@@ -1,13 +1,18 @@
-"""*Admin › Models*: an engine's access token on the gateway outlives the engine on three routes,
+"""*Admin › Models*: an engine's access token on the gateway outlives the engine on four routes,
 and the specification and the test that holds removal say so, naming each (the owner, 21 November
-2026, AD1a's option (c), carried by AD1b).
+2026, AD1a's option (c), carried by AD1b; the fourth route added on the owner's ruling of 23
+November, option A).
 
 **What was false.** ADR-135 Amendment 14 point 9, and the docstring of
 `test_model_key_paths.py::test_an_engine_s_removal_clears_its_virtual_key_n4`, said an engine's
 removal deletes its derived key before the record forgets the engine, "so no key outlives its
 record". Removal is the only route that deletes it. The engine's access token on the gateway (the
 virtual key derived under the current master key and tagged with the engine's name) stays when the
-engine leaves the record any other way, and the text now names the three ways. The token reaches
+engine leaves the record any other way, and the text now names four: the deployment switched to
+local-only, a models file restored, a re-render that drops an engine, and an Add whose record cannot
+be saved is undone (the token was put on the gateway before the record was saved, and the undo
+withdraws the entries and not the token; the 15-minute sweep removes only a check's own key). AD1c
+closes that last route; this slice builds no clearing route. The token reaches
 no model unless an engine of the same name is added again. The note of intent covers the
 credential, which is another thing; a changed master key (open row N6) has no route and stays named
 beside them. **No clearing route is built (the owner's ruling).**
@@ -18,7 +23,8 @@ beside them. **No clearing route is built (the owner's ruling).**
    stand-in gateway holds an engine's derived virtual key; the engine leaves the record by each
    route, driven the way the code does it (the start-up path, which runs `_reconcile`; never an
    internal helper called alone): the deployment switched to local-only, a models file restored
-   without it, a re-render that drops a declared engine. After each, the engine is no longer served
+   without it, a re-render that drops a declared engine, an Add whose record cannot be saved (the
+   file refuses the write, as a full disk does). After each, the engine is no longer served
    and its token is **still** on the stand-in. The stand-in models the real gateway's refusals, not
    only its grants (`test_the_stand_in_refuses_what_the_real_gateway_refuses`: a delete of a key it
    does not hold is a 404, a delete its database does not take a 500, a call with a deleted key a
@@ -32,10 +38,13 @@ beside them. **No clearing route is built (the owner's ruling).**
    routes of the first half (a route in the registry that the text does not name is red; so is a
    route the text names that no driver leaves). No text in the specification, either administration
    guide or the sibling test may say that no key or access token outlives its record without naming
-   each of the three. The plants (rule 15) are at the shape the text takes: the false sentence put
-   back (`test_the_false_sentence_put_back_is_red`), a fourth route in the registry and not named
-   (`test_a_fourth_route_not_named_is_red`, and the route is a real one, found by this file: an Add
-   whose record cannot be saved), one of the three cases taken out (`test_a_case_taken_out_is_red`).
+   each of the four. The plants (rule 15) are at the shape the text takes: the false sentence put
+   back (`test_the_false_sentence_put_back_is_red`), a route in the registry and not named
+   (`test_a_route_not_named_is_red`: a fifth, driven for real as the local-only switch is, under a
+   phrase the text lacks), each of the four cases taken out (`test_a_case_taken_out_is_red`), and a
+   route the text names that no driver shows (`test_a_route_named_that_no_driver_shows_is_red`,
+   each in turn). The text also says the 15-minute sweep does not remove the fourth route's token;
+   that is driven (`test_the_sweep_does_not_remove_an_unsaved_adds_token`).
 
 **The keys.** Every key is made at run time (the owner's rules): none is written in this file. After
 every route nothing the test provokes (the log, the audit, the models file, the view, the routes)
@@ -46,7 +55,7 @@ holds the master key, the typed key or the token
 
 - an engine's removal deletes its derived key:
   `test_model_key_paths.py::test_an_engine_s_removal_clears_its_virtual_key_n4`;
-- the other three routes leave it: `test_each_route_leaves_the_token_and_the_engine_is_gone`, and
+- the other four routes leave it: `test_each_route_leaves_the_token_and_the_engine_is_gone`, and
   it reaches no model until the engine is added again:
   `test_a_left_token_reaches_no_model_until_the_engine_is_added_again`;
 - the text names exactly those routes: `test_the_words_name_exactly_the_routes_that_leave_a_token`.
@@ -64,6 +73,7 @@ import re
 import secrets
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx
@@ -136,6 +146,8 @@ class Site:
         )
         self.audit = InMemoryModelAdminAudit()
         self.processes: list[ModelAdmin] = []
+        #: The check's 15 minutes run on this clock, which a test moves.
+        self.now = datetime(2026, 11, 23, 9, 0, tzinfo=UTC)
 
     def process(
         self, *, local_only: bool = False, declared: tuple[dict[str, object], ...] = ()
@@ -165,6 +177,7 @@ class Site:
             gateway=GatewayAdmin(http),
             audit=self.audit,
             retry_seconds=3600,
+            now=lambda: self.now,
         )
         self.processes.append(admin)
         return admin
@@ -280,10 +293,37 @@ async def re_rendered(site: Site) -> str:
     return "acme"
 
 
+async def unsaved_add(site: Site) -> str:
+    """An **Add** whose record cannot be saved (the owner's ruling of 23 November, option A: a
+    fourth route, named). The engine's key is made by `_reconcile` before the record is saved, the
+    undo withdraws the entries and not the key, and the record never held the engine: so a token
+    outlives an engine that was never in the record. Driven through the screen's own two steps (a
+    check, then Add), with the file's write refused as a full disk refuses it."""
+    admin = site.process()
+    await admin.start()
+    checked = await admin.check(
+        ADMIN, ModelProviderConfig.model_validate(KEYED), SecretStr(site.typed)
+    )
+    assert checked.ok and checked.check, checked.words
+    real = admin._file.save
+
+    def cannot_save(settings: ModelSettings) -> None:
+        if any(p.name == "gemini" for p in settings.providers):
+            raise OSError(28, "No space left on device")
+        real(settings)
+
+    admin._file.save = cannot_save  # type: ignore[method-assign]
+    with pytest.raises(ModelAdminRefused):
+        await admin.add_checked(ADMIN, checked.check)
+    await finished(admin)
+    return "gemini"
+
+
 ROUTES = (
     Route("when the deployment is switched to local-only", local_only),
     Route("when a models file is restored", restored),
     Route("when a re-render drops an engine", re_rendered),
+    Route("when an Add whose record cannot be saved is undone", unsaved_add),
 )
 
 
@@ -460,6 +500,8 @@ def routes_named(text: str) -> list[str] | None:
     if at < 0:
         return None
     sentence = words[at + len(LEAD) :].strip().split(". ")[0].rstrip(".")
+    # An item's own explanation, in brackets, is not another item.
+    sentence = re.sub(r"\s*\([^)]*\)", "", sentence)
     return [i.strip() for i in re.split(r",\s*(?:or\s+)?(?=when\b)", sentence) if i.strip()]
 
 
@@ -560,56 +602,13 @@ def test_the_claim_with_the_three_cases_beside_it_is_not_red() -> None:
     assert problems_in(ROUTES, spec, sibling, (*guides, beside)) == []
 
 
-async def a_fourth_route(site: Site) -> str:
-    """A fourth way for a token to be left, found by this file's own exploration and driven for real
-    (rule 15): an **Add** whose record cannot be saved. The gateway has the engine's key by then
-    (`_reconcile` made it), the undo withdraws the entries and not the key, and the record never
-    held the engine. It is not named in the text the owner gave ("when the engine leaves the
-    record": this one never entered it), so it stands here as the plant for an unnamed route; if
-    the text is ever made to name it, it moves into `ROUTES`."""
-    admin = site.process()
-    await admin.start()
-    checked = await admin.check(
-        ADMIN, ModelProviderConfig.model_validate(KEYED), SecretStr(site.typed)
-    )
-    assert checked.ok and checked.check, checked.words
-    real = admin._file.save
-
-    def cannot_save(settings: ModelSettings) -> None:
-        if any(p.name == "gemini" for p in settings.providers):
-            raise OSError(28, "No space left on device")
-        real(settings)
-
-    admin._file.save = cannot_save  # type: ignore[method-assign]
-    with pytest.raises(ModelAdminRefused):
-        await admin.add_checked(ADMIN, checked.check)
-    await finished(admin)
-    return "gemini"
-
-
-FOURTH = Route("when an add cannot save the record", a_fourth_route)
-
-
-async def test_the_fourth_route_planted_does_leave_a_token(site: Site) -> None:
-    """The planted route below is a real route, not a convenient string: its token is left."""
-    name = await FOURTH.leave(site)
-    assert engine_is_gone(site, name)
-    assert token_left(site, name)
-
-
-def test_a_fourth_route_not_named_is_red() -> None:
-    """Plant 2: a fourth route in the registry (the stand-in leaves its token), not in the text."""
+@pytest.mark.parametrize("dropped", [r.phrase for r in ROUTES])
+def test_a_route_named_that_no_driver_shows_is_red(dropped: str) -> None:
+    """The other direction, for each route in turn: the text names a route the registry no longer
+    shows leaving a token."""
     spec, sibling, guides = words_as_they_are()
-    problems = problems_in((*ROUTES, FOURTH), spec, sibling, guides)
-    assert any(FOURTH.phrase in p and "not named" in p for p in problems if "specification" in p)
-    assert any(FOURTH.phrase in p and "not named" in p for p in problems if "docstring" in p)
-
-
-def test_a_route_named_that_no_driver_shows_is_red() -> None:
-    """The other direction: the text names a route the registry no longer shows leaving a token."""
-    spec, sibling, guides = words_as_they_are()
-    problems = problems_in(ROUTES[:2], spec, sibling, guides)
-    assert any(ROUTES[2].phrase in p and "no driver" in p for p in problems), problems
+    problems = problems_in(tuple(r for r in ROUTES if r.phrase != dropped), spec, sibling, guides)
+    assert any(dropped in p and "no driver" in p for p in problems), problems
 
 
 @pytest.mark.parametrize("taken", [r.phrase for r in ROUTES])
@@ -625,3 +624,38 @@ def test_a_case_taken_out_is_red(taken: str) -> None:
         planted = (cut, sibling) if text is spec else (spec, cut)
         problems = problems_in(ROUTES, planted[0], planted[1], guides)
         assert any(where in p and taken in p and "not named" in p for p in problems), problems
+
+
+#: A fifth route, for the plant only: a phrase the text lacks, with a driver that really leaves a
+#: token (the local-only switch), so the registry and the gateway agree and only the words differ.
+UNNAMED = Route("when an engine's record is edited by hand", local_only)
+
+
+async def test_the_unnamed_plant_does_leave_a_token(site: Site) -> None:
+    """The plant below is a registry entry whose driver leaves a real token: it is red for being
+    unnamed, not because its driver does nothing."""
+    name = await UNNAMED.leave(site)
+    assert engine_is_gone(site, name)
+    assert token_left(site, name)
+
+
+def test_a_route_not_named_is_red() -> None:
+    """Plant 2: a route in the registry (the stand-in leaves its token), not in the text."""
+    spec, sibling, guides = words_as_they_are()
+    problems = problems_in((*ROUTES, UNNAMED), spec, sibling, guides)
+    assert any(UNNAMED.phrase in p and "not named" in p for p in problems if "specification" in p)
+    assert any(UNNAMED.phrase in p and "not named" in p for p in problems if "docstring" in p)
+
+
+async def test_the_sweep_does_not_remove_an_unsaved_adds_token(site: Site) -> None:
+    """The text says the 15-minute sweep removes only a check's own key, so it does not remove the
+    token of an Add that could not be saved. Driven: the check lapses, the sweep runs (the held
+    check is gone and its credential with it), and the engine's token is still on the gateway."""
+    name = await unsaved_add(site)
+    assert token_left(site, name)
+    site.now += timedelta(minutes=16)
+    sweeper = site.process()
+    await sweeper.sweep_checks()
+    await finished(sweeper)
+    assert not sweeper.settings.checks, "the plant: the sweep ran and removed the lapsed check"
+    assert token_left(site, name), "the sweep removed the engine's token, so the text is wrong"
