@@ -42,6 +42,7 @@ import {
   stripItems,
   studioDatasets,
   whyNot,
+  workspaceStudioHref,
 } from "./views/studioWords.js";
 import type { CaseListing, Pipeline, Plan, PlanView, Run, Source, StudioPlace } from "./views/studioWords.js";
 
@@ -258,8 +259,10 @@ export async function loadFrame(
     frame.reminder = {
       text: NEEDS_YOU_WORDS.reminder(frame.proposed),
       tip: NEEDS_YOU_WORDS.reminderTip,
-      href: placeHref(model, caseId),
-      opensModel: model.path === null ? frame.datasetId : null,
+      // The proposed link types are decided in the workspace's Model tab until the proposals are a page of this service (a later
+      // slice), so the reminder goes there and asks it to open on Model (owner's ruling, 20 November: the Needs-you jump is rebuilt).
+      href: workspaceStudioHref(caseId),
+      opensModel: frame.datasetId,
     };
   }
   return frame;

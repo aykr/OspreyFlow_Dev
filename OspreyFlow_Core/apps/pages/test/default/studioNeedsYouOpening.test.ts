@@ -44,20 +44,36 @@ const withProposals = (n: number) =>
 const askingForModel = (html: string): string[] => [...html.matchAll(/<a\b[^>]*\bdata-opens-model="[^"]*"[^>]*>/g)].map((m) => m[0]);
 
 describe("the page asks for Model when a link to it is followed", () => {
-  it("ON1: Model is a page of this service (slice IS2a), so no link asks the workspace to open on it: not the Model tab, not the reminder, and no other", async () => {
+  it("ON1: Model is a page (slice IS2a) but the proposals are still decided in the workspace, so the reminder and the Model page's own link ask it to open on Model, and the tab and no other link does", async () => {
     const w = await make(withProposals(2));
     const res = await w.get(`/studio/releases?case=${CASE_ID}`);
-    expect(askingForModel(res.text)).toEqual([]);
-    // The Model tab and the reminder are plain links to the page, which the person is taken to; the count is still on the tab.
+    const asking = askingForModel(res.text);
+    // The reminder is the one link on another place's page: it goes to the workspace, on the case, and names the dataset.
+    expect(asking).toHaveLength(1);
+    expect(asking[0]).toContain(`data-opens-model="${DATASET}"`);
+    expect(asking[0]).toContain(`href="/?investigation=${CASE_ID}&amp;from=case&amp;view=ingest"`);
+    expect(asking[0]).toContain('aria-describedby="studio-proposals-tip"');
+    // The Model tab is a plain link to the page and carries the count.
     const nav = /<nav aria-label="Ingest Studio places">([\s\S]*?)<\/nav>/.exec(res.text)?.[1] ?? "";
     const links = [...nav.matchAll(/<a ([^>]*)>([^<]*)<\/a>/g)];
-    expect(links.map((l) => l[2])).toContain("1 Model · 2 proposed");
-    expect(links.find((l) => l[2] === "1 Model · 2 proposed")?.[1]).toContain(`href="/studio/model?case=${CASE_ID}"`);
-    expect(res.text).toContain(`<a class="btn" href="/studio/model?case=${CASE_ID}" aria-describedby="studio-proposals-tip">`);
+    const tab = links.find((l) => l[2] === "1 Model \u00b7 2 proposed");
+    expect(tab?.[1]).toContain(`href="/studio/model?case=${CASE_ID}"`);
+    expect(tab?.[1]).not.toContain("data-opens-model");
+    expect(links.filter((l) => (l[1] ?? "").includes("data-opens-model"))).toEqual([]);
 
-    // With no proposals, and with a case that loads into no dataset, nothing asks either.
+    // On the Model page itself (no reminder there) a person who is told proposals wait can still reach them: one link, to the workspace.
+    const page = await w.get(`/studio/model?case=${CASE_ID}`);
+    const onPage = askingForModel(page.text);
+    expect(onPage).toHaveLength(1);
+    expect(onPage[0]).toContain(`data-opens-model="${DATASET}"`);
+    expect(onPage[0]).toContain(`href="/?investigation=${CASE_ID}&amp;from=case&amp;view=ingest"`);
+    expect(page.text).toContain("Decide the proposed link types");
+    expect(page.text).toContain("2 proposed link types wait for you to decide");
+
+    // With no proposals, and with a case that loads into no dataset, nothing asks: no dead-end link, no invented count.
     const none = await make();
     expect(askingForModel((await none.get(`/studio?case=${CASE_ID}`)).text)).toEqual([]);
+    expect(askingForModel((await none.get(`/studio/model?case=${CASE_ID}`)).text)).toEqual([]);
     const bare = await make(person({ cases: [caseRow({ datasets: [], dataset_ids: [] })] }));
     expect(askingForModel((await bare.get(`/studio?case=${CASE_ID}`)).text)).toEqual([]);
   });

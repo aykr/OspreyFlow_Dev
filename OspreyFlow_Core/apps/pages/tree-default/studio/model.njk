@@ -23,6 +23,8 @@
 <h2 id="model-heading">{{ modelWords.heading }}</h2>
 <p>{{ modelWords.intro }}</p>
 {% if notice %}<p role="status">{{ notice }}</p>{% endif %}
+{% if f.proposed > 0 and f.datasetId %}<p>{{ modelWords.proposals(f.proposed) }} <a class="btn" href="{{ modelWords.proposalsHref(f.caseId) }}" data-opens-model="{{ f.datasetId }}">{{ modelWords.proposalsLink }}</a></p>
+{% endif %}
 <section aria-labelledby="draft-heading">
 <h3 id="draft-heading">{{ modelWords.draftHeading }}</h3>
 {% if mv.draft %}

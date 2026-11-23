@@ -15,7 +15,7 @@
  * What the Conduit says about a refusal is shown only when it is the store's own words (a 409 `model_refused`): any other
  * answer is the page's own sentence, so nothing of a Conduit's body or a right's identifier is ever drawn.
  */
-import { PACKS, modelInWords, refusalWords } from "./studioWords.js";
+import { PACKS, modelInWords, refusalWords, workspaceStudioHref } from "./studioWords.js";
 
 // ------------------------------------------------------------------------------------------------ what the Conduit sends
 
@@ -131,6 +131,10 @@ export const MODEL_WORDS = {
   liveVersion: (version: number, by: string | null, made: string | null) =>
     by !== null && made !== null ? `Version ${version}, made live by ${by} on ${made}.` : `Version ${version}.`,
   notYours: (by: string) => `Only ${by} can save into or discard this draft.`,
+  /** The proposed link types are decided in the workspace's Model tab until they are a page of this service: the link goes there and asks it to open on Model. */
+  proposals: (n: number) => `${n === 1 ? "1 proposed link type waits" : `${n} proposed link types wait`} for you to decide. Open the Model tab in the workspace to decide them.`,
+  proposalsLink: "Decide the proposed link types",
+  proposalsHref: (caseId: string) => workspaceStudioHref(caseId),
   noDraft: "There is no draft of the domain model. Open one to change it; nothing that runs changes until a version is made live.",
   noLive: "This dataset has no live domain model yet: it uses the POLE core until one is made live.",
   noTypes: "This version adds no types of its own: it is the POLE core with its packs.",
