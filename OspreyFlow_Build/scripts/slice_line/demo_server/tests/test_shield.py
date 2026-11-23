@@ -15,6 +15,7 @@ import sys
 import time
 
 import pytest
+from pathlib import Path
 
 from conftest import DEMO, PROC_HEADER, runner, sh
 
@@ -194,7 +195,7 @@ def test_the_runner_sets_no_docker_host_and_fetches_duckdbs_extension_over_https
     assert "https://extensions.duckdb.org/" in text and "http://extensions" not in text
 
 
-def spatial_step(monkeypatch, tmp_path, answer=None, refuse=None):
+def spatial_step(monkeypatch, tmp_path, answer=None, refuse=None, during_install=None):
     """runner.py's DUCKDB_SPATIAL itself, with DuckDB and the network stood in for: what it asked for, and said."""
     import gzip
     import io
@@ -220,7 +221,13 @@ def spatial_step(monkeypatch, tmp_path, answer=None, refuse=None):
     duck = types.ModuleType("duckdb")
     duck.__version__ = "1.5.6"
     duck.sql = lambda q: types.SimpleNamespace(fetchone=lambda: ("linux_amd64",))
-    duck.connect = lambda: types.SimpleNamespace(install_extension=lambda p: asked.setdefault("installed", p),
+    def install_extension(p):
+        asked.setdefault("installed", p)
+        if during_install:
+            during_install(p)  # e.g. a second job's step, run while this one installs
+        asked.setdefault("read", Path(p).read_bytes())
+
+    duck.connect = lambda: types.SimpleNamespace(install_extension=install_extension,
                                                  load_extension=lambda n: asked.setdefault("loaded", n))
     monkeypatch.setattr(urllib.request, "urlopen", urlopen)
     monkeypatch.setitem(sys.modules, "duckdb", duck)
@@ -247,6 +254,57 @@ def test_a_refused_spatial_fetch_says_where_it_stopped_and_why(monkeypatch, tmp_
     assert said["status"] == "failed" and said["stage"] == "fetch" and said["http_status"] == 403
     assert said["reason"] == "HTTPError: HTTP Error 403: Forbidden"
     assert "installed" not in asked
+
+
+def test_a_job_installs_from_its_own_unpacked_file_while_another_job_unpacks(monkeypatch, tmp_path):
+    """015: three jobs share the cache. A second job's step, run while the first installs, writes none of the first's
+    files, so the first still installs the whole extension (runs 1c7525d175792ee0 and d7ce43cd986f60e3 were truncated)."""
+    import types
+    whole = b"the whole extension" * 1000
+    second = []
+
+    def another_job_meanwhile(_):
+        duck = sys.modules["duckdb"]
+        first = duck.connect
+        duck.connect = lambda: types.SimpleNamespace(install_extension=second.append, load_extension=lambda n: None)
+        try:
+            exec(compile(r.DUCKDB_SPATIAL, "DUCKDB_SPATIAL", "exec"), {"__name__": "__main__"})
+        finally:
+            duck.connect = first
+
+    asked, said = spatial_step(monkeypatch, tmp_path, answer=whole, during_install=another_job_meanwhile)
+    assert said["status"] == "installed"
+    assert second and second[0] != asked["installed"], "the two jobs installed from one shared file"
+    assert asked["read"] == whole, "the first job's file was changed by the second's unpack"
+    folder = tmp_path / "v1.5.6" / "linux_amd64"
+    assert sorted(x.name for x in folder.iterdir()) == ["spatial.duckdb_extension.gz"], \
+        "a job left its part file or its unpacked copy in the shared cache"
+
+
+def test_a_fetch_writes_a_part_file_of_its_own(monkeypatch, tmp_path):
+    """015: two jobs fetching at once never write one part file. Another job's download in progress is left alone, and
+    this job's own is put in place whole."""
+    import gzip
+    folder = tmp_path / "v1.5.6" / "linux_amd64"
+    folder.mkdir(parents=True)
+    theirs = folder / "spatial.duckdb_extension.gz.part"
+    theirs.write_bytes(b"another job's download, half written")
+    asked, said = spatial_step(monkeypatch, tmp_path, answer=b"mine")
+    assert said["status"] == "installed" and asked["read"] == b"mine"
+    assert theirs.read_bytes() == b"another job's download, half written", "another job's part file was written over"
+    assert gzip.decompress((folder / "spatial.duckdb_extension.gz").read_bytes()) == b"mine"
+
+
+def test_a_cached_download_that_does_not_unpack_is_dropped_and_fetched_again(monkeypatch, tmp_path):
+    """015: a bad file in the cache would turn every later run red; it is dropped, and the next run fetches it."""
+    folder = tmp_path / "v1.5.6" / "linux_amd64"
+    folder.mkdir(parents=True)
+    (folder / "spatial.duckdb_extension.gz").write_bytes(b"not gzip")
+    asked, said = spatial_step(monkeypatch, tmp_path)
+    assert said["status"] == "failed" and said["stage"] == "unpack" and "url" not in asked
+    assert not (folder / "spatial.duckdb_extension.gz").exists()
+    asked, said = spatial_step(monkeypatch, tmp_path)
+    assert said["status"] == "installed" and asked["url"].endswith("spatial.duckdb_extension.gz")
 
 
 def test_install_shows_the_shield_in_its_dry_run_and_cleanup_removes_it():

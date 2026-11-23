@@ -187,6 +187,11 @@ M = [
  (E, '    if d.get("verdict") == "conflict":\n        files', '    if False:\n        files', "conflict_with_main_says_so"),
  (E, '            if old in text or ("/" in short and short in text):', '            if False:', "main_moved_a_path_the_slice_names"),
  (E, '            if parts and parts[0][:1] in ("R", "D") and len(parts) >= 2:', '            if parts and parts[0][:1] in ("D",) and len(parts) >= 2:', "main_moved_a_path_the_slice_names"),
+ # 015: three jobs share the extension cache; each writes only files of its own there
+ (D + "runner.py", '        ext = os.path.join(own, "spatial.duckdb_extension")', '        ext = gz[:-3]', "own_unpacked_file_while_another_job_unpacks"),
+ (D + "runner.py", '        shutil.rmtree(own, ignore_errors=True)', '        pass', "own_unpacked_file_while_another_job_unpacks"),
+ (D + "runner.py", '        fd, part = tempfile.mkstemp(prefix="spatial.", suffix=".part", dir=folder)', '        part = gz + ".part"; fd = os.open(part, os.O_WRONLY | os.O_CREAT | os.O_TRUNC)', "part_file_of_its_own"),
+ (D + "runner.py", '            try:\n                os.remove(gz)\n            except OSError:\n                pass  # another job dropped it first\n            raise', '            raise', "does_not_unpack_is_dropped_and_fetched_again"),
 ]
 bad = 0
 for f, old, new, test in M:
