@@ -1,0 +1,42 @@
+{
+ "advice": "advice only; the Mac's merge run is the gate",
+ "client_names": "not run (no client-name list on this machine)",
+ "failing": {
+  "targets": [],
+  "tests": []
+ },
+ "finished": "2026-11-23T07:13:55Z",
+ "group": [
+  "f8394584d97477d3"
+ ],
+ "holds_main": "8491233fcc16536f9d22196416a19d788d591ce9",
+ "id": "f8394584d97477d3",
+ "lane": "merger",
+ "main": "8491233fcc16536f9d22196416a19d788d591ce9",
+ "not_run": {
+  "docker_skipped": [],
+  "live_step": "",
+  "mac_only": [],
+  "targets": [],
+  "test_files": []
+ },
+ "of": 1,
+ "position": 1,
+ "runner_version": "ew-2",
+ "seconds": 0,
+ "slice": "SE6c",
+ "stack": [
+  {
+   "slice": "SE6c",
+   "tip": "27c016530bf764ca36391ec3c2455c9adb899099"
+  }
+ ],
+ "state": "done",
+ "tip": "27c016530bf764ca36391ec3c2455c9adb899099",
+ "usage": {
+  "cpu_seconds": 0,
+  "memory_peak_bytes": 11739136
+ },
+ "verdict": "error",
+ "words": "the shield does not hold: this account reached 1 port(s) another account listens on (port 34041); nothing was run"
+}

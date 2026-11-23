@@ -17,6 +17,12 @@ it does can fail a run.
    size set on every call (Ollama's default, 4096 tokens, would cut a long prompt off without a word). Its reply must
    be JSON of one fixed shape, within its size caps, naming only tests and files the extract names; otherwise it is
    dropped, the reason kept, and the extract stands alone. So does any error, timeout or a model too big for the card.
+4. It never holds the model while a test job runs (015): the model's helper listens on a loopback port in the range
+   the job's shield must leave open, so a job starting beside it is refused, and a job running beside it could reach
+   it. So the model is asked only while this holds handoff/model.lock alone (each job holds it shared for its whole
+   run, and a starting job waits for it); it is asked only when it fits on the graphics card's free memory, measured
+   at the start of this run; and it is unloaded as soon as its last answer is in, answered or not, before the lock is
+   let go.
 3. The log's text is data: it is quoted into the prompt as a JSON string and written into JSON, never run, sourced or
    given to a shell; this file starts no process at all.
 
@@ -24,6 +30,7 @@ Standard library only, Python 3.8 or later.
 """
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import re
@@ -39,8 +46,10 @@ import protocol as p  # noqa: E402
 
 ROOT = HERE.parent
 HANDOFF = ROOT / "handoff"
+LOCK_NAME = "model.lock"  # in handoff/: the runner's, readable by this account; jobs hold it shared, this alone (015)
 SUMMARIES = ROOT / "summaries"
-VERSION = "sum-2"  # sum-2: identical failures grouped; asked twice, and a difference said
+VERSION = "sum-3"  # sum-2: identical failures grouped; asked twice, and a difference said. sum-3 (015): asked only
+#                     alone, when it fits the card, and unloaded at once
 KEEP = 40  # summaries kept, as the runner keeps results (KEEP_JOBS)
 
 MODEL = "qwen2.5-coder:14b"
@@ -51,6 +60,17 @@ OLLAMA_URL = "http://127.0.0.1:11434/api/generate"  # the host's own Ollama, on 
 NUM_CTX = 16384
 NUM_PREDICT = 1024  # the reply's own budget, inside NUM_CTX
 TIMEOUT = 300  # seconds for one call, a cold load of the model included
+#: The graphics card's free memory in MiB, one line per card, measured by nvidia-smi as root at the start of each run
+#: (install.sh's ExecStartPre: this account has no device of its own). No file, or nothing in it: no card is known,
+#: and the model is not asked (015).
+VRAM_FILE = Path("/run/osprey-summary/vram")
+#: Room kept on the card beyond the weights and the cache: llama.cpp's compute buffers.
+FIT_MARGIN_BYTES = 1 << 30
+#: Between the two asks only. The last ask unloads it (keep_alive 0), and an unload is sent and waited for whatever
+#: happened, so a model left loaded after a failure goes within this time at worst.
+KEEP_BETWEEN_ASKS = "2m"
+UNLOAD_SECONDS = 60  # how long to wait for Ollama to say the model is gone
+MAX_INFO_BYTES = 4 << 20  # /api/show carries the model's licence and template
 SECTION_CHARS = 3000
 TOTAL_CHARS = 24000  # about 8000 tokens of code-like text at 3 characters a token: with the prompt and reply, < NUM_CTX
 MAX_FAILURES = 30
@@ -209,8 +229,10 @@ PROMPT = (
     "cause.\nDATA\n")
 
 
-def ask_model(ext: dict, url: str = OLLAMA_URL, timeout: float = TIMEOUT) -> tuple[dict | None, str | None, dict]:
-    """(the advice, or None; why it was dropped, or None; the timings). Never raises."""
+def ask_model(ext: dict, url: str = OLLAMA_URL, timeout: float = TIMEOUT,
+              keep_alive: str | int = 0) -> tuple[dict | None, str | None, dict]:
+    """(the advice, or None; why it was dropped, or None; the timings). Never raises. keep_alive 0: the model is
+    unloaded once it has answered (015)."""
     t0 = time.monotonic()
     times = {"model_seconds": 0.0}
     if not ext["failures"]:
@@ -221,7 +243,7 @@ def ask_model(ext: dict, url: str = OLLAMA_URL, timeout: float = TIMEOUT) -> tup
     prompt = PROMPT + json.dumps(data, ensure_ascii=True)
     if len(prompt.encode()) // 3 + NUM_PREDICT >= NUM_CTX:  # never a silent cut-off: not asked at all
         return None, "the extract would not fit the model's context of %d tokens" % NUM_CTX, times
-    body = json.dumps({"model": MODEL, "prompt": prompt, "format": "json", "stream": False, "keep_alive": "10m",
+    body = json.dumps({"model": MODEL, "prompt": prompt, "format": "json", "stream": False, "keep_alive": keep_alive,
                        "options": {"num_ctx": NUM_CTX, "num_predict": NUM_PREDICT, "temperature": 0}}).encode()
     try:
         req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
@@ -254,6 +276,110 @@ def ask_model(ext: dict, url: str = OLLAMA_URL, timeout: float = TIMEOUT) -> tup
     if why:
         return None, why, times
     return {"marked": ADVICE_MARK, "model": MODEL, "causes": causes}, None, times
+
+
+def ollama(url: str, path: str, body: dict | None = None, timeout: float = 10) -> dict:
+    """One call to the same Ollama as `url`: GET without a body, POST with one."""
+    req = urllib.request.Request(url.rsplit("/api/", 1)[0] + path, headers={"Content-Type": "application/json"},
+                                 data=None if body is None else json.dumps(body).encode())
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        raw = r.read(MAX_INFO_BYTES + 1)
+    if len(raw) > MAX_INFO_BYTES:
+        raise ValueError("Ollama's answer to %s is over %d bytes" % (path, MAX_INFO_BYTES))
+    got = json.loads(raw)
+    if not isinstance(got, dict):
+        raise ValueError("Ollama's answer to %s is not an object" % path)
+    return got
+
+
+def card_free(vram: Path) -> int | None:
+    """The most free memory on any one card, in bytes, from this run's measurement; None when none was measured."""
+    try:
+        mib = [int(x) for x in vram.read_text().split()]
+    except (OSError, ValueError):
+        return None
+    return max(mib) << 20 if mib else None
+
+
+def model_need(url: str) -> int | None:
+    """What the model takes on the card at NUM_CTX: its weights (the size Ollama lists) and its key-value cache (16-bit,
+    from the shape /api/show gives), and FIT_MARGIN_BYTES. None when Ollama does not say enough to tell."""
+    size = next((m.get("size") for m in ollama(url, "/api/tags").get("models") or []
+                 if isinstance(m, dict) and MODEL in (m.get("name"), m.get("model"))), None)
+    info = ollama(url, "/api/show", {"model": MODEL}).get("model_info") or {}
+    arch = info.get("general.architecture")
+
+    def num(key):
+        v = info.get("%s.%s" % (arch, key))
+        return v if isinstance(v, int) and not isinstance(v, bool) and v > 0 else None
+
+    layers, kv_heads, heads, width = (num(k) for k in ("block_count", "attention.head_count_kv",
+                                                        "attention.head_count", "embedding_length"))
+    key = num("attention.key_length") or (width // heads if width and heads else None)
+    value = num("attention.value_length") or key
+    if not (isinstance(size, int) and size > 0 and layers and kv_heads and key and value):
+        return None
+    return size + layers * kv_heads * (key + value) * 2 * NUM_CTX + FIT_MARGIN_BYTES
+
+
+def does_not_fit(url: str, vram: Path) -> str | None:
+    """Why the model is not to be asked on this card now, or None when it fits (015)."""
+    free = card_free(vram)
+    if free is None:
+        return "no graphics card's free memory was measured for this run"
+    try:
+        need = model_need(url)
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        return "Ollama did not say how big the model is: " + " ".join(("%s: %s" % (type(e).__name__, e)).split())[:160]
+    if need is None:
+        return "Ollama did not say how big the model is"
+    if need > free:
+        return "it needs about %.1f GiB of the graphics card, and %.1f GiB is free" % (need / (1 << 30), free / (1 << 30))
+    return None
+
+
+def loaded(url: str) -> bool | None:
+    """Whether Ollama lists the model as loaded: None when it cannot be asked (refused: nothing of its is loaded)."""
+    try:
+        models = ollama(url, "/api/ps").get("models") or []
+    except urllib.error.URLError as e:
+        return False if isinstance(e.reason, ConnectionRefusedError) else None
+    except (OSError, ValueError):
+        return None
+    return any(isinstance(m, dict) and MODEL in (m.get("name"), m.get("model")) for m in models)
+
+
+def unload(url: str, wait: float | None = None) -> bool:
+    """The model unloaded, and Ollama saying so: True once it no longer lists it. Never loads it to unload it."""
+    end = time.monotonic() + (UNLOAD_SECONDS if wait is None else wait)
+    sent = False
+    while True:
+        now = loaded(url)
+        if now is False:
+            return True
+        if now and not sent:
+            try:
+                ollama(url, "/api/generate", {"model": MODEL, "keep_alive": 0})
+                sent = True
+            except (urllib.error.URLError, OSError, ValueError):
+                pass
+        if time.monotonic() >= end:
+            return False
+        time.sleep(1)
+
+
+def hold_alone(lock: Path) -> tuple[int | None, str | None]:
+    """(the lock's descriptor, held alone; or None and why not). Never waits: a job holding it means try later."""
+    try:
+        fd = os.open(str(lock), os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    except OSError:
+        return None, "the model is not asked without %s, which keeps test jobs out while it is loaded" % lock.name
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        os.close(fd)
+        return None, "busy"
+    return fd, None
 
 
 def distinct(ext: dict) -> list:
@@ -291,17 +417,27 @@ def check_shape(got, ext: dict) -> tuple[list, str | None]:
     return out, None
 
 
-def summarize(jid: str, log_text: str, result: dict, url: str = OLLAMA_URL, timeout: float = TIMEOUT) -> dict:
+def summarize(jid: str, log_text: str, result: dict, url: str = OLLAMA_URL, timeout: float = TIMEOUT,
+              vram: Path | None = None, not_asked: str | None = None) -> dict:
+    """The summary. `not_asked`: why the model is not to be asked at all this time (the extract stands alone)."""
     t0 = time.monotonic()
     ext = extract(log_text, result)
     times = {"extract_seconds": round(time.monotonic() - t0, 2)}
-    advice, dropped, mt = ask_model(ext, url, timeout)
-    times["first_ask"] = mt
-    if advice:  # asked again, the model as loaded now: where the two differ, the summary says so (the owner's ask)
-        again, why_not, mt2 = ask_model(ext, url, timeout)
-        times["second_ask"] = mt2
-        advice = compare(advice, again, why_not)
-        advice["causes"] = expand(advice["causes"], ext)
+    why = not_asked or (does_not_fit(url, vram or VRAM_FILE) if ext["failures"] else None)
+    if why:
+        advice, dropped, mt = None, "the model was not asked: " + why, {"model_seconds": 0.0}
+        times["first_ask"] = mt
+    else:
+        try:
+            advice, dropped, mt = ask_model(ext, url, timeout, keep_alive=KEEP_BETWEEN_ASKS)
+            times["first_ask"] = mt
+            if advice:  # asked again, the model as loaded now: where the two differ, the summary says so (the owner's ask)
+                again, why_not, mt2 = ask_model(ext, url, timeout, keep_alive=0)
+                times["second_ask"] = mt2
+                advice = compare(advice, again, why_not)
+                advice["causes"] = expand(advice["causes"], ext)
+        finally:  # as soon as the last answer is in, whatever it was (015)
+            times["model_unloaded"] = unload(url)
     times.update({k: v for k, v in (times["first_ask"]).items()})
     return {"state": "done", "id": jid, "summarizer_version": VERSION, "made": time.strftime("%Y-%m-%dT%H:%M:%SZ",
                                                                                               time.gmtime()),
@@ -362,32 +498,51 @@ def read_job(folder: Path) -> tuple[str, dict]:
     return text, json.loads((folder / "result.json").read_text())
 
 
-def run_all(handoff: Path = HANDOFF, summaries: Path = SUMMARIES, url: str = OLLAMA_URL, timeout: float = TIMEOUT) -> int:
+def run_all(handoff: Path = HANDOFF, summaries: Path = SUMMARIES, url: str = OLLAMA_URL, timeout: float = TIMEOUT,
+            vram: Path | None = None) -> int:
     if not handoff.is_dir() or not summaries.is_dir():
         return 0
-    for folder in sorted(handoff.iterdir(), key=lambda d: d.stat().st_mtime):
-        jid = folder.name
-        out = summaries / (jid + ".json")
-        if not re.fullmatch(p.ID_PATTERN, jid) or out.exists() or not (folder / "result.json").is_file():
-            continue
+    waiting = [d for d in sorted(handoff.iterdir(), key=lambda d: d.stat().st_mtime)
+               if d.is_dir() and re.fullmatch(p.ID_PATTERN, d.name) and not (summaries / (d.name + ".json")).exists()
+               and (d / "result.json").is_file()]
+    for folder in waiting:  # the lock taken for each one alone, so a job waits for one summary at most (015)
+        fd, not_asked = hold_alone(handoff / LOCK_NAME)
+        if not_asked == "busy":
+            break  # a test job is running: the timer tries again
         try:
-            text, result = read_job(folder)
-            data = summarize(jid, text, result, url, timeout)
-        except Exception as e:  # noqa: BLE001 - a summary that cannot be made says so; it never stops the others
-            data = {"state": "done", "id": jid, "summarizer_version": VERSION, "extract": None,
-                    "advice_from_model": None, "advice_dropped": "the summary could not be made: %s" % type(e).__name__}
-        write(out, data)
+            write(summaries / (folder.name + ".json"), one(folder, url, timeout, vram, not_asked))
+        finally:
+            if fd is not None:
+                os.close(fd)  # only once the model is unloaded: summarize() waits for that
     kept = sorted(summaries.glob("*.json"), key=lambda f: f.stat().st_mtime)
     for old in kept[:-KEEP]:
         old.unlink()
     return 0
 
 
+def one(folder: Path, url: str, timeout: float, vram: Path | None, not_asked: str | None) -> dict:
+    """One hand-over's summary; one that cannot be made says so, and never stops the others."""
+    try:
+        text, result = read_job(folder)
+        return summarize(folder.name, text, result, url, timeout, vram, not_asked)
+    except Exception as e:  # noqa: BLE001
+        return {"state": "done", "id": folder.name, "summarizer_version": VERSION, "extract": None,
+                "advice_from_model": None, "advice_dropped": "the summary could not be made: %s" % type(e).__name__}
+
+
 def main(argv: list) -> int:
     if len(argv) == 3 and argv[1] == "--measure":
         folder = Path(argv[2])
         text, result = read_job(folder)
-        data = summarize(folder.name, text, result)
+        fd, not_asked = hold_alone(HANDOFF / LOCK_NAME)  # by hand too: never beside a test job (015)
+        if not_asked == "busy":
+            print("a test job is running: the model is not asked beside it; try again once it ends", file=sys.stderr)
+            return 1
+        try:
+            data = summarize(folder.name, text, result, not_asked=not_asked)
+        finally:
+            if fd is not None:
+                os.close(fd)
         data["summary_bytes"] = len(json.dumps(data, indent=1, sort_keys=True).encode())
         print(json.dumps({k: data[k] for k in ("id", "log", "summary_bytes", "timings", "advice_from_model",
                                                 "advice_dropped")}, indent=1))

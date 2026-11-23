@@ -2072,7 +2072,7 @@ server (with `server.certificate`, `key` and `ca` as `network.tls`, `server.back
 | `ospreyflow logs [service] [--follow] [--tail N]` | The services' logs (the last 200 lines by default) |
 | `ospreyflow apply` | Applies a changed `osprey.yaml` to the installed deployment (section 8.3): renders it again, keeps every password and key, asks for a newly enabled provider's key (from `OSPREY_MODEL_KEY_<NAME>` or a hidden prompt), and restarts only the services whose settings changed. It makes no account, adds no demo pack and touches no data |
 | `ospreyflow repair-sign-in [--no-demo-accounts]` | Registers the sign-in again — the identity provider's clients, roles and the demo accounts (leave them out with `--no-demo-accounts`; a Small deployment installed without them never gets them), the Conduit's own client secret from the deployment's settings, which a wiped or re-imported identity provider no longer holds, the workspace's own client (which is given no refresh token), and the organisation's identity provider with its client secret, its first sign-in (refusing, or joining by email when `trust_email` is on) and the record of refused sign-ins Admin → People and roles lists (section 5a.1); safe to run again, and prints no secret |
-| `ospreyflow models` | Lists the model engines, each role's default engine, and whether each provider's key is present (yes or no — never the key) |
+| `ospreyflow models` | Lists the model engines, each role's default engine, and whether each provider's key is present (yes, no, lost after a restore, or unknown when the Conduit does not answer — never the key) |
 | `ospreyflow models key <name>` | Sets or replaces a provider's key, from `OSPREY_MODEL_KEY_<NAME>` in the terminal or a hidden prompt, through the Conduit's own key path inside its container, as Admin › Models does: the key is kept by the model gateway alone, and nothing is restarted. Refused for an engine that signs in by the gateway's own IAM role |
 | `ospreyflow models remove-key <name>` | Removes a provider's key; the provider stays enabled but shows "no key" and is not offered to analysts |
 | `ospreyflow grading change --to <scheme> --mapping <file> --dry-run` | Says how many drawn items each line of the mapping (every grade of the old scheme to one of the new) would move, writes nothing, and gives the token the change needs. `--to` is `5x5x5`, `3x5x2` or a scheme file: a YAML file with `scheme` (a name of its own), `source`, `intelligence` and `handling`, each its list of grades. Runs beside a running deployment |
@@ -2656,17 +2656,16 @@ for it.
 At install, each provider's key is `OSPREY_MODEL_KEY_<NAME>`, for example `OSPREY_MODEL_KEY_GEMINI`
 (the single `provider:` keeps `OSPREY_MODEL_PROVIDER_KEY`). Give it in the installer's terminal
 before `ospreyflow install`, or on the guided install's Models screen; an enabled provider without
-its key stops the install. The install writes it to `deployment.env` only until the gateway is up,
-then hands it to the gateway and removes its line. If that fails it says so, the key stays in
-`deployment.env`, and the next `ospreyflow apply` tries again. To enable a provider on a running
-deployment, add it to `osprey.yaml` and run `ospreyflow apply` (section 8.3), which takes its key
-from `OSPREY_MODEL_KEY_<NAME>` or asks for it at a hidden prompt, and hands it on the same way.
+its key stops the install, and a later install keeps a key already given. The install writes it to `deployment.env` only until the gateway is up, then hands it to the gateway and removes its line. If that fails it says so, the key stays in `deployment.env`, and the next `ospreyflow apply` tries again. The gateway keeps it in its own store, sealed under the deployment's own salt (ADR-135 Amendment 2 decision 3). To enable a provider on a running deployment, add it to `osprey.yaml` and run `ospreyflow apply` (section 8.3), which takes its key from `OSPREY_MODEL_KEY_<NAME>` or asks for it at a hidden prompt, and hands it on the same way. On the cloud-platform profile it stays, besides, in the namespace's Kubernetes Secret, the cluster's own secret store, given to the model gateway alone and to no other workload (section 6a). From then on the gateway alone reads it: it is never written to `osprey.yaml`, never logged and never in the audit. It is **managed** in *Admin › Models* (section 10.1), write-only: set, replaced or removed there, never shown back, to anyone. On its way from the screen it passes through the Conduit in transit only, and the Conduit keeps nothing of it (ADR-135 Amendments 2 and 14).
 
 **From the command line**, for headless use and recovery, `ospreyflow models key <name>` sets or
 replaces a key and `ospreyflow models remove-key <name>` removes it (section 8). Both run the
 Conduit's own key path inside its container, the one Admin › Models uses, with the key passed by name
 in the environment, never as an argument; nothing is restarted. `ospreyflow models` says whether each
-key is present: yes, no, or "lost: enter it again" after a restore.
+key is present, as the gateway answers: yes, no, or "lost: enter it again" after a restore; unknown while the
+deployment is stopped. **Prefer the hidden prompt:** a key typed there is never in your shell, whereas
+`export OSPREY_MODEL_KEY_<NAME>=…` is kept in your shell's history; if you must use the variable, start the
+line with a space where your shell leaves such lines out of its history, or clear it afterwards.
 
 **On the guided install page** (section 4.1), the Models screen has a key field for each enabled
 provider. A key typed there is sent only to the install page, on this computer — a request from
@@ -2724,12 +2723,58 @@ line, which stays for headless use and recovery. **What the installer declared**
 deployment is local-only (`local_only` in `osprey.yaml`). **Engines** lists each engine, its jobs and
 models, whether it is under a privacy contract, its key, its limits and **Edit**, **Set limits**,
 **Enter key** or **Rotate key**, **Remove key**, **Test the connection** and **Remove**; **Add an
-engine** adds one. A key is **write-only**: its field says "not shown, never sent back", and the
+engine** adds one, and is described below. A key is **write-only**: its field says "not shown, never sent back", and the
 screen says only *Key set*, *No key*, or *Key lost: enter it again*. **Each job's default engine**
 sets the engine for extraction and Ask, image description, transcription and embeddings. **Limits**
 are requests a minute, tokens a minute and a token budget for a period, applied by the gateway on
 the engine's own key. **Usage** gives each engine's calls, failures and tokens by job, from the
 gateway's own records, never by person. Every change is in **History** and the audit log.
+
+**Adding an engine** (ADR-135 Amendment 14). Choose the **Provider** from the list: Google Gemini,
+OpenAI, Anthropic, Azure OpenAI, Amazon Bedrock (on a cloud platform only), or *Another provider or
+your own gateway*. The form then knows the provider:
+
+- **Label analysts see** is filled from the provider's name; change it if you like. A label that looks
+  like a key is refused, since analysts see it.
+- **Address.** The provider's own address is shown; **Change** sets the address of a gateway that
+  stands in front of it. Azure OpenAI and *Another provider or your own gateway* ask for their address.
+  Amazon Bedrock has neither key nor address: it is reached by the deployment's own role, in London.
+- **Jobs.** Only the jobs the provider can do are offered (Anthropic and Bedrock take no
+  transcription). Type each model's name as the provider gives it, beside a current example; the
+  provider's prefix (`gemini/`, `openai/` …) is the form's business, and is taken off if you type it (for your
+  own gateway the name is kept exactly as you type it). A name that looks like a key is refused.
+  A job left empty uses this deployment's own model.
+- **Key** (or **Token**, for your own gateway): write-only, emptied once sent and when you change the provider.
+  The page never stores it and asks the browser not to fill or save it; if your browser's password manager
+  still offers to save it, decline.
+- **Under a privacy contract**, and when ticked the agreement's reference, as before.
+- **Analysts will see** shows the engine exactly as analysts' engine list will, "Google Gemini (no
+  contract)" or "(under contract)", and that it is offered only for cases whose data may leave this
+  deployment.
+
+**Check** sends the key once to the model gateway, which asks each typed model one call of at most
+one token. Each answer is said in fixed words at the field it concerns: the key refused, at the key;
+a model not offered, at that job; an address that is not `https://`, at the address. **This form adds
+nothing unchecked:** a refused check keeps nothing, and only a passed check offers **Add the engine**,
+which adds it from the check without sending the key again, recording the key as set by whoever
+checked it. A passed check not added within 15 minutes is removed, key and all, within a minute after
+that, and **Cancel** removes it at once. Until then it is listed under **Being checked**, with when it
+lapses and **Cancel the check**, and is offered to no analyst. No engine is added any other way, from
+this screen or by a direct call to the Conduit. Each check, its outcome, its cancelling and its lapsing
+are in **History** and the audit log, never the key. Listing the models a key may use is not built yet:
+the model names are typed. Each provider can be added once here; a second of the same provider (another
+Azure resource, say) comes in a later release.
+
+**Editing an engine, and a new key** (ADR-135 Amendment 14 point 9). A changed model name or address is
+checked the same way before it is saved: the button says **Check and save**, and nothing changes unless
+every model answers; a refusal says what the engine keeps. A changed address asks for the key with it,
+in **Key for the new address**, since a key is never sent to an address it was not entered for; every
+model is then checked at the new address with that key. A changed label or agreement alone is saved
+without a call. **Enter key** and **Rotate the key** check the new key against each of the engine's
+models before it replaces the one held: a key the provider refuses changes nothing, and the engine
+keeps working with the key it has. `ospreyflow models key` checks it the same way. A key moved in from
+`deployment.env` when the deployment is installed is not checked: it is the installer's own key, moved,
+not changed.
 
 **On a cloud platform** (`profile: cloud-platform`), an engine is reached only once the deployment's
 render has made its way out of the namespace, and for Amazon Bedrock the gateway's own IAM role,
@@ -3116,7 +3161,7 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `models.provider.api_base` | str or none | none | The provider's address, where it is not LiteLLM's default (an Azure deployment, a proxy) |
 | `models.provider.privacy_contract` | bool | false | True when the deployment's organisation holds a data-processing agreement with the provider covering this key. A dataset whose egress is `contracted` is sent only to a provider marked so. Default: false. |
 | `models.provider.contract_reference` | str or none | none | The agreement's reference, in words (for example DPA 2026/07); never a secret. Shown beside the mark. |
-| `models.provider.kind` | `provider` \| `gateway` \| `bedrock` | `provider` | ADR-135 Amendments 4 and 7: provider (a hosted provider LiteLLM knows by name), or at profile: cloud-platform only, gateway (your organisation's own OpenAI-compatible AI gateway, at api_base) or bedrock (Amazon Bedrock in London). Default: provider. |
+| `models.provider.kind` | `provider` \| `gateway` \| `bedrock` | `provider` | ADR-135 Amendments 4, 7 and 14: provider (a hosted provider LiteLLM knows by name), gateway (your organisation's own OpenAI-compatible AI gateway, at api_base; on every profile) or, at profile: cloud-platform only, bedrock (Amazon Bedrock in London). Default: provider. |
 | `models.provider.auth` | `key` \| `iam_role` or none | none | ADR-135 Amendments 4 and 7: key (entered in Admin › Models, kept by the model gateway alone), or at profile: cloud-platform only, iam_role (the gateway's own IAM role: no key is stored). Default: iam_role for bedrock, else key. |
 | `models.provider.region` | str or none | none | Bedrock's region (profile: cloud-platform): eu-west-2 (London) only, and the default for bedrock. |
 | `models.providers` | list of section | — | The providers (engines) an administrator enables, each reached through the deployment's gateway; each key is OSPREY_MODEL_KEY_<NAME>. |
@@ -3126,7 +3171,7 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `models.providers.api_base` | str or none | none | The provider's address, where it is not LiteLLM's default (an Azure deployment, a proxy) |
 | `models.providers.privacy_contract` | bool | false | True when the deployment's organisation holds a data-processing agreement with the provider covering this key. A dataset whose egress is `contracted` is sent only to a provider marked so. Default: false. |
 | `models.providers.contract_reference` | str or none | none | The agreement's reference, in words (for example DPA 2026/07); never a secret. Shown beside the mark. |
-| `models.providers.kind` | `provider` \| `gateway` \| `bedrock` | `provider` | ADR-135 Amendments 4 and 7: provider (a hosted provider LiteLLM knows by name), or at profile: cloud-platform only, gateway (your organisation's own OpenAI-compatible AI gateway, at api_base) or bedrock (Amazon Bedrock in London). Default: provider. |
+| `models.providers.kind` | `provider` \| `gateway` \| `bedrock` | `provider` | ADR-135 Amendments 4, 7 and 14: provider (a hosted provider LiteLLM knows by name), gateway (your organisation's own OpenAI-compatible AI gateway, at api_base; on every profile) or, at profile: cloud-platform only, bedrock (Amazon Bedrock in London). Default: provider. |
 | `models.providers.auth` | `key` \| `iam_role` or none | none | ADR-135 Amendments 4 and 7: key (entered in Admin › Models, kept by the model gateway alone), or at profile: cloud-platform only, iam_role (the gateway's own IAM role: no key is stored). Default: iam_role for bedrock, else key. |
 | `models.providers.region` | str or none | none | Bedrock's region (profile: cloud-platform): eu-west-2 (London) only, and the default for bedrock. |
 | `models.defaults` | mapping | — | Each role's default engine, `local` or an enabled provider's name. A role not named runs on `local` (for the single `provider`, on it). |

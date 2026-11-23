@@ -1,0 +1,593 @@
+{
+ "advice": "advice only; the Mac's merge run is the gate",
+ "checks": [
+  {
+   "kind": "ci",
+   "name": "opentofu-check",
+   "status": "not run",
+   "why": "container"
+  },
+  {
+   "kind": "ci",
+   "name": "chart-check",
+   "status": "not run",
+   "why": "container"
+  },
+  {
+   "kind": "ci",
+   "name": "cp-policy-check",
+   "status": "not run",
+   "why": "container"
+  },
+  {
+   "kind": "ci",
+   "name": "client-name-check",
+   "status": "not run",
+   "why": "client-names"
+  },
+  {
+   "kind": "core",
+   "name": "trivy",
+   "status": "not run",
+   "why": "no-tool: trivy is not installed on this machine"
+  },
+  {
+   "kind": "core",
+   "name": "trivy-image-ingest",
+   "status": "not run",
+   "why": "container"
+  },
+  {
+   "kind": "core",
+   "name": "trivy-image-api",
+   "status": "not run",
+   "why": "container"
+  },
+  {
+   "kind": "core",
+   "name": "trivy-image-workspace",
+   "status": "not run",
+   "why": "container"
+  },
+  {
+   "kind": "core",
+   "name": "trivy-image-harness",
+   "status": "not run",
+   "why": "container"
+  },
+  {
+   "kind": "core",
+   "name": "trivy-image-ner",
+   "status": "not run",
+   "why": "container"
+  },
+  {
+   "kind": "core",
+   "name": "trivy-image-worker",
+   "status": "not run",
+   "why": "container"
+  },
+  {
+   "kind": "core",
+   "name": "trivy-image-report-sync",
+   "status": "not run",
+   "why": "container"
+  },
+  {
+   "kind": "core",
+   "name": "trivy-image-superset",
+   "status": "not run",
+   "why": "container"
+  },
+  {
+   "kind": "core",
+   "name": "trivy-image-laurium",
+   "status": "not run",
+   "why": "container"
+  },
+  {
+   "kind": "core",
+   "name": "harness-a11y",
+   "status": "not run",
+   "why": "fixed-port"
+  },
+  {
+   "exit": 0,
+   "kind": "ci",
+   "name": "slice-line-check",
+   "seconds": 599,
+   "status": "passed"
+  },
+  {
+   "exit": 0,
+   "kind": "ci",
+   "name": "lint-tools",
+   "seconds": 0,
+   "status": "passed"
+  },
+  {
+   "exit": 0,
+   "kind": "ci",
+   "name": "licence-check",
+   "seconds": 3,
+   "status": "passed"
+  },
+  {
+   "exit": 0,
+   "kind": "ci",
+   "name": "design-check",
+   "seconds": 2,
+   "status": "passed"
+  },
+  {
+   "exit": 0,
+   "kind": "ci",
+   "name": "ui-words-check",
+   "seconds": 3,
+   "status": "passed"
+  },
+  {
+   "exit": 0,
+   "kind": "ci",
+   "name": "schemas-check",
+   "seconds": 109,
+   "status": "passed"
+  },
+  {
+   "exit": 0,
+   "kind": "ci",
+   "name": "authorized-query-check",
+   "seconds": 0,
+   "status": "passed"
+  },
+  {
+   "exit": 0,
+   "kind": "ci",
+   "name": "demo-guide-check",
+   "seconds": 0,
+   "status": "passed"
+  },
+  {
+   "exit": 0,
+   "kind": "ci",
+   "name": "domain-model-coverage-check",
+   "seconds": 0,
+   "status": "passed"
+  },
+  {
+   "exit": 0,
+   "kind": "ci",
+   "name": "route-coverage-check",
+   "seconds": 6,
+   "status": "passed"
+  },
+  {
+   "exit": 0,
+   "kind": "ci",
+   "name": "product-tree-link-check",
+   "seconds": 0,
+   "status": "passed"
+  },
+  {
+   "exit": 0,
+   "kind": "ci",
+   "name": "decision-log-publication-check",
+   "seconds": 0,
+   "status": "passed"
+  },
+  {
+   "exit": 0,
+   "kind": "ci",
+   "name": "provenance-annotation-check",
+   "seconds": 0,
+   "status": "passed"
+  },
+  {
+   "exit": 0,
+   "kind": "ci",
+   "name": "test-file-coverage-check",
+   "seconds": 12,
+   "status": "passed"
+  },
+  {
+   "exit": 0,
+   "kind": "ci",
+   "name": "citation-check",
+   "seconds": 4,
+   "status": "passed"
+  },
+  {
+   "exit": 0,
+   "kind": "ci",
+   "name": "conformance-guard",
+   "seconds": 3,
+   "status": "passed"
+  },
+  {
+   "exit": 0,
+   "kind": "ci",
+   "name": "lanes-check",
+   "seconds": 123,
+   "status": "passed"
+  },
+  {
+   "exit": 0,
+   "kind": "ci",
+   "name": "confinement-check",
+   "seconds": 18,
+   "status": "passed"
+  },
+  {
+   "exit": 0,
+   "kind": "ci",
+   "name": "no-branches-check",
+   "seconds": 2,
+   "status": "passed"
+  },
+  {
+   "exit": 0,
+   "kind": "ci",
+   "name": "no-langchain-check",
+   "seconds": 2,
+   "status": "passed"
+  },
+  {
+   "exit": 0,
+   "kind": "ci",
+   "name": "bundle",
+   "seconds": 0,
+   "status": "passed"
+  },
+  {
+   "exit": 0,
+   "kind": "core",
+   "name": "lint",
+   "seconds": 12,
+   "status": "passed"
+  },
+  {
+   "exit": 0,
+   "kind": "core",
+   "name": "typecheck",
+   "seconds": 35,
+   "status": "passed"
+  },
+  {
+   "exit": 0,
+   "kind": "core",
+   "name": "no-react-check",
+   "seconds": 0,
+   "status": "passed"
+  },
+  {
+   "exit": 0,
+   "kind": "core",
+   "name": "version-isolation-check",
+   "seconds": 1,
+   "status": "passed"
+  },
+  {
+   "exit": 0,
+   "kind": "test",
+   "name": "test",
+   "seconds": 1170,
+   "status": "passed"
+  }
+ ],
+ "client_names": "not run (no client-name list on this machine)",
+ "duckdb_spatial": {
+  "from": "https://extensions.duckdb.org/v1.5.6/linux_amd64/spatial.duckdb_extension.gz",
+  "platform": "linux_amd64",
+  "sha256": "3aa7e084efff1ceb71218b3bf75911a2ff519f9530547be87f6729f3cd7a1b6a",
+  "status": "installed",
+  "version": "1.5.6"
+ },
+ "failing": {
+  "by_target": {},
+  "targets": [],
+  "tests": []
+ },
+ "finished": "2026-11-23T07:12:14Z",
+ "group": [
+  "edfcda0e99098325",
+  "f6789324db423ac2"
+ ],
+ "holds_main": "8491233fcc16536f9d22196416a19d788d591ce9",
+ "id": "f6789324db423ac2",
+ "lane": "platform-b",
+ "list_drift": [
+  "test file OspreyFlow_Build/tests/test_maintainer_manifest.py starts a container (OspreyFlow_Build/tests/test_maintainer_manifest.py:1074) and is in neither list"
+ ],
+ "lists_from": "the candidate's",
+ "main": "8491233fcc16536f9d22196416a19d788d591ce9",
+ "merge": "323494e392502b54a1547b73fd1822205e181fd5",
+ "merges": [
+  "26949af66ab5d9250b02ece0e89c37de8319ae87",
+  "323494e392502b54a1547b73fd1822205e181fd5"
+ ],
+ "not_run": {
+  "docker_skipped": [
+   "../OspreyFlow_Build/tests/local_docker_guard.py",
+   "../OspreyFlow_Build/tests/harness/test_organisation_sign_in.py",
+   "../OspreyFlow_Build/tests/harness/test_refresh_silent_sign_in_keycloak.py",
+   "../OspreyFlow_Build/tests/harness/test_workspace_proxy.py",
+   "../OspreyFlow_Build/tests/cloud_platform_backup/test_restore_graph.py",
+   "../OspreyFlow_Build/tests/cp_policy_check/test_cp_egress_order.py",
+   "../OspreyFlow_Build/tests/harness/test_cloud_platform_search_jobs_postgres.py",
+   "../OspreyFlow_Build/tests/harness/test_helm_chart.py"
+  ],
+  "live_step": "not run: the live step needs the test stacks (stack_lease.sh), which this machine does not hold",
+  "mac_only": [
+   {
+    "name": "OspreyFlow_Core/apps/workspace/map-verify/contrast.spec.ts",
+    "why": "not run on this machine: its snapshots are another platform's (map-contrast-dark-darwin.png; map-contrast-govuk-darwin.png; map-contrast-light-darwin.png)"
+   }
+  ],
+  "targets": [
+   {
+    "evidence": "OspreyFlow_Build/Makefile:240; OspreyFlow_Build/Makefile:242; OspreyFlow_Build/Makefile:243",
+    "name": "opentofu-check",
+    "why": "container"
+   },
+   {
+    "evidence": "OspreyFlow_Build/Makefile:253",
+    "name": "chart-check",
+    "why": "container"
+   },
+   {
+    "evidence": "OspreyFlow_Build/tools/helm_chart.py:24",
+    "name": "cp-policy-check",
+    "why": "container"
+   },
+   {
+    "evidence": "OspreyFlow_Build/Makefile:57",
+    "name": "client-name-check",
+    "why": "client-names"
+   },
+   {
+    "name": "trivy",
+    "why": "no-tool: trivy is not installed on this machine"
+   },
+   {
+    "evidence": "OspreyFlow_Core/Makefile:52",
+    "name": "trivy-image-ingest",
+    "why": "container"
+   },
+   {
+    "evidence": "OspreyFlow_Core/Makefile:58",
+    "name": "trivy-image-api",
+    "why": "container"
+   },
+   {
+    "evidence": "OspreyFlow_Core/Makefile:66",
+    "name": "trivy-image-workspace",
+    "why": "container"
+   },
+   {
+    "evidence": "OspreyFlow_Core/Makefile:72",
+    "name": "trivy-image-harness",
+    "why": "container"
+   },
+   {
+    "evidence": "OspreyFlow_Core/Makefile:79",
+    "name": "trivy-image-ner",
+    "why": "container"
+   },
+   {
+    "evidence": "OspreyFlow_Core/Makefile:82",
+    "name": "trivy-image-worker",
+    "why": "container"
+   },
+   {
+    "evidence": "OspreyFlow_Core/Makefile:85",
+    "name": "trivy-image-report-sync",
+    "why": "container"
+   },
+   {
+    "evidence": "OspreyFlow_Core/Makefile:88",
+    "name": "trivy-image-superset",
+    "why": "container"
+   },
+   {
+    "evidence": "OspreyFlow_Core/Makefile:93",
+    "name": "trivy-image-laurium",
+    "why": "container"
+   },
+   {
+    "evidence": "OspreyFlow_Core/apps/harness/a11y/playwright.config.ts:45",
+    "name": "harness-a11y",
+    "why": "fixed-port"
+   }
+  ],
+  "test_files": [
+   {
+    "name": "OspreyFlow_Build/tests/test_maintainer_manifest.py",
+    "why": "unlisted: starts a container or binds a fixed port, in neither of lists.tsv's verdicts"
+   }
+  ]
+ },
+ "of": 2,
+ "passed_targets": [
+  "slice-line-check",
+  "lint-tools",
+  "licence-check",
+  "design-check",
+  "ui-words-check",
+  "schemas-check",
+  "authorized-query-check",
+  "demo-guide-check",
+  "domain-model-coverage-check",
+  "route-coverage-check",
+  "product-tree-link-check",
+  "decision-log-publication-check",
+  "provenance-annotation-check",
+  "test-file-coverage-check",
+  "citation-check",
+  "conformance-guard",
+  "confinement-check",
+  "no-branches-check",
+  "no-langchain-check",
+  "bundle",
+  "lint",
+  "typecheck",
+  "no-react-check",
+  "version-isolation-check",
+  "test"
+ ],
+ "position": 2,
+ "runner_version": "ew-2",
+ "scan_rows": [],
+ "seconds": 2123,
+ "slice": "SE9",
+ "stack": [
+  {
+   "slice": "SE6c",
+   "tip": "27c016530bf764ca36391ec3c2455c9adb899099"
+  },
+  {
+   "slice": "SE9",
+   "tip": "4378978f9a09eb5c23f0641543f19fa4f0eef308"
+  }
+ ],
+ "stack_id": "7540a661b6930ecc",
+ "state": "done",
+ "steps": [
+  {
+   "exit": 0,
+   "seconds": 599,
+   "step": "make slice-line-check"
+  },
+  {
+   "exit": 0,
+   "seconds": 0,
+   "step": "make lint-tools"
+  },
+  {
+   "exit": 0,
+   "seconds": 3,
+   "step": "make licence-check"
+  },
+  {
+   "exit": 0,
+   "seconds": 2,
+   "step": "make design-check"
+  },
+  {
+   "exit": 0,
+   "seconds": 3,
+   "step": "make ui-words-check"
+  },
+  {
+   "exit": 0,
+   "seconds": 109,
+   "step": "make schemas-check"
+  },
+  {
+   "exit": 0,
+   "seconds": 0,
+   "step": "make authorized-query-check"
+  },
+  {
+   "exit": 0,
+   "seconds": 0,
+   "step": "make demo-guide-check"
+  },
+  {
+   "exit": 0,
+   "seconds": 0,
+   "step": "make domain-model-coverage-check"
+  },
+  {
+   "exit": 0,
+   "seconds": 6,
+   "step": "make route-coverage-check"
+  },
+  {
+   "exit": 0,
+   "seconds": 0,
+   "step": "make product-tree-link-check"
+  },
+  {
+   "exit": 0,
+   "seconds": 0,
+   "step": "make decision-log-publication-check"
+  },
+  {
+   "exit": 0,
+   "seconds": 0,
+   "step": "make provenance-annotation-check"
+  },
+  {
+   "exit": 0,
+   "seconds": 12,
+   "step": "make test-file-coverage-check"
+  },
+  {
+   "exit": 0,
+   "seconds": 4,
+   "step": "make citation-check"
+  },
+  {
+   "exit": 0,
+   "seconds": 3,
+   "step": "make conformance-guard"
+  },
+  {
+   "exit": 0,
+   "seconds": 123,
+   "step": "make lanes-check"
+  },
+  {
+   "exit": 0,
+   "seconds": 18,
+   "step": "make confinement-check"
+  },
+  {
+   "exit": 0,
+   "seconds": 2,
+   "step": "make no-branches-check"
+  },
+  {
+   "exit": 0,
+   "seconds": 2,
+   "step": "make no-langchain-check"
+  },
+  {
+   "exit": 0,
+   "seconds": 0,
+   "step": "make bundle"
+  },
+  {
+   "exit": 0,
+   "seconds": 12,
+   "step": "make -C ../OspreyFlow_Core lint"
+  },
+  {
+   "exit": 0,
+   "seconds": 35,
+   "step": "make -C ../OspreyFlow_Core typecheck"
+  },
+  {
+   "exit": 0,
+   "seconds": 0,
+   "step": "make -C ../OspreyFlow_Core no-react-check"
+  },
+  {
+   "exit": 0,
+   "seconds": 1,
+   "step": "make -C ../OspreyFlow_Core version-isolation-check"
+  },
+  {
+   "exit": 0,
+   "seconds": 1170,
+   "step": "make test"
+  }
+ ],
+ "tip": "4378978f9a09eb5c23f0641543f19fa4f0eef308",
+ "tree": "b5b824e3dd9970ab19ff48802712e878888c610f",
+ "usage": {
+  "cpu_seconds": 4929,
+  "memory_peak_bytes": 10949083136
+ },
+ "verdict": "pass"
+}

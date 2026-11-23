@@ -1,0 +1,192 @@
+Red first, then green, for the AD1a key-path table (round 6; `OspreyFlow_Build/tests/services/api/test_model_key_paths.py`).
+
+Run on 20 November 2026 with `ARCADEDB_HTTP_PORT=9 POSTGRES_PORT=9`, from `OspreyFlow_Core`, pytest `-p no:cacheprovider --tb=no -rfp`:
+the test file as committed in 506d287, against `services/api/model_admin.py` as it stood at the merge commit 1427b57 (main taken in,
+SE5 and the branch's own edit path, no row of the table fixed). Every key in the run is made at run time; none is in any file; the
+summary lines below have their text filtered of anything key-shaped.
+
+== RED, model_admin.py at 1427b57 ==
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_a_process_killed_after_the_key_and_before_the_record_row_15
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_a_key_the_gateway_will_not_remove_is_never_given_an_entry_rows_16_and_39
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_whatever_leaves_the_edit_once_the_key_is_stored_removes_it_row_17[a cancellation]
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_whatever_leaves_the_edit_once_the_key_is_stored_removes_it_row_17[a JSON error]
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_whatever_leaves_the_edit_once_the_key_is_stored_removes_it_row_17[another transport error]
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_a_moved_edit_that_stops_before_it_wrote_anything_leaves_the_key_rows_29_and_30[an exception nobody named]
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_a_moved_edit_that_stops_before_it_wrote_anything_leaves_the_key_rows_29_and_30[a cancellation]
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_a_not_saved_answer_says_when_the_key_removal_was_saved_row_31
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_a_rotation_that_cannot_record_its_intent_removes_nothing_rows_32_and_33
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_a_rotation_stopped_after_the_old_key_was_removed_says_it_rows_32_and_33[an exception nobody named]
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_a_rotation_stopped_after_the_old_key_was_removed_says_it_rows_32_and_33[a cancellation]
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_a_removed_key_whose_record_is_not_saved_is_lost_not_set_row_34[the record cannot be saved]
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_a_removed_key_whose_record_is_not_saved_is_lost_not_set_row_34[a cancellation]
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_a_removed_engine_whose_record_is_not_saved_has_no_key_row_35
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_start_after_a_kill_between_the_delete_and_the_save_row_36[remove_key]
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_an_engine_whose_unpriced_rebuild_did_not_finish_is_not_offered_row_37
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_another_engines_change_does_not_offer_an_engine_with_no_key_row_38
+PASSED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_the_answer_to_the_key_being_stored_is_lost_row_3
+PASSED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_an_entry_at_the_new_address_that_survives_a_refused_put_back_row_28
+PASSED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_a_moved_edit_that_stops_before_it_wrote_anything_leaves_the_key_rows_29_and_30[the record cannot be saved]
+PASSED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_a_removal_the_gateway_refuses_leaves_the_key_set_and_offered_row_34
+PASSED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_start_after_a_kill_between_the_delete_and_the_save_row_36[remove_engine]
+=================== 17 failed, 5 passed, 1 warning in 5.56s ====================
+
+Read: 17 fail, 5 pass. The five that pass are the rows the merge already closed: row 3 (the answer lost, and the credential removed by
+the branch's own clean-up), row 28 (SE5's address comparison, now on main and merged in), row 29 (the first record save fails: the
+record of intent was already written before any key), row 34's refused removal (nothing deleted), and row 36 for `remove_engine`
+(its entries are withdrawn first, so the old start-up marks it lost). Row 28 was red on the round-5 tip (4ace506, before SE5):
+test_an_entry_at_the_new_address_that_survives_a_refused_put_back_row_28 FAILED [ 35%]
+
+== GREEN, model_admin.py with this slice's fix ==
+22 passed.
+
+== Round 7 (20 November 2026): rows 28 (edit path, check), 40, 36, 41 and 21 and the put-back words ==
+Run from OspreyFlow_Core with ARCADEDB_HTTP_PORT=9 POSTGRES_PORT=9, pytest -p no:cacheprovider --tb=no -rfp. Every key is made at run time.
+
+-- RED: the test file as committed in ba18b15, against services/api/model_admin.py at c66961a (round 6's code) --
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_whatever_leaves_the_edit_once_the_key_is_stored_removes_it_row_17[a cancellation]
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_whatever_leaves_the_edit_once_the_key_is_stored_removes_it_row_17[a JSON error]
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_whatever_leaves_the_edit_once_the_key_is_stored_removes_it_row_17[another transport error]
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_a_rotation_stopped_after_the_old_key_was_removed_says_it_rows_32_and_33[an exception nobody named]
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_a_rotation_stopped_after_the_old_key_was_removed_says_it_rows_32_and_33[a cancellation]
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_a_removed_key_whose_record_is_not_saved_is_lost_not_set_row_34[a cancellation]
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_an_edit_that_keeps_the_address_and_carries_a_key_withdraws_entries_first_row_28
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_a_check_for_a_new_engine_withdraws_a_stray_entry_before_its_key_row_28
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_a_moved_edit_whose_withdrawal_fails_leaves_the_old_key_working_row_40[the gateway refuses it]
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_a_moved_edit_whose_withdrawal_fails_leaves_the_old_key_working_row_40[the answer is lost after it landed]
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_start_marks_an_engine_with_a_note_outstanding_and_reads_no_credential_row_36
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_a_cancelled_check_whose_removal_is_not_saved_cannot_be_added_row_41[the record cannot be saved]
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_a_cancelled_check_whose_removal_is_not_saved_cannot_be_added_row_41[the process is killed]
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_a_probe_credential_left_before_any_models_file_is_removed_at_start_row_21
+FAILED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_a_probe_credential_the_gateway_would_not_remove_is_noted_row_21
+PASSED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_the_answer_to_the_key_being_stored_is_lost_row_3
+PASSED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_a_process_killed_after_the_key_and_before_the_record_row_15
+PASSED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_a_key_the_gateway_will_not_remove_is_never_given_an_entry_rows_16_and_39
+PASSED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_an_entry_at_the_new_address_that_survives_a_refused_put_back_row_28
+PASSED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_a_moved_edit_that_stops_before_it_wrote_anything_leaves_the_key_rows_29_and_30[the record cannot be saved]
+PASSED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_a_moved_edit_that_stops_before_it_wrote_anything_leaves_the_key_rows_29_and_30[an exception nobody named]
+PASSED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_a_moved_edit_that_stops_before_it_wrote_anything_leaves_the_key_rows_29_and_30[a cancellation]
+PASSED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_a_not_saved_answer_says_when_the_key_removal_was_saved_row_31
+PASSED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_a_rotation_that_cannot_record_its_intent_removes_nothing_rows_32_and_33
+PASSED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_a_removed_key_whose_record_is_not_saved_is_lost_not_set_row_34[the record cannot be saved]
+PASSED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_a_removal_the_gateway_refuses_leaves_the_key_set_and_offered_row_34
+PASSED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_a_removed_engine_whose_record_is_not_saved_has_no_key_row_35
+PASSED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_start_after_a_kill_between_the_delete_and_the_save_row_36[remove_key]
+PASSED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_start_after_a_kill_between_the_delete_and_the_save_row_36[remove_engine]
+PASSED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_an_engine_whose_unpriced_rebuild_did_not_finish_is_not_offered_row_37
+PASSED ../OspreyFlow_Build/tests/services/api/test_model_key_paths.py::test_another_engines_change_does_not_offer_an_engine_with_no_key_row_38
+15 failed, 16 passed, 1 warning in 2.37s
+
+-- GREEN: this round's model_admin.py (note of intent), test_model_key_paths.py with SE5's and the branch's own failure tests --
+373 passed, 1 warning in 28.03s
+
+-- PLANTS: each branch of the new code removed in turn, the same two files run; every plant goes red (rule 15) --
+P1 an earlier note is given back by a refused step: 1 red
+    test_a_refused_key_set_does_not_clear_a_note_an_earlier_change_left_rows_16_and_39
+P2 an edit that carries a key does not withdraw disagreeing entries first: 1 red
+    test_an_edit_that_keeps_the_address_and_carries_a_key_withdraws_entries_first_row_28
+P3 a moved edit records its intent before it withdraws the old entries: 4 red
+    test_a_moved_edit_that_stops_before_it_wrote_anything_leaves_the_key_rows_29_and_30[an exception nobody named]
+    test_a_moved_edit_that_stops_before_it_wrote_anything_leaves_the_key_rows_29_and_30[a cancellation]
+    test_a_moved_edit_whose_withdrawal_fails_leaves_the_old_key_working_row_40[the gateway refuses it]
+    test_a_moved_edit_whose_withdrawal_fails_leaves_the_old_key_working_row_40[the answer is lost after it landed]
+P4 start does not settle notes of intent: 5 red
+    test_a_process_killed_after_the_key_and_before_the_record_row_15
+    test_a_key_the_gateway_will_not_remove_is_never_given_an_entry_rows_16_and_39
+    test_start_marks_an_engine_with_a_note_outstanding_and_reads_no_credential_row_36
+    test_a_probe_credential_the_gateway_would_not_remove_is_noted_row_21
+    (and 1 more)
+P5 start does not sweep probe credentials: 1 red
+    test_a_probe_credential_left_before_any_models_file_is_removed_at_start_row_21
+P6 cancel a check without a note of intent: 2 red
+    test_a_cancelled_check_whose_removal_is_not_saved_cannot_be_added_row_41[the record cannot be saved]
+    test_a_cancelled_check_whose_removal_is_not_saved_cannot_be_added_row_41[the process is killed]
+P7 a check for a new engine does not withdraw a stray entry first: 1 red
+    test_a_check_for_a_new_engine_withdraws_a_stray_entry_before_its_key_row_28
+P8 the words say put back although the key was removed: 7 red
+    test_whatever_leaves_the_edit_once_the_key_is_stored_removes_it_row_17[a cancellation]
+    test_whatever_leaves_the_edit_once_the_key_is_stored_removes_it_row_17[a JSON error]
+    test_whatever_leaves_the_edit_once_the_key_is_stored_removes_it_row_17[another transport error]
+    test_a_rotation_stopped_after_the_old_key_was_removed_says_it_rows_32_and_33[an exception nobody named]
+    (and 3 more)
+P9 a change does not settle notes of intent before it begins: 1 red
+    test_a_cancelled_check_whose_removal_is_not_saved_cannot_be_added_row_41[the record cannot be saved]
+P10 the undo does not settle notes of intent: 16 red
+    test_the_answer_to_the_key_being_stored_is_lost_row_3
+    test_whatever_leaves_the_edit_once_the_key_is_stored_removes_it_row_17[a cancellation]
+    test_whatever_leaves_the_edit_once_the_key_is_stored_removes_it_row_17[a JSON error]
+    test_whatever_leaves_the_edit_once_the_key_is_stored_removes_it_row_17[another transport error]
+    (and 12 more)
+
+Two cases were added after the red commit (the note an earlier change left must not be given back by a refused step; a check killed after its key was stored is settled at start): both red on c66961a's model_admin.py (2 failed), green now. The put-back words, SE5's and the branch's own failure tests were adapted where they counted saves (a counted second save is now a note's save): each now fails the save that carries the record's new address.
+Rows 4 (a rotation killed after the old key was removed, and after the new was stored) and 5 (a probe's store whose answer was lost) were added last: red on c66961a's model_admin.py (3 failed), green now.
+
+-- Round 8 (20 November 2026) -----------------------------------------------------------------------------
+Red on 4b9147a's model_admin.py (the tip of round 7), the key-paths file as committed in 0cb469e: 12 failed.
+    test_a_rotation_that_fails_after_the_new_key_is_stored_says_what_became_of_the_key_round_8: 8 (set_key and an edit that keeps its
+        address, each with the engine's key update refused, the key list garbled, a cancellation after the store, and the update refused
+        twice): the new key was still the credential, and the audit named no key_rotated
+    test_a_lapsed_check_s_credential_is_removed_under_a_note_round_8_n1: 2 (the answer lost; the process killed)
+    test_a_cancelled_moved_edit_of_an_engine_with_no_key_does_not_say_put_back_round_8_n2: 2 (key lost; no key)
+Green on 4b9147a (held, not red-first): the rotation that completes; the first check cut short after its key; a lapsed check's removal the
+gateway refuses; rows 29 and 30 planted at the real call sites.
+-- PLANTS: each branch of the round's code put back in turn; every plant goes red (rule 15) --
+
+Q1 _put_key saves the record set and clears the note inside the store (the early clear): 24 red
+    test_a_process_killed_after_the_key_and_before_the_record_row_15
+    test_a_key_the_gateway_will_not_remove_is_never_given_an_entry_rows_16_and_39
+    test_whatever_leaves_the_edit_once_the_key_is_stored_removes_it_row_17[a cancellation]
+    test_whatever_leaves_the_edit_once_the_key_is_stored_removes_it_row_17[a JSON error]
+    (and 20 more)
+Q2 an expired check's credential is deleted with no note: 2 red
+    test_a_lapsed_check_s_credential_is_removed_under_a_note_round_8_n1[the answer to the removal is lost]
+    test_a_lapsed_check_s_credential_is_removed_under_a_note_round_8_n1[the process is killed after the removal]
+Q3 the words ignore a credential the undo removed for a key already lost: 2 red
+    test_a_cancelled_moved_edit_of_an_engine_with_no_key_does_not_say_put_back_round_8_n2[key lost]
+    test_a_cancelled_moved_edit_of_an_engine_with_no_key_does_not_say_put_back_round_8_n2[no key]
+Q4 a failed rotation is audited as a first key (the action is named from the initial default): 4 red
+    test_a_rotation_that_fails_after_the_new_key_is_stored_says_what_became_of_the_key_round_8[the engine's key update is refused-set_key]
+    test_a_rotation_that_fails_after_the_new_key_is_stored_says_what_became_of_the_key_round_8[the key list is garbled-set_key]
+    test_a_rotation_that_fails_after_the_new_key_is_stored_says_what_became_of_the_key_round_8[a cancellation after the store-set_key]
+    test_a_rotation_that_fails_after_the_new_key_is_stored_says_what_became_of_the_key_round_8[the key update is refused and so is the undo's-set_key]
+
+-- Round 9 (20 November 2026) -----------------------------------------------------------------------------
+Red on e547a9f's model_admin.py (the tip of round 8), the key-paths file as committed in 4e27bbb: 7 failed.
+    test_a_rotation_that_fails_after_the_new_key_is_stored_says_what_became_of_the_key_round_8: 4 (an edit that keeps its address; the helper now
+        reads the key_rotated rows for both callers, so it can no longer hide row 42): the failure wrote no key_rotated row
+    test_a_failed_edit_that_carried_a_key_audits_a_key_rotation_row_42: 2 (the key update refused; a cancellation after the store)
+    test_one_key_change_has_one_name_whether_it_fails_or_succeeds_row_43[fails]: 1 (set_key on an engine the record says is set and this process
+        marked unavailable: the failure was audited as key_set)
+Green on e547a9f (held, not red-first): row 43's succeeding end; the N4 test (nothing from the virtual-key listing is shown; its plant is below).
+-- PLANTS: each piece of round 9's code put back in turn; every plant goes red (rule 15) --
+
+P42  the edit passes no key_action to _change (the failure writes no key_rotated row): 6 red
+    test_a_failed_edit_that_carried_a_key_audits_a_key_rotation_row_42 (both) and the edit's four cases of the round-8 rotation test
+P43a set_key's name read from key_state when the change is made, and passed as a value (the round-8 code): 1 red
+    test_one_key_change_has_one_name_whether_it_fails_or_succeeds_row_43[fails-set_key]
+P43b the name `work` settles inside set_key read from key_state (the success end): 2 red
+    test_one_key_change_has_one_name_whether_it_fails_or_succeeds_row_43[fails-set_key], [succeeds-set_key]
+P43c the edit names its key action from key_state: 2 red
+    test_one_key_change_has_one_name_whether_it_fails_or_succeeds_row_43[fails-an edit...], [succeeds-an edit...]
+PN4  the stale virtual key's token added to the log line at the real call site in revoke_stale_engine_keys: 1 red
+    test_nothing_from_the_virtual_key_listing_is_logged_answered_or_audited_n4
+Green now: all 60 cases of test_model_key_paths.py.
+
+-- Round 10 (21 November 2026): no key listing; the N4 search covers key_name ------------------------------------------------------
+Run from OspreyFlow_Core with ARCADEDB_HTTP_PORT=9 POSTGRES_PORT=9, `-k n4`. The plant scripts beside this file (`plants_n4_before_fix.py`,
+`plants_n4_after_fix.py`) patch services/api/model_admin.py, run the three N4 cases and put the file back. Every key is made at run time; the
+stand-in lists a `key_name` of the real shape (`sk-...` and four characters) for the stale key, which the test shows with its own call.
+Red on b7bcd8f's tests against round 9's model_admin.py (the listing still called):
+    test_start_up_asks_the_gateway_for_no_listing_n4: 1 red (the Conduit asked `GET /key/list`)
+    the search test and the route test were green (the finding: nothing searched for key_name)
+PLANTS on round 9's code (the search test's gap, closed):
+PN4k_before  key_name logged where the listing is read: test_start_up_asks_the_gateway_for_no_listing_n4 red, the search test red
+PN4s_before  the stale key's last four put into the words of a refusal: no-listing test red, the search test red
+Green on the fix: test_model_key_paths.py 62 passed; test_model_engine_keys.py green with the master-rotation sweep test replaced (the old one
+asserted the removed behaviour; its successor asserts no listing and keeps a strict xfail for N6).
+PLANTS on the fix (each put back after):
+PN4a  the listing put back in _reconcile, nothing read: no-listing test red; the search test green (it searches what is shown, and nothing is)
+PN4k  the listing put back and each key_name logged: no-listing test red, the search test red
+PN4s  the listing put back and the stale key's last four put into a refusal's words: no-listing test red, the search test red
+PN4r  the route skipped (remove_engine does not delete the engine's key): the route test red (and the search test errors on its own removal)
+The cases of rows 17 and round 8 that planted on the reconcile's `GET /key/list` now plant on the first `GET /v2/model/info` after the key is stored;
+the fault is shown to fire (without it the case fails with "DID NOT RAISE"), which is how the move of plant site was checked.

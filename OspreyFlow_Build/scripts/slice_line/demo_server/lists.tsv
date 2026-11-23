@@ -106,6 +106,7 @@ test	OspreyFlow_Build/tests/test_image_imports_are_carried.py	run	container-guar
 test	OspreyFlow_Build/tests/test_images_built_fresh.py	run	container-guarded	OspreyFlow_Build/tests/test_images_built_fresh.py:8
 test	OspreyFlow_Build/tests/test_live_driver_own_tags.py	run	container-guarded	OspreyFlow_Build/tests/test_live_driver_own_tags.py:180
 test	OspreyFlow_Build/tests/test_local_docker_guard.py	run	container-guarded	OspreyFlow_Build/tests/test_local_docker_guard.py:32
+test	OspreyFlow_Build/tests/test_maintainer_manifest.py	run	container-guarded	OspreyFlow_Build/tests/test_maintainer_manifest.py:1074	its docker build is the text of a workflow file the test writes (line 1074); it runs only git and Python
 test	OspreyFlow_Build/tests/test_measure_search.py	run	container-guarded	OspreyFlow_Build/tests/test_measure_search.py:927
 test	OspreyFlow_Build/tests/test_no_langchain_check.py	run	container-guarded	OspreyFlow_Build/tests/test_no_langchain_check.py:7
 test	OspreyFlow_Build/tests/test_osprey_bundle.py	run	container-guarded	OspreyFlow_Build/tests/test_osprey_bundle.py:352

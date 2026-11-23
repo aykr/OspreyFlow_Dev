@@ -15,6 +15,7 @@ import sys
 import time
 
 import pytest
+from pathlib import Path
 
 from conftest import DEMO, PROC_HEADER, runner, sh
 
@@ -194,7 +195,7 @@ def test_the_runner_sets_no_docker_host_and_fetches_duckdbs_extension_over_https
     assert "https://extensions.duckdb.org/" in text and "http://extensions" not in text
 
 
-def spatial_step(monkeypatch, tmp_path, answer=None, refuse=None):
+def spatial_step(monkeypatch, tmp_path, answer=None, refuse=None, during_install=None):
     """runner.py's DUCKDB_SPATIAL itself, with DuckDB and the network stood in for: what it asked for, and said."""
     import gzip
     import io
@@ -220,7 +221,13 @@ def spatial_step(monkeypatch, tmp_path, answer=None, refuse=None):
     duck = types.ModuleType("duckdb")
     duck.__version__ = "1.5.6"
     duck.sql = lambda q: types.SimpleNamespace(fetchone=lambda: ("linux_amd64",))
-    duck.connect = lambda: types.SimpleNamespace(install_extension=lambda p: asked.setdefault("installed", p),
+    def install_extension(p):
+        asked.setdefault("installed", p)
+        if during_install:
+            during_install(p)  # e.g. a second job's step, run while this one installs
+        asked.setdefault("read", Path(p).read_bytes())
+
+    duck.connect = lambda: types.SimpleNamespace(install_extension=install_extension,
                                                  load_extension=lambda n: asked.setdefault("loaded", n))
     monkeypatch.setattr(urllib.request, "urlopen", urlopen)
     monkeypatch.setitem(sys.modules, "duckdb", duck)
@@ -249,9 +256,128 @@ def test_a_refused_spatial_fetch_says_where_it_stopped_and_why(monkeypatch, tmp_
     assert "installed" not in asked
 
 
+def test_a_job_installs_from_its_own_unpacked_file_while_another_job_unpacks(monkeypatch, tmp_path):
+    """015: three jobs share the cache. A second job's step, run while the first installs, writes none of the first's
+    files, so the first still installs the whole extension (runs 1c7525d175792ee0 and d7ce43cd986f60e3 were truncated)."""
+    import types
+    whole = b"the whole extension" * 1000
+    second = []
+
+    def another_job_meanwhile(_):
+        duck = sys.modules["duckdb"]
+        first = duck.connect
+        duck.connect = lambda: types.SimpleNamespace(install_extension=second.append, load_extension=lambda n: None)
+        try:
+            exec(compile(r.DUCKDB_SPATIAL, "DUCKDB_SPATIAL", "exec"), {"__name__": "__main__"})
+        finally:
+            duck.connect = first
+
+    asked, said = spatial_step(monkeypatch, tmp_path, answer=whole, during_install=another_job_meanwhile)
+    assert said["status"] == "installed"
+    assert second and second[0] != asked["installed"], "the two jobs installed from one shared file"
+    assert asked["read"] == whole, "the first job's file was changed by the second's unpack"
+    folder = tmp_path / "v1.5.6" / "linux_amd64"
+    assert sorted(x.name for x in folder.iterdir()) == ["spatial.duckdb_extension.gz"], \
+        "a job left its part file or its unpacked copy in the shared cache"
+
+
+def test_a_fetch_writes_a_part_file_of_its_own(monkeypatch, tmp_path):
+    """015: two jobs fetching at once never write one part file. Another job's download in progress is left alone, and
+    this job's own is put in place whole."""
+    import gzip
+    folder = tmp_path / "v1.5.6" / "linux_amd64"
+    folder.mkdir(parents=True)
+    theirs = folder / "spatial.duckdb_extension.gz.part"
+    theirs.write_bytes(b"another job's download, half written")
+    asked, said = spatial_step(monkeypatch, tmp_path, answer=b"mine")
+    assert said["status"] == "installed" and asked["read"] == b"mine"
+    assert theirs.read_bytes() == b"another job's download, half written", "another job's part file was written over"
+    assert gzip.decompress((folder / "spatial.duckdb_extension.gz").read_bytes()) == b"mine"
+
+
+def test_a_cached_download_that_does_not_unpack_is_dropped_and_fetched_again(monkeypatch, tmp_path):
+    """015: a bad file in the cache would turn every later run red; it is dropped, and the next run fetches it."""
+    folder = tmp_path / "v1.5.6" / "linux_amd64"
+    folder.mkdir(parents=True)
+    (folder / "spatial.duckdb_extension.gz").write_bytes(b"not gzip")
+    asked, said = spatial_step(monkeypatch, tmp_path)
+    assert said["status"] == "failed" and said["stage"] == "unpack" and "url" not in asked
+    assert not (folder / "spatial.duckdb_extension.gz").exists()
+    asked, said = spatial_step(monkeypatch, tmp_path)
+    assert said["status"] == "installed" and asked["url"].endswith("spatial.duckdb_extension.gz")
+
+
 def test_install_shows_the_shield_in_its_dry_run_and_cleanup_removes_it():
     install = (DEMO / "install.sh").read_text()
     assert 'say "  would write $ROOT/bin/shield.nft, checked with nft -c, and load it as:"' in install
     assert "systemctl enable --now osprey-early-shield.service" in install and "nft -c -f" in install
     cleanup = (DEMO / "cleanup.sh").read_text()
     assert "nft delete table inet osprey_early" in cleanup and "osprey-early-shield.service" in cleanup
+
+
+# ------------------------------------------------------------------------------------------------ 015: the summary's model
+
+def test_a_starting_job_waits_while_the_summary_holds_the_model_then_holds_the_lock_for_its_run(monkeypatch, tmp_path):
+    """015: run edfcda0e99098325's summary loaded the model at 07:12:31 and five runs after it were refused on its port.
+    A job now waits for the summary to let go, then holds the lock shared, so no summary starts beside it."""
+    import fcntl
+    import threading
+    lock, log = tmp_path / "model.lock", tmp_path / "log"
+    lock.write_text("")
+    monkeypatch.setattr(r, "MODEL_LOCK", lock)
+    monkeypatch.setattr(r, "_HELD", [])
+    summary = open(lock)
+    fcntl.flock(summary, fcntl.LOCK_EX)
+    done = threading.Event()
+    t = threading.Thread(target=lambda: (r.wait_for_the_summary(log), done.set()), daemon=True)
+    t.start()
+    assert not done.wait(2.5), "the job did not wait for the summary"
+    fcntl.flock(summary, fcntl.LOCK_UN)
+    summary.close()
+    assert done.wait(5)
+    assert len(r._HELD) == 1 and "waited" in log.read_text() and "for the summary to unload its model" in log.read_text()
+    with open(lock) as again:
+        with pytest.raises(OSError):
+            fcntl.flock(again, fcntl.LOCK_EX | fcntl.LOCK_NB)  # a summary now finds it held
+    os.close(r._HELD.pop())
+
+
+def test_a_job_waits_for_the_summary_no_longer_than_its_limit(monkeypatch, tmp_path):
+    import fcntl
+    lock, log = tmp_path / "model.lock", tmp_path / "log"
+    lock.write_text("")
+    monkeypatch.setattr(r, "MODEL_LOCK", lock)
+    monkeypatch.setattr(r, "SUMMARY_WAIT_SECONDS", 1)
+    monkeypatch.setattr(r, "_HELD", [])
+    with open(lock) as summary:
+        fcntl.flock(summary, fcntl.LOCK_EX)
+        t0 = time.monotonic()
+        r.wait_for_the_summary(log)
+        assert time.monotonic() - t0 < 5 and r._HELD == []
+    assert "going on to the shield check" in log.read_text()
+
+
+def test_with_no_summary_installed_a_job_does_not_wait(monkeypatch, tmp_path):
+    monkeypatch.setattr(r, "MODEL_LOCK", tmp_path / "absent.lock")
+    monkeypatch.setattr(r, "_HELD", [])
+    r.wait_for_the_summary(tmp_path / "log")
+    assert r._HELD == [] and not (tmp_path / "log").exists()
+
+
+def test_a_breach_that_goes_within_the_settle_time_refuses_nothing_and_one_that_stays_does(monkeypatch):
+    seen = [["port 34041"], ["port 34041"], []]
+    monkeypatch.setattr(r, "shield_breaches", lambda: seen.pop(0) if len(seen) > 1 else seen[0])
+    monkeypatch.setattr(r, "SHIELD_SETTLE_SECONDS", 10)
+    monkeypatch.setattr(r.time, "sleep", lambda s: None)
+    assert r.settled_breaches() == []
+    monkeypatch.setattr(r, "shield_breaches", lambda: ["port 34041"])
+    monkeypatch.setattr(r, "SHIELD_SETTLE_SECONDS", 0.2)
+    assert r.settled_breaches() == ["port 34041"]
+
+
+def test_the_job_waits_for_the_summary_before_its_shield_check_and_refuses_on_a_breach_that_stays():
+    text = (DEMO / "runner.py").read_text()
+    body = text[text.index("def run_job("):]
+    assert body.index("wait_for_the_summary(log)") < body.index("breaches = settled_breaches()") \
+        < body.index("make_tree(tree")
+    assert r.SHIELD_SETTLE_SECONDS == 30 and r.SUMMARY_WAIT_SECONDS == 15 * 60

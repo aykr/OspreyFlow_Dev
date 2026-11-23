@@ -469,7 +469,6 @@ ROUTE_RIGHTS = {
     # ADR-135 Amendment 2, ADR-112 Amendment 7: Admin › Models.
     "models_admin_view_route": "manage_models",
     "models_admin_history_route": "manage_models",
-    "models_admin_add_engine_route": "manage_models",
     "models_admin_edit_engine_route": "manage_models",
     "models_admin_remove_engine_route": "manage_models",
     "models_admin_defaults_route": "manage_models",
@@ -479,6 +478,11 @@ ROUTE_RIGHTS = {
     # ADR-135 Amendment 3 (P2), missed from this table at P2's merge: added in P3.
     "models_admin_limits_route": "manage_models",
     "models_admin_usage_route": "manage_models",
+    # ADR-135 Amendment 14: the check before Add, its Add and its Cancel, the only way an engine is
+    # added (the owner's ruling 18).
+    "models_admin_check_route": "manage_models",
+    "models_admin_add_checked_route": "manage_models",
+    "models_admin_cancel_check_route": "manage_models",
     # ADR-147 (P3): Admin › Maps.
     "maps_admin_view_route": "manage_geospatial",
     "maps_admin_history_route": "manage_geospatial",

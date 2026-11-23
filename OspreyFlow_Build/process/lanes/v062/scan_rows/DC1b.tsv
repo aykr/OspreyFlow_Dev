@@ -1,1 +1,0 @@
-tests/test_site_intent.py	OspreyFlow_Build/marketing_site/,OspreyFlow_Core/	reads every built page under marketing_site/sites/org and sites/net and the older site in marketing_site/deploy; runs build.py, overview.py and govanim.py into a temporary folder (which reads OspreyFlow_Core/CHANGELOG.md); imports tests/test_sites.py

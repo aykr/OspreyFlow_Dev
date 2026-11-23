@@ -35,7 +35,7 @@ M = [
  (D + "install.sh", 'say "command=\\"/usr/bin/python3 -I $ROOT/bin/runner.py', 'say "command=\\"/usr/bin/python3 $ROOT/bin/runner.py', "forced_command_ignores_them"),
  (D + "runner.py", '"--property", "CPUQuota=" + p.CPU_QUOTA, ', '', "launches_capped_and_runs_the_real_gate"),
  # the demo shield
- (D + "runner.py", '        breaches = shield_breaches()\n', '        breaches = []\n', "reaches_another_accounts_port_runs_nothing"),
+ (D + "runner.py", '        breaches = settled_breaches()\n', '        breaches = []\n', "reaches_another_accounts_port_runs_nothing"),
  (D + "runner.py", '            if len(parts) < 8 or parts[3] != "0A" or int(parts[7]) == own_uid:', '            if len(parts) < 8 or parts[3] != "0A":', "this_accounts_own_are_not"),
  (D + "runner.py", '            return s.connect_ex((addr, port)) == 0', '            return s.connect_ex((addr, port)) == 99', "reachable_is_a_breach"),
  (D + "runner.py", '        return ["the listening sockets cannot be read', '        return []\n        return ["the listening sockets cannot be read', "shield_cannot_be_checked"),
@@ -151,7 +151,7 @@ M = [
  (D + "summarize.py", '                         for f in distinct(ext)]}', '                         for f in ext["failures"]]}', "identical_failures_are_asked_about_once"),
  (D + "summarize.py", '    return kind + ": " + " ".join(DIGITS.sub("0", base).split())[:300]', '    return kind', "different_errors_are_never_grouped"),
  (D + "summarize.py", '        if c["id"] in other and same_words(c["cause"], other[c["id"]]):', '        if c["id"] in other:', "two_asks_that_differ_say_so"),
- (D + "summarize.py", '        again, why_not, mt2 = ask_model(ext, url, timeout)', '        again, why_not, mt2 = advice, None, {}', "two_asks_that_differ_say_so"),
+ (D + "summarize.py", '                again, why_not, mt2 = ask_model(ext, url, timeout, keep_alive=0)', '                again, why_not, mt2 = advice, None, {}', "two_asks_that_differ_say_so"),
  (D + "summarize.py", '        return {**advice, "stable": None, "stability": "asked once only', '        return {**advice, "stable": True, "stability": "asked once only', "second_ask_that_fails_keeps_the_first"),
  (D + "summarize.py", '            out.append({"id": f["id"], "cause": by[f["same_as"]]["cause"], "same_as": f["same_as"]})', '            pass', "identical_failures_are_asked_about_once"),
  # 013, 1: tested before the verifier answers, held for its tip
@@ -179,7 +179,7 @@ M = [
  (E, '        found = found[:red] + found[red + 1:]', '        found = found[red + 1:]', "middle_one_is_red"),
  (E, '        if red is None or red == len(found) - 1 or not stack_id:', '        if red is None or not stack_id:', "last_is_red_nothing_is_tested_again"),
  (E, '        (f"-without-{retest[\'without\']}" if retest else "")', '        ""', "first_of_three_is_red"),
- (E, '        without, prev = without + [found[red][0]], stack_id', '        without, prev = [found[red][0]], stack_id', "red_in_the_retest_is_tested_again"),
+ (E, '        without, prev, earlier = without + [found[red][0]], stack_id, False', '        without, prev, earlier = [found[red][0]], stack_id, False', "red_in_the_retest_is_tested_again"),
  (E, '    if len(found) == 1:\n        sid, branch, tip, standing = found[0]', '    if False:\n        sid, branch, tip, standing = found[0]', "second_is_run_alone"),
  (E, '    found = [(sid, *standing_of(sid)[:3]) for sid in order]', '    found = [(sid, *verified_tip(sid), VERIFIED) for sid in order]', "stack_may_hold_a_slice_not_yet_verified"),
  # 013, 4: broken by what merged ahead, at the top
@@ -187,6 +187,40 @@ M = [
  (E, '    if d.get("verdict") == "conflict":\n        files', '    if False:\n        files', "conflict_with_main_says_so"),
  (E, '            if old in text or ("/" in short and short in text):', '            if False:', "main_moved_a_path_the_slice_names"),
  (E, '            if parts and parts[0][:1] in ("R", "D") and len(parts) >= 2:', '            if parts and parts[0][:1] in ("D",) and len(parts) >= 2:', "main_moved_a_path_the_slice_names"),
+ # 015: three jobs share the extension cache; each writes only files of its own there
+ (D + "runner.py", '        ext = os.path.join(own, "spatial.duckdb_extension")', '        ext = gz[:-3]', "own_unpacked_file_while_another_job_unpacks"),
+ (D + "runner.py", '        shutil.rmtree(own, ignore_errors=True)', '        pass', "own_unpacked_file_while_another_job_unpacks"),
+ (D + "runner.py", '        fd, part = tempfile.mkstemp(prefix="spatial.", suffix=".part", dir=folder)', '        part = gz + ".part"; fd = os.open(part, os.O_WRONLY | os.O_CREAT | os.O_TRUNC)', "part_file_of_its_own"),
+ (D + "runner.py", '            try:\n                os.remove(gz)\n            except OSError:\n                pass  # another job dropped it first\n            raise', '            raise', "does_not_unpack_is_dropped_and_fetched_again"),
+ # 015: the summary's model never beside a test job: unloaded at once, asked only when it fits, and only alone
+ (D + "summarize.py", '                again, why_not, mt2 = ask_model(ext, url, timeout, keep_alive=0)', '                again, why_not, mt2 = ask_model(ext, url, timeout, keep_alive=KEEP_BETWEEN_ASKS)', "unloaded_as_soon_as_it_has_answered"),
+ (D + "summarize.py", '            times["model_unloaded"] = unload(url)', '            times["model_unloaded"] = True', "unloaded_when_its_answer_is_dropped_too"),
+ (D + "summarize.py", '        now = loaded(url)\n        if now is False:', '        now = loaded(url) if sent else True\n        if now is False:', "never_asked_is_never_loaded_to_be_unloaded"),
+ (D + "summarize.py", '                sent = True\n', '                return True\n', "slow_to_go_is_waited_for"),
+ (D + "summarize.py", '    if need > free:', '    if False:', "asked_only_when_it_fits_on_the_card"),
+ (D + "summarize.py", '    return size + layers * kv_heads * (key + value) * 2 * NUM_CTX + FIT_MARGIN_BYTES', '    return size + FIT_MARGIN_BYTES', "asked_only_when_it_fits_on_the_card"),
+ (D + "summarize.py", '    return max(mib) << 20 if mib else None', '    return min(mib) << 20 if mib else None', "card_with_the_most_room"),
+ (D + "summarize.py", '    if free is None:\n        return "no graphics card', '    if False:\n        return "no graphics card', "no_card_measured_the_model_is_not_asked"),
+ (D + "summarize.py", '    if need is None:\n        return "Ollama did not say', '    if False:\n        return "Ollama did not say', "does_not_say_how_big_the_model_is"),
+ (D + "summarize.py", '        if not_asked == "busy":\n            break', '        if False:\n            break', "never_asked_while_a_test_job_holds_the_lock"),
+ (D + "summarize.py", '        return None, "the model is not asked without %s', '        return None, None; "%s', "without_the_lock_file_the_model_is_not_asked"),
+ (D + "runner.py", '        wait_for_the_summary(log)\n', '', "waits_for_the_summary_before_its_shield_check"),
+ (D + "runner.py", '            fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)\n            break', '            break', "starting_job_waits_while_the_summary_holds_the_model"),
+ (D + "runner.py", '    _HELD.append(fd)\n', '    os.close(fd)\n', "starting_job_waits_while_the_summary_holds_the_model"),
+ (D + "runner.py", '        if not found or time.monotonic() >= end:', '        if True:', "breach_that_goes_within_the_settle_time"),
+ (D + "install.sh", '  act install -m 0640 -o "$USER_NAME" -g "$SUMMARY_USER" /dev/null "$ROOT/handoff/model.lock"\n', '', "measures_the_card_and_makes_the_lock_once"),
+ # the line-fix session's request of 23 November: a candidate is never sent again while a run of it has a verdict on this main, unless asked
+ (E, '        hit = None if a.result or a.again else answered(s, a.slice, tip, [], current_main())', '        hit = None', "not_sent_again_and_its_note_stands"),
+ (E, '        hit = None if a.result or a.again else answered(s, a.slice, tip, [], current_main())', '        hit = None if a.result else answered(s, a.slice, tip, [], current_main())', "again_sends_it_anyway"),
+ (E, '        if data and data.get("state") == "done" and data.get("verdict") in ("pass", "fail", "conflict") \\', '        if data and data.get("state") == "done" and data.get("verdict") \\', "error_is_no_verdict"),
+ (E, '                and data.get("main") == main and data.get("tip") == tip and data.get("stack") == want:', '                and data.get("tip") == tip and data.get("stack") == want:', "old_record_without_its_main"),
+ (E, '                and data.get("main") == main and data.get("tip") == tip and data.get("stack") == want:', '                and data.get("main") == main and data.get("tip") == tip:', "member_below_whose_tip_moved"),
+ (E, '        red = next((k for k, h in enumerate(hits) if h and h[1]["verdict"] in ("fail", "conflict")), None)', '        red = None', "already_red_on_this_main_is_left_out"),
+ (E, '    while found and hits[len(found) - 1]:', '    while False:', "every_member_has_a_verdict"),
+ (E, '    if under is not None:', '    if False:', "already_green_that_others_stand_on"),
+ (E, '    if retest and retest.get("earlier"):', '    if False:', "already_red_on_this_main_is_left_out"),
+ (E, '"tree": d.get("tree"), "main": d.get("main"),', '"tree": d.get("tree"),', "which_main_each_run_was_on"),
+ (E, '    stack           the members up to and including this one, in merge order', '    stack           the members', "docstring_names_every_field"),
 ]
 bad = 0
 for f, old, new, test in M:

@@ -65,6 +65,19 @@ at run time (the owner's rules for keys): none is written in this file.
 - the paths the scout found to send no key anywhere (`remove_key`, `remove_engine`, and a rotation
   the gateway refuses after the old key was removed):
   `test_the_paths_that_take_a_key_away_send_none_anywhere`.
+
+**Brought onto AD1a's edit path (round 6, with main taken in).** SE5 was written against main's
+edit, where a moved address removed the engine's key and an engine was added by `add_engine`. On
+this branch an engine is added by a check and **Add**, and a moved address is given **with its
+key**, checked at the new address and stored only once the engine is marked lost (ADR-135
+Amendment 14). So the set-up is a check then Add; a moved edit carries a key typed for the new
+address; a fault planted "at the live call" skips the check's own probe (`live`), which is the
+change's first call and would otherwise be what the fault refuses; and after a failed moved edit
+the key is **lost** (the old key was replaced and cannot be restored), not "none". Every case of
+SE5's stays, with the same plant at the same call site and the same assertion on what the
+gateway was sent; none is dropped. "The process stops" is a real stop (`Faults.dead`: every later
+request dies too, so nothing runs to undo), and what the restart then does is held by the rows'
+own file, `test_model_key_paths.py`.
 """
 
 from __future__ import annotations
@@ -128,9 +141,13 @@ class Faults(httpx.AsyncBaseTransport):
         self.inner = inner
         self.refuse: list[Callable[[httpx.Request], bool]] = []
         self.lose_answer: list[Callable[[httpx.Request], bool]] = []
+        #: The process has stopped: nothing it would send afterwards is sent.
+        self.dead = False
 
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
         await request.aread()
+        if self.dead:
+            raise Died
         if any(rule(request) for rule in self.refuse):
             return httpx.Response(
                 500,
@@ -146,6 +163,12 @@ class Faults(httpx.AsyncBaseTransport):
 
 def on(path: str) -> Callable[[httpx.Request], bool]:
     return lambda request: request.url.path == path
+
+
+def live(path: str) -> Callable[[httpx.Request], bool]:
+    """`on`, but not for a check's own probe (its entries and credential carry `.check`): the
+    change's first call, which a fault planted for the live engine must not be spent on."""
+    return lambda request: request.url.path == path and b".check" not in request.content
 
 
 def refuse_the_update_then_every_removal() -> Callable[[httpx.Request], bool]:
@@ -214,9 +237,22 @@ class Scene:
 
     async def set_up(self, address: str | None = OLD) -> None:
         """The engine at the old address (or at none: the provider's own), with its key."""
-        await self.admin.add_engine("admin-1", provider(address))
-        await self.admin.set_key("admin-1", "gemini", SecretStr(self.first))
+        await self.add(provider(address), self.first)
         assert self.gateway.credential("osprey-gemini") == self.first
+
+    async def add(
+        self, engine: ModelProviderConfig, key: str, models: frozenset[str] = frozenset({MODEL})
+    ) -> None:
+        """An engine added as the screen adds it: its key and models proved by a check, then Add.
+        The provider accepts `key` for the while, then the one a later key set is checked with."""
+        before = dict(self.gateway.providers)
+        self.gateway.providers = {**before, engine.name: StandInProvider(key, models)}
+        try:
+            checked = await self.admin.check("admin-1", engine, SecretStr(key))
+            assert checked.ok and checked.check, checked.words
+            await self.admin.add_checked("admin-1", checked.check)
+        finally:
+            self.gateway.providers = before
 
     def at(self) -> dict[str, str | None]:
         """Each entry the gateway holds and the address it carries."""
@@ -283,37 +319,44 @@ async def test_a_failed_move_never_lets_a_later_key_reach_an_address_the_record_
     if how == "the gateway refuses":
         scene.faults.refuse.append(refuse_the_update_then_every_removal())
         with pytest.raises(ModelAdminRefused):
-            await scene.admin.edit_engine("admin-1", "gemini", moved)
+            await scene.admin.edit_engine("admin-1", "gemini", moved, SecretStr(scene.second))
     elif how == "the record cannot be saved":
         saves: list[int] = []
         real = scene.admin._file.save
 
         def full(settings: Any) -> None:
-            saves.append(1)
-            if len(saves) == 2:  # the first save drops the key; the second is the new record
+            if settings.providers[0].api_base == NEW:  # the record that gives the engine its move
+                saves.append(1)
                 raise OSError(28, "No space left on device")
             real(settings)
 
         monkeypatch.setattr(scene.admin._file, "save", full)
         # From the moment the save fails the gateway's database refuses every removal.
-        scene.faults.refuse.append(lambda r: len(saves) > 1 and r.url.path == "/model/delete")
+        scene.faults.refuse.append(lambda r: bool(saves) and r.url.path == "/model/delete")
         with pytest.raises(ModelAdminRefused):
-            await scene.admin.edit_engine("admin-1", "gemini", moved)
+            await scene.admin.edit_engine("admin-1", "gemini", moved, SecretStr(scene.second))
         monkeypatch.undo()
     else:
 
         async def stopped(*_args: Any, **_kwargs: Any) -> None:
+            scene.faults.dead = True  # the process is gone: nothing it would send is sent
             raise Died
 
         monkeypatch.setattr(scene.admin._gateway, "put_engine_key", stopped)
         with pytest.raises(Died):
-            await scene.admin.edit_engine("admin-1", "gemini", moved)
+            await scene.admin.edit_engine("admin-1", "gemini", moved, SecretStr(scene.second))
         monkeypatch.undo()
+        scene.faults.dead = False
+        scene.admin = scene.process(faulty=False)  # a restart: a new process, over the same files
+        await scene.admin.start()
     assert scene.admin.settings.providers[0].api_base == OLD, (
         "the record still holds the old address"
     )
     scene.faults.refuse.clear()
     scene.faults.lose_answer.clear()
+    # What the failed edit's own check sent to the new address was a key typed for that address.
+    # From here on, nothing is sent anywhere but where the record says.
+    scene.gateway.sent.clear()
 
     await scene.admin.set_key(
         "admin-1", "gemini", SecretStr(scene.second)
@@ -379,26 +422,26 @@ async def test_a_failed_move_withdraws_the_new_address_entries_whatever_the_fail
         wrote: list[bool] = []
 
         def lost_once(request: httpx.Request) -> bool:
-            if request.url.path == "/model/new" and not wrote:
+            if request.url.path == "/model/new" and b".check" not in request.content and not wrote:
                 wrote.append(True)
                 return True
             return False
 
         scene.faults.lose_answer.append(lost_once)
     else:
-        saves: list[int] = []
         saved = scene.admin._file.save
 
         def full(settings: Any) -> None:
-            saves.append(1)
-            if len(saves) == 2:
+            if settings.providers[0].api_base == NEW:  # the record that gives the engine its move
                 raise OSError(28, "No space left on device")
             saved(settings)
 
         monkeypatch.setattr(scene.admin._file, "save", full)
 
     if how.startswith("an interruption"):
-        task = asyncio.ensure_future(scene.admin.edit_engine("admin-1", "gemini", moved))
+        task = asyncio.ensure_future(
+            scene.admin.edit_engine("admin-1", "gemini", moved, SecretStr(scene.second))
+        )
         await asyncio.wait_for(reached.wait(), 5)
         assert NEW in scene.at().values(), "the plant stops it with the new entries made"
         task.cancel()
@@ -409,7 +452,7 @@ async def test_a_failed_move_withdraws_the_new_address_entries_whatever_the_fail
             await task
     else:
         with pytest.raises(ModelAdminRefused):
-            await scene.admin.edit_engine("admin-1", "gemini", moved)
+            await scene.admin.edit_engine("admin-1", "gemini", moved, SecretStr(scene.second))
     monkeypatch.undo()
     scene.faults.lose_answer.clear()
 
@@ -419,7 +462,7 @@ async def test_a_failed_move_withdraws_the_new_address_entries_whatever_the_fail
     assert scene.gateway.credential("osprey-gemini") is None, (
         "the old key is gone, not kept for the new"
     )
-    assert scene.admin.key_state("gemini") == "none"
+    assert scene.admin.key_state("gemini") == "lost", "the replaced key cannot be restored: lost"
 
 
 # --- part 2: an undo that fails is loud --------------------------------------------------------
@@ -430,11 +473,13 @@ def test_an_undo_that_fails_is_said_in_words_marks_the_engine_and_is_audited(
     scene: Scene, routed: TestClient, moved: bool
 ) -> None:
     asyncio.run(scene.set_up())
-    scene.faults.refuse.append(on("/model/new"))  # the entries cannot be made, at either address
-    answer = routed.put(
-        f"{ENGINES}/gemini",
-        json={"provider": {**ENGINE, "label": "Changed", "api_base": NEW if moved else OLD}},
-    )
+    scene.faults.refuse.append(live("/model/new"))  # the entries cannot be made, at either address
+    body: dict[str, Any] = {
+        "provider": {**ENGINE, "label": "Changed", "api_base": NEW if moved else OLD}
+    }
+    if moved:
+        body["key"] = scene.second  # a moved address is given with its key, checked there
+    answer = routed.put(f"{ENGINES}/gemini", json=body)
     assert answer.status_code in (500, 502), answer.text
     words = answer.json()["detail"]["detail"].lower()
     assert "unavailable" in words and "repaired" in words, "the engine is said to be unavailable"
@@ -445,7 +490,7 @@ def test_an_undo_that_fails_is_said_in_words_marks_the_engine_and_is_audited(
     assert view["engines"][0]["key_state"] != "set", "the engine is marked, not shown as set"
     assert scene.admin.routes().engines["gemini"].key_present is False, "and offered to no analyst"
 
-    last = scene.audit.entries[-1]
+    last = [e for e in scene.audit.entries if e.action == "engine_edited"][-1]
     assert (last.action, last.engine) == ("engine_edited", "gemini")
     assert last.outcome.startswith("refused") and "unavailable" in last.outcome, last.outcome
     recorded = json.dumps([e.model_dump(mode="json") for e in scene.audit.entries])
@@ -453,6 +498,7 @@ def test_an_undo_that_fails_is_said_in_words_marks_the_engine_and_is_audited(
 
     # Repaired as the words say: the gateway answers again, and the key is entered again.
     scene.faults.refuse.clear()
+    scene.gateway.sent.clear()  # the moved edit's check, at the new address, sent a key typed there
     asyncio.run(scene.admin.set_key("admin-1", "gemini", SecretStr(scene.second)))
     assert scene.admin.key_state("gemini") == "set"
     assert scene.admin.routes().engines["gemini"].key_present is True
@@ -465,7 +511,9 @@ def test_an_exception_nobody_named_says_one_thing_about_the_gateway(
     scene: Scene, routed: TestClient, monkeypatch: pytest.MonkeyPatch, undone: bool
 ) -> None:
     """The answer and the audit never say both that the gateway was put back and that it was not:
-    "put back" is said only once the undo has succeeded. Planted at the call site the route uses:
+    "put back" is said only once the undo has succeeded **and** restored the credential too (a
+    moved edit's undo removes the new key and cannot bring the old one back, so it says the entries
+    are as the record says and the key is removed). Planted at the call site the route uses:
     the engine's key update raises something nobody named, after the new entries were made, and
     (where the undo fails) the gateway's database then refuses every removal."""
     asyncio.run(scene.set_up())
@@ -482,14 +530,20 @@ def test_an_exception_nobody_named_says_one_thing_about_the_gateway(
     monkeypatch.setattr(gateway, "put_engine_key", garbled)
     if not undone:
         scene.faults.refuse.append(lambda r: bool(raised) and r.url.path == "/model/delete")
-    answer = routed.put(f"{ENGINES}/gemini", json={"provider": {**ENGINE, "api_base": NEW}})
+    answer = routed.put(
+        f"{ENGINES}/gemini", json={"provider": {**ENGINE, "api_base": NEW}, "key": scene.second}
+    )
     assert answer.status_code == 500, answer.text
     words = answer.json()["detail"]["detail"].lower()
-    audited = scene.audit.entries[-1].outcome.lower()
+    audited = [e for e in scene.audit.entries if e.action == "engine_edited"][-1].outcome.lower()
     for said in (words, audited):
         assert "was not saved" in said
         if undone:
-            assert "was put back as the saved settings say" in said
+            # The undo made the entries what the record says but removed the replaced key and
+            # could not restore it (the owner's ruling, round 7): "put back" is not said.
+            assert "entries are as the saved settings say" in said
+            assert "key was removed by this change" in said and "enter it again" in said
+            assert "was put back" not in said
             assert "unavailable" not in said
         else:
             assert "unavailable" in said and "restart" in said
@@ -516,14 +570,16 @@ async def test_an_interrupted_change_whose_undo_fails_marks_the_engine_and_is_au
 
     monkeypatch.setattr(gateway, "put_engine_key", hangs)
     scene.faults.refuse.append(lambda r: reached.is_set() and r.url.path == "/model/delete")
-    task = asyncio.ensure_future(scene.admin.edit_engine("admin-1", "gemini", provider(NEW)))
+    task = asyncio.ensure_future(
+        scene.admin.edit_engine("admin-1", "gemini", provider(NEW), SecretStr(scene.second))
+    )
     await asyncio.wait_for(reached.wait(), 5)
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
         await task
     monkeypatch.undo()
 
-    last = scene.audit.entries[-1]
+    last = [e for e in scene.audit.entries if e.action == "engine_edited"][-1]
     assert (last.action, last.engine) == ("engine_edited", "gemini")
     assert last.outcome.startswith("interrupted") and "not put back" in last.outcome, last.outcome
     assert "unavailable" in last.outcome
@@ -535,6 +591,7 @@ async def test_an_interrupted_change_whose_undo_fails_marks_the_engine_and_is_au
     assert "unavailable" in tested.words
 
     scene.faults.refuse.clear()
+    scene.gateway.sent.clear()  # the failed edit's check sent a key typed for the new address
     await scene.admin.set_key("admin-1", "gemini", SecretStr(scene.second))
     assert "gemini" not in scene.admin._unavailable
     await scene.call()
@@ -577,9 +634,7 @@ async def test_an_interruption_before_the_change_wrote_anything_leaves_the_engin
 
     monkeypatch.setattr(scene.admin, "_withdraw_disagreeing", hangs)
     scene.faults.refuse.append(on("/key/update"))
-    task = asyncio.ensure_future(
-        scene.admin.set_key("admin-1", "gemini", SecretStr(scene.second))
-    )
+    task = asyncio.ensure_future(scene.admin.set_key("admin-1", "gemini", SecretStr(scene.second)))
     await asyncio.wait_for(reached.wait(), 5)
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
@@ -617,12 +672,18 @@ async def test_an_edit_that_wrote_nothing_is_not_undone_so_an_undo_cannot_break_
     else:
         reached = asyncio.Event()
 
-        async def hangs(*_args: Any, **_kwargs: Any) -> None:
-            reached.set()  # the move has begun, but the gateway has not been written to
+        real_delete = scene.admin._gateway.delete_credential
+
+        async def hangs(name: str) -> None:
+            if reached.is_set():  # the check's own clean-up, once the cancellation has come
+                return await real_delete(name)
+            reached.set()  # the move has begun (the check's probe), the engine not written to
             await asyncio.sleep(3600)
 
         monkeypatch.setattr(scene.admin._gateway, "delete_credential", hangs)
-        task = asyncio.ensure_future(scene.admin.edit_engine("admin-1", "gemini", provider(NEW)))
+        task = asyncio.ensure_future(
+            scene.admin.edit_engine("admin-1", "gemini", provider(NEW), SecretStr(scene.second))
+        )
         await asyncio.wait_for(reached.wait(), 5)
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
@@ -653,10 +714,13 @@ async def test_the_connection_test_of_an_unavailable_engine_says_it_is_unavailab
     The words are those of the unavailable engine, nothing is sent to the gateway for it, and the
     test is audited."""
     await scene.set_up()
-    scene.faults.refuse.append(on("/model/new"))
+    scene.faults.refuse.append(live("/model/new"))
     with pytest.raises(ModelAdminRefused):
         await scene.admin.edit_engine(
-            "admin-1", "gemini", provider(NEW if moved else OLD, label="Changed")
+            "admin-1",
+            "gemini",
+            provider(NEW if moved else OLD, label="Changed"),
+            SecretStr(scene.second) if moved else None,
         )
     assert "gemini" in scene.admin._unavailable
     scene.gateway.sent.clear()
@@ -706,17 +770,19 @@ async def test_start_puts_right_what_a_stopped_change_left_at_another_address(
     await scene.set_up()
 
     async def stopped(*_args: Any, **_kwargs: Any) -> None:
+        scene.faults.dead = True  # nothing the process would send afterwards is sent
         raise Died
 
     monkeypatch.setattr(scene.admin._gateway, "put_engine_key", stopped)
     with pytest.raises(Died):
-        await scene.admin.edit_engine("admin-1", "gemini", provider(NEW))
+        await scene.admin.edit_engine("admin-1", "gemini", provider(NEW), SecretStr(scene.second))
     monkeypatch.undo()
     assert NEW in scene.at().values(), "the plant leaves the new entries made"
 
     restarted = scene.process(faulty=False)
     await restarted.start()
     assert set(scene.at().values()) == {OLD}, scene.at()
+    scene.gateway.sent.clear()  # the stopped edit's check sent a key typed for the new address
     await restarted.set_key("admin-1", "gemini", SecretStr(scene.second))
     await scene.call()
     assert scene.addresses_reached_by(scene.second) == {OLD}
@@ -780,11 +846,12 @@ async def test_a_key_is_not_taken_while_an_entry_disagrees_and_cannot_be_withdra
 ) -> None:
     await scene.set_up()
     await scene.plant_entries_at(NEW)
-    scene.faults.refuse.append(on("/model/delete"))
+    scene.faults.refuse.append(live("/model/delete"))
     with pytest.raises(ModelAdminRefused):
         await scene.admin.set_key("admin-1", "gemini", SecretStr(scene.second))
     assert scene.gateway.credential("osprey-gemini") != scene.second, "the key was stored"
     scene.faults.refuse.clear()
+    scene.gateway.sent.clear()  # (the key set's own check, where it was typed for, is not it)
     await scene.call()
     assert scene.second not in {k for _, k in scene.gateway.sent}
 
@@ -795,8 +862,10 @@ async def test_adding_an_engine_over_a_stale_entry_at_another_address_makes_it_a
     """`_reconcile` kept an entry held under the same id, whatever address it carried."""
     stray = provider(NEW, name="openai", roles={"extraction": "gpt-4.1-mini"})
     await scene.admin._gateway.add_entry(stray, "gpt-4.1-mini")
-    await scene.admin.add_engine(
-        "admin-1", provider(OLD, name="openai", roles={"extraction": "gpt-4.1-mini"})
+    await scene.add(
+        provider(OLD, name="openai", roles={"extraction": "gpt-4.1-mini"}),
+        a_key(),
+        frozenset({"gpt-4.1-mini"}),
     )
     assert set(scene.at().values()) == {OLD}, scene.at()
 
@@ -839,12 +908,13 @@ async def test_a_deployment_that_agrees_loses_no_entry_at_start_or_at_a_key_chan
     await scene.process(faulty=False).start()
     await scene.admin.set_key("admin-1", "gemini", SecretStr(scene.second))
     assert scene.at() == before
-    assert not [line for line in scene.gateway.seen if "/model/delete" in line], (
-        "an entry was removed"
-    )
-    assert not [line for line in scene.gateway.seen if "/model/new" in line], (
-        "an entry was made again"
-    )
+    # (a key set is checked by one call under a probe's own entries, which carry `.check`)
+    assert not [
+        line for line in scene.gateway.seen if "/model/delete" in line and ".check" not in line
+    ], "an entry was removed"
+    assert not [
+        line for line in scene.gateway.seen if "/model/new" in line and ".check" not in line
+    ], "an entry was made again"
 
 
 # --- the other paths (item 4): read, and shown to send no key anywhere -------------------------
@@ -861,10 +931,18 @@ async def test_the_paths_that_take_a_key_away_send_none_anywhere(scene: Scene, h
     elif how == "remove_engine":
         await scene.admin.remove_engine("admin-1", "gemini")
     else:
-        scene.gateway.refuse_credentials = 500
+        # The live credential's store is refused after its removal; the check's own is not.
+        scene.faults.refuse.append(
+            lambda r: (
+                r.url.path == "/credentials"
+                and r.method == "POST"
+                and json.loads(r.content)["credential_name"] == "osprey-gemini"
+            )
+        )
         with pytest.raises(ModelAdminRefused):
             await scene.admin.set_key("admin-1", "gemini", SecretStr(scene.second))
         assert scene.admin.key_state("gemini") == "lost"
+    scene.gateway.sent.clear()  # (a check's own call, before the key went, is not a call after)
     await scene.call()
     assert scene.gateway.credential("osprey-gemini") is None
     assert {k for _, k in scene.gateway.sent} <= {None}, scene.gateway.sent

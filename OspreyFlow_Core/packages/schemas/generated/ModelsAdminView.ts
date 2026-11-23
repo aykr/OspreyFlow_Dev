@@ -21,7 +21,7 @@ export type PrivacyContract = boolean;
  */
 export type ContractReference = string | null;
 /**
- * ADR-135 Amendments 4 and 7: provider (a hosted provider LiteLLM knows by name), or at profile: cloud-platform only, gateway (your organisation's own OpenAI-compatible AI gateway, at api_base) or bedrock (Amazon Bedrock in London). Default: provider.
+ * ADR-135 Amendments 4, 7 and 14: provider (a hosted provider LiteLLM knows by name), gateway (your organisation's own OpenAI-compatible AI gateway, at api_base; on every profile) or, at profile: cloud-platform only, bedrock (Amazon Bedrock in London). Default: provider.
  */
 export type Kind = "provider" | "gateway" | "bedrock";
 /**
@@ -47,6 +47,24 @@ export type SendableHandlingCodes = string[];
 export type Source = "osprey.yaml" | "models file";
 export type EngineKinds = ("provider" | "gateway" | "bedrock")[];
 export type ExtractionEngine = "deep_read" | "laurium";
+export type Id = string;
+export type Label1 = string;
+export type Kind1 = "provider" | "gateway" | "bedrock";
+export type Address = string | null;
+export type AddressAsked = boolean;
+export type Key = boolean;
+export type Example = string | null;
+export type Jobs = string[];
+export type Prefix = string;
+export type Note = string;
+export type Providers = CatalogueEntry[];
+export type Id1 = string;
+export type Engine = string;
+export type Label2 = string;
+export type By = string;
+export type At = string;
+export type ExpiresAt = string;
+export type Checks = HeldCheck[];
 
 /**
  * `GET /v1/admin/models`.
@@ -60,6 +78,8 @@ export interface ModelsAdminView {
   source: Source;
   engine_kinds?: EngineKinds;
   extraction_engine?: ExtractionEngine;
+  providers?: Providers;
+  checks?: Checks;
   [k: string]: unknown;
 }
 /**
@@ -117,4 +137,36 @@ export interface Defaults {
 }
 export interface LocalModels {
   [k: string]: string | null;
+}
+/**
+ * One provider of *Admin › Models*' list (ADR-135 Amendment 14 point 1), as the form shows it:
+ * its own address or that it asks one, whether it signs in by a key, its jobs alone, a current
+ * model as the example beside the typed name, and LiteLLM's prefix, which the form takes off a
+ * name typed with it. The hosts a check calls stay in the Conduit.
+ */
+export interface CatalogueEntry {
+  id: Id;
+  label: Label1;
+  kind: Kind1;
+  address: Address;
+  address_asked: AddressAsked;
+  key: Key;
+  example: Example;
+  jobs: Jobs;
+  prefix: Prefix;
+  note?: Note;
+  [k: string]: unknown;
+}
+/**
+ * A passed check waiting for **Add** (ADR-135 Amendment 14 point 2), shown in Admin as being
+ * checked so it can be cancelled; never an engine, never offered to analysts.
+ */
+export interface HeldCheck {
+  id: Id1;
+  engine: Engine;
+  label: Label2;
+  by: By;
+  at: At;
+  expires_at: ExpiresAt;
+  [k: string]: unknown;
 }

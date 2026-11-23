@@ -70,7 +70,7 @@ TRUST_EMAIL_LINE = (
     "WARNING: organisation sign-in joins by email (sign_in.organisation.trust_email): a person "
     "arriving through the organisation is joined to the OspreyFlow account holding the same email "
     "address. Anyone who can make the organisation's provider give that address takes the account "
-    "over (the 2023 \"nOAuth\" account takeovers). Keep it on only with the security officer's "
+    'over (the 2023 "nOAuth" account takeovers). Keep it on only with the security officer\'s '
     "sign-off that every address is verified."
 )
 #: ADR-113 decision 8: the two personas added beside the analyst and the admin.

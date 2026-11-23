@@ -444,9 +444,7 @@ def _print_checks(checks: list[Check]) -> bool:
     return all(check.ok for check in checks)
 
 
-def _doctor(
-    args: argparse.Namespace, probes: Probes, product: Path, env: Mapping[str, str]
-) -> int:
+def _doctor(args: argparse.Namespace, probes: Probes, product: Path, env: Mapping[str, str]) -> int:
     server = None
     base = _product_config(product)
     made: Mapping[str, Any] = base
@@ -1572,7 +1570,6 @@ def _models(args: argparse.Namespace, ctx: _Context) -> int:
     handed over by name in the Docker client's environment (`-e`), never an argument, never
     printed; nothing is restarted (`cli/ospreyflow/models.py`)."""
     directory = ctx.deployed()
-    env_file = directory / "deployment.env"
     models = engine_keys.read_models(ctx.product, directory)
     wanted = engine_keys.read_wanted(ctx.config_path.parent)
     in_conduit = [*_compose_of(directory), "exec", "-T"]
@@ -1580,7 +1577,7 @@ def _models(args: argparse.Namespace, ctx: _Context) -> int:
     states = engine_keys.parse_status(out) if code == 0 else None
     if args.action is None:
         defaults = engine_keys.parse_defaults(out) if code == 0 else None
-        print("\n".join(engine_keys.list_engines(models, env_file, states, defaults)))
+        print("\n".join(engine_keys.list_engines(models, states, defaults)))
         return 0
     known = set(states or {})
     who = f"cli:{getpass.getuser()}"

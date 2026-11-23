@@ -8,6 +8,8 @@
     early_warning.py <A> <B> [<C>]            a stack (009): main+A, main+A+B and main+A+B+C tested at once, one job
                                               each, in that merge order; one note each. When one is red, the ones
                                               above it are tested again without it, at once after (013, 3)
+    early_warning.py <slice>... --again       send it even though a run of the same candidate already has a verdict
+                                              on the current main ("Never sent twice", below)
     early_warning.py standing <slice>         what the slice's records let this script do now (013): verified,
                                               tested-not-yet-verified, or refused and why; and each held note of the
                                               slice marked void (its tip moved) or now verified. Exit 0, 2 refused
@@ -56,6 +58,39 @@ The setting lives outside the repository and is the owner's:
       "poll_seconds": 60,                       optional: how often it asks
       "max_wait_minutes": 240                   optional: when it stops asking and writes "no result"
     }
+
+Never sent twice (the line-fix session's request of 23 November 2026). A candidate is main, the members below the slice in
+its stack, and the slice, each at its tip. It is not sent again while a run of exactly that candidate ended with a
+verdict (pass, fail or conflict) on the current main, as the server says when asked for that run (never a note); the
+earlier run's note stands, and the exit code is that run's. --again sends it anyway. An error (a refusal, a shield
+breach, no result) is no verdict, and never stops a send. In a stack, a member already red or in conflict on this main
+is left out, as after a red (013, 3), and the ones above are tested without it; a member already green that others
+stand on stops the stack (Refused), unless --again.
+
+The runner's result for one job (`result <id>`, as `fetch <id>` prints it), the shape the merge reads:
+
+    state           "done" | "running" | "died" | "unknown" | "refused"; only "done" carries what follows
+    id              the job's run id (16 hex)
+    slice, tip      the member this job tests: the last of `stack`
+    main            the main commit the job was built on
+    stack           the members up to and including this one, in merge order, each {"slice", "tip"}: the job tests
+                    main + each of them merged in turn. A slice run alone: [itself]. Member k of a stack: its first k
+    position, of    this job's place in its group, from 1, and the group's size (1 and 1 when run alone)
+    group           the group's run ids in merge order (group[position - 1] is this job's own id)
+    stack_id        the stack's own id, for `result <stack_id>`; absent for a slice run alone
+    lane            the lane slot whose ports the job used
+    verdict         "pass" | "fail" | "conflict" | "error" (error: no verdict on the slice; `words` says why)
+    words           one line saying why, for anything but a pass
+    tree            the candidate tree it tested: the tree of its own merge commit `merge`
+    merges          each member's merge commit, in order
+    holds_main      the main the server now holds (for the next bundle)
+    checks, passed_targets, failing {targets, tests}, not_run {targets, test_files, docker_skipped, mac_only,
+    live_step}      what ran and how it ended; "not run" is never a pass
+    duckdb_spatial  {status: installed | failed | not fetched, stage, reason, version, platform, sha256}
+    runner_version  "ew-2"; seconds, finished, usage, steps, scan_rows, list_drift, lists_from, client_names, advice
+
+`result <stack_id>` gives {state, id, main, runner_version, stack: [each member job's result above, in merge order],
+advice}; its `state` is "running" while any member runs.
 
 Nothing of the setting (host, user, key path) is ever written into the note or printed: an unreachable server is
 said as "unreachable (ssh exit N)", never with ssh's own words, which name the host.
@@ -489,7 +524,11 @@ def note_text(slice_id: str, tip: str, data: dict | None, headline: str, why: st
         if ahead:
             out += ["**Broken by what merged ahead, not by the server.** This red is the slice meeting what merged "
                     "before it, so the Mac's merge would be refused for it too: " + " ".join(ahead), ""]
-    if retest:
+    if retest and retest.get("earlier"):
+        out += [f"**Tested without {retest['without']}**, which already had a verdict of red on this main in run "
+                f"`{retest['stack_id']}` (`early_warning.py fetch {retest['stack_id']}`), so it was not sent again "
+                ": this is its own result, in the stack named below.", ""]
+    elif retest:
         out += [f"**Tested again without {retest['without']}**, which was red in stack `{retest['stack_id']}` "
                 f"(`early_warning.py fetch {retest['stack_id']}`): this is its own result, in the stack named below.", ""]
     out += [f"**{ADVICE}.** {RED_RULE}", "",
@@ -561,7 +600,7 @@ def record_run(slice_id: str, tip: str, jid: str, data: dict | None, standing: s
     d = data or {}
     OWN.mkdir(parents=True, exist_ok=True)
     with RUNS.open("a") as fh:
-        fh.write(json.dumps({"slice": slice_id, "tip": tip, "id": jid, "tree": d.get("tree"),
+        fh.write(json.dumps({"slice": slice_id, "tip": tip, "id": jid, "tree": d.get("tree"), "main": d.get("main"),
                              "stack": [x.get("slice") for x in d.get("stack") or []], "standing": standing,
                              "at": c.now()}) + "\n")
 
@@ -586,6 +625,50 @@ def recorded_runs(slice_id: str, tip: str, tree: str) -> list[str]:
             seen.append((jid, r.get("tree")))
     same = [x for x, tr in seen if tr == tree]
     return (same or [x for x, _ in seen])[:1]
+
+
+#: How many recorded runs of one candidate are asked about before it is sent (never sent twice): the newest few are enough.
+ANSWERED_ASKS = 3
+
+
+def current_main() -> str:
+    return c.git(["rev-parse", "refs/heads/main"], c.REPO)
+
+
+def answered(s: dict, slice_id: str, tip: str, below: list, main: str) -> tuple[str, dict] | None:
+    """Never sent twice: (the run's id, its result) for the newest run RUNS holds of exactly this candidate (main, then each of
+    `below` as (slice, tip), then this slice at this tip) that the server says ended with a verdict on `main`; None
+    when there is none, or the server cannot say. Only the server's own answer counts, never a note."""
+    want = [{"slice": x, "tip": t} for x, t in below] + [{"slice": slice_id, "tip": tip}]
+    try:
+        lines = RUNS.read_text().splitlines()
+    except OSError:
+        return None
+    asked = 0
+    for ln in reversed(lines):
+        try:
+            r = json.loads(ln)
+        except ValueError:
+            continue
+        if not isinstance(r, dict) or r.get("slice") != slice_id or r.get("tip") != tip \
+                or r.get("stack") != [x["slice"] for x in want] or r.get("main") not in (None, main) \
+                or not re.fullmatch(proto.ID_PATTERN, str(r.get("id"))):
+            continue
+        asked += 1
+        if asked > ANSWERED_ASKS:
+            return None
+        _, data = ssh(s, ["result", r["id"]], timeout=120)
+        if data and data.get("state") == "done" and data.get("verdict") in ("pass", "fail", "conflict") \
+                and data.get("main") == main and data.get("tip") == tip and data.get("stack") == want:
+            return r["id"], data
+    return None
+
+
+def not_again(slice_id: str, tip: str, jid: str, data: dict, s: dict) -> int:
+    headline, exit_code, why = outcome(data, 0)
+    print(scrub(f"{slice_id}: not sent again: run {jid} already gave a verdict for tip {tip[:10]} on this main "
+                f"({headline}: {why}). Its note stands; --again sends it anyway.", s))
+    return exit_code
 
 
 def write_note(slice_id: str, tip: str, data: dict | None, headline: str, why: str, jid: str, s: dict,
@@ -669,7 +752,7 @@ def trust(s: dict, jid: str, slice_id: str, tip: str, tree: str) -> tuple[int, d
                    "why": "the server ran this exact tree and every check it could run passed; the Mac runs the rest"}
 
 
-def run_stack(s: dict, order: list) -> int:
+def run_stack(s: dict, order: list, again: bool = False) -> int:
     """009's stack: one bundle, one command, then each candidate's note. 013, item 3: when one candidate is red, the
     slices above it are tested again at once without it (main + the ones below + the ones above), and again if one of
     those is red, so one bad slice does not cost the ones behind it a whole run each. Each such result is its own
@@ -677,18 +760,63 @@ def run_stack(s: dict, order: list) -> int:
     found = [(sid, *standing_of(sid)[:3]) for sid in order]
     for sid in order:
         review_held(sid)
-    finals, without, prev = {}, [], ""
+    finals, without, prev, earlier = {}, [], "", False
+    if not again:  # never sent twice: no candidate of the request is sent again while a run of it has a verdict on this main. The
+        # retests below are this request's own (013, 3, the owner's ruling: the ones below a red are run again as the
+        # base of the ones above), so they are not looked at again
+        found, left, finals = answered_members(s, found, current_main())
+        if left:
+            without, prev, earlier = [sid for sid, _ in left], left[-1][1], True
+        if not found:
+            return max(finals.values())
     while True:
-        results = one_stack(s, found, without, prev)
+        results = one_stack(s, found, without, prev, earlier)
         finals.update({sid: r[0] for sid, r in results.items()})
         red = next((k for k, (sid, *_) in enumerate(found) if results.get(sid, (GREEN, ""))[0] == RED), None)
         stack_id = next((r[1] for r in results.values() if r[1]), "")
         if red is None or red == len(found) - 1 or not stack_id:
             return max(finals.values())
-        without, prev = without + [found[red][0]], stack_id
+        without, prev, earlier = without + [found[red][0]], stack_id, False
         found = found[:red] + found[red + 1:]
         print(scrub(f"Tested again at once without {without[-1]}, which was red in stack {prev}: "
                     + ", ".join(sid for sid, *_ in found[red:]), s))
+
+
+def answered_members(s: dict, found: list, main: str) -> tuple[list, list, dict]:
+    """Never sent twice: the request's members less those whose own candidate already has a verdict on this main: (the members
+    still to send, [(each one left out as red or in conflict, its run id)], {each one not sent: that run's exit code}).
+    The lowest red one is left out first, and the candidates above it change, so they are looked at again. Then the
+    ones with a verdict at the top are not sent, from the top down. A green one others still stand on is Refused,
+    unless --again."""
+    left, finals, seen = [], {}, {}
+
+    def hit(k):
+        sid, _, tip, _ = found[k]
+        key = (sid, tip, tuple((x, t) for x, _, t, _ in found[:k]))
+        if key not in seen:
+            seen[key] = answered(s, sid, tip, list(key[2]), main)
+        return seen[key]
+
+    while True:
+        hits = [hit(k) for k in range(len(found))]
+        red = next((k for k, h in enumerate(hits) if h and h[1]["verdict"] in ("fail", "conflict")), None)
+        if red is None:
+            break
+        sid, _, tip, _ = found[red]
+        finals[sid] = not_again(sid, tip, *hits[red], s)
+        left.append((sid, hits[red][0]))
+        found = found[:red] + found[red + 1:]
+    while found and hits[len(found) - 1]:
+        sid, _, tip, _ = found[-1]
+        finals[sid] = not_again(sid, tip, *hits[len(found) - 1], s)
+        found = found[:-1]
+    under = next((k for k in range(len(found)) if hits[k]), None)
+    if under is not None:
+        sid, jid = found[under][0], hits[under][0]
+        above = ", ".join(x for x, *_ in found[under + 1:])
+        raise Refused(f"{sid} is green on this main in run {jid}, and {above} stand on it: a stack would test it "
+                      "again. Send it with --again, or the ones above once it has merged.")
+    return found, left, finals
 
 
 def start_when_free(s: dict, branches, order: list | None) -> tuple[str, dict | None, int]:
@@ -702,10 +830,12 @@ def start_when_free(s: dict, branches, order: list | None) -> tuple[str, dict | 
         time.sleep(s["poll_seconds"])
 
 
-def one_stack(s: dict, found: list, without: list, prev_stack: str) -> dict:
-    """One stack (or, with one slice left, one run): {slice: (exit code, the stack's or run's id, "" if none)}."""
+def one_stack(s: dict, found: list, without: list, prev_stack: str, earlier: bool = False) -> dict:
+    """One stack (or, with one slice left, one run): {slice: (exit code, the stack's or run's id, "" if none)}.
+    `earlier`: the last one left out had a verdict of red before this request, and was not sent again."""
     order = [sid for sid, *_ in found]
-    retest = {"without": "-".join(without), "stack_id": prev_stack} if without else None
+    retest = {"without": "-".join(without), "stack_id": prev_stack, **({"earlier": True} if earlier else {})} \
+        if without else None
     if len(found) == 1:
         sid, branch, tip, standing = found[0]
         state, sent, code = start_when_free(s, branch, None) if retest else start(s, branch)
@@ -799,6 +929,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--result", metavar="ID", help="poll a run already started")
     ap.add_argument("--trust", metavar="ID", help="for the merge: does the server's run ID prove --tree?")
     ap.add_argument("--tree", metavar="HASH", help="the candidate tree the merge built (with --trust)")
+    ap.add_argument("--again", action="store_true",
+                    help="send it even though a run of the same candidate has a verdict on this main")
     a = ap.parse_args(argv)
     s: dict = {}
     try:
@@ -827,11 +959,16 @@ def main(argv: list[str] | None = None) -> int:
                 code, said = trust(s, jid, a.slices[0], tip, a.tree)
             print(scrub(json.dumps(said, indent=1, sort_keys=True), s))
             return code
+        if a.again and (a.result or a.trust):
+            raise Refused("--again sends a slice; --result and --trust send nothing.")
         if len(a.slices) > 1:
-            return run_stack(s, a.slices)
+            return run_stack(s, a.slices, a.again)
         a.slice = a.slices[0]
         review_held(a.slice)
         branch, tip, standing, _ = standing_of(a.slice)
+        hit = None if a.result or a.again else answered(s, a.slice, tip, [], current_main())
+        if hit:
+            return not_again(a.slice, tip, *hit, s)
     except Refused as e:
         print(f"Refused: {e}", file=sys.stderr)
         return REFUSED_HERE

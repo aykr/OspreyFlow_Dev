@@ -151,6 +151,12 @@ if ! id -u "$SUMMARY_USER" >/dev/null 2>&1; then
 fi
 act install -d -o "$USER_NAME" -g "$SUMMARY_USER" -m 2750 "$ROOT/handoff"
 act install -d -o "$SUMMARY_USER" -g "$USER_NAME" -m 2750 "$ROOT/summaries"
+# 015: the summary's model and the test jobs never overlap. Each job holds handoff/model.lock shared for its run; the
+#    summary asks the model only while it holds it alone, and lets it go once the model is unloaded. Made once: a lock
+#    a job holds is never replaced under it.
+if [ ! -e "$ROOT/handoff/model.lock" ]; then
+  act install -m 0640 -o "$USER_NAME" -g "$SUMMARY_USER" /dev/null "$ROOT/handoff/model.lock"
+fi
 act chmod 0755 "$ROOT/bin/summarize.py"
 SUMMARY_NFT="$(sed "s/@SUMMARY_USER@/$SUMMARY_USER/g" "$HERE/summary.nft")"
 SUMMARY_SERVICE="[Unit]
@@ -160,6 +166,9 @@ Type=oneshot
 User=$SUMMARY_USER
 Group=$SUMMARY_USER
 ExecStartPre=+/usr/sbin/nft -f $ROOT/bin/summary.nft
+RuntimeDirectory=osprey-summary
+RuntimeDirectoryMode=0755
+ExecStartPre=-+/bin/sh -c 'rm -f /run/osprey-summary/vram; command -v nvidia-smi >/dev/null && nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits > /run/osprey-summary/vram.part && mv /run/osprey-summary/vram.part /run/osprey-summary/vram'
 ExecStart=/usr/bin/python3 -I $ROOT/bin/summarize.py
 NoNewPrivileges=yes
 ProtectSystem=strict
@@ -221,5 +230,7 @@ say "Containers, networks, volumes, images: none started, none changed. $USER_NA
 say "Created: the account $USER_NAME; $ROOT (bin/, data/, home/.ssh/); $DROPIN_DIR/$DROPIN_NAME;"
 say "  $SHIELD_UNIT and the nftables table inet osprey_early it loads;"
 say "  the account $SUMMARY_USER, $ROOT/handoff and $ROOT/summaries, osprey-summary.service, .path and .timer, and the"
-say "  nftables table inet osprey_summary (its one allowed connection: 127.0.0.1 port 11434);"
+say "  nftables table inet osprey_summary (its one allowed connection: 127.0.0.1 port 11434), and"
+say "  $ROOT/handoff/model.lock (015: the summary asks its model only while no test job runs, and only when it fits"
+say "  the graphics card's free memory, measured by nvidia-smi before each summary; it unloads the model at once);"
 say "  linger for $USER_NAME. Removed by: sudo bash $ROOT/bin/cleanup.sh (try --dry-run first)."
