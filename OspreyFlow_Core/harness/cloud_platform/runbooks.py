@@ -119,6 +119,7 @@ def _reporting_section(config: OspreyConfig, values: dict[str, Any]) -> str:
             "themselves are the schema `osprey_reports` inside `ospreyflow`, as on Small.\n"
         )
     if config.reporting.sync:
+        # fmt: off
         lines.append(
             "**A dashboard identity**, for each dashboard the report sync fills: once its app registration\n"
             "exists and holds `Dashboard.Read` (*What it needs*), an administrator registers it in\n"
@@ -132,6 +133,7 @@ def _reporting_section(config: OspreyConfig, values: dict[str, Any]) -> str:
             'kubectl -n "$NS" rollout status deploy/report-sync --timeout 10m\n'
             "```\n"
         )
+        # fmt: on
     lines.append(
         "**Power BI, if the client uses it** (an option, not a step): Power BI reads the schema\n"
         "`osprey_reports` in `ospreyflow` through a read-only login of its own, made on the managed\n"
@@ -271,7 +273,11 @@ def render_install(config: OspreyConfig, platform: PlatformSettings, values: dic
     if "searchIndex" in values:
         rollouts += "\n" + _SEARCH_REBUILD.rstrip("\n")
     hosts = [r["host"] for r in values["ingress"]["rules"]]
-    glass = next(r["host"] for r in values["ingress"]["rules"] if r["service"] == "workspace")
+    # The Glass's own host: the workspace's rule, or `pages`' once a complete GOV.UK tree has
+    # removed the workspace (ADR-152 Amendment 3, I22).
+    glass = next(
+        r["host"] for r in values["ingress"]["rules"] if r["service"] in ("workspace", "pages")
+    )
     host = cp.registry.split("/")[0]
     claims = cp.claims
     assert claims is not None  # the render refuses this profile without them

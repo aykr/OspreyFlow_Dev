@@ -40,6 +40,7 @@ from typing import Protocol
 
 import yaml
 
+from harness import pages_service
 from harness.cluster import SECRET_NAME
 from harness.first_admin import first_administrator, one_time_code
 from harness.images import DigestResolver
@@ -171,7 +172,12 @@ def _derived(
 
 def _minted(config: OspreyConfig, environ: Mapping[str, str]) -> dict[str, str]:
     """Every secret a fresh deployment needs, freshly made; a kept value replaces each."""
-    from harness.apply import analytics_secret_lines, mail_secret_lines, provider_secret_lines
+    from harness.apply import (
+        analytics_secret_lines,
+        mail_secret_lines,
+        pages_secret_lines,
+        provider_secret_lines,
+    )
     from harness.reporting import reporting_secrets
 
     client = generate_client_secret()
@@ -190,6 +196,10 @@ def _minted(config: OspreyConfig, environ: Mapping[str, str]) -> dict[str, str]:
         "OSPREY_LITELLM_DB_PASSWORD": generate_client_secret(),
     }
     minted.update(_pairs(reporting_secrets(config) + analytics_secret_lines(config)))
+    if pages_service.enabled(config):
+        # ADR-152 Amendment 3 item 3: the page service's two secrets, only with the setting on, made
+        # as `apply` makes Lite's (`pages_secret_lines`) and kept as every other value is.
+        minted.update(_pairs(pages_secret_lines()))
     minted.update(
         _pairs(mail_secret_lines(config, environ) + provider_secret_lines(config, environ))
     )

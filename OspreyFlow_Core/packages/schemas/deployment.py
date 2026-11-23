@@ -1762,10 +1762,10 @@ class PagesConfig(BaseModel):
     """Whether the deployment runs the page service (ADR-152 Amendment 3, 21 November 2026): the
     server-rendered pages (`apps/pages`, the Ingest Studio's frame and Releases first). Off by
     default, and turned on for one deployment at a time, by the owner, in that deployment's own
-    `osprey.yaml`; nothing else turns it on (not a profile, a brand or a release). Nothing reads
-    the setting yet: the renderers that will (slice PL7a2b) and the release switch (PL7d) are
-    theirs. A render is exactly what it was while the setting is absent because `OspreyConfig`
-    leaves this section out of its dump unless the file wrote it (Amendment 3 point 2)."""
+    `osprey.yaml`; nothing else turns it on (not a profile, a brand or a release). The renderers
+    read it (`harness/pages_service.py`, slice PL7a2b); the release switch is PL7d's. A render is
+    exactly what it was while the setting is absent because `OspreyConfig` leaves this section out
+    of its dump unless the file wrote it (Amendment 3 point 2)."""
 
     model_config = ConfigDict(extra="forbid")
 

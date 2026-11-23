@@ -39,6 +39,7 @@ from typing import Any
 
 import yaml
 
+from harness import pages_service
 from harness.cloud_platform.settings import (
     KUBE_API,
     PlatformSettings,
@@ -80,7 +81,10 @@ REALM_SETTINGS = frozenset(
 #: Our Secret's keys only the realm, or the Conduit's exchange with it, reads.
 REALM_SECRETS = frozenset(
     {"OSPREY_KEYCLOAK_ADMIN", "OSPREY_KEYCLOAK_ADMIN_PASSWORD", "OSPREY_KEYCLOAK_DB_PASSWORD",
-     "OIDC_TOKEN_EXCHANGE_CLIENT_SECRET"}
+     "OIDC_TOKEN_EXCHANGE_CLIENT_SECRET",
+     # The page service's client in the realm (ADR-152 decision 4): this profile has no realm, so
+     # the secret is not made (only its session secret is: `pages_service.service_environment`).
+     "OSPREY_PAGES_CLIENT_SECRET"}
 )  # fmt: skip
 #: The realm's own files (its export and its login theme), which only Keycloak mounts.
 REALM_FILES = ("realm.json", "theme--")
@@ -142,6 +146,9 @@ def _cp(config: OspreyConfig) -> CloudPlatformConfig:
 
 
 def _refuse(config: OspreyConfig) -> None:
+    # The page service has no sign-in on this shape yet (PL7a2b case C): refused in words, not
+    # rendered without it.
+    pages_service.refuse_on_cloud_platform(config)
     if config.map is None:
         raise CloudPlatformNotRenderable(
             "the Conduit reads its basemaps from osprey.yaml's map: section at start and cannot "
@@ -243,8 +250,11 @@ def entra_settings(config: OspreyConfig) -> dict[str, str]:
         "OSPREY_FIRST_ADMINISTRATORS": ",".join(claims.first_administrators),
         # ADR-148 Amendment 15: what they hold of each value the administrator sets, at install.
         **(
-            {"OSPREY_FIRST_ADMINISTRATOR_ACCESS": json.dumps(claims.first_administrator_access,
-                                                             sort_keys=True)}  # fmt: skip
+            {
+                "OSPREY_FIRST_ADMINISTRATOR_ACCESS": json.dumps(
+                    claims.first_administrator_access, sort_keys=True
+                )
+            }  # fmt: skip
             if claims.first_administrator_access
             else {}
         ),
@@ -936,15 +946,40 @@ def _ingress(
         annotations[nginx + directive.replace("_", "-")] = str(seconds)
     annotations[nginx + "proxy-body-size"] = _nginx_size(upload_cap_bytes(environment))
     rules = []
+    # ADR-152 Amendment 3 and decision 7: with the page service on, the paths of its route table go
+    # to `pages` ahead of the Glass's own, and once a GOV.UK tree is complete the Glass's door is
+    # `pages` itself (I22: no workspace, no route to one). Off, the doors are the profile's.
+    pages_here = pages_service.SERVICE in names
+    no_workspace = pages_service.workspace_removed(config)
     for door in profile.doors:
         site, service, port = door.site, door.workload, door.port
+        if site == "glass" and no_workspace and pages_here:
+            service, port = pages_service.SERVICE, pages_service.PAGES_PORT
         if service in names:
             host = getattr(where, site).removeprefix("https://").split("/")[0].split(":")[0]
             paths = [{"path": "/", "service": service, "port": port}]
+            if site == "glass" and pages_here and not no_workspace:
+                paths = [
+                    *(
+                        {
+                            "path": path,
+                            "service": pages_service.SERVICE,
+                            "port": pages_service.PAGES_PORT,
+                        }
+                        for path in pages_service.route_paths(config)
+                    ),
+                    *paths,
+                ]
             if site == "identity" and config.appearance.brand == "govuk":
                 # As Caddy does (`harness.site`; ADR-132 Amendment 2): the sign-in page's GOV.UK
                 # stylesheet and fonts from the Glass, on the sign-in page's own name.
-                paths.insert(0, {"path": "/assets/govuk", "service": "workspace", "port": 8080})
+                # With the workspace removed (I22), the same assets come from `pages`.
+                assets = (
+                    (pages_service.SERVICE, pages_service.PAGES_PORT)
+                    if no_workspace
+                    else ("workspace", 8080)
+                )
+                paths.insert(0, {"path": "/assets/govuk", "service": assets[0], "port": assets[1]})
             rules.append({"host": host, "service": service, "port": port, "paths": paths})
     tls_secret = _cp(config).tls_secret
     wildcard = platform.ingress.wildcard
@@ -1301,9 +1336,16 @@ def render_cloud_platform(
         # P9's backup and restore pods render beside the workloads; their rows by their names.
         # The seed's row only where its Job is rendered (the poc shape): no store admits a pod of
         # that name elsewhere (ADR-148 Amendment 14).
-        "egress": egress_policy(config, platform, profile, workloads, others=[
-            o for o in profile.egress.others if o != "seed" or _cp(config).shape == "poc"]),
+        "egress": egress_policy(
+            config,
+            platform,
+            profile,
+            workloads,
+            others=[o for o in profile.egress.others if o != "seed" or _cp(config).shape == "poc"],
+        ),
         "ingress": _ingress(config, platform, names, profile, environment),
+        # ADR-152 Amendment 3 item 3: the chart's own record that the page service runs here.
+        **({"pages": {"enabled": True}} if pages_service.enabled(config) else {}),
         "environment": environment,
         "files": {
             **files,

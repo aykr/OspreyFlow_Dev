@@ -13,8 +13,25 @@ update. Work not yet in a release is listed under *Unreleased*.
 
 **Settings (ADR-152 Amendment 3).**
 - **`pages.enabled` exists in `osprey.yaml`, and is off.** It says whether a deployment runs the page service, the
-  server-rendered pages. It is `false` unless the owner sets it to `true` in that deployment's own file, and nothing reads
-  it yet: no deployment's rendered files change.
+  server-rendered pages. It is `false` unless the owner sets it to `true` in that deployment's own file, and nothing else
+  turns it on (not a profile, a brand or a release). The renderers now read it: while it is off, or not written, every
+  deployment's rendered files are exactly what they were, in every shape and under each brand, and a value that is not
+  `true` or `false` is refused in words. Turned on, they add the page service, its routes and its settings. A GOV.UK
+  deployment whose tree is complete and where it is off is refused in words (no tree is complete yet).
+  Turning it on where the page service could not sign people in is also refused in words, rather than rendered with a
+  sign-in that fails: where the identity address is plain HTTP (a local-lite one), and where it is served with a
+  certificate from the front proxy's own internal authority (a `.localhost`, `.local` or `.internal` name, or an IP
+  address, with no `network.tls`), which the page service does not trust, and where the organisation's own certificate
+  (`network.tls`) names no `ca`, on any name (the render cannot tell a private root from a public one, and the page
+  service has no way to trust a root it is not given; a public authority's root will do). Serve the identity address
+  over HTTPS with a certificate it trusts (a public name, or the organisation's own on a Small, with its `ca`), or leave
+  the setting off. **The cloud-platform shape
+  (development and the proof of concept) is refused too, with the setting on:** the page service has no sign-in there
+  yet (the chart gives it no egress to the identity provider, and it has no registration with the organisation's
+  Entra ID: ADR-148 Amendment 23), so leave `pages.enabled` off for those deployments until the page service is
+  offered on that shape. On a Small
+  the front proxy also listens, inside its container, at the address's own port for the identity name, so the page
+  service reaches its sign-in without a route out of the deployment.
 
 **The Ingest Studio (ADR-152).**
 - **The Studio's frame and its Releases screen are built as server-rendered pages** (the page service, not yet in any

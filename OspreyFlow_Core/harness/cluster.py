@@ -33,6 +33,7 @@ from typing import Any
 
 import yaml
 
+from harness import pages_service
 from harness.images import DigestResolver, ServiceImage
 from harness.keycloak_theme import login_theme_options, read_tokens, render_login_theme
 from harness.realm import render_realm_json
@@ -63,6 +64,7 @@ STATEFUL = frozenset({"keycloak", "arcadedb", "clickhouse", "clickhouse-keeper",
 #: none (the network reaches every port); a Kubernetes Service names them.
 PORTS: dict[str, list[int]] = {
     "workspace": [8080],
+    "pages": [pages_service.PAGES_PORT],
     "api": [8000],
     "superset": [8088],
     "laurium": [8000],
@@ -196,7 +198,8 @@ class _Translator:
 #: The Conduit by its own `/healthz`; the Glass by its own page (its `/healthz` is the Conduit's).
 READY_WITHOUT_HEALTHCHECK: dict[str, list[str]] = {
     "api": [
-        "python", "-c",
+        "python",
+        "-c",
         "import urllib.request as u; u.urlopen('http://127.0.0.1:8000/healthz', timeout=5)",
     ],
     "workspace": ["wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"],
@@ -625,6 +628,9 @@ def render_cluster(
         "imagePullSecrets": [],
         "environment": environment,
         "files": files,
+        # ADR-152 Amendment 3 item 3: the chart's own record that the page service runs here.
+        # Written only with the setting on; with it off the values hold no such key.
+        **({"pages": {"enabled": True}} if pages_service.enabled(config) else {}),
         "workloads": workloads,
         "jobs": jobs,
     }
