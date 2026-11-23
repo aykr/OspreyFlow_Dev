@@ -3,6 +3,14 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 23 November 2026, evening: SE9b; the race test (PL4d3f); PL14a's rerun (the owner, in chat, about 21:00 to 21:15 UTC)
+
+**SE9b (GitHub's conformance job has 80 live tests red on SE9's merge `2e13b10`: the parameter `:at` in three deletion statements):** the owner said yes. Rename the parameter in the three statements only; a live test against a throwaway ArcadeDB under the stack lease, red first; **prove the reserved-word reading on the live database first, and if the cause is something else, stop and tell the owner.** Track 4 (sol). **Its row is committed the moment AD1b's merge starts, not held for the whole stack: while main has 80 red on GitHub, a new failure from any other part would be hidden among them; if that costs PL12b's or PL7a2b's counted result, accept it. SE9b merges ahead of everything not yet in its gate.** The owner pushes main himself.
+
+**PL4d3f (BACKLOG 21, the race test that depends on chance):** the owner said yes, cut it now on a sol track. It changes only `test_pl4d3d_declared_units.py` and what it needs to be deterministic; the test must still prove two builds in one tree collide; no case removed or loosened; red first by forcing the race, not by waiting for it. **Until it merges, a refusal by this test alone is rerun once without asking the owner.** (The conductor commits PL4d3f's row with SE9b's, at AD1b's merge start, so one commit costs the stack's counted green once.)
+
+**PL14a:** the owner's send-back line was a misreading of the red-before block of `merge-d9ee38d9.log` (the test named failed only on the base, as required); **withdrawn and removed from `resume.tsv`.** PL14a's merge is rerun when the slot is free; the one failure in its gate was the race test above.
+
 ## 23 November 2026: a builder never merges another part's unmerged tip; a correction on the scan-row sections (the owner, in chat, about 19:40 UTC)
 
 **Every builder: never merge another part's unmerged tip, or any branch but main, into your branch. Take main in when the line tells you to, and nothing else.** AD1b merged AD1a's tip and the hook then counted AD1a's tests as AD1b's. If a part needs another part's change that has not merged, it stops and tells the conductor. The sentence is in every live builder brief.

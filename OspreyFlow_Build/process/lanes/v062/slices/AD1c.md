@@ -22,7 +22,7 @@
 
 ## Acceptance test
 
-A new pure test named for the fourth route (the builder names it), red first; **say which folders it walks** (a scan-map row is written from that; a builder cannot add it).
+A new pure test, `OspreyFlow_Build/tests/services/api/test_add_failed_save_removes_the_token.py` (red first on main; the name is fixed so the row can name it), for items 1 and 2, and a second new pure test for item 3b (the orphaned tokens) whose name you choose; **say which folders each walks** (a scan-map row is written from that; a builder cannot add it). **Every finding of this part is the owner's (it handles keys): the conductor stops it and reports, never accepts it narrower.**
 
 ## Out of scope
 
