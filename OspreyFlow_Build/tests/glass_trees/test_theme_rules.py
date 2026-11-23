@@ -750,3 +750,191 @@ def test_a_file_outside_the_scan_roots_is_not_scanned(core: Path) -> None:
     plant(core, "services/zz/zz.css", '[data-brand="govuk"] .zz { margin: 0; }\n')
     plant(core, "harness/other.py", 'X = """\n[data-brand="govuk"] .zz { margin: 0; }\n"""\n')
     assert_clean(core)
+
+
+# ------------------- the two named sign-in files: missing is refused, moved is read
+
+
+@pytest.mark.parametrize("name", SIGN_IN_FILES)
+def test_a_named_sign_in_file_that_is_removed_is_an_error_not_a_skip(
+    core: Path, name: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    (core / name).unlink()
+    with pytest.raises(trc.ThemeScanError, match=name):
+        trc.find_theme_rules(core)
+    assert trc.main(core=core, allowlist_path=ALLOWLIST) == 1
+    assert name in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("name", SIGN_IN_FILES)
+@pytest.mark.parametrize("new_home", ["harness/renamed_{base}", "harness/sign_in/{base}"])
+def test_a_named_sign_in_file_renamed_or_moved_out_of_the_themes_folder_is_refused(
+    core: Path, name: str, new_home: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The shape the fault takes: the file still exists, with a GOV.UK rule in it, but not where the
+    check looks; the gate must not pass over it (the success line would still have named it)."""
+    base = Path(name).name
+    moved = core / new_home.format(base=base)
+    moved.parent.mkdir(parents=True, exist_ok=True)
+    (core / name).rename(moved)
+    with pytest.raises(trc.ThemeScanError, match=name):
+        trc.find_theme_rules(core)
+    assert trc.main(core=core, allowlist_path=ALLOWLIST) == 1
+    assert name in capsys.readouterr().out
+
+
+def test_a_sign_in_file_of_the_same_name_in_a_themes_folder_is_not_a_move(core: Path) -> None:
+    """A file called `govuk_chrome.js` under another theme is a different file's home: the named
+    file is still gone from where it was, unless it is the one that moved. Only the *named file's*
+    basename under `packages/themes/<name>/` excuses its absence, and a removed file with none is
+    refused (above); here the sign-in script is removed and an unrelated script is planted."""
+    (core / "harness/govuk_chrome.js").unlink()
+    plant(core, "packages/themes/govuk/other_script.js", "var X = 1;\n")
+    with pytest.raises(trc.ThemeScanError, match="harness/govuk_chrome.js"):
+        trc.find_theme_rules(core)
+
+
+def _move_chrome_into_the_govuk_theme(core: Path) -> Path:
+    moved = core / "packages/themes/govuk/govuk_chrome.js"
+    moved.parent.mkdir(parents=True, exist_ok=True)
+    (core / "harness/govuk_chrome.js").rename(moved)
+    return moved
+
+
+def test_the_chrome_script_moved_under_the_govuk_theme_folder_is_read_there_and_stays_green(
+    core: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The move ADR-152 Am. 4 item 2 plans: refused nowhere, read in its new home, and a GOV.UK rule
+    in it is at home (green)."""
+    moved = _move_chrome_into_the_govuk_theme(core)
+    assert moved in {path for path, _ in trc.scanned_files(core)}
+    assert_clean(core)
+    moved.write_text(
+        moved.read_text(encoding="utf-8") + '\nvar ZZ = ".govuk-header, .zz { display: none; }";\n',
+        encoding="utf-8",
+    )
+    assert_clean(core)
+    assert trc.main(core=core, allowlist_path=ALLOWLIST) == 0
+    out = capsys.readouterr().out
+    # It names the file where it was read, and the file that was not read at its old path is not
+    # named as if it had been.
+    assert "packages/themes/govuk/govuk_chrome.js" in out
+    assert "harness/keycloak_theme.py" in out
+    assert "harness/govuk_chrome.js and" not in out and "harness/govuk_chrome.js;" not in out
+
+
+def test_the_chrome_script_moved_under_the_govuk_theme_folder_is_read_for_another_themes_rule(
+    core: Path,
+) -> None:
+    """Read there, not skipped: a rule of another theme in it is found."""
+    moved = _move_chrome_into_the_govuk_theme(core)
+    moved.write_text(
+        moved.read_text(encoding="utf-8")
+        + '\nvar ZZ = "[data-brand=\\"other\\"] .zz { margin: 0; }";\n',
+        encoding="utf-8",
+    )
+    assert triples(judged(core).new) == [
+        ("packages/themes/govuk/govuk_chrome.js", '[data-brand="other"] .zz', "string-rule")
+    ]
+
+
+def test_the_success_line_names_the_sign_in_files_actually_read(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    assert trc.main() == 0
+    out = capsys.readouterr().out
+    for name in SIGN_IN_FILES:
+        assert name in out
+
+
+# ------------------------------------------------- a bad allowlist file is refused, never defaulted
+
+
+def _allowlist_text(tmp_path: Path, text: str) -> Path:
+    path = tmp_path / "allow.txt"
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+GOOD_ENTRY = "apps/workspace/src/admin/admin.css\t.admin-nav--govuk\trule"
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "",
+        "\n",
+        f"# no count line\n{GOOD_ENTRY}\n",
+        f"# count: 1\n{GOOD_ENTRY}\n",
+        f"{GOOD_ENTRY}\n",
+        "count:\n",
+        "count: seventy\n",
+        "count: 7o\n",
+        "count: -1\n",
+        "count: 1.5\n",
+        "Count: 1\n",
+        f"\ncount: 1\n{GOOD_ENTRY}\n",
+    ],
+    ids=[
+        "empty",
+        "blank",
+        "no-count-line",
+        "count-in-a-comment",
+        "entry-first",
+        "count-without-number",
+        "count-non-numeric",
+        "count-digit-then-letter",
+        "count-negative",
+        "count-decimal",
+        "count-wrong-case",
+        "count-not-first-line",
+    ],
+)
+def test_an_allowlist_whose_first_line_is_not_a_count_is_refused(
+    tmp_path: Path, text: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = _allowlist_text(tmp_path, text)
+    with pytest.raises(trc.ThemeScanError, match="first line"):
+        trc.load_allowlist(path)
+    # Through the entry point: refused (exit 1), with the reason in words, not a pass.
+    assert trc.main(core=CORE, allowlist_path=path) == 1
+    out = capsys.readouterr().out
+    assert "allow.txt" in out and "first line must be `count: N`" in out
+
+
+@pytest.mark.parametrize(
+    ("entry", "why"),
+    [
+        ("apps/workspace/src/admin/admin.css\t.admin-nav--govuk", "two fields"),
+        ("apps/workspace/src/admin/admin.css\t.admin-nav--govuk\trule\textra", "four fields"),
+        ("apps/workspace/src/admin/admin.css .admin-nav--govuk rule", "spaces, not tabs"),
+        ("apps/workspace/src/admin/admin.css\t\trule", "an empty key"),
+        ("\t.admin-nav--govuk\trule", "an empty path"),
+        ("apps/workspace/src/admin/admin.css\t.admin-nav--govuk\t", "an empty kind"),
+        ("apps/workspace/src/admin/admin.css", "one field"),
+    ],
+)
+def test_an_allowlist_entry_without_three_tab_separated_fields_is_refused_and_named(
+    tmp_path: Path, entry: str, why: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The entry is on the file's third line (the count, a comment, then it), and the error names
+    that line: a malformed entry is never skipped, which would let the list shrink unnoticed or an
+    entry stand unrecorded."""
+    path = _allowlist_text(tmp_path, f"count: 2\n# a test copy\n{entry}\n{GOOD_ENTRY}\n")
+    with pytest.raises(trc.ThemeScanError, match=r"allow\.txt:3:"):
+        trc.load_allowlist(path)
+    assert trc.main(core=CORE, allowlist_path=path) == 1
+    assert "allow.txt:3:" in capsys.readouterr().out, why
+
+
+def test_a_malformed_entry_after_good_ones_is_refused_at_its_own_line(tmp_path: Path) -> None:
+    path = _allowlist_text(tmp_path, f"count: 2\n{GOOD_ENTRY}\n\n# note\nonly one field\n")
+    with pytest.raises(trc.ThemeScanError, match=r"allow\.txt:5:"):
+        trc.load_allowlist(path)
+
+
+def test_a_well_formed_allowlist_with_comments_and_blank_lines_is_read(tmp_path: Path) -> None:
+    path = _allowlist_text(tmp_path, f"count: 1\n# a comment\n\n{GOOD_ENTRY}\n")
+    loaded = trc.load_allowlist(path)
+    assert loaded.recorded == 1
+    assert loaded.entries == [tuple(GOOD_ENTRY.split("\t"))]
