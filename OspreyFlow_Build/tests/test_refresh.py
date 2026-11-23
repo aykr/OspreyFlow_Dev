@@ -747,6 +747,56 @@ def test_a_deployment_with_the_identity_off_keeps_a_workspace_build_with_no_args
     assert before.count("workspace") == (out / "compose.yaml").read_text().count("workspace")
 
 
+def _pulled_with_identity(repo: Path, *, identity: bool) -> Path:
+    """A deployment installed from a release (no `build` on any service, so refresh keeps it in pull mode) whose
+    `osprey.yaml` has the GOV.UK identity switch as given."""
+    import yaml
+
+    out = _gateway_before_pl13b(repo, from_source=False)
+    config = yaml.safe_load((out / "osprey.yaml").read_text())
+    config["appearance"] = {"brand": "govuk", "govuk_identity": identity}
+    (out / "osprey.yaml").write_text(yaml.safe_dump(config), encoding="utf-8")
+    return out
+
+
+def test_refresh_refuses_in_words_a_pulled_deployment_with_the_identity_on(repo: Path) -> None:
+    """The finding of PL7c's round 5: refresh does not go through `render()`, so a deployment that pulls the release's
+    images with the switch on had its workspace image moved to `<sha>-govuk`, which no release publishes, and failed on
+    a missing image with none of the render's words. It says the render's words, and writes and runs nothing."""
+    out = _pulled_with_identity(repo, identity=True)
+    compose_before = (out / "compose.yaml").read_text()
+    lock_before = (out / "versions.lock").read_text()
+    recorder = Recorder()
+
+    with pytest.raises(refresh.RefreshFailed, match="appearance.govuk_identity is on"):
+        refresh.refresh(repo, run=recorder, register=Registrar())
+
+    assert recorder.calls == []
+    assert (out / "compose.yaml").read_text() == compose_before
+    assert (out / "versions.lock").read_text() == lock_before
+    assert "-govuk" not in compose_before + (out / "compose.yaml").read_text()
+
+
+def test_the_files_only_refresh_of_an_update_refuses_the_same_deployment_in_words(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`ospreyflow update` runs `refresh --files-only`: its exit code is 1, with the words on stderr."""
+    out = _pulled_with_identity(repo, identity=True)
+    compose_before = (out / "compose.yaml").read_text()
+
+    code = refresh.main(["--files-only"], repo_root=repo)
+
+    assert code == 1
+    assert "appearance.govuk_identity is on" in capsys.readouterr().err
+    assert (out / "compose.yaml").read_text() == compose_before
+
+
+def test_a_pulled_deployment_with_the_identity_off_is_not_refused(repo: Path) -> None:
+    out = _pulled_with_identity(repo, identity=False)
+    refresh.refresh(repo, run=Recorder(), register=Registrar())
+    assert "-govuk" not in (out / "compose.yaml").read_text()
+
+
 def test_moving_the_gateway_twice_changes_nothing_the_second_time(repo: Path) -> None:
     out = _gateway_before_pl13b(repo, from_source=True)
     refresh.refresh(repo, run=Recorder(), register=Registrar())
