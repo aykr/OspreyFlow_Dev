@@ -29,8 +29,11 @@ of theme A under theme B's folder is one too.
 `packages/glass-shared/src`, `apps/workspace/src`, `apps/workspace/scripts`, `apps/pages`,
 `apps/harness/src` (the `.css` files, the `<style>` blocks of `.njk` and `.html` files, and
 `fonts*.json`); and, as strings, `harness/keycloak_theme.py` and `harness/govuk_chrome.js` by name.
-`node_modules`, `dist` and anything under `assets/govuk` (generated output) are never read; nor are
-the marketing sites or `OspreyFlow_Build`.
+`node_modules` and `__pycache__` (at any depth) and the gitignored generated output, by exact path
+(`GENERATED`: `apps/{workspace,harness,pages}/dist`, `apps/workspace/public/assets/govuk`), are
+never read; a committed folder that merely shares a name (`dist`, `assets/govuk`) is read. Nor
+are the marketing sites or `OspreyFlow_Build`. A scan root that is missing is an error (the
+themes folder, absent until a theme moves, is the one exception).
 
 **What it cannot see.** A component's class strings (the 56 React files that branch on the brand are
 code, not CSS rules), a theme named only in TypeScript or in a `.mjs` build script, an `@import` of
@@ -85,8 +88,18 @@ SCAN_ROOTS = (
 )
 #: The sign-in theme's files, read as strings, by name.
 SIGN_IN_FILES = ("harness/keycloak_theme.py", "harness/govuk_chrome.js")
-#: Folders never entered: installed or generated output.
-PRUNED = frozenset({"node_modules", "dist", ".git", "__pycache__"})
+#: Folders never entered, at any depth: what `OspreyFlow_Core/.gitignore` ignores by name.
+PRUNED = frozenset({"node_modules", ".git", "__pycache__"})
+#: Generated, gitignored output, by its exact path under `OspreyFlow_Core` (never by a folder's
+#: name alone: a committed `dist` or `assets/govuk` folder elsewhere is read like any other).
+GENERATED = (
+    "apps/workspace/dist",
+    "apps/harness/dist",
+    "apps/pages/dist",
+    "apps/workspace/public/assets/govuk",
+)
+#: A scan root that may be absent (no theme has moved into its folder yet); any other must exist.
+OPTIONAL_ROOTS = frozenset({THEMES_DIR})
 
 _GOVUK_WORD = re.compile(r"(?<![A-Za-z0-9])govuk(?![A-Za-z0-9])", re.IGNORECASE)
 _BRAND = re.compile(
@@ -251,7 +264,12 @@ def _walk(css: str, context: tuple[str, ...], out: list[RawFinding]) -> None:
         i = end + 1
         if prelude.startswith("@"):
             if _GROUPING.match(prelude):
-                _walk(body, (*context, prelude), out)
+                # `@scope (.govuk-header)` takes a selector: the prelude can name a theme itself.
+                scoped = _selector_themes(prelude)
+                if scoped:
+                    out.append(RawFinding(_key(context, prelude), "rule", tuple(sorted(scoped))))
+                else:
+                    _walk(body, (*context, prelude), out)
             elif re.match(r"@font-face\b", prelude, re.IGNORECASE):
                 if _GDS.search(body):
                     out.append(
@@ -373,23 +391,25 @@ def _html_findings(text: str) -> list[RawFinding]:
 # ---------------------------------------------------------------------------- reading the tree
 
 
-def _generated(parts: tuple[str, ...]) -> bool:
-    return any(a == "assets" and b == "govuk" for a, b in zip(parts, parts[1:], strict=False))
-
-
 def scanned_files(core: Path = CORE) -> list[tuple[Path, str]]:
     """`(file, how it is read)` for everything read under `core`: `css`, `html`, `fonts`, or
-    `python` / `javascript` (as strings)."""
+    `python` / `javascript` (as strings). A scan root that is missing (other than
+    `OPTIONAL_ROOTS`) is a `ThemeScanError`, not an empty walk: a renamed root must not go blind."""
     files: list[tuple[Path, str]] = []
     for top in SCAN_ROOTS:
         root = core / top
+        if not root.is_dir():
+            if top in OPTIONAL_ROOTS:
+                continue
+            raise ThemeScanError(f"the scan root {top} is not a folder under {core}")
         in_themes = top == THEMES_DIR
         for here, dirs, names in os.walk(root):
-            dirs[:] = sorted(d for d in dirs if d not in PRUNED)
+            here_relative = Path(here).relative_to(core).as_posix()
+            dirs[:] = sorted(
+                d for d in dirs if d not in PRUNED and f"{here_relative}/{d}" not in GENERATED
+            )
             for name in sorted(names):
                 path = Path(here) / name
-                if _generated(path.relative_to(core).parts):
-                    continue
                 suffix = path.suffix
                 if suffix == ".css":
                     files.append((path, "css"))

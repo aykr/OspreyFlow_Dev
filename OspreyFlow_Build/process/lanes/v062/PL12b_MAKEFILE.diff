@@ -17,12 +17,13 @@
  # ADR-041: mechanical control for the fetch-then-check authorization bug class.
 --- a/OspreyFlow_Build/tests/glass_trees/test_design_gates_reach.py
 +++ b/OspreyFlow_Build/tests/glass_trees/test_design_gates_reach.py
-@@ -29,6 +29,12 @@
+@@ -29,6 +29,13 @@
  `tools.layout.PAGES_COPY_ROOTS` gives, so a gate that drops one is red; `tests/glass_trees/test_pages_foundation.py`
  holds that each gate reads a violation planted under each root.
  
 +**The theme-rule check (slice PL12b).** `tools/theme_rule_check.py` reads `packages/design` (the
-+three files in it included), the Glass's source and the pages app.
++three files in it included), the Glass's source and scripts, the shared package, the harness's source
++and the pages app, and refuses a scan root that is missing.
 +`test_the_theme_rule_check_names_the_design_package_and_the_pages_roots` holds its roots to them,
 +and `test_the_theme_rule_check_reads_packages_design` plants a brand rule in the copy of
 +`packages/design` and shows it found there.
@@ -30,7 +31,7 @@
  This file walks no part of the repository by `git ls-files`: it reads
  `OspreyFlow_Core/packages/design/` only (copied, never written).
  """
-@@ -40,7 +46,7 @@
+@@ -40,7 +47,7 @@
  from pathlib import Path
  
  import pytest
@@ -39,24 +40,34 @@
  from tools.layout import CORE
  
  DESIGN = CORE / "packages" / "design"
-@@ -141,3 +147,21 @@
+@@ -141,3 +148,31 @@
      for gate, roots in named.items():
          assert set(PAGES_ROOTS) <= roots, f"{gate} does not read {sorted(set(PAGES_ROOTS) - roots)}"
  
 +
 +def test_the_theme_rule_check_names_the_design_package_and_the_pages_roots() -> None:
-+    """The check's roots hold the three design files, the Glass's source and the pages roots."""
++    """The check's roots hold the three design files, the pages roots and every root the brief
++    names, and each is a folder that exists (a renamed root is an error in the tool, not blindness)."""
 +    roots = [CORE / top for top in theme_rule_check.SCAN_ROOTS]
 +    for name in THE_THREE:
 +        assert _under(DESIGN / name, roots), f"theme_rule_check skips packages/design/{name}"
-+    for top in (*PAGES_ROOTS, "apps/workspace/src"):
++    named = (
++        "apps/workspace/src",
++        "apps/workspace/scripts",
++        "apps/harness/src",
++        "packages/glass-shared/src",
++    )
++    for top in (*PAGES_ROOTS, *named):
 +        assert _under(CORE / top, roots), f"theme_rule_check skips {top}"
++        assert (CORE / top).is_dir(), f"{top} is not a folder: the check is blind there"
 +
 +
 +def test_the_theme_rule_check_reads_packages_design(planted: Path) -> None:
 +    # The shape the real rules have: a brand block in a stylesheet of the design package's folder.
 +    planted.write_text('[data-brand="govuk"] .planted { margin: 0; }\n', encoding="utf-8")
 +    core = planted.parent.parent.parent  # the copy is `<tmp>/packages/design`: its root is `<tmp>`
++    for top in theme_rule_check.SCAN_ROOTS:  # the check refuses a root that is missing
++        (core / top).mkdir(parents=True, exist_ok=True)
 +    found = [f for f in theme_rule_check.find_theme_rules(core) if f.path.endswith(PLANT)]
 +    assert [(f.path, f.key, f.kind) for f in found] == [
 +        (f"packages/design/{PLANT}", '[data-brand="govuk"] .planted', "rule")
