@@ -37,11 +37,11 @@ The new test; `tests/connectors/` pure files that exist; `tests/services/api/tes
 
 ## The live stack
 
-A throwaway Postgres only (no ArcadeDB needed): a container of its own on a free high port, never the owner's `osprey-local-lite-*` deployment and never port 5432 or 55433 if another session holds it; take `scripts/stack_lease.sh`'s lease first (rule 14) and bring it down before releasing it. The builder gives the exact command it ran. **If the seat cannot start a container, it stops and says so; it does not report the live run as done.** The verifier repeats the run from step 5 on its own container.
+A throwaway Postgres only (no ArcadeDB needed): a container of its own on a free high port, never the owner's `osprey-local-lite-*` deployment and never port 5432 or 55433 if another session holds it; take `OspreyFlow_Build/scripts/stack_lease.sh`'s lease first (rule 14) and bring it down before releasing it. The builder gives the exact command it ran. **If the seat cannot start a container, it stops and says so; it does not report the live run as done.** The verifier repeats the run from step 5 on its own container.
 
 ## Scan-map rows (the owner's rule for the night, 22 November 2026): checked on main before this starts
 
-- `tests/connectors/test_sql_connector_probe_shape.py` (new): **walks no folder** (one named file); it needs no row. If the builder's version walks anything, it stops and tells the conductor, which writes a row to `scan_rows/SE6c.tsv` on main first.
+- `OspreyFlow_Build/tests/connectors/test_sql_connector_probe_shape.py` (new): **walks no folder** (one named file); it needs no row. If the builder's version walks anything, it stops and tells the conductor, which writes a row to `scan_rows/SE6c.tsv` on main first.
 - `tests/connectors/test_sql_connector_live.py`, `tests/services/report_sync/test_report_sync.py`: exist; not new; **no row in the scan map**, none needed (neither walks a folder).
 - SE6b's tests are on main already and need nothing.
 - **Checked by the conductor on 23 November 2026 against the scan map (198 lines):** no row names `tests/connectors/test_sql_connector_live.py`, `tests/services/report_sync/test_report_sync.py` or the new test; none is needed (none walks a folder).
