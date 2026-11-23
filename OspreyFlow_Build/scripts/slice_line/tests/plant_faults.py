@@ -328,7 +328,7 @@ M = [
  # LINE_FIXES_5_BRIEF.md, C: merged of cut, per build
  ("board.py", '"account": kw["account"], "merged": state == "done",', '"account": kw["account"], "merged": bool(merged),', "merge_record_the_board_refuses"),
  ("board.py", '        d["cut"] += 1\n', '        d["cut"] = max(d["cut"], 3)\n', "new_row_raises_the_cut"),
- ("board.py", '            "self_clears": c.self_clears(), "build_slices": counts, "approved_diffs": applied_diffs()}', '            "self_clears": c.self_clears(), "build_slices": {k: v for k, v in counts.items() if v["merged"]}, "approved_diffs": applied_diffs()}', "no_merged_slice_writes_0_of_n"),
+ ("board.py", '            "self_clears": c.self_clears(), "standing_today": c.standing_today(), "build_slices": counts, "approved_diffs": applied_diffs()}', '            "self_clears": c.self_clears(), "standing_today": c.standing_today(), "build_slices": {k: v for k, v in counts.items() if v["merged"]}, "approved_diffs": applied_diffs()}', "no_merged_slice_writes_0_of_n"),
  ("board.py", '    builds = {k: {**v, **({"slices": counts[k]["said"]', '    builds = {k: {**v, **({} if True else {"slices": counts[k]["said"]', "two_merged_writes_2_of_3"),
  ("board.py", '        if r["build"] not in ids:\n            continue', '        if False:\n            continue', "not_in_the_plan_is_not_counted"),
  # LINE_FIXES_5_BRIEF.md, 10: the owner's approved diffs
@@ -571,6 +571,24 @@ M = [
  ("server_gate.py", '    i = pos - 1 if isinstance(pos, int) and pos >= 1 else 0', '    i = 0', "stacked_above_another"),
  ("server_gate.py", '        i = None  # the stack does not place', '        pass  # the stack does not place', "does_not_place"),
  ("server_gate.py", '"index": i if i is not None else -1,', '"index": i if i is not None else 0,', "does_not_place"),
+ # the owner's file 012, A1: one more round after a merge refusal on his standing permission, never past its nevers
+ ("resume.py", '    if hit:\n        refuse(f"the refusal names a key', '    if False:\n        refuse(f"the refusal names a key', "round_after_refusal_never_for_a_finding_naming"),
+ ("resume.py", '        if same:\n            refuse(', '        if False:\n            refuse(', "round_after_refusal_never_twice"),
+ ("common.py", '    if used >= rule["per_day"]:\n        return None, (f"the standing permission', '    if False:\n        return None, (f"the standing permission', "round_after_refusal_at_its_budget"),
+ ("common.py", '    return sum(1 for r in owner_changes() if r["at"].startswith(day) and', '    return sum(1 for r in owner_changes() if', "round_after_refusal_at_its_budget"),
+ ("resume.py", '    if c.parked(slice_id):\n        refuse(', '    if False:\n        refuse(', "round_after_refusal_never_for_a_slice_stopped_on_red_checks_or_parked"),
+ ("common.py", ' or parts[1] == PARK:', ':', "round_after_refusal_never_for_a_slice_stopped_on_red_checks_or_parked"),
+ ("resume.py", '    if red:\n        refuse(f"{slice_id} has been stopped for red checks', '    if False:\n        refuse(f"{slice_id} has been stopped for red checks', "round_after_refusal_never_for_a_slice_stopped_on_red_checks_or_parked"),
+ ("resume.py", '        if r["slice"] == slice_id and r["stop"] == "red":', '        if False:', "round_after_refusal_never_for_a_slice_stopped_on_red_checks_or_parked"),
+ ("resume.py", '    if not cause:\n        refuse(', '    if False:\n        refuse(', "round_after_refusal_never_when_the_cause_is_not_recorded"),
+ ("resume.py", '    return sorted(set(files)) if files and all(files) else []', '    return sorted(set(files) - {""})', "round_after_refusal_never_when_the_cause_is_not_recorded"),
+ ("common.py", ' and 1 <= int(p[2]) <= STANDING_BUDGET_MOST', ' and 0 <= int(p[2])', "round_after_refusal_off_or_unclear"),
+ ("common.py", '    if stray:\n        return None, (f"{STANDING_FILE.name} says', '    if False:\n        return None, (f"{STANDING_FILE.name} says', "round_after_refusal_off_or_unclear or standing_accept_still_reads"),
+ ("common.py", '    lines = [ln for ln in lines if ln[0] == STANDING_RULE]\n', '', "round_after_refusal_the_standing_accept_still_reads or standing_accept_off_or_unclear"),
+ ("resume.py", '    new_round, new_limit = rnd + 1, limit + 1\n    said', '    new_round, new_limit = rnd + 1, limit\n    said', "round_after_refusal_gives_one_round"),
+ ("resume.py", '        "evidence": f"owner-changes.tsv: standing.tsv {RAR}"}, *(gate.get("findings") or [])]})', '        "evidence": ""}][:0] + (gate.get("findings") or [])})', "round_after_refusal_gives_one_round"),
+ ("resume.py", '    c.log_standing_use(slice_id, RAR, "send-back", "refused", RAR, what)', '    c.log_self_clear(slice_id, "refused", RAR, what)', "round_after_refusal_gives_one_round or round_after_refusal_at_its_budget or never_twice"),
+ ("board.py", '        for line in standing_lines():\n            print(line)', '        pass', "round_after_refusal_gives_one_round or round_after_refusal_at_its_budget"),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.

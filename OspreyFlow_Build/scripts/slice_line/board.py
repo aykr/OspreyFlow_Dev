@@ -378,8 +378,25 @@ def applied_diffs() -> list[dict]:
 
 def self_clear_lines(rows: list[dict] | None = None) -> list[str]:
     """Each stop the line cleared itself, one line each: the time, the slice, the stop, the cause, what it did."""
-    return [f"cleared by the line: {r['slice']} ({r['stop']} stop, cause {r['cause']}) at {r['at']}: {r['what']}"
+    return [(f"a round given by the line: {r['slice']} (a merge refusal, standing permission {r['cause']}) at {r['at']}: "
+             if r["cause"] == "round-after-refusal" else
+             f"cleared by the line: {r['slice']} ({r['stop']} stop, cause {r['cause']}) at {r['at']}: ") + r["what"]
             for r in (c.self_clears() if rows is None else rows)]
+
+
+def standing_lines(rows: list[dict] | None = None) -> list[str]:
+    """The owner's standing permissions today (his file 012), one line each: on or off, uses of the day's budget, and,
+    at the budget, that the line gives no more today."""
+    out = []
+    for r in (c.standing_today() if rows is None else rows):
+        if not r["on"]:
+            out.append(f"standing permission {r['name']}: off ({r['why']})" + (f"; {r['used']} used today" if r["used"] else ""))
+        elif r["at_budget"]:
+            out.append(f"standing permission {r['name']}: AT ITS BUDGET, {r['used']} of {r['per_day']} used today (UTC): "
+                       "the line gives no more today; the owner's own line is needed")
+        else:
+            out.append(f"standing permission {r['name']}: on, {r['used']} of {r['per_day']} used today (UTC)")
+    return out
 
 
 def write_status(builds: dict, path: Path | None = None, owed: list[dict] | None = None, ci: dict | None = None,
@@ -398,7 +415,7 @@ def write_status(builds: dict, path: Path | None = None, owed: list[dict] | None
                            "slices_cut": counts[k]["cut"]} if k in counts else {})} for k, v in builds.items()}
     body = {"updated": c.now(), "main": main, "dial": dial, "builds": builds, "owed_live_tests": owed or [],
             "main_ci": ci or {"state": "unknown", "run": None, "url": "", "why": "not read"},
-            "self_clears": c.self_clears(), "build_slices": counts, "approved_diffs": applied_diffs()}
+            "self_clears": c.self_clears(), "standing_today": c.standing_today(), "build_slices": counts, "approved_diffs": applied_diffs()}
     text = ("// Written by OspreyFlow_Build/scripts/slice_line/board.py. Never edited by hand.\n"
             "// state is one of: \"building\", \"verifying\", \"done\", \"stopped\". A build not started is left out.\n"
             f"window.OSPREY_STATUS = {json.dumps(body, indent=2)};\n")
@@ -525,6 +542,8 @@ def main() -> int:
         for r in fixed:
             print(f"command corrected: {r['slice']} at {r['at']} ({r['detail'].split('command corrected: ', 1)[-1]})")
         for line in self_clear_lines():
+            print(line)
+        for line in standing_lines():
             print(line)
         pending = c.DATA / "push.pending"
         if pending.exists():

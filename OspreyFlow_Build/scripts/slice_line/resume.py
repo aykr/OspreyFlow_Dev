@@ -7,7 +7,11 @@
   add-round        a slice stopped at its rounds limit gets one more round                             owner's line
   clear-stop       a slice stopped on red checks: its red-stop records removed, back to building       owner's line
   send-back        a slice the merge gate refused goes back with the gate's findings, its round        none within the
-                   advanced (past its rounds limit it needs the owner's add-round line as well)        limit
+                   advanced (past its rounds limit it needs the owner's add-round line as well, or     limit
+                   his standing permission, standing.tsv: round-after-refusal per-day <N> <date>:     (or his standing
+                   one round for the refusal's named cause alone, once; never the same cause twice,   permission past
+                   a finding naming a key, a credential or a security rule, a slice stopped for red   it)
+                   checks or one he has parked (`<slice> park <date>` in resume.tsv); N a day)
                    a verified slice goes back too, on the owner's send-back line only (a finding the  owner's line
                    owner does not accept narrower), its round advanced; past the limit the add-round  (and add-round
                    line as well. A findings record newer than the tip's pass tells the builder why    past the limit)
@@ -244,6 +248,86 @@ def send_back_verified(slice_id: str, wt: Path, st: dict, rnd: int, limit: int) 
         said.append(f"no round from {c.TABLE_ROUND} on starts without its table: {table} is not on main yet.")
     return [f"{slice_id}: a verified slice back to the builder on the owner's line, round {new_round} of {new_limit}.",
             *said]
+
+
+#: The owner's standing permission for one more round after a merge refusal (his file 012, A1; common.py).
+RAR = "round-after-refusal"
+
+
+def refusal_cause(rec: Path, tip: str) -> list[str]:
+    """The refusal's cause as the gate recorded it: the file of each failing test or target its findings name, or []
+    when a finding names none (a red with no name: the cause is not recorded)."""
+    files = [str(f.get("file") or "").strip() for f in (c.read_json(rec / f"verify-gate-{tip}.json") or {}).get("findings") or []]
+    return sorted(set(files)) if files and all(files) else []
+
+
+def given_before(rec: Path) -> list[dict]:
+    """Each round the permission gave this slice before, with the cause it was given for."""
+    return [c.read_json(f) or {} for f in sorted(rec.glob(f"{RAR}-*.json"))]
+
+
+def red_stopped(slice_id: str, rec: Path) -> str:
+    """How the slice is known to have been stopped for red checks (the Stop hook's six red stops), or '': a red stop
+    now, or one cleared by the owner's line, a corrected command or the line itself."""
+    if (rec / "red_stop.json").exists():
+        return "a red stop now"
+    for r in c.owner_changes():
+        if r["slice"] == slice_id and r["action"] in ("clear-stop", "correct-command"):
+            return f"{r['action']} at {r['at']}"
+    for r in c.self_clears():
+        if r["slice"] == slice_id and r["stop"] == "red":
+            return f"cleared by the line at {r['at']}"
+    return ""
+
+
+def round_after_refusal(slice_id: str, wt: Path, st: dict, rec: Path, rnd: int, limit: int, no_line: str) -> list[str]:
+    """One more round past the rounds limit after a merge refusal, on the owner's standing permission (standing.tsv:
+    round-after-refusal per-day <N> <date>) in place of his add-round line, to fix the refusal's named cause alone,
+    once for that refusal. Never: the same cause a second time for the slice; a finding naming a key, a credential or
+    a security rule; a slice stopped for red checks; a slice the owner has parked; past the day's budget. Refused in
+    words, with nothing changed, otherwise."""
+    tip = st.get("tip") or c.git(["rev-parse", "HEAD"], wt)
+
+    def refuse(why: str):
+        raise Refused(f"{no_line} The standing permission {RAR} does not give it: {why}. Nothing changed.")
+
+    grant, why = c.standing_grant(RAR)
+    if not grant:
+        refuse(why)
+    if c.parked(slice_id):
+        refuse(f"the owner has parked {slice_id} ({c.parked(slice_id)} in resume.tsv)")
+    red = red_stopped(slice_id, rec)
+    if red:
+        refuse(f"{slice_id} has been stopped for red checks ({red}): its rounds are the owner's")
+    hit = SECURITY_WORDS.search(stop_words(st, rec, tip))  # the self-clear's word check, unchanged
+    if hit:
+        refuse(f"the refusal names a key, a credential or a security rule ({hit.group(0)!r} in its findings)")
+    cause = refusal_cause(rec, tip)
+    if not cause:
+        refuse("the gate's record names no failing test or target for this refusal (its cause is not recorded)")
+    for before in given_before(rec):
+        same = sorted(set(before.get("cause") or []) & set(cause))
+        if same:
+            refuse(f"it gave {slice_id} a round for the same cause before ({', '.join(same)}, at {before.get('at')}): "
+                   "a second time is the owner's")
+    new_round, new_limit = rnd + 1, limit + 1
+    said = back_to_building(slice_id, wt, rounds_limit=new_limit, round=new_round)
+    named = ", ".join(cause)
+    f = rec / f"verify-gate-{tip}.json"
+    gate = c.read_json(f) or {}
+    c.write_json(f, {**gate, "findings": [{
+        "file": cause[0],
+        "what": (f"This round ({new_round} of {new_limit}) is given by the owner's standing permission for this merge "
+                 f"refusal alone ({RAR}): fix only the cause the gate names below ({named}) and change nothing else. "
+                 "If the same cause is red again, the slice goes to the owner."),
+        "evidence": f"owner-changes.tsv: standing.tsv {RAR}"}, *(gate.get("findings") or [])]})
+    c.write_json(rec / f"{RAR}-{tip}.json", {"slice": slice_id, "tip": tip, "cause": cause, "round": new_round,
+                                            "rounds_limit": new_limit, "at": c.now()})
+    what = (f"one more round after the merge refusal at {tip[:10]}, for its named cause alone ({named}), without the "
+            f"owner's add-round line; round {rnd} -> {new_round}, limit {limit} -> {new_limit}; use {grant['used'] + 1} "
+            f"of {grant['per_day']} today")
+    c.log_standing_use(slice_id, RAR, "send-back", "refused", RAR, what)
+    return [f"{slice_id}: back to the builder on the owner's standing permission ({RAR}): {what}.", *said]
 
 
 # ------------------------------------------------------------------ slices.tsv: one row's frozen columns
@@ -932,7 +1016,10 @@ def act(slice_id: str, action: str, standing_only: bool = False, args: list[str]
                 said = back_to_building(slice_id, wt, round=rnd + 1)
                 c.log_owner_change(slice_id, action, f"standing (within the rounds limit): round {rnd} -> {rnd + 1}")
                 return [f"{slice_id}: back to the builder with the gate's findings, round {rnd + 1} of {limit}.", *said]
-            tag = authority(slice_id, "add-round")
+            try:
+                tag = authority(slice_id, "add-round")
+            except Refused as no_line:  # the owner's file 012, A1: his standing permission in place of the line
+                return round_after_refusal(slice_id, wt, st, rec, rnd, limit, str(no_line))
             said = back_to_building(slice_id, wt, round=rnd + 1, rounds_limit=limit + 1)
             c.log_owner_change(slice_id, action, f"{tag}: past the limit; round {rnd} -> {rnd + 1}, limit {limit} -> {limit + 1}")
             return [f"{slice_id}: back to the builder with the gate's findings, round {rnd + 1} of {limit + 1}.", *said]

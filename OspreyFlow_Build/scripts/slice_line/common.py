@@ -335,14 +335,100 @@ STANDING_RULE = "accept-test-gaps"
 STANDING_FLOOR = 3
 
 
-def standing_rule() -> tuple[dict | None, str]:
-    """The owner's standing line, `accept-test-gaps from-round <N> <YYYY-MM-DD>` (N at least 3), or None with why
-    not. Missing, unreadable, more than one line, or anything else: no standing accept, never guessed."""
+#: The owner's standing permissions (his file 012, 23 November 2026), each one more line in standing.tsv, each with a
+#: daily budget: `<name> per-day <N> <YYYY-MM-DD>`, N from 1 to STANDING_BUDGET_MOST (his "ten a day"; more is a change
+#: to this file, never a line). Each use is logged in owner-changes.tsv ("standing.tsv <name>: ...") and in
+#: self-clears.tsv, which the board prints. round-after-refusal: one more round after a merge refusal past the rounds
+#: limit, without the add-round line (resume.py send-back). clear-line-stops: a stop whose cause is the line's cleared
+#: without the clear-stop line (resume.py self-clear).
+STANDING_PERMISSIONS = ("round-after-refusal", "clear-line-stops")
+STANDING_BUDGET_MOST = 10
+
+
+def standing_lines() -> tuple[list[list[str]] | None, str]:
+    """The owner's lines in standing.tsv, each split into its words, or None with why not: a line that names no rule or
+    permission of the line's turns every one of them off (a misspelt line is never guessed at)."""
     try:
         text = STANDING_FILE.read_text()
     except OSError:
-        return None, f"{STANDING_FILE.name} is not there (the standing accept is off)"
+        return None, f"{STANDING_FILE.name} is not there (the standing accept and permissions are off)"
     lines = [ln.split() for ln in text.splitlines() if ln.strip() and not ln.lstrip().startswith("#")]
+    stray = [ln for ln in lines if ln[0] not in (STANDING_RULE, *STANDING_PERMISSIONS)]
+    if stray:
+        return None, (f"{STANDING_FILE.name} says {' '.join(stray[0])!r}, which names no standing rule or permission "
+                      f"({', '.join((STANDING_RULE, *STANDING_PERMISSIONS))}): all of them are off until it is put right")
+    return lines, "on"
+
+
+def a_date(word: str) -> bool:
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", word):
+        return False
+    try:
+        datetime.strptime(word, "%Y-%m-%d")
+    except ValueError:
+        return False
+    return True
+
+
+def standing_permission(name: str) -> tuple[dict | None, str]:
+    """The owner's standing permission `name` (one line `<name> per-day <N> <YYYY-MM-DD>`), or None with why not."""
+    lines, why = standing_lines()
+    if lines is None:
+        return None, why
+    mine = [ln for ln in lines if ln[0] == name]
+    want = f"one line '{name} per-day <1 to {STANDING_BUDGET_MOST}> <YYYY-MM-DD>'"
+    if len(mine) != 1:
+        return None, f"{STANDING_FILE.name} holds {len(mine)} '{name}' lines, not {want} (the permission is off)"
+    p = mine[0]
+    if not (len(p) == 4 and p[1] == "per-day" and p[2].isdigit() and 1 <= int(p[2]) <= STANDING_BUDGET_MOST
+            and a_date(p[3])):
+        return None, f"{STANDING_FILE.name} says {' '.join(p)!r}, not {want} (the permission is off)"
+    return {"name": name, "per_day": int(p[2]), "given": p[3], "line": " ".join(p)}, "on"
+
+
+def standing_uses_today(name: str) -> int:
+    """How many times the permission was used today (UTC), by its rows in owner-changes.tsv."""
+    day = now()[:10]
+    return sum(1 for r in owner_changes() if r["at"].startswith(day) and r["detail"].startswith(f"standing.tsv {name}:"))
+
+
+def standing_grant(name: str) -> tuple[dict | None, str]:
+    """The permission, when it is on and today's budget is not spent; None with why not."""
+    rule, why = standing_permission(name)
+    if not rule:
+        return None, why
+    used = standing_uses_today(name)
+    if used >= rule["per_day"]:
+        return None, (f"the standing permission {name} has given its {rule['per_day']} for today ({now()[:10]}, UTC): at "
+                      "its budget the line gives no more today, and the owner's own line is needed")
+    return {**rule, "used": used}, "on"
+
+
+def standing_today() -> list[dict]:
+    """Each standing permission today, for the board: on or off (and why), its uses and its budget."""
+    out = []
+    for name in STANDING_PERMISSIONS:
+        rule, why = standing_permission(name)
+        used = standing_uses_today(name)
+        out.append({"name": name, "on": bool(rule), "why": why, "used": used, "per_day": (rule or {}).get("per_day", 0),
+                    "at_budget": bool(rule) and used >= rule["per_day"]})
+    return out
+
+
+def log_standing_use(slice_id: str, name: str, action: str, stop: str, cause: str, what: str) -> dict:
+    """One use of a standing permission: its row in owner-changes.tsv (what the budget counts) and in self-clears.tsv
+    (what the board prints, in one sentence: what the line did and why)."""
+    log_owner_change(slice_id, action, f"standing.tsv {name}: {what}")
+    return log_self_clear(slice_id, stop, cause, what)
+
+
+def standing_rule() -> tuple[dict | None, str]:
+    """The owner's standing line, `accept-test-gaps from-round <N> <YYYY-MM-DD>` (N at least 3), or None with why
+    not. Missing, unreadable, more than one such line, or anything else: no standing accept, never guessed."""
+    lines, why = standing_lines()
+    if lines is None:
+        return None, why
+    lines = [ln for ln in lines if ln[0] == STANDING_RULE]
     want = f"one line '{STANDING_RULE} from-round <{STANDING_FLOOR} or more> <YYYY-MM-DD>'"
     if len(lines) != 1:
         return None, f"{STANDING_FILE.name} holds {len(lines)} lines, not {want}"
@@ -392,6 +478,22 @@ def self_clears() -> list[dict]:
     return [dict(zip(SELF_CLEAR_COLUMNS, r + [""] * (len(SELF_CLEAR_COLUMNS) - len(r)))) for r in rows]
 
 
+#: The owner's park line in resume.tsv, `<slice> park <YYYY-MM-DD>` (his file 012): a parked slice is his, and no standing
+#: permission acts on it. It is never used up; he lifts it by deleting the line.
+PARK = "park"
+
+
+def parked(slice_id: str) -> str:
+    """The owner's park line for the slice (of any day), or ''."""
+    if not RESUME_FILE.is_file():
+        return ""
+    for ln in RESUME_FILE.read_text().splitlines():
+        parts = ln.split()
+        if not ln.strip().startswith("#") and len(parts) == 3 and parts[:2] == [slice_id, PARK]:
+            return "\t".join(parts)
+    return ""
+
+
 def unapplied_lines() -> list[dict]:
     """The owner's lines in resume.tsv for a slice not yet used (no use logged in owner-changes.tsv): each its slice,
     action, arguments (move-seat's seat and account), date and text. The k-th of k identical lines is unapplied until it
@@ -402,7 +504,7 @@ def unapplied_lines() -> list[dict]:
     changes = owner_changes()
     out, seen = [], {}
     for parts in lines:
-        if len(parts) < 3 or parts[0] == "clear-account":
+        if len(parts) < 3 or parts[0] == "clear-account" or parts[1] == PARK:
             continue
         sid, action, args, date = parts[0], parts[1], parts[2:-1], parts[-1]
         key = tuple(parts)
