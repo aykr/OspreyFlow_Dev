@@ -851,10 +851,10 @@ THE_TRUST_WORDS = (
     "(a public name, or network.tls on a Small), or leave pages.enabled off"
 )
 THE_CA_WORDS = (
-    "pages.enabled is on, but the identity address {identity} is on a name no public authority "
-    "signs for, and the deployment's own certificate (network.tls) names no CA, so the page "
-    "service has no way to trust it and people could not sign in: give network.tls a ca (the "
-    "organisation's root certificate), or leave pages.enabled off"
+    "pages.enabled is on, but the identity address {identity} is served with the deployment's own "
+    "certificate (network.tls), which names no CA, so the page service cannot tell which root to "
+    "trust for it and people could not sign in: give network.tls a ca (the root certificate that "
+    "signed it; a public authority's root will do), or leave pages.enabled off"
 )
 LOCAL_LITE_HTTPS = {"network": {"public_origin": "https://reference.ospreyflow.localhost:8443"}}
 HTTPS_IDENTITY = "https://id.reference.ospreyflow.localhost:8443"
@@ -914,9 +914,12 @@ def test_local_lite_over_https_is_refused_in_words(brand: str) -> None:
     assert _render("local-lite", brand, **OFF, **LOCAL_LITE_HTTPS)
 
 
-def _small(brand: str, origin: str, own: dict[str, str] | None = None) -> Any:
+def _small(
+    brand: str, origin: str, own: dict[str, str] | None = None, *, access_key: bool = False
+) -> Any:
     """A small deployment at `origin`, the page service on, with the organisation's own certificate
-    when `own` is given (its optional `ca` in it): its configuration."""
+    when `own` is given (its optional `ca` in it), and the shared key (`network.access_key`) when
+    asked: its configuration."""
     from schemas.deployment import OspreyConfig
 
     raw = ref.raw_config("small")
@@ -927,6 +930,8 @@ def _small(brand: str, origin: str, own: dict[str, str] | None = None) -> Any:
             "key": "/etc/ospreyflow/tls/osprey.key",
             **own,
         }
+    if access_key:
+        raw["network"]["access_key"] = True
     raw["appearance"] = {**raw.get("appearance", {}), "brand": brand}
     raw["pages"] = {"enabled": True}
     return OspreyConfig.model_validate(raw)
@@ -970,15 +975,17 @@ def test_a_small_on_a_name_the_proxy_signs_itself_is_refused_without_a_certifica
         ("https://osprey.example.org", None),
         ("https://osprey.example.org:9443", None),
         ("https://osprey.internal", {"ca": "/etc/ospreyflow/tls/org-root.pem"}),
-        ("https://osprey.example.org", {}),
+        ("https://osprey.example.org", {"ca": "/etc/ospreyflow/tls/org-root.pem"}),
+        ("https://osprey.intra.example.gov.uk", {"ca": "/etc/ospreyflow/tls/org-root.pem"}),
     ],
-    ids=["public", "public-port", "own-with-ca", "public-name-own-certificate"],
+    ids=["public", "public-port", "own-with-ca", "public-name-own-with-ca", "private-name-own-with-ca"],
 )
 def test_a_name_with_a_certificate_the_service_trusts_is_rendered(
     origin: str, own: dict[str, str] | None, brand: str
 ) -> None:
     """A public name (Caddy asks a public authority), or the organisation's own certificate
-    (`network.tls`; its CA mounted into the service where it is given): not refused."""
+    (`network.tls`) with its CA given, mounted into the service: not refused. The organisation's own
+    certificate with no CA is refused, on any name (`test_a_small_with_its_own_certificate_*`)."""
     files = _compose_files(_small(brand, origin, own))
     assert pages_service("small", files) is not None
     assert _trust_findings(files) == []
@@ -988,7 +995,9 @@ def _trust_findings(files: dict[str, bytes]) -> list[str]:
     """What is wrong with the service's trust for the certificate its issuer's name is served with,
     read of the rendered files alone: the identity site of the Caddyfile with no `tls` line (the
     proxy signs it, by a public authority or, for the names Caddy keeps for itself, its own
-    internal one) on such a name is a certificate the service cannot verify."""
+    internal one) on such a name is a certificate the service cannot verify; one with the
+    organisation's `tls` line and no CA named for the service is a certificate it cannot be told
+    to trust, whatever the name."""
     service = pages_service("small", files)
     if service is None or "OSPREY_PAGES_OIDC_ISSUER" not in service["env"]:
         return []
@@ -1007,11 +1016,12 @@ def _trust_findings(files: dict[str, bytes]) -> list[str]:
             f"{host} is signed by the proxy's own internal authority, "
             "which the service does not trust"
         ]
-    if internal and "NODE_EXTRA_CA_CERTS" not in service["env"]:
-        # A certificate of the organisation's on a name no public authority signs for comes from a
-        # private root, which node trusts only where NODE_EXTRA_CA_CERTS names it.
+    if given and "NODE_EXTRA_CA_CERTS" not in service["env"]:
+        # The organisation's own certificate, on any name: the render cannot tell a public root
+        # from a private one, and node trusts a private one only where NODE_EXTRA_CA_CERTS names it.
         return [
-            f"{host} is served with a private certificate and the service is given no CA for it"
+            f"{host} is served with the organisation's own certificate "
+            "and the service is given no CA for it"
         ]
     return []
 
@@ -1037,19 +1047,28 @@ INTERNAL_NAMES = [
     "https://10.1.2.3",
     "https://osprey.home.arpa",
 ]
+#: Every name an organisation's own certificate may be given on: the ones Caddy signs itself, and
+#: the rest, which the render cannot tell from a name a public authority signs for (a private
+#: authority's name outside the suffixes Caddy knows: round 8's finding).
+OWN_CERTIFICATE_NAMES = [
+    *INTERNAL_NAMES,
+    "https://osprey.intra.example.gov.uk",
+    "https://osprey.example.org",
+    "https://osprey.example.org:9443",
+]
 
 
 @pytest.mark.parametrize("brand", BRANDS)
-@pytest.mark.parametrize("origin", INTERNAL_NAMES)
-def test_a_small_on_a_private_name_with_its_own_certificate_and_no_ca_is_refused(
-    origin: str, brand: str
-) -> None:
-    """No public authority signs for these names, so the organisation's certificate on one comes
-    from a private root, which node trusts only where `NODE_EXTRA_CA_CERTS` names it: with
-    `network.tls` and no `ca`, the sign-in would fail at sign-in time. Refused at render time in
-    exactly these words, by a `ValueError` of its own kind. With a `ca` it renders (the next test
-    and `test_a_name_with_a_certificate_the_service_trusts_is_rendered`); off it is the reference
-    (the setting is off in the reference's own cases)."""
+@pytest.mark.parametrize("origin", OWN_CERTIFICATE_NAMES)
+def test_a_small_with_its_own_certificate_and_no_ca_is_refused(origin: str, brand: str) -> None:
+    """The organisation's certificate may come from a private root, which node trusts only where
+    `NODE_EXTRA_CA_CERTS` names it, and the render cannot tell a private root from a public one by
+    the name (an internal suffix is only the names Caddy signs itself: `osprey.intra.example.gov.uk`
+    is outside them and may be a private authority's): with `network.tls` and no `ca` the sign-in
+    could fail at sign-in time, so it is refused at render time in exactly these words, by a
+    `ValueError` of its own kind, on any name. With a `ca` it renders (the next test and
+    `test_a_name_with_a_certificate_the_service_trusts_is_rendered`); off it is the reference (the
+    setting is off in the reference's own cases)."""
     from urllib.parse import urlsplit
 
     own = {"ca": "/etc/ospreyflow/tls/org-root.pem"}
@@ -1063,18 +1082,23 @@ def test_a_small_on_a_private_name_with_its_own_certificate_and_no_ca_is_refused
 
 
 @pytest.mark.parametrize("brand", BRANDS)
-def test_the_ca_trust_check_is_red_for_a_private_certificate_with_no_ca(brand: str) -> None:
-    """The planted fault takes the shape the renderer writes: the refusal taken out, so a Small on
-    an `.internal` name with `network.tls` and no `ca` is rendered with the issuer, the proxy's
-    `tls /certs/` line and no `NODE_EXTRA_CA_CERTS`. The check reads the files and names it; it is
-    clean for the same Small with a `ca`."""
-    config = _small(brand, "https://osprey.internal", {})
+@pytest.mark.parametrize(
+    "origin", ["https://osprey.internal", "https://osprey.intra.example.gov.uk"]
+)
+def test_the_ca_trust_check_is_red_for_an_own_certificate_with_no_ca(
+    origin: str, brand: str
+) -> None:
+    """The planted fault takes the shape the renderer writes: the refusal taken out, so a Small
+    with `network.tls` and no `ca` is rendered with the issuer, the proxy's `tls /certs/` line and
+    no `NODE_EXTRA_CA_CERTS`, on a name inside Caddy's internal suffixes and on one outside them. The
+    check reads the files and names it; it is clean for the same Small with a `ca`."""
+    config = _small(brand, origin, {})
     with _patched("harness.pages_service", "refuse_sign_in_without_ca", _no_trust_refusal):
         files = _compose_files(config)
     found = _trust_findings(files)
     assert any("no CA for it" in line for line in found), found
     assert "\ttls /certs/" in files["Caddyfile"].decode("utf-8")
-    own = _small(brand, "https://osprey.internal", {"ca": "/etc/ospreyflow/tls/org-root.pem"})
+    own = _small(brand, origin, {"ca": "/etc/ospreyflow/tls/org-root.pem"})
     assert _trust_findings(_compose_files(own)) == []
 
 
@@ -1540,10 +1564,9 @@ CA_ON_THE_HOST = "/etc/ospreyflow/tls/org-root.pem"
 LISTENER_CASES = {
     "public-name": ("https://osprey.example.org", None, False),
     "public-name-port": ("https://osprey.example.org:9443", None, True),
-    "own-certificate": ("https://osprey.example.org", {}, True),
-    "own-certificate-ca": ("https://osprey.example.org", {"ca": CA_ON_THE_HOST}, True),
-    "own-certificate-port": ("https://osprey.example.org:9443", {}, True),
-    "own-certificate-8443": ("https://osprey.example.org:8443", {}, False),
+    "own-certificate": ("https://osprey.example.org", {"ca": CA_ON_THE_HOST}, True),
+    "own-certificate-port": ("https://osprey.example.org:9443", {"ca": CA_ON_THE_HOST}, True),
+    "own-certificate-8443": ("https://osprey.example.org:8443", {"ca": CA_ON_THE_HOST}, False),
 }
 
 
@@ -1576,7 +1599,7 @@ def test_the_routes_reader_names_a_site_with_two_addresses() -> None:
     address line holds two addresses, as the identity site now can: it is named by its first."""
     from harness import site
 
-    config = _small("ospreyflow", "https://osprey.example.org:9443", {})
+    config = _small("ospreyflow", "https://osprey.example.org:9443", {"ca": CA_ON_THE_HOST})
     text = _compose_files(config)["Caddyfile"].decode("utf-8")
     assert "https://id.osprey.example.org, https://id.osprey.example.org:9443 {" in text
     assert site.routes(text)["id.osprey.example.org"] == "keycloak:8080"
@@ -1691,11 +1714,10 @@ def _ca_findings(service: dict[str, Any]) -> list[str]:
 def test_the_service_trusts_the_organisations_ca_it_signs_in_through(brand: str) -> None:
     """As Keycloak's truststore is given `network.tls.ca` (ADR-114 Amendment 33 decision 4): the
     service's own discovery, keys and token request go to the identity name, whose certificate is
-    the organisation's. Without a CA nothing is mounted and nothing named."""
+    the organisation's. Without a CA there is nothing to trust it by: refused (round 8)."""
     assert _ca_findings(_small_with_its_own_certificate(brand, ca=CA_ON_THE_HOST)) == []
-    without = _small_with_its_own_certificate(brand)
-    assert "NODE_EXTRA_CA_CERTS" not in without["environment"]
-    assert not without.get("volumes")
+    with pytest.raises(ValueError, match="names no CA"):
+        _small_with_its_own_certificate(brand)
 
 
 def test_the_ca_check_is_red_for_a_service_that_is_not_told_to_read_it() -> None:
@@ -1714,6 +1736,237 @@ def test_the_ca_check_is_red_for_a_service_that_is_not_told_to_read_it() -> None
     # The mount follows the variable (both are written, or neither), so both findings are reported.
     assert "NODE_EXTRA_CA_CERTS does not name the mounted CA" in found, found
     assert service_module.CA_IN_SERVICE
+
+
+# ---- 6b'''. the shared key (`network.access_key`, ADR-114 Amendment 41) with the service on (round 8) --
+#
+# A Small that asks for the shared key puts every route to the Glass behind it: the Caddyfile's
+# `route { basic_auth ... }`, in which each name's handlers sit. The page service's routes (the
+# matcher `@pages` and the `handle @pages` that sends it to `pages`, or every path once a GOV.UK
+# tree is complete) are added to that site, and a handler written outside the `route`, or ahead of
+# `basic_auth`, would serve the page service's paths (`/session`, `/assets/pages`, `/studio`, or
+# everything) without the key. A security rule: nothing here is accepted narrower. The service's
+# own server-side requests to the identity name, through the alias, carry no pass, so each must be
+# on the key's open list (the three the Glass asks from its own origin: discovery, keys, token).
+#
+# Caddy is not on the path of this test (it runs where `NEEDS_CADDY` is satisfied,
+# `test_access_key_proxy.py`): the Caddyfile is read here as the tree of blocks it is, so a missing
+# or extra brace, a matcher used and never declared, and a handler outside the key's `route` are
+# each found by reading it.
+
+#: What the page service asks the identity provider itself, from the proxy's alias: `openid-client`'s
+#: discovery (`.well-known/openid-configuration`), the key set the discovery names (`certs`, read by
+#: `createRemoteJWKSet`) and the token request of the code grant (`token`, the client's secret in the
+#: body: `ClientSecretPost`, which is the library's default). `apps/pages/server/oidc.ts` makes no
+#: other call to it from the service (the authorisation address is the person's browser's).
+THE_SERVICES_OWN_REQUESTS = (
+    "/realms/osprey/.well-known/openid-configuration",
+    "/realms/osprey/protocol/openid-connect/certs",
+    "/realms/osprey/protocol/openid-connect/token",
+)
+KEY_ORIGIN = "https://osprey.example.org"
+
+
+class _Block:
+    """One `label {` of a Caddyfile and what is in it: leaf lines (`str`) and nested blocks."""
+
+    def __init__(self, label: str) -> None:
+        self.label = label
+        self.children: list[_Block | str] = []
+
+    def text(self) -> str:
+        return "\n".join(
+            [self.label, *(c if isinstance(c, str) else c.text() for c in self.children)]
+        )
+
+
+def _parse_caddyfile(text: str) -> list[_Block]:
+    """The top-level blocks (the global options and each site) of a Caddyfile; refuses braces that
+    do not match, as Caddy does."""
+    top: list[_Block] = []
+    stack: list[_Block] = []
+    for number, raw in enumerate(text.splitlines(), start=1):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line == "}":
+            if not stack:
+                raise ValueError(f"line {number}: a closing brace with nothing open")
+            stack.pop()
+        elif line.endswith("{"):
+            block = _Block(line[:-1].strip())
+            (stack[-1].children if stack else top).append(block)
+            stack.append(block)
+        elif stack:
+            stack[-1].children.append(line)
+        elif line.startswith("import "):
+            continue  # the key file's three snippets, imported at the top
+        else:
+            raise ValueError(f"line {number}: {line!r} outside every block")
+    if stack:
+        raise ValueError(f"{stack[-1].label!r} is never closed")
+    return top
+
+
+def _key_findings(files: dict[str, bytes]) -> list[str]:
+    """What is wrong with the front proxy's configuration of a Small that asks for the shared key,
+    with the page service on, read of the rendered Caddyfile alone."""
+    try:
+        sites = [b for b in _parse_caddyfile(files["Caddyfile"].decode("utf-8")) if b.label]
+    except ValueError as refused:
+        return [f"the Caddyfile is not well formed: {refused}"]
+    found: list[str] = []
+    for site in sites:
+        if not site.label.startswith("https://"):
+            continue
+        route = next(
+            (c for c in site.children if isinstance(c, _Block) and c.label == "route"), None
+        )
+        for child in site.children:
+            if child is route:
+                continue
+            leaf = child if isinstance(child, str) else child.text()
+            if "pages:" in leaf or (not leaf.startswith("@pages ") and "@pages" in leaf):
+                found.append(f"{site.label}: the page service's route is outside the key's route")
+        uses = route is not None and "handle @pages" in route.text()
+        if uses and not any(isinstance(c, str) and c.startswith("@pages ") for c in site.children):
+            found.append(f"{site.label}: @pages is used and never declared in the site")
+        if route is not None:
+            order = [c if isinstance(c, str) else c.label for c in route.children]
+            asked = next((i for i, c in enumerate(order) if c.startswith("basic_auth ")), None)
+            served = next(
+                (
+                    i
+                    for i, c in enumerate(route.children)
+                    if "pages:" in (c if isinstance(c, str) else c.text())
+                ),
+                None,
+            )
+            if served is not None and (asked is None or served < asked):
+                found.append(f"{site.label}: the page service is served before the key is asked")
+        if site.label.startswith("https://id."):
+            locked = next(
+                (c for c in site.children if isinstance(c, _Block) and c.label == "@osprey_locked"),
+                None,
+            )
+            listed = locked.text() if locked else ""
+            for path in THE_SERVICES_OWN_REQUESTS:
+                if f'"{path}"' not in listed:
+                    found.append(f"{site.label}: {path} is not on the key's open list")
+    return found
+
+
+def _with_key(brand: str) -> dict[str, bytes]:
+    return _compose_files(_small(brand, KEY_ORIGIN, access_key=True))
+
+
+def _pages_handled_ahead_of_the_key(real: Callable[..., Any]) -> Callable[..., Any]:
+    """The renderer with the page service's `handle @pages` written ahead of the key's `route`, at
+    the site (the shape a change that emits it before wrapping the rest would write)."""
+
+    def planted(host: str, *, identity: bool, handlers: list[str]) -> list[str]:
+        if handlers[:1] == ["\thandle @pages {"]:
+            return [*handlers[:3], *real(host, identity=identity, handlers=handlers[3:])]
+        return list(real(host, identity=identity, handlers=handlers))
+
+    return planted
+
+
+def _every_path_served_with_no_key(real: Callable[..., Any]) -> Callable[..., Any]:
+    """The complete tree's `handle { reverse_proxy pages:8090 }` written with no `route` at all."""
+
+    def planted(host: str, *, identity: bool, handlers: list[str]) -> list[str]:
+        if any("pages:" in line for line in handlers):
+            return list(handlers)
+        return list(real(host, identity=identity, handlers=handlers))
+
+    return planted
+
+
+def _route_never_closed(real: Callable[..., Any]) -> Callable[..., Any]:
+    def planted(host: str, *, identity: bool, handlers: list[str]) -> list[str]:
+        return list(real(host, identity=identity, handlers=handlers))[:-1]
+
+    return planted
+
+
+def _without_the_matcher(real: Callable[..., Any]) -> Callable[..., Any]:
+    def planted(paths: list[str]) -> str:
+        return ""
+
+    return planted
+
+
+def _open_list_without(path_end: str) -> Callable[[Any], Any]:
+    def narrowed(real: tuple[str, ...]) -> Any:
+        return tuple(p for p in real if not p.endswith(path_end))
+
+    return narrowed
+
+
+@pytest.mark.parametrize("brand", BRANDS)
+def test_with_the_shared_key_every_route_to_the_page_service_is_behind_it(brand: str) -> None:
+    """A Small that asks for the key, the service on: the Caddyfile is well formed, `@pages` is
+    declared in the site and used inside the key's `route` after `basic_auth`, no handler sends a
+    path to `pages` outside it, and the three requests the service itself makes to the identity name
+    are on the open list."""
+    files = _with_key(brand)
+    assert _key_findings(files) == []
+    caddyfile = files["Caddyfile"].decode("utf-8")
+    assert "\t\tbasic_auth @osprey_locked bcrypt OspreyFlow {" in caddyfile
+    assert "reverse_proxy pages:8090" in caddyfile, "the page service is not routed at all"
+    assert pages_service("small", files)["env"]["OSPREY_PAGES_OIDC_ISSUER"].endswith("/realms/osprey")
+
+
+def test_with_the_shared_key_a_complete_govuk_tree_is_served_from_inside_the_key(
+    tmp_path: Path,
+) -> None:
+    """I22 with the key: every path goes to `pages`, and every one is behind the key."""
+    with a_complete_govuk_tree(tmp_path):
+        files = _with_key("govuk")
+    caddyfile = files["Caddyfile"].decode("utf-8")
+    assert "reverse_proxy pages:8090" in caddyfile and "@pages" not in caddyfile
+    assert not has_a_workspace("small", files)
+    assert _key_findings(files) == []
+
+
+@pytest.mark.parametrize("brand", BRANDS)
+def test_the_key_check_is_red_for_the_page_service_ahead_of_the_key(brand: str) -> None:
+    """Clean, then red with the handler written outside the route (the finding of round 8), then
+    clean."""
+    assert _key_findings(_with_key(brand)) == []
+    with _patched("harness.site", "_behind_the_key", _pages_handled_ahead_of_the_key):
+        found = _key_findings(_with_key(brand))
+    assert any("outside the key's route" in line for line in found), found
+    assert _key_findings(_with_key(brand)) == []
+
+
+def test_the_key_check_is_red_for_every_path_served_with_no_key(tmp_path: Path) -> None:
+    with a_complete_govuk_tree(tmp_path):
+        assert _key_findings(_with_key("govuk")) == []
+        with _patched("harness.site", "_behind_the_key", _every_path_served_with_no_key):
+            found = _key_findings(_with_key("govuk"))
+    assert any("outside the key's route" in line for line in found), found
+
+
+@pytest.mark.parametrize("brand", BRANDS)
+def test_the_key_check_is_red_for_a_caddyfile_that_is_not_well_formed(brand: str) -> None:
+    with _patched("harness.site", "_behind_the_key", _route_never_closed):
+        found = _key_findings(_with_key(brand))
+    assert any("not well formed" in line for line in found), found
+    with _patched("harness.pages_service", "caddy_matcher", _without_the_matcher):
+        found = _key_findings(_with_key(brand))
+    assert any("never declared" in line for line in found), found
+
+
+@pytest.mark.parametrize("brand", BRANDS)
+@pytest.mark.parametrize("path_end", ["/.well-known/openid-configuration", "/certs", "/token"])
+def test_the_key_check_is_red_when_a_request_the_service_makes_is_not_on_the_open_list(
+    path_end: str, brand: str
+) -> None:
+    with _patched("harness.site", "OPEN_ON_THE_IDENTITY_PROVIDER", _open_list_without(path_end)):
+        found = _key_findings(_with_key(brand))
+    assert any(f"{path_end} is not on the key's open list" in line for line in found), found
 
 
 # ---- 6c. the cluster's install makes the secrets the pod names --------------------------------
