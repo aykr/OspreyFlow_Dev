@@ -50,8 +50,8 @@ launch's one-time token before the prompt is sent (the prompt goes over stream-j
 
 ## Gates and their proofs
 
-`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (608 cases) plants each violation in the shape its real call
-site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (507 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
+`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (624 cases) plants each violation in the shape its real call
+site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (515 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
 
 | Gate | Where | What refuses |
 | --- | --- | --- |
@@ -273,6 +273,7 @@ says that cost is a list-price estimate, not a bill.
 - **The stack** (004, 3): a slice stacked on others counts only when main is exactly the tree the server ran it on; a refusal marks the ones above to go to the server again (`server-again.json`).
 - **The shadow** (004, 4): each merge records the server's result beside the Mac's whole gate for the same candidate: agree, differ or no comparison (`server-shadow-<run>.json`, `server-shadow.tsv`).
 - **The board and the server** (004, 5): each waiting slice's server result (running, green, red and the test, none; run again; a rerun's result), what each merge took from the server, and the shadow's tally.
+- **A run with no verdict** (013, 23 November 2026; SE6c, run f8394584d97477d3): a run of the runner's shape is read as its own run whatever it holds; a finished run with no verdict (an error: "nothing was run") says so in the merge record, never "candidate tree None"; and when the note names such a run, the newest earlier run of the slice at that tip with a verdict (the early warning's `runs.jsonl`) is read instead, recorded as `newer_without_verdict`, and still counts only if it is the Mac's own candidate. The tests read every real fetched result in `tests/fixtures/server_result_*.json` as the run it is (alone, first of a stack, above another, an error).
 - **`merge_slice.py server-report`** (004, 6): the Mac-only remainder's and the whole merge's time with the green counted, the same for the whole gate, refusals caught before the slot, environment differences, the shadow.
 - **Three project checks at every stop** (005): `route-coverage-check`, `test-file-coverage-check` and `mypy` run at the start and at every stop in the builder's worktree, as the line's own step (a slice started before meets them at its next stop, no refreeze). A refused merge records its cause; the board counts refusals by cause.
 - **The branch's own changes** (007): the Stop hook's per-file checks and scans read the files changed since `git merge-base main HEAD`, not the frozen base: what a builder takes in from main is never the slice's.

@@ -1230,6 +1230,8 @@ def counted_gate(slice_id: str, tip: str, base: str, after: Path, log: Path) -> 
     out = {"run_id": rid, "counted": False, "tree": tree, "same": same is None, "server_verdict": (e or {}).get("verdict")}
     if same:
         out["same_why"] = same
+    if (e or {}).get("newer_without_verdict"):  # 013: the note's newer run ended without one; this run was read
+        out["newer_without_verdict"] = e["newer_without_verdict"]
     if not server_gate.counting():
         return {**out, "why": "the owner's switch (server_counts) is off"}
     if why:

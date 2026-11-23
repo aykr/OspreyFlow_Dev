@@ -555,8 +555,17 @@ M = [
  ("resume.py", '"verdict": "findings", "passes": [], "findings": [finding, *kept],', '"verdict": "pass", "passes": [], "findings": [finding, *kept],', "sends_a_verified_slice_back"),
  ("resume.py", '    said = back_to_building(slice_id, wt, round=new_round, rounds_limit=new_limit)', '    said = back_to_building(slice_id, wt, rounds_limit=new_limit)', "sends_a_verified_slice_back"),
  ("resume.py", '    if new_round >= c.TABLE_ROUND and not (c.REPO / table).is_file():', '    if False:', "rounds_table"),
+ # the owner's file 013: a run with no verdict is read as its own run, says so, and never hides an earlier verdict
+ ("server_gate.py", '            any(k in result for k in ("tree", "position", "group")):', '            "tree" in result:', "every_real_result_reads or se6c or with_no_verdict"),
+ ("server_gate.py", '    if e.get("state") == "done" and e.get("verdict") not in VERDICTS:', '    if False:', "every_real_result_reads or with_no_verdict"),
+ ("server_gate.py", '    for older in older_runs(slice_id, tip, rid):', '    for older in []:', "se6c or never_hides"),
+ ("server_gate.py", '    return bool(e) and e.get("state") == "done" and e.get("verdict") in VERDICTS', '    return bool(e) and e.get("state") == "done" and e.get("verdict") is not None', "se6c or never_hides"),
+ ("server_gate.py", '    if result.get("slice") == slice_id and result.get("tip") == tip and \\\n', '    if True and \\\n', "with_no_verdict_only_the_slices_own"),
+ ("server_gate.py", '        if r.get("slice") == slice_id and r.get("tip") == tip and', '        if r.get("slice") == slice_id and', "with_no_verdict_only_the_slices_own"),
+ ("server_gate.py", '        if r.get("slice") == slice_id and r.get("tip") == tip and', '        if r.get("tip") == tip and', "with_no_verdict_only_the_slices_own"),
+ ("merge_slice.py", '    if (e or {}).get("newer_without_verdict"):', '    if False:', "se6c or never_hides"),
  # the owner's file 011: the runner's own result shape (run 97dc976c7be6d175), read as the runner gives it
- ("server_gate.py", '    if result.get("slice") == slice_id and result.get("tip") == tip and "tree" in result:\n        return own_run(result)', '    if False:\n        return own_run(result)', "real_result_reads or switch_on_a_green_for_the_macs_tree or same_green_is_agree"),
+ ("server_gate.py", '):  # the runner\'s own shape, a run with no tree too\n        return own_run(result)', ') and False:\n        return own_run(result)', "real_result_reads or switch_on_a_green_for_the_macs_tree or same_green_is_agree"),
  ("server_gate.py", '"main": result.get("main") if i == 0 else None,', '"main": None,', "real_result_reads"),
  ("server_gate.py", '            base_tree = below.get("tree")', '            base_tree = None', "stacked_above_another"),
  ("server_gate.py", '    i = pos - 1 if isinstance(pos, int) and pos >= 1 else 0', '    i = 0', "stacked_above_another"),
