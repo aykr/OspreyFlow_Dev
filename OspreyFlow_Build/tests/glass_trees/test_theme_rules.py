@@ -335,6 +335,33 @@ def test_vi_a_recorded_count_that_is_not_the_entry_count_fails(
     assert not result.ok
 
 
+def test_vi_an_entry_and_its_rule_deleted_without_lowering_the_count_fails(
+    core: Path, tmp_path: Path
+) -> None:
+    """The count stays at the ceiling while the list shrinks: only the branch that compares the
+    recorded count with the entries held can see it (the ceiling is met, nothing is new or stale),
+    so a slice cannot leave headroom for a later entry to be added back unnoticed."""
+    sheet = core / "apps/workspace/src/admin/admin.css"
+    sheet.write_text(
+        sheet.read_text(encoding="utf-8").replace(".admin-nav--govuk { width: 220px; }\n", ""),
+        encoding="utf-8",
+    )
+    real = trc.load_allowlist(ALLOWLIST)
+    assert real.recorded == trc.RATCHET_CEILING  # the count is at the ceiling, as it must be
+    gone = ("apps/workspace/src/admin/admin.css", ".admin-nav--govuk", "rule")
+    entries = list(real.entries)
+    entries.remove(gone)
+    edited = _write_allowlist(tmp_path / "allow.txt", real.recorded, entries)
+    result = judged(core, edited)
+    assert result.new == [] and result.stale == []
+    assert result.count_problems == [
+        f"the allowlist holds {real.recorded - 1} entries but records {real.recorded}: the count "
+        "is not the number of entries (it is lowered by deleting an entry's line, and the count "
+        "with it)"
+    ]
+    assert not result.ok
+
+
 def test_the_count_may_fall_when_an_entry_is_deleted_with_its_rule(
     core: Path, tmp_path: Path
 ) -> None:
