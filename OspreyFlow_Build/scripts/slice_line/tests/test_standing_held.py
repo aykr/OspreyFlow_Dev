@@ -3,7 +3,10 @@ PL11): it is tried again as soon as the lock frees, and no other round starts me
 the line's limit, the slice stops for the conductor (who runs resume.py <ID> accept when it frees); it never goes on to
 another round with the accept dropped.
 
-The verifier runs as run_seat.py runs it (test_finding_kind.run_verifier); the lock is held by another process.
+The verifier runs as run_seat.py runs it (test_finding_kind.run_verifier); the lock is held by another process. No
+clock decides the order (the owner, 23 November 2026: the lock held for 5 seconds freed before the line looked when the
+suite ran beside two builders, and apply_39 took its commit back on that red): the lock is held until the test lets it
+go, and the test lets it go only once the line has said the accept is held.
 """
 from __future__ import annotations
 
@@ -15,25 +18,45 @@ import time
 import pytest
 
 from test_accept import rec, state
-from test_finding_kind import FAULT, finding
+from test_finding_kind import FAULT, finding, verifier_code
 from test_gates import world  # noqa: F401  (a fixture)
-from test_standing_accept import GAPS, verified_round
+from test_standing_accept import GAPS, ON, at_verifier, switch, verified_round
 
 HOLDER = """
-import fcntl, sys, time
+import fcntl, sys
 fh = open(sys.argv[1], "a")
 fcntl.flock(fh, fcntl.LOCK_EX)
 print("held", flush=True)
-time.sleep(float(sys.argv[2]))
+sys.stdin.read()
 """
+#: How long the test waits for an event before it fails (never how long a lock is held).
+EVENT_WAIT_S = 600
 
 
-def hold(path, seconds):
-    """Another process holds this lock for so many seconds; returns once it holds it."""
+def hold(path):
+    """Another process holds this lock until let go (let_go); returns once it holds it."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    p = subprocess.Popen([sys.executable, "-c", HOLDER, str(path), str(seconds)], stdout=subprocess.PIPE, text=True)
+    p = subprocess.Popen([sys.executable, "-c", HOLDER, str(path)], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                         text=True)
     assert p.stdout.readline().strip() == "held"
     return p
+
+
+def let_go(holder):
+    holder.stdin.close()
+    holder.wait(timeout=EVENT_WAIT_S)
+
+
+def until_said(proc, out, words):
+    """Waits until the running line has printed these words (the event); fails if it ends first."""
+    end = time.monotonic() + EVENT_WAIT_S
+    while time.monotonic() < end:
+        if words in out.read_text():
+            return
+        if proc.poll() is not None:
+            raise AssertionError(f"the line ended before it said {words!r}: {out.read_text()}")
+        time.sleep(0.1)
+    raise AssertionError(f"the line did not say {words!r} within {EVENT_WAIT_S} s: {out.read_text()}")
 
 
 def lock_of(w, which):
@@ -46,34 +69,49 @@ def lock_of(w, which):
 @pytest.mark.parametrize("which", ["the-slices-own-resume-lock", "a-merge-whose-record-names-no-slice"])
 def test_a_standing_accept_a_lock_refuses_is_held_and_lands_when_the_lock_frees(world, which):
     w = world
-    w["env"]["OSPREY_STANDING_HOLD_MINUTES"] = "2"
-    holder = hold(lock_of(w, which), 5)
-    try:
-        t0 = time.monotonic()
-        wt, tip, p = verified_round(w, GAPS, round_=3, limit=5)
-        waited = time.monotonic() - t0
-    finally:
-        holder.kill()
-        holder.wait()
+    w["env"]["OSPREY_STANDING_HOLD_MINUTES"] = "60"               # the limit is not what this case is about
+    switch(w, ON)
+    wt, tip = at_verifier(w, round_=3, limit=5)
+    code, _ = verifier_code(w, tip, GAPS)
+    out = w["tmp"] / "verifier.out"
+    holder = hold(lock_of(w, which))
+    with out.open("w") as fh:
+        p = subprocess.Popen([w["py"], "-c", code], cwd=w["repo"], env=w["env"], stdout=fh, stderr=subprocess.STDOUT)
+        try:
+            until_said(p, out, "the standing accept is held")      # the event: refused by the lock, and held
+            assert not (rec(w) / f"accepted-{tip}.json").exists()  # not accepted while the lock is held
+        finally:
+            let_go(holder)
+        rc = p.wait(timeout=EVENT_WAIT_S)
+    said = out.read_text()
     st = state(w)
-    assert p.returncode == 0, p.stdout + p.stderr
-    assert "held" in p.stdout, p.stdout
+    assert rc == 0 and "Traceback" not in said, said
     assert st["phase"] == "verified" and st["round"] == 3, st      # accepted; no round 4 was started
     assert (rec(w) / f"accepted-{tip}.json").exists()
-    assert waited >= 3, waited                                     # it did wait for the lock
 
 
 def test_a_standing_accept_held_past_the_limit_stops_the_slice_and_starts_no_round(world):
     w = world
     w["env"]["OSPREY_STANDING_HOLD_MINUTES"] = "0.05"              # 3 seconds
-    holder = hold(lock_of(w, "the-slices-own-resume-lock"), 30)
-    try:
-        wt, tip, p = verified_round(w, GAPS, round_=3, limit=5)
-    finally:
-        holder.kill()
-        holder.wait()
+    switch(w, ON)
+    wt, tip = at_verifier(w, round_=3, limit=5)
+    code, _ = verifier_code(w, tip, GAPS)
+    out = w["tmp"] / "verifier.out"
+    holder = hold(lock_of(w, "the-slices-own-resume-lock"))       # held until the line has given up, however slow
+    with out.open("w") as fh:
+        p = subprocess.Popen([w["py"], "-c", code], cwd=w["repo"], env=w["env"], stdout=fh, stderr=subprocess.STDOUT)
+        try:
+            rc = p.wait(timeout=EVENT_WAIT_S)                      # the event: the line gives up while still held
+        except subprocess.TimeoutExpired:
+            p.kill()
+            p.wait()
+            rc = None
+        finally:
+            let_go(holder)
+    said = out.read_text()
+    assert rc is not None, f"the line was still holding after {EVENT_WAIT_S} s, past its limit: {said}"
     st = state(w)
-    assert p.returncode == 1, p.stdout + p.stderr
+    assert rc == 1 and "Traceback" not in said, said
     assert st["phase"] == "stopped" and st["round"] == 3, st       # not round 4 with the accept dropped
     assert "standing accept" in st["note"] and "resume.py S1 accept" in st["note"], st["note"]
     assert not (rec(w) / f"accepted-{tip}.json").exists()

@@ -37,6 +37,14 @@ def at_verifier(w, round_=1, limit=2):
 
 def run_verifier(w, tip, findings, verdict="findings"):
     """run_seat.verifier('S1'), its session stood in by a result line carrying this verdict. Returns (exit, prompts)."""
+    code, prompts = verifier_code(w, tip, findings, verdict)
+    p = sh([w["py"], "-c", code], w["repo"], w["env"], check=False)
+    assert "Traceback" not in p.stderr, p.stderr
+    return p, json.loads(prompts.read_text())
+
+
+def verifier_code(w, tip, findings, verdict="findings"):
+    """The program run_verifier runs, and where it writes the prompts it saw (for a test that watches it while it runs)."""
     t = w["tmp"] / "verifier-transcript.jsonl"
     t.write_text(json.dumps({"type": "assistant", "text": f"{verdict} {tip}"}) + "\n")
     prompts = w["tmp"] / "prompts.json"
@@ -56,9 +64,7 @@ rc = run_seat.verifier("S1")
 open({str(prompts)!r}, "w").write(json.dumps(seen))
 sys.exit(rc)
 """
-    p = sh([w["py"], "-c", code], w["repo"], w["env"], check=False)
-    assert "Traceback" not in p.stderr, p.stderr
-    return p, json.loads(prompts.read_text())
+    return code, prompts
 
 
 def record(w, tip):
