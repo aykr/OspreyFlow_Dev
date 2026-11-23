@@ -65,6 +65,27 @@ COMPOSE = ("local-lite", "small")
 HELM = ("cluster", "cloud-platform", "cloud-platform-poc")
 ON = {"pages": {"enabled": True}}
 OFF = {"pages": {"enabled": False}}
+#: The reference's local-lite is plain HTTP on a `.localhost` name, which the page service will not
+#: sign people in through (its issuer check refuses an `http` issuer that is not loopback), so the
+#: render refuses to turn the service on there (round 4: `test_*_is_refused_in_words`). Every case
+#: that needs local-lite *on* therefore serves it over HTTPS, on the same name and a port.
+LOCAL_LITE_HTTPS = {"network": {"public_origin": "https://reference.ospreyflow.localhost:8443"}}
+
+
+def _on(shape: str) -> dict[str, Any]:
+    """The settings of a shape with the page service on: `pages.enabled`, and for local-lite the
+    HTTPS origin it needs to be turned on at all."""
+    return {**ON, **(LOCAL_LITE_HTTPS if shape == "local-lite" else {})}
+
+
+def _baseline(shape: str, brand: str) -> dict[str, bytes]:
+    """What `_on(shape)` is compared with: the reference's stored folder, bar local-lite, whose
+    origin differs there, so its twin with the setting off at the same origin."""
+    if shape == "local-lite":
+        return _render(shape, brand, **LOCAL_LITE_HTTPS)
+    return ref.read_folder(ref.REFERENCE / ref.folder_name(shape, brand))
+
+
 #: `OSPREY_PAGES_TREE`, from `appearance.brand` (ADR-152 decision 7).
 TREE = {"ospreyflow": "default", "govuk": "govuk"}
 #: Where `pages` listens (`apps/pages/server/config.ts`'s default `OSPREY_PAGES_PORT`).
@@ -520,8 +541,8 @@ def test_the_two_minted_secrets_are_the_same_off_and_on(shape: str, brand: str) 
     minted since PL9a stay as the reference pins them, off or on. `deployment.env` is the
     reference's, byte for byte, with the setting on: the setting adds no secret, and takes none
     away."""
-    on = _render(shape, brand, **ON)
-    stored = ref.read_folder(ref.REFERENCE / ref.folder_name(shape, brand))
+    on = _render(shape, brand, **_on(shape))
+    stored = _baseline(shape, brand)
     assert on["deployment.env"] == stored["deployment.env"]
     for name in ("OSPREY_PAGES_CLIENT_SECRET", "OSPREY_PAGES_SESSION_SECRET"):
         assert re.search(rf"(?m)^{name}=PINNED_\d+$", on["deployment.env"].decode("utf-8"))
@@ -532,7 +553,7 @@ def test_the_two_minted_secrets_are_the_same_off_and_on(shape: str, brand: str) 
 
 @pytest.mark.parametrize(("shape", "brand"), SHAPE_BRANDS, ids=IDS)
 def test_on_holds_the_service_the_route_and_the_variables(shape: str, brand: str) -> None:
-    files = _render(shape, brand, **ON)
+    files = _render(shape, brand, **_on(shape))
     assert on_findings(shape, brand, files) == []
 
 
@@ -543,25 +564,22 @@ def test_on_reaches_the_service_by_its_own_variables_and_by_name(shape: str, bra
     secret), and the public origin as the deployment's own."""
     from harness.site import sites
 
-    files = _render(shape, brand, **ON)
+    files = _render(shape, brand, **_on(shape))
     service = pages_service(shape, files)
     assert service is not None
     env = service["env"]
     assert env["OSPREY_PAGES_TREE"] == TREE[brand]
     assert env["OSPREY_PAGES_PORT"] == PAGES_PORT
-    assert env["OSPREY_PAGES_PUBLIC_ORIGIN"] == sites(ref.config_for(shape, brand)).glass
+    assert (
+        env["OSPREY_PAGES_PUBLIC_ORIGIN"] == sites(ref.config_for(shape, brand, **_on(shape))).glass
+    )
     assert env["OSPREY_PAGES_CONDUIT_URL"] == "http://api:8000"
     secret = env["OSPREY_PAGES_SESSION_SECRET"]
     assert "PINNED_" not in secret and "token" not in secret.lower()
     if shape in COMPOSE:
         assert secret.startswith("${OSPREY_PAGES_SESSION_SECRET:?"), secret
-        if shape == "local-lite":
-            # Plain HTTP: no issuer the service accepts, so none of the three sign-in variables
-            # (`test_local_lite_on_plain_http_is_given_no_half_of_a_sign_in`).
-            assert "OSPREY_PAGES_CLIENT_SECRET" not in env
-        else:
-            assert env["OSPREY_PAGES_CLIENT_SECRET"].startswith("${OSPREY_PAGES_CLIENT_SECRET:?")
-            assert env["OSPREY_PAGES_OIDC_ISSUER"].endswith("/realms/osprey")
+        assert env["OSPREY_PAGES_CLIENT_SECRET"].startswith("${OSPREY_PAGES_CLIENT_SECRET:?")
+        assert env["OSPREY_PAGES_OIDC_ISSUER"].endswith("/realms/osprey")
     else:
         assert secret == "secret:OSPREY_PAGES_SESSION_SECRET", secret
 
@@ -570,8 +588,8 @@ def test_on_reaches_the_service_by_its_own_variables_and_by_name(shape: str, bra
 def test_on_changes_only_the_files_that_name_the_service(shape: str, brand: str) -> None:
     """On adds what decision 7 describes and only that: the files that differ from the reference
     are the ones that carry a service, a route, or the lock of the images; nothing else moves."""
-    on = _render(shape, brand, **ON)
-    stored = ref.read_folder(ref.REFERENCE / ref.folder_name(shape, brand))
+    on = _render(shape, brand, **_on(shape))
+    stored = _baseline(shape, brand)
     chart = {name for name in set(on) | set(stored) if name.startswith(ref.CHART_PREFIX)}
     moved = {name for name in (set(on) | set(stored)) - chart if on.get(name) != stored.get(name)}
     allowed = {
@@ -596,7 +614,7 @@ def test_on_writes_the_chart_value_and_the_chart_carries_none_by_default(shape: 
     `values off`), and the renderer's values hold `pages.enabled: true` with the setting on."""
     default = yaml.safe_load((ref.CHART / "values.yaml").read_text(encoding="utf-8"))
     assert "pages" not in default
-    assert _values(_render(shape, "ospreyflow", **ON))["pages"] == {"enabled": True}
+    assert _values(_render(shape, "ospreyflow", **_on(shape)))["pages"] == {"enabled": True}
     assert "pages" not in _values(_render(shape, "ospreyflow"))
 
 
@@ -623,12 +641,12 @@ def test_the_same_thing_missing_while_on_is_red(plant: Plant, shape: str, brand:
     """On holds the service, the route, the variable and the chart value: with the one the plant
     names taken out, the on checks fail, naming it. Clean first (the on render holds all of it),
     red with the thing out, clean again after."""
-    assert on_findings(shape, brand, _render(shape, brand, **ON)) == [], "not clean first"
+    assert on_findings(shape, brand, _render(shape, brand, **_on(shape))) == [], "not clean first"
     with plant.taken_out(shape):
-        found = on_findings(shape, brand, _render(shape, brand, **ON))
+        found = on_findings(shape, brand, _render(shape, brand, **_on(shape)))
     assert found, f"{plant.name} in {shape}-{brand}: taking it out was not seen"
     assert any(plant.missing in line for line in found), f"red for another reason: {found}"
-    assert on_findings(shape, brand, _render(shape, brand, **ON)) == [], "not clean after"
+    assert on_findings(shape, brand, _render(shape, brand, **_on(shape))) == [], "not clean after"
 
 
 # ---- 5. the cutover ---------------------------------------------------------------------------
@@ -688,11 +706,11 @@ def test_the_complete_govuk_tree_with_the_setting_on_renders_without_the_workspa
 ) -> None:
     """I22: no workspace service and no route to one; every path goes to `pages`. And the workspace
     is there while the tree is partial (the default of the repository today), setting on."""
-    partial = _render(shape, "govuk", **ON)
+    partial = _render(shape, "govuk", **_on(shape))
     assert has_a_workspace(shape, partial), "the workspace is gone while the tree is partial"
     assert "/" not in pages_paths(shape, partial)
     with a_complete_govuk_tree(tmp_path):
-        files = _render(shape, "govuk", **ON)
+        files = _render(shape, "govuk", **_on(shape))
     assert not has_a_workspace(shape, files)
     assert pages_paths(shape, files) >= {"/"}, "not every path goes to pages"
     assert on_findings(shape, "govuk", files) == []
@@ -798,40 +816,159 @@ def test_on_is_an_environment_the_page_service_starts_with(shape: str, brand: st
     """The values, not only the names: with the setting on, what each shape renders for the service
     passes the refusals of its own `loadConfig` (an `http` issuer that is not loopback, an origin
     with a path, a short or missing secret). Local-lite on plain HTTP, the demo's own address form,
-    is the shape this caught: its sign-in cannot be given the service, and the service is then
-    started with none of the three sign-in variables (it answers 503 on sign-in, as it did before
-    it was built) rather than with an issuer it refuses."""
-    assert _page_service_refuses(shape, _render(shape, brand, **ON)) == []
+    is the shape this caught: the service refuses its issuer, so the render refuses to turn the
+    service on there (`test_turning_the_service_on_over_plain_http_is_refused_in_words`)."""
+    assert _page_service_refuses(shape, _render(shape, brand, **_on(shape))) == []
 
 
-def _an_http_issuer(real: Callable[..., Any]) -> Callable[..., Any]:
-    """The renderer's old form, as it wrote it: the public identity name over whatever scheme the
-    deployment's own origin has, wherever a sign-in is set up."""
+# ---- 6a. plain HTTP: the render refuses, in words, rather than leave sign-in out ---------------
+#
+# The owner's ruling of 23 November 2026: the page service's issuer check is not weakened, and the
+# fix is in the render: an address the service accepts, or a refusal to turn the service on where
+# HTTPS is not available, said in plain words. On local-lite over plain HTTP the identity address is
+# `http://id.<name>.localhost:<port>`: not https, and not loopback by the service's own rule, so
+# there is no address to give it, and the render refuses.
 
-    def planted(config: Any, *, with_sign_in: bool) -> dict[str, str]:
-        from harness.realm import PAGES_CLIENT_ID, PAGES_CLIENT_SECRET_KEY
-        from harness.site import REALM, sites
+THE_HTTPS_WORDS = (
+    "pages.enabled is on, but the identity address {identity} is neither https nor a loopback "
+    "address, and the page service does not sign people in over plain HTTP: serve the identity "
+    "address over HTTPS (network.public_origin on https), or leave pages.enabled off"
+)
+PLAIN_HTTP_IDENTITY = "http://id.reference.ospreyflow.localhost:8081"
+SIGN_IN_VARIABLES = (
+    "OSPREY_PAGES_OIDC_ISSUER",
+    "OSPREY_PAGES_CLIENT_ID",
+    "OSPREY_PAGES_CLIENT_SECRET",
+)
 
-        environment: dict[str, str] = real(config, with_sign_in=with_sign_in)
-        if with_sign_in:
-            names = sites(config)
-            environment["OSPREY_PAGES_OIDC_ISSUER"] = f"{names.identity}/realms/{REALM}"
-            environment["OSPREY_PAGES_CLIENT_ID"] = PAGES_CLIENT_ID
-            environment["OSPREY_PAGES_CLIENT_SECRET"] = "${%s:?set}" % PAGES_CLIENT_SECRET_KEY
-        return environment
+
+@pytest.mark.parametrize("brand", BRANDS)
+def test_turning_the_service_on_over_plain_http_is_refused_in_words(brand: str) -> None:
+    """Local-lite at the reference's own `http://` address with the setting on: refused, in exactly
+    these words (the setting, the address, what to do), by an error that is a plain `ValueError`
+    like every other refusal of the renderers. Nothing is rendered."""
+    config = ref.config_for("local-lite", brand, **ON)
+    with pytest.raises(ValueError) as refused:
+        ref.render_files(config)
+    assert str(refused.value) == THE_HTTPS_WORDS.format(identity=PLAIN_HTTP_IDENTITY)
+    assert type(refused.value).__name__ == "PageServiceNeedsHttps"
+
+
+@pytest.mark.parametrize("brand", BRANDS)
+def test_the_refusal_is_for_plain_http_with_the_setting_on_alone(brand: str) -> None:
+    """Off over plain HTTP is the reference (nothing is refused, nothing changes); on over HTTPS is
+    rendered. The refusal is not a general dislike of local-lite."""
+    assert ref.differences("local-lite", brand, _render("local-lite", brand, **OFF)) == []
+    assert pages_service("local-lite", _render("local-lite", brand, **LOCAL_LITE_HTTPS)) is None
+    assert pages_service("local-lite", _render("local-lite", brand, **_on("local-lite")))
+
+
+def _no_refusal_for_plain_http(real: Callable[..., Any]) -> Callable[..., Any]:
+    """The renderer without its refusal: nothing says no, and the service is given the issuer the
+    deployment has, `http://id.<name>` (what the render wrote before round 2)."""
+
+    def planted(config: Any) -> None:
+        return None
 
     return planted
 
 
 @pytest.mark.parametrize("brand", BRANDS)
 def test_the_start_up_check_is_red_for_an_http_issuer_that_is_not_loopback(brand: str) -> None:
-    """The planted fault takes the shape the renderer wrote: `http://id.<host>/realms/osprey` in
-    local-lite. The check is clean first, red with it (naming the issuer and the rule), clean again."""
-    assert _page_service_refuses("local-lite", _render("local-lite", brand, **ON)) == []
-    with _patched("harness.pages_service", "service_environment", _an_http_issuer):
+    """The planted fault takes the shape the renderer writes: the refusal taken out, so
+    `http://id.<host>/realms/osprey` is written into the service's environment in local-lite. The
+    service's own start-up refusal (emulated from `config.ts`) is clean first, red with it, naming
+    the rule, and clean again."""
+    clean = _page_service_refuses("local-lite", _render("local-lite", brand, **_on("local-lite")))
+    assert clean == []
+    with _patched(
+        "harness.pages_service", "refuse_sign_in_without_https", _no_refusal_for_plain_http
+    ):
         found = _page_service_refuses("local-lite", _render("local-lite", brand, **ON))
     assert any("OSPREY_PAGES_OIDC_ISSUER must be an https address" in line for line in found), found
-    assert _page_service_refuses("local-lite", _render("local-lite", brand, **ON)) == []
+    assert (
+        _page_service_refuses("local-lite", _render("local-lite", brand, **_on("local-lite"))) == []
+    )
+
+
+def _loopback_issuer_accepted(issuer: str) -> bool:
+    from urllib.parse import urlsplit
+
+    url = urlsplit(issuer)
+    host = url.hostname or ""
+    loopback = host in ("localhost", "::1") or re.fullmatch(r"127(\.\d{1,3}){3}", host)
+    return url.scheme == "https" or (url.scheme == "http" and bool(loopback))
+
+
+@pytest.mark.parametrize(
+    ("issuer", "accepted"),
+    [
+        ("https://id.osprey.example.org/realms/osprey", True),
+        ("http://localhost:8081/realms/osprey", True),
+        ("http://127.0.0.1:8081/realms/osprey", True),
+        ("http://127.1.2.3/realms/osprey", True),
+        ("http://id.reference.ospreyflow.localhost:8081/realms/osprey", False),
+        ("http://keycloak:8080/realms/osprey", False),
+        ("http://127.0.0.1.example.org/realms/osprey", False),
+        ("ftp://id.osprey.example.org/realms/osprey", False),
+    ],
+)
+def test_the_rule_the_render_applies_is_the_services_own(issuer: str, accepted: bool) -> None:
+    """Held to what `apps/pages/server/config.ts` refuses (scheme, then loopback by name or by the
+    `127.x.x.x` form): the render's rule gives the same answer as the emulated start-up check for
+    each address, so the two cannot drift. An address with a loopback look-alike host is not one."""
+    import harness.pages_service as the_service
+
+    assert _loopback_issuer_accepted(issuer) is accepted
+    assert the_service.service_accepts_issuer(issuer) is accepted
+
+
+def _drop_the_sign_in(real: Callable[..., Any]) -> Callable[..., Any]:
+    """The round-2 renderer, as it wrote it: the three sign-in variables left out, nothing said."""
+
+    def planted(config: Any, *, with_sign_in: bool) -> dict[str, str]:
+        environment: dict[str, str] = real(config, with_sign_in=with_sign_in)
+        for name in (*SIGN_IN_VARIABLES, "NODE_EXTRA_CA_CERTS"):
+            environment.pop(name, None)
+        return environment
+
+    return planted
+
+
+def _sign_in_variable_findings(shape: str, files: dict[str, bytes]) -> list[str]:
+    """No render of the page service in a shape that runs the identity provider holds fewer than the
+    three sign-in variables (the service refuses one without the others, and with none its sign-in
+    answers 503). The cloud platform runs none of ours: its people sign in with the organisation's
+    (`test_the_cloud_platform_holds_no_client_of_ours_for_the_page_service`)."""
+    service = pages_service(shape, files)
+    if service is None or shape in ("cloud-platform", "cloud-platform-poc"):
+        return []
+    held = [name for name in SIGN_IN_VARIABLES if name in service["env"]]
+    if len(held) == len(SIGN_IN_VARIABLES):
+        return []
+    return [
+        f"the page service holds {len(held)} of the three sign-in variables "
+        f"(missing {', '.join(n for n in SIGN_IN_VARIABLES if n not in held)})"
+    ]
+
+
+@pytest.mark.parametrize("brand", BRANDS)
+@pytest.mark.parametrize("shape", ("local-lite", "small", "cluster"))
+def test_every_render_of_the_service_holds_all_three_sign_in_variables(
+    shape: str, brand: str
+) -> None:
+    assert _sign_in_variable_findings(shape, _render(shape, brand, **_on(shape))) == []
+
+
+@pytest.mark.parametrize("brand", BRANDS)
+@pytest.mark.parametrize("shape", ("local-lite", "small", "cluster"))
+def test_the_sign_in_variables_check_is_red_for_a_service_given_none(
+    shape: str, brand: str
+) -> None:
+    with _patched("harness.pages_service", "service_environment", _drop_the_sign_in):
+        found = _sign_in_variable_findings(shape, _render(shape, brand, **_on(shape)))
+    assert found and "0 of the three sign-in variables" in found[0], found
+    assert _sign_in_variable_findings(shape, _render(shape, brand, **_on(shape))) == []
 
 
 @pytest.mark.parametrize("brand", BRANDS)
@@ -841,7 +978,7 @@ def test_an_https_deployment_is_given_its_sign_in(shape: str, brand: str) -> Non
     written, the secret by reference and never a value, in the compose shape and the cluster's
     chart alike. (The cloud platform's people sign in with the organisation's own: it holds none,
     `test_the_cloud_platform_holds_no_client_of_ours_for_the_page_service`.)"""
-    env = (pages_service(shape, _render(shape, brand, **ON)) or {})["env"]
+    env = (pages_service(shape, _render(shape, brand, **_on(shape))) or {})["env"]
     assert env["OSPREY_PAGES_OIDC_ISSUER"] == "https://id.osprey.example.org/realms/osprey"
     assert env["OSPREY_PAGES_CLIENT_ID"] == "osprey-pages"
     reference = env["OSPREY_PAGES_CLIENT_SECRET"]
@@ -851,78 +988,176 @@ def test_an_https_deployment_is_given_its_sign_in(shape: str, brand: str) -> Non
     ), reference
 
 
+def test_local_lite_over_https_is_given_its_sign_in() -> None:
+    env = (pages_service("local-lite", _render("local-lite", "govuk", **_on("local-lite"))) or {})[
+        "env"
+    ]
+    assert env["OSPREY_PAGES_OIDC_ISSUER"] == (
+        "https://id.reference.ospreyflow.localhost:8443/realms/osprey"
+    )
+    assert all(name in env for name in SIGN_IN_VARIABLES)
+
+
 @pytest.mark.parametrize("shape", ("cloud-platform", "cloud-platform-poc"))
 def test_the_cloud_platform_holds_no_client_of_ours_for_the_page_service(shape: str) -> None:
-    env = (pages_service(shape, _render(shape, "govuk", **ON)) or {})["env"]
+    env = (pages_service(shape, _render(shape, "govuk", **_on(shape))) or {})["env"]
     assert not [n for n in env if n.startswith(("OSPREY_PAGES_OIDC", "OSPREY_PAGES_CLIENT"))]
 
 
-def test_local_lite_on_plain_http_is_given_no_half_of_a_sign_in() -> None:
-    """All three sign-in variables or none (the service refuses a part): on plain HTTP, none."""
-    env = (pages_service("local-lite", _render("local-lite", "govuk", **ON)) or {})["env"]
-    assert not [
-        name for name in env if name.startswith(("OSPREY_PAGES_OIDC", "OSPREY_PAGES_CLIENT"))
-    ]
-
-
-# ---- 6b. the sign-in it is given can be completed ---------------------------------------------
+# ---- 6b. the sign-in it is given is reached without a route out ---------------------------------
 #
 # The service fetches its issuer itself, at sign-in (`apps/pages/server/oidc.ts`: `discovery`), and
 # the issuer is the public identity name (`https://id.<host>/realms/osprey`: openid-client checks
 # the discovery document's `issuer` against the address it asked, so the internal Keycloak address
-# the Conduit uses is not one the service can be given). On the internal network, which has no
-# route out, nothing answers to that name: so a service given an issuer is on `egress` too, as the
-# Conduit is when the managed Postgres is outside. Measured here as the render's own words about
-# the networks, not against a running stack: nobody has signed in through it on a real one (PL9a).
+# the Conduit uses is not one the service can be given). The owner's ruling of 23 November 2026:
+# the page service is on the internal network `osprey` alone (ADR-114 Amendment 7: no route out;
+# `egress_needs` is not widened for it), and reaches the identity name through **a network alias for
+# that name on the proxy, inside `osprey`**.
 
 
-def _sign_in_findings(shape: str, files: dict[str, bytes]) -> list[str]:
-    service = pages_service(shape, files)
-    if service is None or "OSPREY_PAGES_OIDC_ISSUER" not in service["env"]:
+def _identity_alias(config: Any) -> str:
+    from harness.site import sites
+
+    return f"id.{sites(config).host}"
+
+
+def _networks(service: dict[str, Any]) -> dict[str, Any]:
+    """A compose service's `networks`, list or mapping, as a mapping of name to its settings."""
+    given = service.get("networks") or {}
+    return {name: {} for name in given} if isinstance(given, list) else dict(given)
+
+
+def _network_findings(shape: str, brand: str, files: dict[str, bytes]) -> list[str]:
+    """What is wrong with the page service's reach to its issuer in a compose render that holds it:
+    the service on `osprey` alone, and the proxy answering to the identity name on `osprey`."""
+    services = yaml.safe_load(files["compose.yaml"].decode("utf-8"))["services"]
+    pages = services.get("pages")
+    if pages is None or "OSPREY_PAGES_OIDC_ISSUER" not in pages.get("environment", {}):
         return []
-    if service["egress"]:
-        return []
-    return [
-        "OSPREY_PAGES_OIDC_ISSUER names the public identity address and `pages` is on the "
-        "internal network alone: no route to it, so sign-in cannot complete"
-    ]
+    found: list[str] = []
+    if _networks(pages) != {"osprey": {}}:
+        found.append(f"pages is on {sorted(_networks(pages))}, not the internal network alone")
+    config = ref.config_for(shape, brand, **_on(shape))
+    wanted = _identity_alias(config)
+    proxy = _networks(services["proxy"])
+    if wanted not in (proxy.get("osprey") or {}).get("aliases", []):
+        found.append(f"the proxy has no alias {wanted} on the internal network osprey")
+    for name, settings in proxy.items():
+        if name != "osprey" and wanted in (settings or {}).get("aliases", []):
+            found.append(f"the proxy has the alias {wanted} on {name}, which reaches out")
+    return found
 
 
-def _pages_on_the_internal_network_alone(real: Callable[..., Any]) -> Callable[..., Any]:
-    """The renderer's old placement, as it wrote it: `networks: [osprey]` for `pages`."""
+def _pages_also_on_egress(real: Callable[..., Any]) -> Callable[..., Any]:
+    """The round-3 renderer, as it wrote it: `networks: [osprey, egress]` for `pages`."""
 
     def planted(config: Any, services: dict[str, Any]) -> None:
         real(config, services)
-        services["pages"]["networks"] = ["osprey"]
+        services["pages"]["networks"] = ["osprey", "egress"]
 
     return planted
 
 
-@pytest.mark.parametrize(("shape", "brand"), SHAPE_BRANDS, ids=IDS)
-def test_a_service_given_an_issuer_can_reach_it(shape: str, brand: str) -> None:
-    assert _sign_in_findings(shape, _render(shape, brand, **ON)) == []
+def _proxy_without_the_alias(real: Callable[..., Any]) -> Callable[..., Any]:
+    def planted(config: Any, services: dict[str, Any]) -> None:
+        real(config, services)
+        services["proxy"]["networks"] = ["osprey", "egress"]
+
+    return planted
+
+
+def _proxy_alias_on_egress(real: Callable[..., Any]) -> Callable[..., Any]:
+    def planted(config: Any, services: dict[str, Any]) -> None:
+        real(config, services)
+        services["proxy"]["networks"] = {
+            "osprey": {},
+            "egress": {"aliases": [_identity_alias(config)]},
+        }
+
+    return planted
+
+
+def _proxy_alias_for_the_wrong_name(real: Callable[..., Any]) -> Callable[..., Any]:
+    def planted(config: Any, services: dict[str, Any]) -> None:
+        from harness.site import sites
+
+        real(config, services)
+        services["proxy"]["networks"] = {
+            "osprey": {"aliases": [sites(config).host]},
+            "egress": {},
+        }
+
+    return planted
 
 
 @pytest.mark.parametrize("brand", BRANDS)
-@pytest.mark.parametrize("shape", ("small", "cluster"))
-def test_the_sign_in_reach_check_is_red_for_a_service_on_the_internal_network_alone(
+@pytest.mark.parametrize("shape", COMPOSE)
+def test_the_page_service_is_on_the_internal_network_alone_with_the_alias_on_the_proxy(
     shape: str, brand: str
 ) -> None:
-    assert pages_service(shape, _render(shape, brand, **ON))["env"]["OSPREY_PAGES_OIDC_ISSUER"]
-    with _patched("harness.render", "_place_on_networks", _pages_on_the_internal_network_alone):
-        found = _sign_in_findings(shape, _render(shape, brand, **ON))
-    assert any("OSPREY_PAGES_OIDC_ISSUER" in line and "internal network" in line for line in found)
-    assert _sign_in_findings(shape, _render(shape, brand, **ON)) == []
+    files = _render(shape, brand, **_on(shape))
+    services = yaml.safe_load(files["compose.yaml"].decode("utf-8"))["services"]
+    assert services["pages"]["networks"] == ["osprey"]
+    assert services["proxy"]["networks"] == {
+        "osprey": {"aliases": [_identity_alias(ref.config_for(shape, brand, **_on(shape)))]},
+        "egress": {},
+    }
+    assert _network_findings(shape, brand, files) == []
+    assert all(name in services["pages"]["environment"] for name in SIGN_IN_VARIABLES)
 
 
 @pytest.mark.parametrize("brand", BRANDS)
-def test_a_service_with_no_issuer_and_no_managed_cache_stays_on_the_internal_network(
-    brand: str,
+@pytest.mark.parametrize("shape", COMPOSE)
+def test_the_alias_widens_nothing_the_deployment_reaches_out_to(shape: str, brand: str) -> None:
+    """`egress_needs` is not widened for the page service: the services on `egress` are the ones the
+    reference has (the proxy and the two model fetchers), and no other."""
+    on = yaml.safe_load(_render(shape, brand, **_on(shape))["compose.yaml"].decode("utf-8"))
+    base = yaml.safe_load(_baseline(shape, brand)["compose.yaml"].decode("utf-8"))
+
+    def reaching_out(document: dict[str, Any]) -> set[str]:
+        return {n for n, s in document["services"].items() if "egress" in _networks(s)}
+
+    assert reaching_out(on) == reaching_out(base)
+    assert "pages" not in reaching_out(on)
+
+
+@pytest.mark.parametrize("brand", BRANDS)
+@pytest.mark.parametrize("shape", ("cluster", "cloud-platform", "cloud-platform-poc"))
+def test_the_page_service_in_a_chart_is_given_no_route_out_but_the_managed_cache(
+    shape: str, brand: str
 ) -> None:
-    """Egress is for what needs it (ADR-114 Amendment 7): local-lite has no issuer the service
-    accepts and a cache of its own, so `pages` is given no route out."""
-    service = pages_service("local-lite", _render("local-lite", brand, **ON))
-    assert service is not None and service["egress"] is False
+    """A chart's page service is off `egress` unless a feature the deployment configures needs it:
+    the managed Valkey outside the cluster (`egress_needs`, the one line that names the service).
+    Its issuer is not one: with no managed cache it has none (held on the compose shapes, which
+    have no managed cache, by `test_the_alias_widens_nothing_the_deployment_reaches_out_to`).
+    The cloud platform's per-workload policy is not touched by this slice."""
+    config = ref.config_for(shape, brand, **_on(shape))
+    service = pages_service(shape, _render(shape, brand, **_on(shape)))
+    assert service is not None
+    assert service["egress"] is (config.external.valkey is not None)
+
+
+NETWORK_PLANTS = [
+    ("on egress", _pages_also_on_egress, "not the internal network alone"),
+    ("no alias", _proxy_without_the_alias, "no alias"),
+    ("alias on egress", _proxy_alias_on_egress, "reaches out"),
+    ("wrong name", _proxy_alias_for_the_wrong_name, "no alias"),
+]
+
+
+@pytest.mark.parametrize("brand", BRANDS)
+@pytest.mark.parametrize("shape", COMPOSE)
+@pytest.mark.parametrize(
+    ("plant", "wrapper", "says"), NETWORK_PLANTS, ids=[plant[0] for plant in NETWORK_PLANTS]
+)
+def test_the_network_check_is_red_for_each_fault_in_the_shape_the_renderer_writes(
+    plant: str, wrapper: Any, says: str, shape: str, brand: str
+) -> None:
+    assert _network_findings(shape, brand, _render(shape, brand, **_on(shape))) == []
+    with _patched("harness.render", "_place_on_networks", wrapper):
+        found = _network_findings(shape, brand, _render(shape, brand, **_on(shape)))
+    assert any(says in line for line in found), f"{plant}: {found}"
+    assert _network_findings(shape, brand, _render(shape, brand, **_on(shape))) == []
 
 
 CA_ON_THE_HOST = "/etc/ospreyflow/tls/org-root.pem"
@@ -1115,7 +1350,7 @@ def test_a_govuk_function_with_its_page_is_routed_to_pages_and_the_rest_stays(
     matcher, or the Ingress's path) beside the service's own; the workspace is still there; and
     the same tree with the setting off is the reference."""
     with a_partial_govuk_tree(tmp_path, ["/studio/example"]):
-        files = _render(shape, "govuk", **ON)
+        files = _render(shape, "govuk", **_on(shape))
         routed = pages_paths(shape, files)
         assert routed >= {"/studio/example"} | OWN_PATHS, routed
         assert "/" not in routed and has_a_workspace(shape, files)
@@ -1126,7 +1361,7 @@ def test_a_govuk_function_with_its_page_is_routed_to_pages_and_the_rest_stays(
 @pytest.mark.parametrize("shape", SHAPES)
 def test_with_no_function_page_yet_only_the_services_own_paths_go_to_pages(shape: str) -> None:
     """The tree as the repository has it today (no route list): `pages`' own paths and nothing else."""
-    assert pages_paths(shape, _render(shape, "govuk", **ON)) == OWN_PATHS
+    assert pages_paths(shape, _render(shape, "govuk", **_on(shape))) == OWN_PATHS
 
 
 @pytest.mark.parametrize("shape", SHAPES)
@@ -1134,7 +1369,7 @@ def test_the_default_brand_reads_no_govuk_route_list(shape: str, tmp_path: Path)
     """The route list is the GOV.UK tree's: the default theme's table is the Studio's and the
     service's own, whatever that list holds."""
     with a_partial_govuk_tree(tmp_path, ["/studio/example"]):
-        routed = pages_paths(shape, _render(shape, "ospreyflow", **ON))
+        routed = pages_paths(shape, _render(shape, "ospreyflow", **_on(shape)))
     assert routed == OWN_PATHS | STUDIO_PATHS
 
 
@@ -1151,5 +1386,5 @@ def test_the_route_check_is_red_when_the_listed_path_stays_with_the_workspace(
 
     with a_partial_govuk_tree(tmp_path, ["/studio/example"]):
         with mock.patch.object(service, "route_paths", own_only):
-            routed = pages_paths(shape, _render(shape, "govuk", **ON))
+            routed = pages_paths(shape, _render(shape, "govuk", **_on(shape)))
     assert "/studio/example" not in routed
