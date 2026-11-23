@@ -15,9 +15,9 @@
 5. **The register.** PL11's register lists GDS Transport as `conditional` with `ships: only when appearance.govuk_identity is on`. When this slice lands, change its `note` (today's build holds the files) to say they no longer do, and add the test that the register's claim holds (a default build's output has no file the register marks conditional).
 6. **Report:** the mechanism chosen and why; the build output before and after (sizes, file lists); what changes for a deployment that turns the switch on; any place that still names the face.
 
-## Acceptance test
+## Acceptance test (named by the conductor on 23 November 2026, as the owner's ruling of that day asks)
 
-A new pure test under `OspreyFlow_Build/tests/glass_trees/` for the default build's output (item 3) plus the I9 proofs of item 4. **Say which folders each walks.**
+**Two new pure tests, red first on main (neither file exists):** `OspreyFlow_Build/tests/glass_trees/test_default_build_holds_no_gds_transport.py` (item 3: a default build's output, or the build's declared output list, holds no GDS Transport face, and holds it with the switch on; the planted unconditional `sync_govuk_assets.mjs` is red; item 5's register claim) and `OspreyFlow_Build/tests/glass_trees/test_default_tree_carries_no_govuk_assets.py` (item 4: the default tree's assets and CSS never name the crown, the GOV.UK logotype or the GOV.UK typeface). The switch's own cases (`test_govuk_identity_is_off_by_default`, the brand case, the settings validation) and `apps/workspace/src/brand/brand.test.tsx` and the pages `identity.spec.ts` are the other proofs of items 1 and 4 and run in the checks. **Scan-map rows for the two Python tests are on main (`scan_rows/PL7c.tsv`, written by the conductor from item 3 and 4's reading: the workspace, the design package, the pages service and the renderer): if your tests walk a different folder, say so in your report and the conductor corrects the row before your stop.** **The owner's ruling of 23 November: this slice is built and merged to main; the running GOV.UK demo is not touched, since the demo runs the installed release. Nothing here changes any deployment's settings.**
 
 ## Out of scope
 
