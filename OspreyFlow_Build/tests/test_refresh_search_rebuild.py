@@ -68,6 +68,13 @@ def test_a_rebuild_that_fails_says_search_stays_on_exact_identifiers_and_the_sta
     repo: Path,  # noqa: F811
 ) -> None:
     _compose(repo, OPENSEARCH)
+    # An address is set (`OPENSEARCH_HOST`), so the rebuild failed for another reason: the message
+    # stays. With neither setting it sends the operator to `ospreyflow apply` instead
+    # (`test_refresh_plain_lines.py`, D216).
+    env = repo / "deploy/generated/local-lite/deployment.env"
+    env.write_text(
+        env.read_text(encoding="utf-8") + "OPENSEARCH_HOST=opensearch\n", encoding="utf-8"
+    )
     register = Registrar()
     with pytest.raises(refresh.RefreshFailed) as failed:
         refresh.refresh(

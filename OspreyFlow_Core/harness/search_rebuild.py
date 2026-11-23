@@ -13,12 +13,32 @@ from pathlib import Path
 
 import yaml
 
+#: The two settings either of which tells the Conduit where OpenSearch is (`OPENSEARCH_URL` first).
+ADDRESS_SETTINGS = ("OPENSEARCH_URL", "OPENSEARCH_HOST")
+
 REBUILD = ["exec", "-T", "api", "python", "-m", "scripts.rebuild_search_index"]
 
 
 def renders_opensearch(compose_file: Path) -> bool:
     services = (yaml.safe_load(compose_file.read_text(encoding="utf-8")) or {}).get("services")
     return isinstance(services, dict) and "opensearch" in services
+
+
+def sets_no_address(env_file: Path) -> bool:
+    """Whether the deployment's `deployment.env` sets neither `OPENSEARCH_URL` nor `OPENSEARCH_HOST`
+    to anything but blanks, as the Conduit reads them (`services.search_index.run`'s `configured`):
+    the rebuild then reaches for `localhost:9200`, where nothing answers, and running it again
+    mends nothing, since the missing thing is the setting, which `ospreyflow apply` writes (D216).
+    No value is returned. A file that cannot be read is not said to lack the setting."""
+    try:
+        text = env_file.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    for line in text.splitlines():
+        key, sep, value = line.partition("=")
+        if sep and key.strip() in ADDRESS_SETTINGS and value.strip().strip("'\""):
+            return False
+    return True
 
 
 def rebuild_argv(compose: Sequence[str]) -> list[str]:
