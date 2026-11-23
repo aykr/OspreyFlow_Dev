@@ -116,6 +116,9 @@ async def test_the_adapter_sums_the_counts_of_each_chunk_and_sends_the_deleted_q
     assert await adapter.count_deleted_visible([*ids, *ids[:50]], READER) == 2400
     assert len(client.gremlin_sent) == 3
     assert all('has("reverted",true)' in q for q in client.gremlin_sent)
+    # The caller's own principal reached the query (rule 3): each query holds the reader's step.
+    access = AccessFilter(load_uk_le_scheme())
+    assert all(access.gremlin_has_step(READER, deleted=True) in q for q in client.gremlin_sent)
     assert all(q.endswith(".values('id').dedup().count()") for q in client.gremlin_sent)
 
 
