@@ -449,9 +449,9 @@ def render_login_theme(
     if appearance.banner_text is not None:
         # ADR-132 Amendment 7; absent when unset, so the theme is byte for byte as it was.
         settings["bannerText"] = appearance.banner_text
-    if appearance.govuk_identity:
-        # ADR-152 decision 14; absent when off, so a deployment not using it renders as it did.
-        settings["govukIdentity"] = True
+    # ADR-152 decision 14, invariant I9: written as true or false every time under the GOV.UK brand,
+    # never left out: the sign-in script reads settings with no key as from before the switch.
+    settings["govukIdentity"] = bool(appearance.govuk_identity)
     files[THEME_PROPERTIES] = _PROPERTIES.replace(
         "js/osprey-sign-in.js", "js/osprey-sign-in.js js/govuk-chrome.js"
     )

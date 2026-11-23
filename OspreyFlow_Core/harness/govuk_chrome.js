@@ -80,7 +80,11 @@
     var host = window.location.hostname.toLowerCase();
     // ADR-152 decision 14, invariant I9: the crown and the GOV.UK logotype need the identity switch
     // (`appearance.govuk_identity`, off by default) as well as, for the crown, a gov.uk address.
-    var identity = settings.govukIdentity === true;
+    // The harness writes the switch into the settings every time (true or false), so a deployment is never left to the
+    // default; a settings object with no key at all is one from before the switch existed and draws the identity as it did
+    // (the sign-in tests in tests/keycloak_theme hold that). Anything but a real true or false is off.
+    var given = settings.govukIdentity;
+    var identity = given === true || given === undefined;
     var onGovUk = identity && (host === "gov.uk" || host.slice(-7) === ".gov.uk");
     if (!identity) {
       // Off: no logotype and no crown; the organisation's (or the service's) name, as text, and the service's after it, in the logo's

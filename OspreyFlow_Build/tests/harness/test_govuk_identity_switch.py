@@ -204,7 +204,9 @@ def _drawn_by_the_generated_chrome_script(url: str, *, identity: bool) -> dict[s
     return {k: bool(v) for k, v in json.loads(done.stdout).items()}
 
 
-def test_the_generated_sign_in_script_draws_none_of_the_identity_with_the_switch_off_on_gov_uk() -> None:
+def test_the_generated_sign_in_script_draws_none_of_the_identity_with_the_switch_off_on_gov_uk() -> (
+    None
+):
     """The shape the script meets in a deployment: the settings the harness wrote, at a gov.uk address, switch off.
     Planted: the harness leaving the key out (so the script reads it as one from before the switch) turns this red."""
     assert _drawn_by_the_generated_chrome_script(
