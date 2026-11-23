@@ -12,6 +12,7 @@ text a person writes: `yes`, `on`, a quoted `"true"`, a number), not a hand-writ
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -408,13 +409,20 @@ def test_a_cluster_that_pulls_the_releases_images_refuses_the_identity() -> None
     render(cluster_config(AWS, appearance={"brand": "govuk"}), resolver=_resolver)
 
 
+CLOUD_FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "cloud_platform"
+
+
+def _resolver(ref: str) -> str:
+    """A stand-in digest for each reference, so the render needs no registry (as the cloud platform's own tests give)."""
+    return "sha256:" + hashlib.sha256(ref.encode()).hexdigest()
+
+
 def _images_plan(**appearance: object) -> list[dict[str, object]]:
     """A cloud platform's image plan (`images.yaml`, which `ospreyflow images push` follows), from its own fixture."""
-    from tools.cp_policy_check import FIXTURES, _resolver
 
     from harness.render import render
 
-    raw = yaml.safe_load((FIXTURES / "development.yaml").read_text(encoding="utf-8"))
+    raw = yaml.safe_load((CLOUD_FIXTURES / "development.yaml").read_text(encoding="utf-8"))
     raw["appearance"] = {**raw.get("appearance", {}), **appearance}
     config = OspreyConfig.model_validate(raw)
     plan = yaml.safe_load(render(config, resolver=_resolver).artefacts["images.yaml"])
