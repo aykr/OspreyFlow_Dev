@@ -313,3 +313,71 @@ def test_install_shows_the_shield_in_its_dry_run_and_cleanup_removes_it():
     assert "systemctl enable --now osprey-early-shield.service" in install and "nft -c -f" in install
     cleanup = (DEMO / "cleanup.sh").read_text()
     assert "nft delete table inet osprey_early" in cleanup and "osprey-early-shield.service" in cleanup
+
+
+# ------------------------------------------------------------------------------------------------ 015: the summary's model
+
+def test_a_starting_job_waits_while_the_summary_holds_the_model_then_holds_the_lock_for_its_run(monkeypatch, tmp_path):
+    """015: run edfcda0e99098325's summary loaded the model at 07:12:31 and five runs after it were refused on its port.
+    A job now waits for the summary to let go, then holds the lock shared, so no summary starts beside it."""
+    import fcntl
+    import threading
+    lock, log = tmp_path / "model.lock", tmp_path / "log"
+    lock.write_text("")
+    monkeypatch.setattr(r, "MODEL_LOCK", lock)
+    monkeypatch.setattr(r, "_HELD", [])
+    summary = open(lock)
+    fcntl.flock(summary, fcntl.LOCK_EX)
+    done = threading.Event()
+    t = threading.Thread(target=lambda: (r.wait_for_the_summary(log), done.set()), daemon=True)
+    t.start()
+    assert not done.wait(2.5), "the job did not wait for the summary"
+    fcntl.flock(summary, fcntl.LOCK_UN)
+    summary.close()
+    assert done.wait(5)
+    assert len(r._HELD) == 1 and "waited" in log.read_text() and "for the summary to unload its model" in log.read_text()
+    with open(lock) as again:
+        with pytest.raises(OSError):
+            fcntl.flock(again, fcntl.LOCK_EX | fcntl.LOCK_NB)  # a summary now finds it held
+    os.close(r._HELD.pop())
+
+
+def test_a_job_waits_for_the_summary_no_longer_than_its_limit(monkeypatch, tmp_path):
+    import fcntl
+    lock, log = tmp_path / "model.lock", tmp_path / "log"
+    lock.write_text("")
+    monkeypatch.setattr(r, "MODEL_LOCK", lock)
+    monkeypatch.setattr(r, "SUMMARY_WAIT_SECONDS", 1)
+    monkeypatch.setattr(r, "_HELD", [])
+    with open(lock) as summary:
+        fcntl.flock(summary, fcntl.LOCK_EX)
+        t0 = time.monotonic()
+        r.wait_for_the_summary(log)
+        assert time.monotonic() - t0 < 5 and r._HELD == []
+    assert "going on to the shield check" in log.read_text()
+
+
+def test_with_no_summary_installed_a_job_does_not_wait(monkeypatch, tmp_path):
+    monkeypatch.setattr(r, "MODEL_LOCK", tmp_path / "absent.lock")
+    monkeypatch.setattr(r, "_HELD", [])
+    r.wait_for_the_summary(tmp_path / "log")
+    assert r._HELD == [] and not (tmp_path / "log").exists()
+
+
+def test_a_breach_that_goes_within_the_settle_time_refuses_nothing_and_one_that_stays_does(monkeypatch):
+    seen = [["port 34041"], ["port 34041"], []]
+    monkeypatch.setattr(r, "shield_breaches", lambda: seen.pop(0) if len(seen) > 1 else seen[0])
+    monkeypatch.setattr(r, "SHIELD_SETTLE_SECONDS", 10)
+    monkeypatch.setattr(r.time, "sleep", lambda s: None)
+    assert r.settled_breaches() == []
+    monkeypatch.setattr(r, "shield_breaches", lambda: ["port 34041"])
+    monkeypatch.setattr(r, "SHIELD_SETTLE_SECONDS", 0.2)
+    assert r.settled_breaches() == ["port 34041"]
+
+
+def test_the_job_waits_for_the_summary_before_its_shield_check_and_refuses_on_a_breach_that_stays():
+    text = (DEMO / "runner.py").read_text()
+    body = text[text.index("def run_job("):]
+    assert body.index("wait_for_the_summary(log)") < body.index("breaches = settled_breaches()") \
+        < body.index("make_tree(tree")
+    assert r.SHIELD_SETTLE_SECONDS == 30 and r.SUMMARY_WAIT_SECONDS == 15 * 60

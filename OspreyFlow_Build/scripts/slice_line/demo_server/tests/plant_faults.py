@@ -35,7 +35,7 @@ M = [
  (D + "install.sh", 'say "command=\\"/usr/bin/python3 -I $ROOT/bin/runner.py', 'say "command=\\"/usr/bin/python3 $ROOT/bin/runner.py', "forced_command_ignores_them"),
  (D + "runner.py", '"--property", "CPUQuota=" + p.CPU_QUOTA, ', '', "launches_capped_and_runs_the_real_gate"),
  # the demo shield
- (D + "runner.py", '        breaches = shield_breaches()\n', '        breaches = []\n', "reaches_another_accounts_port_runs_nothing"),
+ (D + "runner.py", '        breaches = settled_breaches()\n', '        breaches = []\n', "reaches_another_accounts_port_runs_nothing"),
  (D + "runner.py", '            if len(parts) < 8 or parts[3] != "0A" or int(parts[7]) == own_uid:', '            if len(parts) < 8 or parts[3] != "0A":', "this_accounts_own_are_not"),
  (D + "runner.py", '            return s.connect_ex((addr, port)) == 0', '            return s.connect_ex((addr, port)) == 99', "reachable_is_a_breach"),
  (D + "runner.py", '        return ["the listening sockets cannot be read', '        return []\n        return ["the listening sockets cannot be read', "shield_cannot_be_checked"),
@@ -151,7 +151,7 @@ M = [
  (D + "summarize.py", '                         for f in distinct(ext)]}', '                         for f in ext["failures"]]}', "identical_failures_are_asked_about_once"),
  (D + "summarize.py", '    return kind + ": " + " ".join(DIGITS.sub("0", base).split())[:300]', '    return kind', "different_errors_are_never_grouped"),
  (D + "summarize.py", '        if c["id"] in other and same_words(c["cause"], other[c["id"]]):', '        if c["id"] in other:', "two_asks_that_differ_say_so"),
- (D + "summarize.py", '        again, why_not, mt2 = ask_model(ext, url, timeout)', '        again, why_not, mt2 = advice, None, {}', "two_asks_that_differ_say_so"),
+ (D + "summarize.py", '                again, why_not, mt2 = ask_model(ext, url, timeout, keep_alive=0)', '                again, why_not, mt2 = advice, None, {}', "two_asks_that_differ_say_so"),
  (D + "summarize.py", '        return {**advice, "stable": None, "stability": "asked once only', '        return {**advice, "stable": True, "stability": "asked once only', "second_ask_that_fails_keeps_the_first"),
  (D + "summarize.py", '            out.append({"id": f["id"], "cause": by[f["same_as"]]["cause"], "same_as": f["same_as"]})', '            pass', "identical_failures_are_asked_about_once"),
  # 013, 1: tested before the verifier answers, held for its tip
@@ -192,6 +192,23 @@ M = [
  (D + "runner.py", '        shutil.rmtree(own, ignore_errors=True)', '        pass', "own_unpacked_file_while_another_job_unpacks"),
  (D + "runner.py", '        fd, part = tempfile.mkstemp(prefix="spatial.", suffix=".part", dir=folder)', '        part = gz + ".part"; fd = os.open(part, os.O_WRONLY | os.O_CREAT | os.O_TRUNC)', "part_file_of_its_own"),
  (D + "runner.py", '            try:\n                os.remove(gz)\n            except OSError:\n                pass  # another job dropped it first\n            raise', '            raise', "does_not_unpack_is_dropped_and_fetched_again"),
+ # 015: the summary's model never beside a test job: unloaded at once, asked only when it fits, and only alone
+ (D + "summarize.py", '                again, why_not, mt2 = ask_model(ext, url, timeout, keep_alive=0)', '                again, why_not, mt2 = ask_model(ext, url, timeout, keep_alive=KEEP_BETWEEN_ASKS)', "unloaded_as_soon_as_it_has_answered"),
+ (D + "summarize.py", '            times["model_unloaded"] = unload(url)', '            times["model_unloaded"] = True', "unloaded_when_its_answer_is_dropped_too"),
+ (D + "summarize.py", '        now = loaded(url)\n        if now is False:', '        now = loaded(url) if sent else True\n        if now is False:', "never_asked_is_never_loaded_to_be_unloaded"),
+ (D + "summarize.py", '                sent = True\n', '                return True\n', "slow_to_go_is_waited_for"),
+ (D + "summarize.py", '    if need > free:', '    if False:', "asked_only_when_it_fits_on_the_card"),
+ (D + "summarize.py", '    return size + layers * kv_heads * (key + value) * 2 * NUM_CTX + FIT_MARGIN_BYTES', '    return size + FIT_MARGIN_BYTES', "asked_only_when_it_fits_on_the_card"),
+ (D + "summarize.py", '    return max(mib) << 20 if mib else None', '    return min(mib) << 20 if mib else None', "card_with_the_most_room"),
+ (D + "summarize.py", '    if free is None:\n        return "no graphics card', '    if False:\n        return "no graphics card', "no_card_measured_the_model_is_not_asked"),
+ (D + "summarize.py", '    if need is None:\n        return "Ollama did not say', '    if False:\n        return "Ollama did not say', "does_not_say_how_big_the_model_is"),
+ (D + "summarize.py", '        if not_asked == "busy":\n            break', '        if False:\n            break', "never_asked_while_a_test_job_holds_the_lock"),
+ (D + "summarize.py", '        return None, "the model is not asked without %s', '        return None, None; "%s', "without_the_lock_file_the_model_is_not_asked"),
+ (D + "runner.py", '        wait_for_the_summary(log)\n', '', "waits_for_the_summary_before_its_shield_check"),
+ (D + "runner.py", '            fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)\n            break', '            break', "starting_job_waits_while_the_summary_holds_the_model"),
+ (D + "runner.py", '    _HELD.append(fd)\n', '    os.close(fd)\n', "starting_job_waits_while_the_summary_holds_the_model"),
+ (D + "runner.py", '        if not found or time.monotonic() >= end:', '        if True:', "breach_that_goes_within_the_settle_time"),
+ (D + "install.sh", '  act install -m 0640 -o "$USER_NAME" -g "$SUMMARY_USER" /dev/null "$ROOT/handoff/model.lock"\n', '', "measures_the_card_and_makes_the_lock_once"),
 ]
 bad = 0
 for f, old, new, test in M:

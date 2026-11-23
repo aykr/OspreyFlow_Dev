@@ -56,6 +56,16 @@ REFUSALS = WORK / "refusals.log"
 #: summary account reads nothing of data/. install.sh makes them; without them nothing is handed over.
 HANDOFF = HERE.parent / "handoff"
 SUMMARIES = HERE.parent / "summaries"
+#: 015: the summary's model and the jobs never overlap. The model's helper listens on a loopback port in the range the
+#: job's shield leaves open, so a job starting beside it is refused, and one running beside it could reach it. Each job
+#: holds this lock shared for its whole run; the summary asks the model only while it holds it alone, and lets it go
+#: once the model is unloaded. A starting job waits for that, at most SUMMARY_WAIT_SECONDS (two asks and the unload).
+MODEL_LOCK = HANDOFF / "model.lock"
+SUMMARY_WAIT_SECONDS = 15 * 60
+#: A breach is checked again for this long before the run is refused: a helper Ollama is closing may still listen
+#: for a moment after it says the model is gone. Nothing has run while it waits.
+SHIELD_SETTLE_SECONDS = 30
+_HELD = []  # the job's own hold on MODEL_LOCK, kept open until the job's process ends
 KEEP_JOBS = 40  # 009: a result is kept until the merge has asked for it by id, for several slices at once
 
 #: merge_slice.py's OFFLINE_PORTS: an offline run reaches no store.
@@ -433,6 +443,43 @@ def reachable(family: int, addr: str, port: int) -> bool:
             return s.connect_ex((addr, port)) == 0
         except OSError:
             return False
+
+
+def wait_for_the_summary(log: Path) -> None:
+    """Hold MODEL_LOCK shared for the job's run (015), waiting while a summary holds the model. No lock (no summary
+    installed): nothing to wait for. Past SUMMARY_WAIT_SECONDS the job goes on, and its shield check decides."""
+    try:
+        fd = os.open(str(MODEL_LOCK), os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    except OSError:
+        return
+    t0 = time.monotonic()
+    while True:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_SH | fcntl.LOCK_NB)
+            break
+        except OSError:
+            if time.monotonic() - t0 >= SUMMARY_WAIT_SECONDS:
+                os.close(fd)
+                with log.open("a") as fh:
+                    fh.write("\n$ (the summary still held the model after %d s; going on to the shield check)\n"
+                             % SUMMARY_WAIT_SECONDS)
+                return
+            time.sleep(2)
+    _HELD.append(fd)
+    waited = time.monotonic() - t0
+    if waited >= 1:
+        with log.open("a") as fh:
+            fh.write("\n$ (waited %d s for the summary to unload its model)\n" % waited)
+
+
+def settled_breaches() -> list:
+    """shield_breaches(), checked again for SHIELD_SETTLE_SECONDS while it finds any: only a breach that stays counts."""
+    end = time.monotonic() + SHIELD_SETTLE_SECONDS
+    while True:
+        found = shield_breaches()
+        if not found or time.monotonic() >= end:
+            return found
+        time.sleep(3)
 
 
 def shield_breaches() -> list:
@@ -832,7 +879,8 @@ def run_job(jid: str) -> int:
               "not_run": {"targets": [], "test_files": [], "docker_skipped": [], "mac_only": [], "live_step": ""},
               "client_names": "not run (no client-name list on this machine)"}
     try:
-        breaches = shield_breaches()
+        wait_for_the_summary(log)
+        breaches = settled_breaches()
         if breaches:
             raise Stop("error", "the shield does not hold: this account reached %d port(s) another account listens on "
                        "(%s); nothing was run" % (len(breaches), ", ".join(breaches[:10])))
@@ -943,6 +991,8 @@ def prune_jobs() -> None:
             pass
     if HANDOFF.is_dir():  # a hand-over goes once its summary is made, or its job is gone
         for d in HANDOFF.iterdir():
+            if not d.is_dir() or d.is_symlink():
+                continue  # model.lock (015), and anything not a hand-over
             if (SUMMARIES / (d.name + ".json")).exists() or not (JOBS / d.name).is_dir():
                 shutil.rmtree(str(d), ignore_errors=True)
 
