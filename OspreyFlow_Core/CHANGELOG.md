@@ -30,7 +30,10 @@ update. Work not yet in a release is listed under *Unreleased*.
   switch on is refused in words (`appearance.govuk_identity is on, and this render pulls the workspace image`) until a release
   carries a build with the face for it. A deployment already built from source takes the switch on its next
   refresh (`scripts/refresh.py`), which puts the build argument on the workspace's build stanza (and takes it off when the
-  switch is off again).
+  switch is off again). **The workspace built with the switch on is its own image, with its own tag**
+  (`osprey/workspace:local-govuk`; `…/workspace:<commit>-govuk` in a cloud platform's registry), so a default deployment
+  and a GOV.UK one on the same machine, or sharing a registry, never run each other's image: a start that does not rebuild
+  runs the image its own tag holds. Every other deployment, and every other service, keeps the tag it had.
 
 **The Ingest Studio (ADR-152).**
 - **The Studio's frame and its Releases screen are built as server-rendered pages** (the page service, not yet in any

@@ -82,6 +82,7 @@ from harness.keycloak_theme import (
 )
 from harness.profiles import postgres_connections_up_to_date
 from harness.render import (
+    GOVUK_IMAGE_TAG_SUFFIX,
     STATE_CONTAINER_PATH,
     STORE_VOLUMES,
     _render_compose,
@@ -604,14 +605,29 @@ def _identity_argument_moved(service: dict[str, Any], wanted: dict[str, Any]) ->
     of the GOV.UK identity argument and no other: the switch turned on adds it, the switch turned
     off removes it, and an operator's own arguments stay as they were. Without this a stanza that
     already had a `build` (and so was skipped whole) rebuilt the default image after the switch
-    changed, and the type fell back to arial in silence. True when it changed the stanza."""
+    changed, and the type fell back to arial in silence.
+
+    The image's tag goes with the argument (the workspace built with the identity is a different
+    image, so a different tag: `GOVUK_IMAGE_TAG_SUFFIX`), and only that suffix is touched: an
+    operator's own tag stays. True when it changed the stanza."""
     held = service.get("build")
     if not isinstance(held, dict) or not isinstance(wanted.get("build"), dict):
         return False
+    changed = False
+    # The tag is the render's when the two differ by the suffix alone.
+    held_image, wanted_image = str(service.get("image") or ""), str(wanted.get("image") or "")
+    if (
+        wanted_image
+        and held_image != wanted_image
+        and held_image.removesuffix(GOVUK_IMAGE_TAG_SUFFIX)
+        == wanted_image.removesuffix(GOVUK_IMAGE_TAG_SUFFIX)
+    ):
+        service["image"] = wanted_image
+        changed = True
     want = (wanted["build"].get("args") or {}).get(_IDENTITY_ARGUMENT)
     args = held.get("args") if isinstance(held.get("args"), dict) else {}
     if args.get(_IDENTITY_ARGUMENT) == want:
-        return False
+        return changed
     if want is None:
         args = {k: v for k, v in args.items() if k != _IDENTITY_ARGUMENT}
         if args:
@@ -689,7 +705,7 @@ def _pins_moved(directory: Path) -> None:
             row["service"]: row
             for row in yaml.safe_load(
                 _render_versions_lock(
-                    [i for i in images if i.service in built_here],
+                    [i for i in images if i.service in (*built_here, *switched)],
                     lambda _image: None,
                     allow_unpinned=True,
                 )

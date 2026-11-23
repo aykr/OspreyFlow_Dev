@@ -478,6 +478,8 @@ rows:
       `appearance.govuk_identity` is on. Off, `public/` and `dist/` hold the stylesheet with the face's
       rules taken out and no font file. `tests/glass_trees/test_default_build_holds_no_gds_transport.py`
       holds the claim (a default build's output holds no file this row marks conditional).
+      The image built with the switch on is its own image under its own tag (`-govuk`), so a default
+      deployment never runs it.
 
   - id: F4
     kind: font

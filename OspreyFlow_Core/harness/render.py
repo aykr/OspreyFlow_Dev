@@ -301,6 +301,11 @@ class GovukIdentityNeedsABuild(RuntimeError):
         )
 
 
+#: Added to the workspace image's tag when the GOV.UK identity switch is on for the deployment:
+#: its image is a different image (it holds GDS Transport's files), so it is a different tag.
+GOVUK_IMAGE_TAG_SUFFIX = "-govuk"
+
+
 def wants_govuk_identity(config: OspreyConfig) -> bool:
     """The switch is on for this deployment: it means something only under the GOV.UK brand."""
     return config.appearance.brand == "govuk" and bool(config.appearance.govuk_identity)
@@ -639,17 +644,27 @@ def service_images(config: OspreyConfig, *, build_context: str = "../../..") -> 
     sha = git_sha(Path(source_path)) if source_path is not None else git_sha()
 
     def _owned(service: str, dockerfile: str, **own: Any) -> ServiceImage:
+        # ADR-152 decision 14: the workspace built with the GOV.UK identity holds GDS Transport's
+        # files and the default build never does, so the two are not the same image and cannot
+        # share a tag: a local tag is one per machine, a registry's one per commit, and a start
+        # that does not rebuild runs whatever its tag last held (the default deployment would
+        # serve the face, or the GOV.UK one fall back to arial in silence). Every other
+        # deployment, and every other service, keeps the tag it had.
+        govuk = service == "workspace" and wants_govuk_identity(config)
+        kind = GOVUK_IMAGE_TAG_SUFFIX if govuk else ""
         if building:
             return ServiceImage(
                 service,
-                f"osprey/{service}:local",
+                f"osprey/{service}:local{kind}",
                 build_context=build_context,
                 dockerfile=dockerfile,
                 **own,
             )
         # ADR-114 Amendment 8: a user repository's release pushes to its own owner's registry.
         registry = os.environ.get("OSPREY_IMAGE_REGISTRY") or OWNED_IMAGE_REGISTRY
-        return ServiceImage(service, f"{registry}/{service}:{sha}", dockerfile=dockerfile, **own)
+        return ServiceImage(
+            service, f"{registry}/{service}:{sha}{kind}", dockerfile=dockerfile, **own
+        )
 
     # **These third-party references are verified to resolve, and that is not a given.** Two of the
     # eight written for Stage 2 §5a did not exist at all — `minio/minio:RELEASE.2024-10-13…` and

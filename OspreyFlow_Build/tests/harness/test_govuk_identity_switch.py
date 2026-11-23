@@ -310,10 +310,14 @@ def _workspace_image(appearance: dict[str, object], **components: object) -> str
     return str(compose_services(config, images)["workspace"]["image"])
 
 
-def test_a_default_deployment_and_one_with_the_identity_on_never_share_a_workspace_image_tag() -> None:
+def test_a_default_deployment_and_one_with_the_identity_on_never_share_a_workspace_image_tag() -> (
+    None
+):
     default = _workspace_image({"brand": "govuk"})
     switched_on = _workspace_image({"brand": "govuk", "govuk_identity": True})
-    assert default == "osprey/workspace:local"  # what it was: a default deployment renders byte for byte as before
+    assert (
+        default == "osprey/workspace:local"
+    )  # what it was: a default deployment renders byte for byte as before
     assert switched_on != default
     # Every other deployment on the machine that is not GOV.UK with the switch on keeps the default's tag, wherever the
     # switch is written (under the other brand it means nothing: ADR-152 decision 14).
@@ -339,7 +343,9 @@ def test_a_cloud_platform_pushes_the_workspace_with_the_identity_on_under_its_ow
 
     def target(**appearance: object) -> str:
         return next(
-            str(i["target"]) for i in _images_plan(**appearance) if "/workspace:" in str(i["target"])
+            str(i["target"])
+            for i in _images_plan(**appearance)
+            if "/workspace:" in str(i["target"])
         )
 
     assert target(brand="govuk", govuk_identity=True) != target(brand="govuk")
