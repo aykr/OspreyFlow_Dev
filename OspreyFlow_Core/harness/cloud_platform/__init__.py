@@ -146,6 +146,9 @@ def _cp(config: OspreyConfig) -> CloudPlatformConfig:
 
 
 def _refuse(config: OspreyConfig) -> None:
+    # The page service has no sign-in on this shape yet (PL7a2b case C): refused in words, not
+    # rendered without it.
+    pages_service.refuse_on_cloud_platform(config)
     if config.map is None:
         raise CloudPlatformNotRenderable(
             "the Conduit reads its basemaps from osprey.yaml's map: section at start and cannot "

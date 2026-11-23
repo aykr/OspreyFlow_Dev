@@ -8,8 +8,9 @@ refuses (`refuse_a_cutover_without_the_service`) refuses a configuration that wo
 render a deployment with neither front end. Nothing here is read from a profile, a brand or a
 release: `enabled` is the only input to "on".
 
-What "on" adds, in each of the four shapes (the compose file, the chart's values, the platform
-Ingress):
+What "on" adds, in the shapes that can run it (local-lite is refused over plain HTTP or an
+untrusted certificate, and the cloud-platform shape has no sign-in for it yet: `refuse_*`; so, in
+effect, small and cluster: the compose file, the chart's values):
 
 * the `pages` service (`harness.render.compose_services`; the chart's workloads and the lock are
   translated from it): its image is the owned `pages` image, its two secrets by reference to the
@@ -66,6 +67,13 @@ class PageServiceNeedsTrust(ValueError):
     trust (round 5 of PL7a2b: the service's certificate check is not weakened or switched off)."""
 
 
+class PageServiceNotOnThisShape(ValueError):
+    """The page service is on for the cloud-platform shape, which has no sign-in for it yet (the
+    owner's ruling of 23 November 2026, PL7a2b case C: ADR-148 Amendment 23 item 1 needs the chart's
+    egress to the identity provider and the page service's own Entra registration, a part of its
+    own)."""
+
+
 class PageServiceNotEnabled(ValueError):
     """A GOV.UK deployment whose tree is complete would lose its workspace with nothing to take its
     place (ADR-152 Amendment 3 item 4)."""
@@ -98,6 +106,26 @@ def govuk_tree_is_complete(config: OspreyConfig) -> bool:
     from scripts import tree_parity
 
     return tree_parity.govuk_tree_state() == tree_parity.COMPLETE
+
+
+#: The words of the refusal for the cloud-platform shape.
+NEEDS_SIGN_IN_ON_CLOUD_PLATFORM = (
+    "pages.enabled is on, but the page service cannot run on the cloud-platform shape yet: people "
+    "would have no way to sign in to it there (the chart gives it no egress to the identity "
+    "provider, and it has no registration with the organisation's Entra ID: ADR-148 Amendment 23). "
+    "Leave pages.enabled off for this deployment until the page service is offered on the "
+    "cloud-platform shape"
+)
+
+
+def refuse_on_cloud_platform(config: OspreyConfig) -> None:
+    """The page service is not rendered for the cloud-platform shape (development or the proof of
+    concept) with the setting on: it would hold none of its three sign-in variables, and the chart
+    has no egress to the identity provider for it. No sign-in is built here, no egress is added and
+    the chart's policy is untouched; the part that gives the page service its Entra sign-in lifts
+    this. Off is the reference."""
+    if enabled(config) and config.profile is Profile.CLOUD_PLATFORM:
+        raise PageServiceNotOnThisShape(NEEDS_SIGN_IN_ON_CLOUD_PLATFORM)
 
 
 def refuse_a_cutover_without_the_service(config: OspreyConfig) -> None:
@@ -253,8 +281,8 @@ def service_environment(config: OspreyConfig, *, with_sign_in: bool) -> dict[str
     other secret reaches the service. `with_sign_in` is whether the deployment runs the identity
     provider the service signs in against: where it does, the service is given **all three** sign-in
     variables or the render refuses (`refuse_sign_in_without_https`), never fewer. The cloud
-    platform's people sign in with the organisation's own (PL9b), so its service holds no client of
-    ours and answers sign-in as it did before it was built."""
+    platform runs no identity provider of ours and is refused with the setting on before this is
+    reached (`refuse_on_cloud_platform`)."""
     from harness.realm import PAGES_CLIENT_ID, PAGES_CLIENT_SECRET_KEY, PAGES_SESSION_SECRET_KEY
     from harness.site import REALM, sites
 

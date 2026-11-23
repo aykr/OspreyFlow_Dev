@@ -1178,7 +1178,8 @@ def test_turning_the_service_on_for_the_cloud_platform_is_refused_in_words(
 def test_the_cloud_refusal_is_for_the_setting_on_alone(shape: str, brand: str) -> None:
     """Off, written or absent, is the reference (nothing is refused); the refusal is not a general
     dislike of the shape."""
-    assert ref.differences(shape, brand, _render(shape, brand, **OFF)) == []
+    written = _off_as_written(shape, _render(shape, brand, **OFF))
+    assert ref.differences(shape, brand, written) == []
     assert ref.differences(shape, brand, _render(shape, brand)) == []
 
 
