@@ -57,8 +57,9 @@ describe("the sign-in page's chrome, run", () => {
     return document.body;
   }
 
-  // The harness writes the switch into every GOV.UK sign-in theme as a boolean, so "off" is the key written as false; a
-  // settings object from before the switch existed (no key) is the script as it was, which the keycloak_theme node tests hold.
+  // The harness writes the switch into every GOV.UK sign-in theme as a boolean, so "off" is the key written as false. A
+  // settings object with no key (from before the switch existed) is also off: the switch is the only thing that turns the
+  // identity on (the owner's ruling of 23 November 2026).
   const off = { govukIdentity: false };
 
   it("with the switch off (the default, written as false) draws the organisation's name, no logotype, no crown", () => {
@@ -81,6 +82,14 @@ describe("the sign-in page's chrome, run", () => {
     expect(bare.querySelector(".govuk-header__service-name")).toBeNull();
     // The same name for both is one name, not two.
     expect(run({ ...off, organisation: "Prison Intelligence" }).querySelector(".govuk-header__service-name")).toBeNull();
+  });
+
+  it.each(["localhost", "prison-intelligence.service.gov.uk"])("with no switch key at all (%s) is off: no logotype, no crown, the name in its place", (host) => {
+    const body = run({}, host);
+    expect(body.querySelector(".govuk-header__logotype")).toBeNull();
+    expect(body.querySelector(".govuk-footer__crown")).toBeNull();
+    expect(body.textContent).not.toMatch(/Crown copyright|Open Government Licence/);
+    expect(body.querySelector(".govuk-header__organisation-name")?.textContent).toBe("Ministry of Examples");
   });
 
   it("with only a quoted or truthy non-true value is still off", () => {

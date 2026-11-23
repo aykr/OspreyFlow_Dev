@@ -350,6 +350,50 @@ def test_the_proxys_routing_table_is_brought_up_to_date_and_the_proxy_restarted(
     assert ["restart", "proxy"] in [call[-2:] for call in run.calls]
 
 
+@pytest.mark.parametrize("identity", [True, False])
+def test_a_govuk_deployment_whose_sign_in_theme_has_no_switch_key_gets_it_when_refreshed(
+    repo: Path, identity: bool
+) -> None:
+    """PL7c round 8 (the owner's ruling of 23 November 2026): a settings object with no `govukIdentity` key means off, so a
+    GOV.UK deployment made before the switch existed draws no GOV.UK identity until its theme is rewritten. Refresh is one of
+    the paths that rewrites it (`_theme_changed` writes whenever a file differs; `ospreyflow start --build` and `update`'s
+    files step both run it). The shape on disk: the settings line the renderer wrote before the switch, four keys. With the
+    identity on, the deployment is built from the checkout, which the pulled `local-lite` fixture is not (refresh refuses
+    the identity there in words), so that case runs the theme step refresh runs, `_theme_changed`; the off case runs the
+    whole `refresh.refresh`."""
+    import json
+
+    import yaml
+    from harness.keycloak_theme import GOVUK_CHROME_SCRIPT, login_theme_options
+
+    from schemas.deployment import OspreyConfig
+
+    out = _rendered(repo)
+    config_path = out / "osprey.yaml"
+    raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    raw["appearance"] = {"brand": "govuk", "service_name": "Prison Intelligence", "govuk_identity": identity}
+    config_path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
+    # The theme as it was before this version: the chrome script's settings line holds no switch key.
+    write_login_theme(out, tokens_css=TOKENS, **login_theme_options(OspreyConfig.model_validate(raw)))
+    chrome = out / THEME_DIRECTORY / THEME_NAME / GOVUK_CHROME_SCRIPT
+    prefix = "window.OSPREY_GOVUK = "
+    line, _, rest = chrome.read_text(encoding="utf-8").partition("\n")
+    settings = json.loads(line.removeprefix(prefix).rstrip(";"))
+    assert settings.pop("govukIdentity") is identity
+    chrome.write_text(f"{prefix}{json.dumps(settings)};\n{rest}", encoding="utf-8")
+    assert "govukIdentity" not in chrome.read_text(encoding="utf-8").split("\n", 1)[0]
+
+    run = Recorder()
+    if identity:
+        assert refresh._theme_changed(out, repo) is True
+    else:
+        refresh.refresh(repo, run=run, register=Registrar())
+        assert "restart" in _subcommands(run.calls)  # Keycloak reads the theme at start
+
+    after = chrome.read_text(encoding="utf-8").split("\n", 1)[0].removeprefix(prefix).rstrip(";")
+    assert json.loads(after)["govukIdentity"] is identity
+
+
 # --- services a later render adds reach an existing deployment (ADR-098 decision 2) -------------
 
 

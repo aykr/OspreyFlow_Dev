@@ -662,3 +662,92 @@ def test_the_switch_is_a_field_the_schema_describes() -> None:
     field = AppearanceConfig.model_fields["govuk_identity"]
     assert field.default is False
     assert field.description and field.description.startswith("Default: false.")
+
+
+# ----- round 8: a missing key means off (the owner's ruling of 23 November 2026), so the renderer must never leave it out
+
+_SETTINGS_PREFIX = "window.OSPREY_GOVUK = "
+
+
+def _key_written(files: dict[str, str]) -> object:
+    """The `govukIdentity` the sign-in script will read, or a marker string when its settings line does not hold the key."""
+    first = files[GOVUK_CHROME_SCRIPT].split("\n", 1)[0]
+    assert first.startswith(_SETTINGS_PREFIX)
+    return json.loads(first.removeprefix(_SETTINGS_PREFIX).rstrip(";")).get("govukIdentity", "<missing>")
+
+
+_APPEARANCES = [
+    {},
+    {"govuk_identity": True},
+    {"govuk_identity": False},
+    {"govuk_identity": True, "phase": "none"},
+    {"organisation": "A department", "service_name": "Service", "banner_text": "Words."},
+    {"govuk_identity": True, "organisation": "A department", "banner_text": "Words."},
+]
+
+
+@pytest.mark.parametrize("raw", _APPEARANCES, ids=[json.dumps(a) for a in _APPEARANCES])
+def test_no_render_path_leaves_the_switch_out_of_the_sign_in_settings(
+    raw: dict[str, object], tmp_path: Path
+) -> None:
+    """The shape the callers pass (`login_theme_options` of a loaded file: apply, refresh and the cluster render all use it),
+    through the renderer and through the writer. The key is a real `true` or `false` every time under the GOV.UK brand."""
+    from harness.keycloak_theme import login_theme_options, write_login_theme
+
+    config = OspreyConfig.model_validate(
+        {"components": {"source_path": "."}, "appearance": {"brand": "govuk", **raw}}
+    )
+    options = login_theme_options(config)
+    expected = bool(raw.get("govuk_identity", False))
+    assert _key_written(render_login_theme(TOKENS, **options)) is expected
+    write_login_theme(tmp_path, tokens_css=TOKENS, **options)
+    on_disk = (tmp_path / "keycloak-theme" / "osprey" / GOVUK_CHROME_SCRIPT).read_text(encoding="utf-8")
+    assert _key_written({GOVUK_CHROME_SCRIPT: on_disk}) is expected
+
+
+def test_the_check_that_the_key_is_written_is_red_for_a_settings_line_without_it() -> None:
+    """Rule 15, at the shape the renderer emits: its own first line with the key taken out."""
+    files = render_login_theme(
+        TOKENS, appearance=AppearanceConfig(brand="govuk", govuk_identity=False), glass_origin=GLASS
+    )
+    line, _, rest = files[GOVUK_CHROME_SCRIPT].partition("\n")
+    settings = json.loads(line.removeprefix(_SETTINGS_PREFIX).rstrip(";"))
+    del settings["govukIdentity"]
+    stripped = {GOVUK_CHROME_SCRIPT: f"{_SETTINGS_PREFIX}{json.dumps(settings)};\n{rest}"}
+    assert _key_written(stripped) == "<missing>"
+    assert _key_written(files) is False
+
+
+def test_the_generated_sign_in_script_draws_none_of_the_identity_with_no_key_on_gov_uk() -> None:
+    """The shape a deployment made before this version holds: the settings line without the key, at a gov.uk address.
+    Fail closed: no logotype, no crown, no Crown copyright."""
+    assert NODE, "node is needed to run the sign-in theme's script"
+    files = render_login_theme(
+        TOKENS, appearance=AppearanceConfig(brand="govuk", govuk_identity=True), glass_origin=GLASS
+    )
+    line, _, rest = files[GOVUK_CHROME_SCRIPT].partition("\n")
+    settings = json.loads(line.removeprefix(_SETTINGS_PREFIX).rstrip(";"))
+    del settings["govukIdentity"]
+    old = f"{_SETTINGS_PREFIX}{json.dumps(settings)};\n{rest}"
+    harness = (
+        f"const {{ JSDOM }} = require({json.dumps(str(CORE / 'node_modules' / 'jsdom'))});"
+        "const dom = new JSDOM('<!doctype html><html><body><main></main></body></html>',"
+        " { url: 'https://id.service.gov.uk/realms/osprey/', runScripts: 'outside-only' });"
+        "const d = dom.window.document;"
+        "d.documentElement.setAttribute('data-brand', 'govuk');"
+        f"dom.window.eval({json.dumps(old)});"
+        "console.log(JSON.stringify({logotype: !!d.querySelector('.govuk-header__logotype'),"
+        "crown: !!d.querySelector('circle[cx=\"20\"][cy=\"17.6\"]'),"
+        "footer_crown: !!d.querySelector('.govuk-footer__crown'),"
+        "crown_copyright: /Crown copyright/.test(d.body.textContent)}));"
+    )
+    done = subprocess.run(  # noqa: S603
+        [NODE, "-e", harness], capture_output=True, text=True, timeout=60, check=False
+    )
+    assert done.returncode == 0, done.stderr
+    assert json.loads(done.stdout) == {
+        "logotype": False,
+        "crown": False,
+        "footer_crown": False,
+        "crown_copyright": False,
+    }
