@@ -38,3 +38,7 @@ The new test; `tests/harness/test_render.py`, `tests/harness/test_reference_rend
 ## Out of scope
 
 **Any change to `_render_env`** (a test plants a line in it, the slice does not change it); the lines `apply` appends; any secret (nothing here writes, changes, removes or classifies one); `OSPREY_RELEASE_VERSION`; the four model lines' behaviour; a migration; a v0.5.1 fixture; the protected files. **A finding that names a key, a credential or a security rule is stopped and reported, never accepted narrower. This slice's boundary is a security boundary.**
+
+## Never merge another part's unmerged tip (the owner, 23 November 2026)
+
+**Never merge another part's unmerged tip, or any branch but main, into your branch.** Take main in when the line tells you to, and nothing else. A part that did this (AD1b, with AD1a's tip) had the hook count the other part's tests as its own. If your part needs another part's change that has not merged, stop and tell the conductor.

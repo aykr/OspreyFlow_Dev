@@ -27,3 +27,7 @@ A new pure test named for the fourth route (the builder names it), red first; **
 ## Out of scope
 
 The master-key rotation row (N6); the gateway's own behaviour; any change to the keys' derivation; the Models screen (AD1b's). **A finding that names a key, a credential or a security rule is stopped and reported, never accepted narrower.**
+
+## Never merge another part's unmerged tip (the owner, 23 November 2026)
+
+**Never merge another part's unmerged tip, or any branch but main, into your branch.** Take main in when the line tells you to, and nothing else. A part that did this (AD1b, with AD1a's tip) had the hook count the other part's tests as its own. If your part needs another part's change that has not merged, stop and tell the conductor.

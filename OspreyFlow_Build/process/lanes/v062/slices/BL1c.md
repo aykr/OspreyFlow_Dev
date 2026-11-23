@@ -36,3 +36,7 @@ All under `process/lanes/v062/`, and nothing else:
 ## Out of scope
 
 Any other check; the allowlist's contents; the product; the protected files (the `citation-check` target is unchanged).
+
+## Never merge another part's unmerged tip (the owner, 23 November 2026)
+
+**Never merge another part's unmerged tip, or any branch but main, into your branch.** Take main in when the line tells you to, and nothing else. A part that did this (AD1b, with AD1a's tip) had the hook count the other part's tests as its own. If your part needs another part's change that has not merged, stop and tell the conductor.

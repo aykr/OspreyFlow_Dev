@@ -58,3 +58,7 @@ The three new tests; PL7a2b's pages-setting test (changed only where the stand-i
 ## Out of scope
 
 The cloud-platform sign-in (PL7e); the issuer check in `apps/pages/server/config.ts` (not weakened: the owner's ruling); turning the setting on anywhere; the protected files and the workflow (diffs for the owner).
+
+## Never merge another part's unmerged tip (the owner, 23 November 2026)
+
+**Never merge another part's unmerged tip, or any branch but main, into your branch.** Take main in when the line tells you to, and nothing else. A part that did this (AD1b, with AD1a's tip) had the hook count the other part's tests as its own. If your part needs another part's change that has not merged, stop and tell the conductor.

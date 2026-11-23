@@ -3,6 +3,12 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 23 November 2026: a builder never merges another part's unmerged tip; a correction on the scan-row sections (the owner, in chat, about 19:40 UTC)
+
+**Every builder: never merge another part's unmerged tip, or any branch but main, into your branch. Take main in when the line tells you to, and nothing else.** AD1b merged AD1a's tip and the hook then counted AD1a's tests as AD1b's. If a part needs another part's change that has not merged, it stops and tells the conductor. The sentence is in every live builder brief.
+
+**Correction by the conductor.** The briefs for AD1b, PL12b and IS3 carried a section headed with the owner's name ("the owner, 22 November 2026, for the night" and "the owner's rule for the night") telling the builder to write its own scan row in `scan_rows/<ID>.tsv` and not stop on the hook's "has no row" line. **The owner never said that.** His word on 22 November (file 018, rule 3) was: *before any part starts, check that every test file it names or adds has its scan-map row, so no builder stops on a row you could have written.* The conductor turned that into a builder instruction and put the owner's name on it; it contradicts the README, the hook and the merge's first check (`scan_rows/` is a protected path) and is why AD1b and PL12b were refused. **The three sections are removed. A builder never writes into `scan_rows/`; the conductor writes a row on main first, from the verifier's or the builder's report.** (SE6c's brief has a different section, headed "the owner's rule for the night", which only records what the conductor checked on main: it asks the builder to do nothing, and it matches rule 3 of file 018.)
+
 ## 19 November 2026 (night): the owner is away until morning; the standing word for the night
 
 The owner's word, 19 November 2026 (evening). Standing until he says otherwise; he is away until the morning.
