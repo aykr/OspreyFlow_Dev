@@ -179,7 +179,7 @@ M = [
  (E, '        found = found[:red] + found[red + 1:]', '        found = found[red + 1:]', "middle_one_is_red"),
  (E, '        if red is None or red == len(found) - 1 or not stack_id:', '        if red is None or not stack_id:', "last_is_red_nothing_is_tested_again"),
  (E, '        (f"-without-{retest[\'without\']}" if retest else "")', '        ""', "first_of_three_is_red"),
- (E, '        without, prev = without + [found[red][0]], stack_id', '        without, prev = [found[red][0]], stack_id', "red_in_the_retest_is_tested_again"),
+ (E, '        without, prev, earlier = without + [found[red][0]], stack_id, False', '        without, prev, earlier = [found[red][0]], stack_id, False', "red_in_the_retest_is_tested_again"),
  (E, '    if len(found) == 1:\n        sid, branch, tip, standing = found[0]', '    if False:\n        sid, branch, tip, standing = found[0]', "second_is_run_alone"),
  (E, '    found = [(sid, *standing_of(sid)[:3]) for sid in order]', '    found = [(sid, *verified_tip(sid), VERIFIED) for sid in order]', "stack_may_hold_a_slice_not_yet_verified"),
  # 013, 4: broken by what merged ahead, at the top
@@ -209,6 +209,18 @@ M = [
  (D + "runner.py", '    _HELD.append(fd)\n', '    os.close(fd)\n', "starting_job_waits_while_the_summary_holds_the_model"),
  (D + "runner.py", '        if not found or time.monotonic() >= end:', '        if True:', "breach_that_goes_within_the_settle_time"),
  (D + "install.sh", '  act install -m 0640 -o "$USER_NAME" -g "$SUMMARY_USER" /dev/null "$ROOT/handoff/model.lock"\n', '', "measures_the_card_and_makes_the_lock_once"),
+ # the line-fix session's request of 23 November: a candidate is never sent again while a run of it has a verdict on this main, unless asked
+ (E, '        hit = None if a.result or a.again else answered(s, a.slice, tip, [], current_main())', '        hit = None', "not_sent_again_and_its_note_stands"),
+ (E, '        hit = None if a.result or a.again else answered(s, a.slice, tip, [], current_main())', '        hit = None if a.result else answered(s, a.slice, tip, [], current_main())', "again_sends_it_anyway"),
+ (E, '        if data and data.get("state") == "done" and data.get("verdict") in ("pass", "fail", "conflict") \\', '        if data and data.get("state") == "done" and data.get("verdict") \\', "error_is_no_verdict"),
+ (E, '                and data.get("main") == main and data.get("tip") == tip and data.get("stack") == want:', '                and data.get("tip") == tip and data.get("stack") == want:', "old_record_without_its_main"),
+ (E, '                and data.get("main") == main and data.get("tip") == tip and data.get("stack") == want:', '                and data.get("main") == main and data.get("tip") == tip:', "member_below_whose_tip_moved"),
+ (E, '        red = next((k for k, h in enumerate(hits) if h and h[1]["verdict"] in ("fail", "conflict")), None)', '        red = None', "already_red_on_this_main_is_left_out"),
+ (E, '    while found and hits[len(found) - 1]:', '    while False:', "every_member_has_a_verdict"),
+ (E, '    if under is not None:', '    if False:', "already_green_that_others_stand_on"),
+ (E, '    if retest and retest.get("earlier"):', '    if False:', "already_red_on_this_main_is_left_out"),
+ (E, '"tree": d.get("tree"), "main": d.get("main"),', '"tree": d.get("tree"),', "which_main_each_run_was_on"),
+ (E, '    stack           the members up to and including this one, in merge order', '    stack           the members', "docstring_names_every_field"),
 ]
 bad = 0
 for f, old, new, test in M:
