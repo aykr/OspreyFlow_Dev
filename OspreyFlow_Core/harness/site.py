@@ -142,7 +142,17 @@ def render_caddyfile(config: OspreyConfig, *, doors: bool = True) -> str:
             handlers = _behind_the_key(
                 names.host, identity=name == f"id.{names.host}", handlers=handlers
             )
-        lines += ["", f"{names.scheme}://{name} {{", *given, *matchers, *handlers, "}"]
+        address = f"{names.scheme}://{name}"
+        if (
+            name == f"id.{names.host}"
+            and doors
+            and (port := pages_service.identity_listener_port(config))
+        ):
+            # The page service reaches its issuer through the alias, inside the network, at the
+            # origin's port: the proxy listens there for this name too (the compose proxy alone:
+            # `doors`, which a cluster, with no alias, does not have).
+            address = f"{address}, {address}:{port}"
+        lines += ["", f"{address} {{", *given, *matchers, *handlers, "}"]
     # ADR-114 Amendment 7: the doors this machine alone uses, through the proxy, so the services
     # behind them need no published port — and so no route out (measured: a published port needs
     # a network that reaches the internet).
@@ -228,7 +238,7 @@ def _behind_the_key(host: str, *, identity: bool, handlers: list[str]) -> list[s
 
 
 #: A site named by host; a bare `:port` door (`loopback_doors`) is not a name and is not listed.
-_SITE = re.compile(r"^(?:https?://)(?P<name>[^\s{:][^\s{]*)\s*\{\s*$")
+_SITE = re.compile(r"^(?:https?://)(?P<name>[^\s{:,][^\s{,]*)(?:\s*,\s*\S+)*\s*\{\s*$")
 _UPSTREAM = re.compile(r"^\s*reverse_proxy\s+(?P<upstream>\S+)\s*$")
 
 

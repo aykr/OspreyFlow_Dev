@@ -879,16 +879,16 @@ def test_the_refusal_is_for_plain_http_with_the_setting_on_alone(brand: str) -> 
 
 # ---- 6a'. HTTPS the service cannot trust: the render refuses, in words (round 5, case B) ---------
 #
-# On local-lite over HTTPS on a `.localhost` name there is no `network.tls` (a Small's alone), so the
-# front proxy's automatic HTTPS signs the identity name's certificate with Caddy's own internal
-# authority, which node does not trust: the service's discovery fetch would fail verification and the
-# sign-in would be lost, at sign-in time rather than at render time. The service's certificate check
-# is not weakened and not disabled; a trust path would take the authority's root out of the proxy's
-# data volume, which also holds the authority's private key. So the render refuses, in words, where
-# no trust for the identity name's certificate exists: Caddy's own rule for the names it signs itself
-# (`localhost`, `*.localhost`, `*.local`, `*.internal`, `*.home.arpa`, an IP address) with no
-# certificate of the organisation's given. A public name, or `network.tls`, is trusted (its CA
-# mounted where there is one).
+# On local-lite over HTTPS on a `.localhost` name there is no `network.tls` (a Small's alone), so
+# the front proxy's automatic HTTPS signs the identity name's certificate with Caddy's own internal
+# authority, which node does not trust: the service's discovery fetch would fail verification and
+# the sign-in would be lost, at sign-in time rather than at render time. The service's certificate
+# check is not weakened and not disabled; a trust path would take the authority's root out of the
+# proxy's data volume, which also holds the authority's private key. So the render refuses, in
+# words, where no trust for the identity name's certificate exists: Caddy's own rule for the names
+# it signs itself (`localhost`, `*.localhost`, `*.local`, `*.internal`, `*.home.arpa`, an IP
+# address) with no certificate of the organisation's given. A public name, or `network.tls`, is
+# trusted (its CA mounted where there is one).
 
 
 @pytest.mark.parametrize("brand", BRANDS)
@@ -993,7 +993,8 @@ def _trust_findings(files: dict[str, bytes]) -> list[str]:
     given = "\ttls /certs/" in block
     if internal and not given:
         return [
-            f"{host} is signed by the proxy's own internal authority, which the service does not trust"
+            f"{host} is signed by the proxy's own internal authority, "
+            "which the service does not trust"
         ]
     return []
 
@@ -1358,7 +1359,9 @@ NETWORK_PLANTS = [
 def _identity_on_another_port(real: Callable[..., Any]) -> Callable[..., Any]:
     def planted(config: Any, **kwargs: Any) -> str:
         text: str = real(config, **kwargs)
-        changed = re.sub(r"(?m)^(https://id\.[^\s,{:]+)(:\d+)? \{$", r"\1:9999 {", text)
+        changed = re.sub(
+            r"(?m)^(https://id\.[^\s,{:]+)(?:, https://id\.[^\s,{]+)? \{$", r"\1:9999 {", text
+        )
         assert changed != text, "the real Caddyfile has no identity site to move"
         return changed
 
@@ -1396,9 +1399,10 @@ def test_the_network_check_is_red_for_each_fault_in_the_shape_the_renderer_write
 # ---- 6b'. the issuer's port is one the proxy listens on inside the container (round 5, case A) ---
 #
 # The alias takes the service to the proxy's container, and the issuer is the public identity name
-# *with the origin's port*: Keycloak reports its issuer as `KC_HOSTNAME` (the public address) whichever
-# door a request came through, and the service checks the discovery document's `issuer` against the
-# address it asked, so an issuer carrying the proxy's in-container port would be refused. The
+# *with the origin's port*: Keycloak reports its issuer as `KC_HOSTNAME` (the public address)
+# whichever door a request came through, and the service checks the discovery document's `issuer`
+# against the address it asked, so an issuer carrying the proxy's in-container port would be
+# refused. The
 # service therefore connects to the origin's port in the proxy's container. A Small on its own
 # certificate listens on 8443 there (the host's published 443 is mapped to it, which the internal
 # network does not use), and any Small at a port that is not 443 is published `P:443`. So with the
@@ -1409,7 +1413,8 @@ def test_the_network_check_is_red_for_each_fault_in_the_shape_the_renderer_write
 # Measured, 23 November 2026, on a throwaway Caddy 2.11.4 on its own network, as the account the
 # own-certificate proxy runs as (65534): with `https://id.<host>` alone the alias answers on 8443
 # and refuses on 443 ("Connection refused": the fault); with `https://id.<host>,
-# https://id.<host>:443` it answers on both (Docker lets a container's own processes bind a low port).
+# https://id.<host>:443` it answers on both (Docker lets a container's own processes bind a low
+# port).
 
 CA_ON_THE_HOST = "/etc/ospreyflow/tls/org-root.pem"
 LISTENER_CASES = {
@@ -1444,6 +1449,28 @@ def _identity_host(config: Any) -> str:
     from harness.site import sites
 
     return f"id.{sites(config).host}"
+
+
+def test_the_routes_reader_names_a_site_with_two_addresses() -> None:
+    """`harness.site.routes` (what `status` and the front-proxy tests read) takes a site block whose
+    address line holds two addresses, as the identity site now can: it is named by its first."""
+    from harness import site
+
+    config = _small("ospreyflow", "https://osprey.example.org:9443", {})
+    text = _compose_files(config)["Caddyfile"].decode("utf-8")
+    assert "https://id.osprey.example.org, https://id.osprey.example.org:9443 {" in text
+    assert site.routes(text)["id.osprey.example.org"] == "keycloak:8080"
+
+
+def test_a_cluster_proxy_is_given_no_extra_address() -> None:
+    """The cluster has no alias, so its Caddyfile (rendered `doors=False`) has the one address."""
+    from harness.site import render_caddyfile
+
+    config = ref.config_for("cluster", "govuk", **ON)
+    text = render_caddyfile(config, doors=False)
+    assert [a for _n, a in _labels(text) if "https://id.osprey.example.org" in a] == [
+        ["https://id.osprey.example.org"]
+    ]
 
 
 FAULTS_IN_THE_LISTENER = [
@@ -1484,9 +1511,9 @@ def test_the_listener_check_is_red_when_the_identity_site_is_on_another_port(
 @pytest.mark.parametrize("brand", BRANDS)
 @pytest.mark.parametrize("case", LISTENER_CASES)
 def test_the_extra_listener_publishes_nothing_and_adds_no_network(case: str, brand: str) -> None:
-    """The proxy's published ports, its networks (bar the alias, which is round 4's), and every other
-    service of the compose file are what they are with the setting off at the same address: the
-    listener is inside the container, on `osprey`, and widens nothing."""
+    """The proxy's published ports, its networks (bar the alias, which is round 4's), and every
+    other service of the compose file are what they are with the setting off at the same address:
+    the listener is inside the container, on `osprey`, and widens nothing."""
     origin, own, _extra = LISTENER_CASES[case]
     on = yaml.safe_load(_compose_files(_small(brand, origin, own))["compose.yaml"])["services"]
     config = _small(brand, origin, own)

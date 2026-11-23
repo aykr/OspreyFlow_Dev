@@ -60,6 +60,12 @@ class PageServiceNeedsHttps(ValueError):
     address is neither https nor loopback (the owner's ruling of 23 November 2026)."""
 
 
+class PageServiceNeedsTrust(ValueError):
+    """The page service is on, and the identity name's certificate is one the service cannot verify:
+    the front proxy signs that name itself, with its own internal authority, which node does not
+    trust (round 5 of PL7a2b: the service's certificate check is not weakened or switched off)."""
+
+
 class PageServiceNotEnabled(ValueError):
     """A GOV.UK deployment whose tree is complete would lose its workspace with nothing to take its
     place (ADR-152 Amendment 3 item 4)."""
@@ -139,8 +145,20 @@ def caddy_matcher(paths: list[str]) -> str:
 NEEDS_HTTPS = (
     "pages.enabled is on, but the identity address {identity} is neither https nor a loopback "
     "address, and the page service does not sign people in over plain HTTP: serve the identity "
-    "address over HTTPS (network.public_origin on https), or leave pages.enabled off"
+    "address over HTTPS with a certificate the page service trusts, or leave pages.enabled off"
 )
+
+#: The words of the third refusal, with the identity address in them.
+NEEDS_TRUST = (
+    "pages.enabled is on, but the identity address {identity} is served with a certificate from "
+    "the front proxy's own internal authority, which the page service does not trust, so people "
+    "could not sign in: give the deployment an address with a certificate the page service trusts "
+    "(a public name, or network.tls on a Small), or leave pages.enabled off"
+)
+
+#: The names Caddy signs itself, with its own internal authority, rather than ask a public one
+#: (certmagic's `SubjectIsInternal`, with an IP address, which no public authority signs for).
+_INTERNAL_SUFFIXES = (".localhost", ".local", ".internal", ".home.arpa")
 
 
 def service_accepts_issuer(issuer: str) -> bool:
@@ -166,6 +184,56 @@ def refuse_sign_in_without_https(config: OspreyConfig) -> None:
     names = sites(config)
     if not service_accepts_issuer(f"{names.identity}/realms/{REALM}"):
         raise PageServiceNeedsHttps(NEEDS_HTTPS.format(identity=names.identity))
+
+
+def caddy_signs_itself(host: str) -> bool:
+    """Whether Caddy gives `host` a certificate from its own internal authority: `localhost`, a name
+    under `.localhost`, `.local`, `.internal` or `.home.arpa`, or an IP address (the names no public
+    authority signs for). Node does not trust that authority."""
+    import ipaddress
+
+    name = host.rstrip(".").lower()
+    try:
+        ipaddress.ip_address(name)
+    except ValueError:
+        return name == "localhost" or name.endswith(_INTERNAL_SUFFIXES)
+    return True
+
+
+def refuse_sign_in_without_trust(config: OspreyConfig) -> None:
+    """The page service is given a sign-in whose certificate it can verify, or it is not turned on.
+    An https identity address the proxy signs itself (local-lite's `.localhost` name: Lite has no
+    `network.tls`) is served with an authority node does not trust, so discovery would fail at
+    sign-in; no trust path is given (it would take the authority's root out of the proxy's data
+    volume, which holds its private key) and the service's check is not touched: the render refuses.
+    The organisation's own certificate (`network.tls`, its CA mounted where it is given) and a
+    public name are trusted. Plain HTTP is `refuse_sign_in_without_https`'s."""
+    from harness.site import sites
+
+    names = sites(config)
+    if names.scheme == "https" and config.network.tls is None and caddy_signs_itself(names.host):
+        raise PageServiceNeedsTrust(NEEDS_TRUST.format(identity=names.identity))
+
+
+def identity_listener_port(config: OspreyConfig) -> int | None:
+    """The port the front proxy must also listen on, inside its container, for the identity name,
+    so the page service reaches its issuer through the alias (round 5 of PL7a2b).
+
+    The issuer is the public identity name with the origin's port (Keycloak reports its issuer as
+    the public address whichever door a request came through, and the service checks the discovery
+    document against the address it asked, so an issuer carrying the proxy's in-container port would
+    be refused). The proxy's own in-container HTTPS port is 8443 with the organisation's certificate
+    and 443 otherwise, and the host's published port maps to it: the alias does not. So where the
+    origin's port is not the proxy's own, the identity site is given an address at the origin's
+    port too. Nothing is published, no network is added. None where no listener is needed, where
+    the page service is off, or where the origin is plain HTTP (refused above)."""
+    from harness.site import PROXY_HTTPS_PORT, sites
+
+    names = sites(config)
+    if not enabled(config) or names.scheme != "https":
+        return None
+    own = PROXY_HTTPS_PORT if config.network.tls is not None else 443
+    return None if names.port == own else names.port
 
 
 def identity_alias(config: OspreyConfig) -> str:
@@ -207,6 +275,7 @@ def service_environment(config: OspreyConfig, *, with_sign_in: bool) -> dict[str
     }
     if with_sign_in:
         refuse_sign_in_without_https(config)
+        refuse_sign_in_without_trust(config)
         environment["OSPREY_PAGES_OIDC_ISSUER"] = f"{names.identity}/realms/{REALM}"
         environment["OSPREY_PAGES_CLIENT_ID"] = PAGES_CLIENT_ID
         environment["OSPREY_PAGES_CLIENT_SECRET"] = refer % PAGES_CLIENT_SECRET_KEY

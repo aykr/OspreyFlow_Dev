@@ -18,8 +18,13 @@ update. Work not yet in a release is listed under *Unreleased*.
   deployment's rendered files are exactly what they were, in every shape and under each brand, and a value that is not
   `true` or `false` is refused in words. Turned on, they add the page service, its routes and its settings. A GOV.UK
   deployment whose tree is complete and where it is off is refused in words (no tree is complete yet).
-  Turning it on where the deployment is served over plain HTTP (a local-lite one) is also refused in words: the page
-  service signs people in only through an `https` identity address, so serve it over HTTPS or leave the setting off.
+  Turning it on where the page service could not sign people in is also refused in words, rather than rendered with a
+  sign-in that fails: where the identity address is plain HTTP (a local-lite one), and where it is served with a
+  certificate from the front proxy's own internal authority (a `.localhost`, `.local` or `.internal` name, or an IP
+  address, with no `network.tls`), which the page service does not trust. Serve the identity address over HTTPS with a
+  certificate it trusts (a public name, or the organisation's own on a Small), or leave the setting off. On a Small
+  the front proxy also listens, inside its container, at the address's own port for the identity name, so the page
+  service reaches its sign-in without a route out of the deployment.
 
 **The Ingest Studio (ADR-152).**
 - **The Studio's frame and its Releases screen are built as server-rendered pages** (the page service, not yet in any
