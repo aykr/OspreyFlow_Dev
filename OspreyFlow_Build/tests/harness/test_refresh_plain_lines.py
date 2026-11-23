@@ -44,9 +44,10 @@ render is claimed.
 - the failure of the search rebuild sending the operator to the wrong command —
   `test_the_rebuild_with_no_opensearch_address_says_to_run_apply`.
 
-**Folders this file reads.** None is walked. It reads one file by name,
+**Folders this file walks.** None. It reads one file by name,
 `tests/fixtures/refresh_plain_lines_reviewed.txt`, and the source text of five render functions
-(`inspect.getsource`).
+(`inspect.getsource`); its other files are its own temporary folders. It imports nothing from
+another test file, so the scan map needs no row for it.
 """
 
 from __future__ import annotations
@@ -54,7 +55,7 @@ from __future__ import annotations
 import inspect
 import json
 import re
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -71,7 +72,6 @@ from scripts import refresh
 from tools import reference_render as ref
 
 from schemas.deployment import OspreyConfig, generated_folder
-from tests.test_refresh import Recorder, Registrar, repo  # noqa: F401  (the fixture, by name)
 
 REVIEWED_FILE = (
     Path(__file__).resolve().parent.parent / "fixtures" / "refresh_plain_lines_reviewed.txt"
@@ -96,19 +96,40 @@ HELD_SECRETS = (
 )
 OPERATOR_LINE = "MY_OWN_SETTING=operator-added-77\n"
 
-#: The lines a refresh already rewrites by its other steps (`_models_up_to_date`,
-#: `_release_up_to_date`): put back by them, where they put them. Not by this slice.
-ALREADY_HANDLED = frozenset(
-    {
-        "OSPREY_RELEASE_VERSION",
-        "OSPREY_STATE_DIR",
-        "OSPREY_POST_INGEST_RESOLUTION",
-        "OSPREY_EXTRACTION_MODEL",
-        "OSPREY_VISION_MODEL",
-        "OSPREY_TRANSCRIPTION_MODEL",
-        "OSPREY_EMBEDDING_MODEL",
-    }
-)
+
+class Recorder:
+    """The compose commands a refresh would run, recorded; one is refused when `fail_on` is in it.
+    Nothing reaches Docker. (Kept here, not imported from `tests/test_refresh.py`, which walks its
+    own temporary folder: importing it would make this file one the scan map must list.)"""
+
+    def __init__(self, fail_on: str | None = None) -> None:
+        self.calls: list[list[str]] = []
+        self.fail_on = fail_on
+
+    def __call__(self, argv: Sequence[str]) -> None:
+        self.calls.append(list(argv))
+        if self.fail_on and self.fail_on in argv:
+            raise refresh.RefreshFailed(" ".join(argv))
+
+
+class Registrar:
+    def __call__(self, argv: list[str]) -> int:
+        return 0
+
+
+@pytest.fixture
+def repo(tmp_path: Path) -> Path:
+    """A product folder with one rendered deployment that holds a held secret, a current theme and
+    an empty compose file."""
+    out = tmp_path / "deploy" / "generated" / "local-lite"
+    out.mkdir(parents=True)
+    (out / "deployment.env").write_text("OSPREY_POSTGRES_PASSWORD=pg-secret-77\n", encoding="utf-8")
+    (out / "compose.yaml").write_text("services: {}\n", encoding="utf-8")
+    tokens = tmp_path / "packages" / "design" / "tokens.css"
+    tokens.parent.mkdir(parents=True)
+    tokens.write_text(TOKENS, encoding="utf-8")
+    write_login_theme(out, tokens_css=TOKENS)
+    return tmp_path
 
 
 def _keys(env_text: str) -> list[str]:
@@ -250,8 +271,7 @@ def test_a_line_the_render_writes_comes_back_exactly_as_the_render_writes_it(
     )
     # Every other line, in order and byte for byte.
     assert _without(after, key) == _without(made.full, key)
-    if key not in ALREADY_HANDLED:  # put back in the render's own place, comments and all
-        assert after == made.full
+    assert after == made.full  # in the render's own place, comments and all
 
 
 def test_a_deployment_that_lacks_nothing_is_not_rewritten(
@@ -347,7 +367,7 @@ def test_a_line_the_operator_edited_keeps_its_edit_and_its_key_is_named(
     assert "OSPREY_PROFILE" not in said and "OSPREY_GRAPH_STORE" not in said
     # Nothing else moved.
     for key in _keys(made.full):
-        if key not in edited and key not in ALREADY_HANDLED and key != "OPENSEARCH_HOST":
+        if key not in edited and key != "OPENSEARCH_HOST":
             assert _line(after, key) == _line(made.full, key)
 
 
