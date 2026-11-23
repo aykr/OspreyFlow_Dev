@@ -1041,7 +1041,14 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
             # built image has a stable local tag that `versions.lock` can name and that a later
             # `docker compose up` resolves without rebuilding. `dockerfile` is relative to
             # `context`, which is the repository root, so it stays repo-root-relative.
-            service["build"] = entry.build_stanza()
+            stanza: dict[str, Any] = dict(entry.build_stanza())
+            if entry.service == "workspace" and config.appearance.govuk_identity:
+                # ADR-152 decision 14 (the owner's ruling of 21 November 2026): GDS Transport's
+                # files are in the workspace's bundle only for a deployment whose GOV.UK
+                # identity switch is on. Off, no `args` key is written, so a deployment that
+                # does not use it renders byte for byte what it did.
+                stanza["args"] = {"OSPREY_GOVUK_IDENTITY": "1"}
+            service["build"] = stanza
         if entry.owned and entry.reads_env_file:
             # Without this the deployment's own generated environment file is written and then
             # never reaches a container: the Conduit fail-fasts on a missing `OIDC_JWKS_URL` and

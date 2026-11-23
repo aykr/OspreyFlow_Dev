@@ -2,6 +2,9 @@
 //
 // ADR-132: the deployment's brand is separate from the viewer's theme. Under `govuk` the page is light
 // whatever is asked and neither theme button is drawn; under `ospreyflow` the theme behaves as before.
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -14,6 +17,8 @@ import {
   brandFromUrl,
   brandTitle,
   currentBrand,
+  currentGovukIdentity,
+  identityFromUrl,
   GOVUK_STYLESHEET,
   loadBrandStylesheet,
   PLAIN_APPEARANCE,
@@ -95,7 +100,13 @@ describe("reading the deployment's appearance", () => {
   it("takes what the deployment names", () => {
     expect(
       readAppearance({ brand: "govuk", service_name: "Prison Intelligence", organisation: "Ministry of Examples", phase: "beta" }),
-    ).toEqual({ brand: "govuk", serviceName: "Prison Intelligence", organisation: "Ministry of Examples", phase: "beta" });
+    ).toEqual({
+      brand: "govuk",
+      serviceName: "Prison Intelligence",
+      organisation: "Ministry of Examples",
+      phase: "beta",
+      govukIdentity: false,
+    });
   });
 
   it("takes the deployment's banner text when it names one, and adds nothing when it does not (ADR-132 Amendment 7)", () => {
@@ -170,5 +181,55 @@ describe("an address on gov.uk (ADR-132 Amendment 7)", () => {
     ["localhost", false],
   ])("%s is on gov.uk: %s", (host, expected) => {
     expect(isGovUkHost(host)).toBe(expected);
+  });
+});
+
+// ADR-152 decision 14 and invariant I9: the GOV.UK identity switch (`appearance.govuk_identity`), off by default.
+// It is the only thing that turns the crown, the GOV.UK logotype and GDS Transport on, and it means nothing under
+// the OspreyFlow brand.
+describe("the GOV.UK identity switch", () => {
+  const stylesheet = readFileSync(join(__dirname, "../../../../packages/design/tokens.css"), "utf-8");
+
+  afterEach(() => document.documentElement.removeAttribute("data-govuk-identity"));
+
+  it("is off unless the deployment says a real true", () => {
+    expect(PLAIN_APPEARANCE.govukIdentity).toBe(false);
+    expect(readAppearance({ brand: "govuk" }).govukIdentity).toBe(false);
+    expect(readAppearance({ brand: "govuk", govuk_identity: false }).govukIdentity).toBe(false);
+    for (const given of ["true", "yes", "on", 1, null, [], {}]) {
+      expect(readAppearance({ brand: "govuk", govuk_identity: given }).govukIdentity).toBe(false);
+    }
+    expect(readAppearance({ brand: "govuk", govuk_identity: true }).govukIdentity).toBe(true);
+  });
+
+  it("is put on the page only under the GOV.UK brand, and taken off with it", () => {
+    applyBrand("govuk", true);
+    expect(currentGovukIdentity()).toBe(true);
+    expect(document.documentElement.getAttribute("data-govuk-identity")).toBe("on");
+    applyBrand("govuk");
+    expect(currentGovukIdentity()).toBe(false);
+    expect(document.documentElement.hasAttribute("data-govuk-identity")).toBe(false);
+    // It means nothing under ospreyflow: asked for, it is not set.
+    applyBrand("ospreyflow", true);
+    expect(currentGovukIdentity()).toBe(false);
+    expect(document.documentElement.hasAttribute("data-govuk-identity")).toBe(false);
+  });
+
+  it("is chosen by the address only in a development build", () => {
+    expect(identityFromUrl("?govuk_identity=on", true)).toBe(true);
+    expect(identityFromUrl("?govuk_identity=off", true)).toBe(false);
+    expect(identityFromUrl("?govuk_identity=maybe", true)).toBeNull();
+    expect(identityFromUrl("?govuk_identity=on", false)).toBeNull();
+  });
+
+  // I9's brand case: with the switch off, the GOV.UK look names no typeface the build does not hold.
+  it("keeps GDS Transport out of the GOV.UK brand's own type until the switch is on", () => {
+    const brandBlock = /\[data-brand="govuk"\]\s*\{[^}]*\}/.exec(stylesheet)![0];
+    expect(brandBlock).toContain("--ui:arial,sans-serif");
+    expect(brandBlock).not.toContain("GDS Transport");
+    // The one rule that names it carries both attributes, so no rule without the switch can reach it.
+    const code = stylesheet.replace(/\/\*[\s\S]*?\*\//g, "");
+    const rules = [...code.matchAll(/([^{}]+)\{[^}]*GDS Transport[^}]*\}/g)].map((m) => m[1]!.trim());
+    expect(rules).toEqual(['[data-brand="govuk"][data-govuk-identity="on"]']);
   });
 });

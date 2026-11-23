@@ -18,9 +18,19 @@ export interface Appearance {
   /** ADR-132 Amendment 7: the deployment's own words for the banner, in place of "This is a new
    * service."; with no phase, shown alone. Absent when the deployment names none. */
   bannerText?: string;
+  /** ADR-152 decision 14, invariant I9: the GOV.UK identity switch (`appearance.govuk_identity`, off by default). Under
+   * `govuk` with it off no page shows the crown, the GOV.UK logotype or the GOV.UK typeface; the header carries the
+   * organisation's name and the type is the fallback stack. Means nothing under `ospreyflow`. */
+  govukIdentity: boolean;
 }
 
-export const PLAIN_APPEARANCE: Appearance = { brand: "ospreyflow", serviceName: null, organisation: null, phase: "none" };
+export const PLAIN_APPEARANCE: Appearance = {
+  brand: "ospreyflow",
+  serviceName: null,
+  organisation: null,
+  phase: "none",
+  govukIdentity: false,
+};
 
 const PHASES: readonly Phase[] = ["alpha", "beta", "live", "none"];
 
@@ -39,6 +49,8 @@ export function readAppearance(section: unknown): Appearance {
     serviceName: text(given.service_name),
     organisation: text(given.organisation),
     phase: PHASES.includes(given.phase as Phase) ? (given.phase as Phase) : "none",
+    // Only a real `true`: a string, a number or an absent key is off, so a malformed file never turns the identity on.
+    govukIdentity: given.govuk_identity === true,
     ...(bannerText ? { bannerText } : {}),
   };
 }
@@ -65,9 +77,30 @@ export function currentBrand(): Brand {
   return document.documentElement.getAttribute("data-brand") === "govuk" ? "govuk" : "ospreyflow";
 }
 
-/** Puts `brand` on the page. Call `applyTheme` after it: under `govuk` it holds the page light. */
-export function applyBrand(brand: Brand): void {
-  document.documentElement.setAttribute("data-brand", brand);
+/** `?govuk_identity=on` or `?govuk_identity=off`, so a tester sees the GOV.UK look either way without a redeploy. Only
+ * in a development build, as `brandFromUrl`. */
+export function identityFromUrl(search: string, dev: boolean): boolean | null {
+  if (!dev) return null;
+  const asked = new URLSearchParams(search).get("govuk_identity");
+  return asked === "on" ? true : asked === "off" ? false : null;
+}
+
+/** Whether the page is showing the GOV.UK identity now: under `govuk`, with the switch on. The CSS follows
+ * `data-govuk-identity` on `<html>` (`packages/design/tokens.css`), which is set only then. */
+export function currentGovukIdentity(): boolean {
+  if (typeof document === "undefined") return false;
+  const root = document.documentElement;
+  return root.getAttribute("data-brand") === "govuk" && root.getAttribute("data-govuk-identity") === "on";
+}
+
+/** Puts `brand` on the page, and the GOV.UK identity switch with it: `govukIdentity` counts only under `govuk` (it means
+ * nothing under `ospreyflow`), and the attribute is absent otherwise. Call `applyTheme` after it: under `govuk` it holds
+ * the page light. */
+export function applyBrand(brand: Brand, govukIdentity = false): void {
+  const root = document.documentElement;
+  root.setAttribute("data-brand", brand);
+  if (brand === "govuk" && govukIdentity) root.setAttribute("data-govuk-identity", "on");
+  else root.removeAttribute("data-govuk-identity");
 }
 
 /** The page title: under `govuk` the GOV.UK form, "<service> – GOV.UK"; otherwise unchanged. */
@@ -76,7 +109,8 @@ export function brandTitle(appearance: Appearance, brand: Brand, current: string
   return `${appearance.serviceName ?? appearance.organisation ?? "OspreyFlow"} – GOV.UK`;
 }
 
-/** Where `apps/workspace/scripts/sync_govuk_assets.mjs` puts GOV.UK Frontend's stylesheet, beside its fonts. */
+/** Where `apps/workspace/scripts/sync_govuk_assets.mjs` puts GOV.UK Frontend's stylesheet. With the identity switch off
+ * it is the stylesheet without the face's rules or the crest, and no fonts stand beside it; on, the fonts do. */
 export const GOVUK_STYLESHEET = "/assets/govuk/govuk-frontend.css";
 
 /** Under `govuk`, adds GOV.UK Frontend's stylesheet to the page and resolves once it has loaded (or

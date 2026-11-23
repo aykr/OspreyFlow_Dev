@@ -472,10 +472,12 @@ rows:
     status: conditional
     owner_ruling: 21 November 2026, not a sovereignty gap
     note: >-
-      Today's build still holds the files: the workspace's `build` runs `sync_govuk_assets.mjs`
-      unconditionally, so they are in `public/assets/govuk/fonts` and in `dist/`. Taking them out of
-      the default build is the identity-switch slice after PL4's slice E (`slices/PL7c.md`), not this
-      register's; the gate does not fail on it.
+      The default build no longer holds the files (slice PL7c). The workspace's `build` still runs
+      `sync_govuk_assets.mjs`, but the step copies the faces only when `OSPREY_GOVUK_IDENTITY` is `1` or
+      `true`: the workspace image's build argument, which the renderer passes only for a deployment whose
+      `appearance.govuk_identity` is on. Off, `public/` and `dist/` hold the stylesheet with the face's
+      rules taken out and no font file. `tests/glass_trees/test_default_build_holds_no_gds_transport.py`
+      holds the claim (a default build's output holds no file this row marks conditional).
 
   - id: F4
     kind: font

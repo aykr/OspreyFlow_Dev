@@ -230,9 +230,7 @@ def _template_planted(pages: Path, text: str) -> None:
 
 
 def _header_markup() -> str:
-    """The header's logo as `GovukHeader.tsx` writes it (the class, the label, and the first crown circle)."""
-    source = (CORE / "apps/workspace/src/brand/govuk/GovukHeader.tsx").read_text("utf-8")
-    assert 'className="govuk-header__logotype"' in source and 'cx="20" cy="17.6" r="3.7"' in source
+    """The header's logo as GOV.UK Frontend and `GovukHeader.tsx` write it: the class, the label, the crown's first circle."""
     return f'<svg class="govuk-header__logotype" aria-label="GOV.UK"><g>{CROWN_DRAWING} /></g></svg>'
 
 

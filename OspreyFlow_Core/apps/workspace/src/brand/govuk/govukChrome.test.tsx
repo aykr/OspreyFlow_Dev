@@ -25,19 +25,60 @@ afterEach(() => applyBrand("ospreyflow"));
 
 describe("the sign-in page's GOV.UK header and footer", () => {
   it("are the Glass's own components", () => {
-    applyBrand("govuk");
+    applyBrand("govuk", true);
     // The full markup, as on gov.uk: off gov.uk the script itself takes the crown out (ADR-132 Amendment 8).
-    expect(constant("HEADER")).toBe(renderToStaticMarkup(<GovukHeader hostname="prison-intelligence.service.gov.uk" />));
+    expect(constant("HEADER")).toBe(renderToStaticMarkup(<GovukHeader hostname="prison-intelligence.service.gov.uk" identity />));
     expect(constant("FOOTER")).toBe(renderToStaticMarkup(<GovukFooter organisation={null} />));
   });
 
   // ADR-132 Amendment 8: off gov.uk both crop the logo to the word mark the same way.
   it("crop the header's logo off gov.uk as the Glass's component does", () => {
-    applyBrand("govuk");
-    const off = renderToStaticMarkup(<GovukHeader hostname="govuk.ospreyflow.app" />);
+    applyBrand("govuk", true);
+    const off = renderToStaticMarkup(<GovukHeader hostname="govuk.ospreyflow.app" identity />);
     const viewBox = /viewBox="([^"]+)"/.exec(off)![1]!;
     const width = /width="([^"]+)"/.exec(off)![1]!;
     expect(SCRIPT).toContain(`logotype.setAttribute("viewBox", "${viewBox}")`);
     expect(SCRIPT).toContain(`logotype.setAttribute("width", "${width}")`);
+  });
+});
+
+// ADR-152 decision 14, invariant I9: the script is the sign-in page's whole GOV.UK frame, so it is run, as the browser runs
+// it, against a page with the settings the harness writes, and what it draws is read back.
+describe("the sign-in page's chrome, run", () => {
+  const settings = { serviceName: "Prison Intelligence", organisation: "Ministry of Examples", phase: "none", glassOrigin: "" };
+
+  function run(given: Record<string, unknown>): HTMLElement {
+    document.body.innerHTML = '<main id="kc-form-login"></main>';
+    document.documentElement.setAttribute("data-brand", "govuk");
+    (window as unknown as { OSPREY_GOVUK: unknown }).OSPREY_GOVUK = { ...settings, ...given };
+    new Function(SCRIPT)();
+    return document.body;
+  }
+
+  it("with the switch off (the default, and the key absent) draws the organisation's name, no logotype, no crown", () => {
+    const body = run({});
+    expect(body.querySelector(".govuk-header__logotype")).toBeNull();
+    expect(body.querySelector(".govuk-header svg")).toBeNull();
+    expect(body.querySelector(".govuk-header__organisation-name")?.textContent).toBe("Ministry of Examples");
+    expect(body.querySelector(".govuk-footer__crown")).toBeNull();
+    expect(body.textContent).not.toMatch(/Crown copyright|Open Government Licence/);
+  });
+
+  it("with the switch off falls back to the service's name, then to OspreyFlow", () => {
+    expect(run({ organisation: null }).querySelector(".govuk-header__organisation-name")?.textContent).toBe("Prison Intelligence");
+    const bare = run({ organisation: null, serviceName: null });
+    expect(bare.querySelector(".govuk-header__organisation-name")?.textContent).toBe("OspreyFlow");
+  });
+
+  it("with only a quoted or truthy non-true value is still off", () => {
+    for (const given of ["true", 1, "yes"]) expect(run({ govukIdentity: given }).querySelector(".govuk-header__logotype")).toBeNull();
+  });
+
+  it("with the switch on draws the word mark (no crown off gov.uk), as before", () => {
+    const body = run({ govukIdentity: true });
+    const logo = body.querySelector(".govuk-header__logotype");
+    expect(logo).not.toBeNull();
+    expect(logo!.querySelector("g")).toBeNull();
+    expect(body.querySelector(".govuk-header__organisation-name")).toBeNull();
   });
 });

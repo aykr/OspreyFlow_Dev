@@ -8,7 +8,14 @@ import { afterEach, describe, expect, it } from "vitest";
 import { applyBrand, PLAIN_APPEARANCE, type Appearance } from "@ospreyflow/glass-shared";
 import { BrandFrame, MAIN_CONTENT_ID, useFullFooter } from "./BrandFrame";
 
-const GOVUK: Appearance = { brand: "govuk", serviceName: "Prison Intelligence", organisation: "Ministry of Examples", phase: "beta" };
+// The identity switch is on for these (ADR-152 decision 14): the cases below draw the logo and, on gov.uk, the crown.
+const GOVUK: Appearance = {
+  brand: "govuk",
+  serviceName: "Prison Intelligence",
+  organisation: "Ministry of Examples",
+  phase: "beta",
+  govukIdentity: true,
+};
 
 function frame(appearance: Appearance) {
   return render(
@@ -55,7 +62,7 @@ describe("under the OspreyFlow brand", () => {
 
 describe("under the GOV.UK brand", () => {
   it("reads skip link, GOV.UK header, the Glass, then the footer", () => {
-    applyBrand("govuk");
+    applyBrand("govuk", true);
     const { container } = frame(GOVUK);
     const stops = tabStops(container);
     expect(stops[0]).toBe("Skip to main content");
@@ -69,12 +76,32 @@ describe("under the GOV.UK brand", () => {
   // ADR-132 Amendment 5 (the owner's ruling of 4 November 2026): the service-name band under the
   // GOV.UK header is gone, to give the workspace its height back; the name stays in the page title.
   it("draws no service-name band, and names the service in the page title", () => {
-    applyBrand("govuk");
+    applyBrand("govuk", true);
     document.title = "OspreyFlow — The Glass";
     const { container } = frame(GOVUK);
     expect(container.querySelector(".govuk-service-navigation")).toBeNull();
     expect(screen.queryByRole("link", { name: "Prison Intelligence" })).toBeNull();
     expect(document.title).toBe("Prison Intelligence – GOV.UK");
+  });
+});
+
+// ADR-152 decision 14, invariant I9: with the identity switch off the frame shows the organisation's name where the GOV.UK
+// logo would be, and nothing of the Crown even on a gov.uk address.
+describe("under the GOV.UK brand with the identity switch off", () => {
+  const OFF: Appearance = { ...GOVUK, govukIdentity: false };
+
+  it("draws no logotype and no crown, on gov.uk too, and names the organisation", () => {
+    applyBrand("govuk");
+    const { container } = render(
+      <BrandFrame appearance={OFF} hostname="prison-intelligence.service.gov.uk">
+        <button type="button">Inside the Glass</button>
+      </BrandFrame>,
+    );
+    expect(container.querySelector(".govuk-header__logotype")).toBeNull();
+    expect(container.querySelector(".govuk-header")!.textContent).toContain("Ministry of Examples");
+    expect(container.querySelector(".govuk-footer__crown")).toBeNull();
+    expect(container.textContent).not.toMatch(/Crown copyright|Open Government Licence/);
+    expect(screen.queryByRole("link", { name: /GOV\.UK/ })).toBeNull();
   });
 });
 
@@ -88,7 +115,7 @@ describe("the footer on and off gov.uk", () => {
   }
 
   it("is one line on the workspace's screens off gov.uk", () => {
-    applyBrand("govuk");
+    applyBrand("govuk", true);
     const { container } = render(
       <BrandFrame appearance={GOVUK} hostname="demo.ospreyflow.app">
         <button type="button">Inside the Glass</button>
@@ -100,7 +127,7 @@ describe("the footer on and off gov.uk", () => {
   });
 
   it("is full on a screen that claims it, still with nothing of the Crown off gov.uk", () => {
-    applyBrand("govuk");
+    applyBrand("govuk", true);
     const { container } = render(
       <BrandFrame appearance={GOVUK} hostname="demo.ospreyflow.app">
         <Home />
@@ -112,7 +139,7 @@ describe("the footer on and off gov.uk", () => {
   });
 
   it("is the full footer, Crown and all, on gov.uk", () => {
-    applyBrand("govuk");
+    applyBrand("govuk", true);
     const { container } = render(
       <BrandFrame appearance={GOVUK} hostname="prison-intelligence.service.gov.uk">
         <button type="button">Inside the Glass</button>
@@ -134,7 +161,7 @@ describe("the compact top on the workspace's screens", () => {
   const chrome = (container: HTMLElement) => container.querySelector(".govuk-header")!.parentElement!;
 
   it("is compact on a workspace screen", () => {
-    applyBrand("govuk");
+    applyBrand("govuk", true);
     const { container } = render(
       <BrandFrame appearance={GOVUK} hostname="demo.ospreyflow.app">
         <button type="button">Inside the Glass</button>
@@ -144,7 +171,7 @@ describe("the compact top on the workspace's screens", () => {
   });
 
   it("is full while Home or the sign-in page is shown", () => {
-    applyBrand("govuk");
+    applyBrand("govuk", true);
     const { container } = render(
       <BrandFrame appearance={GOVUK} hostname="demo.ospreyflow.app">
         <Home />

@@ -295,7 +295,7 @@ createRoot(document.getElementById("root")!).render(
   framed ? (
     <BrandFrame
       appearance={brand === "govuk"
-        ? { brand: "govuk", serviceName: "Prison Intelligence", organisation: "Ministry of Examples", phase: "beta" }
+        ? { brand: "govuk", serviceName: "Prison Intelligence", organisation: "Ministry of Examples", phase: "beta", govukIdentity: true }
         : PLAIN_APPEARANCE}
     >
       <AdminWithoutCase apiBaseUrl="http://keyboard-test.invalid" bearerToken="unused" rights={new Set(tab.split(","))}

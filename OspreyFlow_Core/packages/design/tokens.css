@@ -186,11 +186,18 @@
   /* A 3px yellow outline with a 2px dark inner shadow, the Design System's focus state. */
   --focus:#ffdd00; --focus-ink:#0b0c0c; --focus-width:3px; --focus-offset:0;
 
-  --ui:"GDS Transport",arial,sans-serif;
+  /* The fallback stack: GOV.UK Frontend's own when the typeface is not included (ADR-152 decision 14). The typeface
+     is the next block's, and only with the identity switch on. */
+  --ui:arial,sans-serif;
   --r-control:0; --r-panel:0; --r-overlay:0;
   /* GOV.UK tags are square too (ADR-132). */
   --r-chip:0;
 }
+
+/* The GOV.UK typeface, only with the GOV.UK identity switch on (`appearance.govuk_identity`, ADR-152 decision 14,
+   invariant I9): `data-govuk-identity="on"` is set on <html> only under this brand and only then, and a build with the
+   switch off holds no GDS Transport file at all (the face is licensed for services on GOV.UK domains only). */
+[data-brand="govuk"][data-govuk-identity="on"] { --ui:"GDS Transport",arial,sans-serif; }
 
 /* GOV.UK type on the GOV.UK brand's pages (ADR-132, the owner's ruling 3; DESIGN.md §11): the
    welcome, start and Admin pages take GOV.UK's scale, 19px body. The workspace keeps the 13px base

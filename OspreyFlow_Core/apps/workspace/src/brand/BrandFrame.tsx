@@ -19,7 +19,7 @@ import { createContext, useContext, useLayoutEffect, useRef, useState, type Reac
 import { brandTitle, isGovUkHost, type Appearance } from "@ospreyflow/glass-shared";
 import { containInnerScroll } from "./containInnerScroll";
 import { GovukFooter } from "./govuk/GovukFooter";
-import { GovukHeader } from "./govuk/GovukHeader";
+import { GovukHeader, governmentHeaderName } from "./govuk/GovukHeader";
 import { PhaseBanner } from "./govuk/PhaseBanner";
 import { SkipLink } from "./govuk/SkipLink";
 
@@ -88,14 +88,25 @@ export function BrandFrame({
           by the slim footer's own rule (Home and the sign-in page claim the full frame). */}
       <div ref={above} className={claims === 0 ? "brand-chrome brand-chrome--compact" : "brand-chrome"}>
         {/* ADR-145 decision 3: the place switcher stands inside the GOV.UK header. */}
-        <GovukHeader withPlaces hostname={hostname} />
+        <GovukHeader
+          withPlaces
+          hostname={hostname}
+          identity={appearance.govukIdentity}
+          name={governmentHeaderName(appearance.organisation, appearance.serviceName)}
+        />
         <PhaseBanner phase={appearance.phase} text={appearance.bannerText} />
       </div>
       {/* Focused by the skip link; not itself a control, so it is not in the Tab order. */}
       <div id={MAIN_CONTENT_ID} tabIndex={-1} className="main-content">
         <FullFooter.Provider value={claim}>{children}</FullFooter.Provider>
       </div>
-      <GovukFooter organisation={appearance.organisation} onGovUk={isGovUkHost(hostname)} slim={claims === 0} />
+      {/* The crown, Crown copyright and the licence line need the identity switch as well as a gov.uk address
+          (ADR-152 decision 14); without it the footer is the one it draws off gov.uk. */}
+      <GovukFooter
+        organisation={appearance.organisation}
+        onGovUk={isGovUkHost(hostname) && appearance.govukIdentity}
+        slim={claims === 0}
+      />
     </>
   );
 }

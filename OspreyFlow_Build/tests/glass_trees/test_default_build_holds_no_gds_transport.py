@@ -373,22 +373,25 @@ def _register() -> list[dict[str, object]]:
     return importlib.import_module("tools.licence_register").load_register()
 
 
-def conditional_files(rows: list[dict[str, object]], fonts: dict) -> list[tuple[str, str]]:
-    """`(row id, folder)` for each `conditional` font row: the folder its fonts.json entry says it is self-hosted under."""
+def conditional_files(rows: list[dict[str, object]], fonts: dict) -> list[tuple[str, str, list[str]]]:
+    """`(row id, folder, stems)` for each `conditional` font row: where its fonts.json entry says it is self-hosted, and the
+    file-name stems it owns there. The folder also holds the fallback stylesheet, which is not the face."""
     by_family = {e["family"]: e for e in fonts["fonts"]}
     found = []
     for row in rows:
         if row["kind"] == "font" and row["status"] == "conditional":
             entry = by_family[row["name"]]
-            found.append((str(row["id"]), str(entry["self_hosted_under"])))
+            found.append((str(row["id"]), str(entry["self_hosted_under"]), list(entry["file_stems"])))
     return found
 
 
 def register_problems(rows: list[dict[str, object]], fonts: dict, files: dict[str, bytes]) -> list[str]:
     out = []
-    for row_id, folder in conditional_files(rows, fonts):
+    for row_id, folder, stems in conditional_files(rows, fonts):
         for rel in sorted(files):
-            if ("/" + rel).startswith(folder.rstrip("/") + "/"):
+            base = rel.rsplit("/", 1)[-1]
+            under = ("/" + rel).startswith(folder.rstrip("/") + "/")
+            if under and any(base.startswith(stem + "-") for stem in stems):
                 out.append(f"{row_id} is conditional and its file {rel} is in the default build")
     return out
 

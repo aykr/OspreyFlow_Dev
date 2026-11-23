@@ -307,10 +307,12 @@ def scratch_tree(parent: Path) -> Path:
     return app
 
 
-def run_build(app: Path, directory: Path) -> subprocess.CompletedProcess[str]:
+def run_build(
+    app: Path, directory: Path, env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["npm", "run", "build", "--", "--outDir", str(directory), "--emptyOutDir"],
-        cwd=app, capture_output=True, text=True, timeout=TIMEOUT, check=False,
+        cwd=app, capture_output=True, text=True, timeout=TIMEOUT, check=False, env=env,
     )
 
 
@@ -1020,11 +1022,14 @@ def test_two_builds_in_one_tree_collide_and_two_builds_of_build_to_do_not(tmp_pa
     each in its own copy: both succeed, every time. The two collide because they share a tree, and they do not once they
     share none; no lock is needed, and none is taken."""
     failures: list[str] = []
+    # The race is in the step's copy of the GOV.UK fonts and images, which only a build with the GOV.UK identity switch on
+    # makes (PL7c: a default build copies none, so it has nothing to collide over). The plant is made as the gate met it.
+    identity_on = {**os.environ, "OSPREY_GOVUK_IDENTITY": "1"}
     for attempt in range(5):
         shared = scratch_tree(tmp_path / f"shared{attempt}")
         results = race([
-            lambda out=tmp_path / f"s{attempt}a": run_build(shared, out),
-            lambda out=tmp_path / f"s{attempt}b": run_build(shared, out),
+            lambda out=tmp_path / f"s{attempt}a": run_build(shared, out, identity_on),
+            lambda out=tmp_path / f"s{attempt}b": run_build(shared, out, identity_on),
         ])
         failures = [r.stdout + r.stderr for r in results if r.returncode != 0]
         if failures:

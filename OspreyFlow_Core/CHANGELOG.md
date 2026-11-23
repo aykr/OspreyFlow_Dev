@@ -16,6 +16,16 @@ update. Work not yet in a release is listed under *Unreleased*.
   server-rendered pages. It is `false` unless the owner sets it to `true` in that deployment's own file, and nothing reads
   it yet: no deployment's rendered files change.
 
+**The GOV.UK identity switch (ADR-152 decision 14).**
+- **`appearance.govuk_identity` exists in `osprey.yaml`, and is off.** The crown, the GOV.UK logotype and the GOV.UK typeface
+  (GDS Transport, licensed for services on GOV.UK domains only) now show only when a deployment turns it on. **A deployment
+  under `appearance.brand: govuk` that does not set it will look different after it updates:** the header names the
+  organisation in place of the GOV.UK logo, the type is Arial, and the footer carries no crown. To keep today's look, set
+  `govuk_identity: true` under `appearance:` in that deployment's own `osprey.yaml`. A default build of the Glass no longer
+  holds GDS Transport's files; a deployment built from source (`components.source_path`) with the switch on gets them. The
+  release's own images are default builds, so a deployment that pulls them shows the fallback type until a later release
+  carries the face for it.
+
 **The Ingest Studio (ADR-152).**
 - **The Studio's frame and its Releases screen are built as server-rendered pages** (the page service, not yet in any
   deployment: `pages.enabled` is off). The React screens are unchanged.

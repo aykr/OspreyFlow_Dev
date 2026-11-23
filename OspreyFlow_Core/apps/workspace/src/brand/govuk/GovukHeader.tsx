@@ -8,10 +8,17 @@
 // link only), so the header is a small local extension of it: one slot, after the logo, that
 // `shell/PlaceSwitcher.tsx` draws the places into. Its styling is `shell/places.css`, on the header's
 // own colours.
-import { currentBrand, isGovUkHost } from "@ospreyflow/glass-shared";
+import { currentBrand, currentGovukIdentity, isGovUkHost } from "@ospreyflow/glass-shared";
 
 /** The local extension's slot (see above). */
 export const GOVUK_HEADER_PLACES_ID = "govuk-header-places";
+
+/** ADR-152 decision 14, invariant I9: with the GOV.UK identity switch off (`identity` false) the header draws no GOV.UK
+ * logotype and no crown, only `name` (the organisation's, or the service's) in the logo's place, as plain text. With
+ * it on, as ADR-132 draws it. Both read the page's own switch (`currentGovukIdentity`) unless told. */
+export function governmentHeaderName(organisation: string | null, serviceName: string | null): string {
+  return organisation ?? serviceName ?? "OspreyFlow";
+}
 
 /** `withPlaces`: the slot for the place switcher, in the Glass's frame; the identity provider's
  * sign-in page draws the header without it (`harness/govuk_chrome.js`, ADR-132 Amendment 2).
@@ -20,8 +27,22 @@ export const GOVUK_HEADER_PLACES_ID = "govuk-header-places";
 export function GovukHeader({
   withPlaces = false,
   hostname = typeof window === "undefined" ? "" : window.location.hostname,
-}: { withPlaces?: boolean; hostname?: string } = {}) {
+  identity = currentGovukIdentity(),
+  name = "OspreyFlow",
+}: { withPlaces?: boolean; hostname?: string; identity?: boolean; name?: string } = {}) {
   if (currentBrand() !== "govuk") return null;
+  if (!identity) {
+    return (
+      <div className="govuk-header">
+        <div className="govuk-header__container govuk-width-container">
+          <div className="govuk-header__logo">
+            <span className="govuk-header__homepage-link govuk-header__organisation-name">{name}</span>
+          </div>
+          {withPlaces && <div id={GOVUK_HEADER_PLACES_ID} className="govuk-header__places" />}
+        </div>
+      </div>
+    );
+  }
   const crown = isGovUkHost(hostname);
   return (
     <div className="govuk-header">

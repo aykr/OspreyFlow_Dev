@@ -20,7 +20,7 @@ describe("GovukHeader", () => {
   });
 
   it("links the GOV.UK logo to gov.uk", () => {
-    applyBrand("govuk");
+    applyBrand("govuk", true);
     render(<GovukHeader />);
     expect(screen.getByRole("link", { name: /GOV\.UK/ }).getAttribute("href")).toBe("https://www.gov.uk/");
   });
@@ -28,7 +28,7 @@ describe("GovukHeader", () => {
   // ADR-132 Amendment 5 (the owner's ruling of 4 November 2026): no service-name band under the
   // header. The header is the GOV.UK logo and nothing else; the name is in the page title.
   it("draws no service-name band and no link but the logo's", () => {
-    applyBrand("govuk");
+    applyBrand("govuk", true);
     const { container } = render(<GovukHeader />);
     expect(container.querySelector(".govuk-service-navigation")).toBeNull();
     expect(screen.queryByRole("region", { name: "Service information" })).toBeNull();
@@ -38,7 +38,7 @@ describe("GovukHeader", () => {
   // ADR-132 Amendment 8 (the owner's ruling of 13 November 2026): off gov.uk the header draws no crown, as the
   // footer already does (Amendment 7); the GOV.UK word mark stays, still the link's name. On gov.uk, as it was.
   it("draws no crown off gov.uk, the word mark kept", () => {
-    applyBrand("govuk");
+    applyBrand("govuk", true);
     const { container } = render(<GovukHeader hostname="govuk.ospreyflow.app" />);
     const logo = container.querySelector(".govuk-header__logotype")!;
     expect(logo.querySelector("g")).toBeNull();
@@ -47,9 +47,33 @@ describe("GovukHeader", () => {
   });
 
   it("draws the crown on gov.uk", () => {
-    applyBrand("govuk");
+    applyBrand("govuk", true);
     const { container } = render(<GovukHeader hostname="prison-intelligence.service.gov.uk" />);
     expect(container.querySelector(".govuk-header__logotype g")).not.toBeNull();
+  });
+
+  // ADR-152 decision 14, invariant I9: with the switch off (the default) the header has no GOV.UK logotype and no crown.
+  it("with the identity switch off draws the organisation's name and no GOV.UK logotype, whatever the address", () => {
+    for (const hostname of ["demo.example.org", "prison-intelligence.service.gov.uk"]) {
+      applyBrand("govuk");
+      const { container } = render(<GovukHeader hostname={hostname} name="Ministry of Examples" />);
+      expect(container.querySelector(".govuk-header__logotype")).toBeNull();
+      expect(container.querySelector("svg")).toBeNull();
+      expect(container.querySelector("circle")).toBeNull();
+      expect(container.textContent).toBe("Ministry of Examples");
+      expect(container.querySelector("a")).toBeNull();
+      cleanup();
+    }
+  });
+
+  it("keys the logotype on the switch, not on the brand alone (I9)", () => {
+    applyBrand("govuk");
+    const off = render(<GovukHeader hostname="prison-intelligence.service.gov.uk" />);
+    expect(off.container.querySelector(".govuk-header__logotype")).toBeNull();
+    cleanup();
+    applyBrand("govuk", true);
+    const on = render(<GovukHeader hostname="prison-intelligence.service.gov.uk" />);
+    expect(on.container.querySelector(".govuk-header__logotype")).not.toBeNull();
   });
 
   it("leaves no style for the band in tokens.css", () => {
