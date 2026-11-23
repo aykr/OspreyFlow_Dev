@@ -10,9 +10,15 @@ constants), not by an entry in `tests/fixtures/citation_allowlist.txt`.
 **Folders this file walks** (for the scan row): none of the real repository's folders is walked
 from here by name. Every case builds a throwaway tree under `tmp_path` with the real folder names
 (`process/lanes/v062/...`, `spec/`, `apps/`, `scripts/`), which is the shape the check really sees;
-two cases read the real tree through the check's own scan (`scanned_files`, `skipped_files`) and
+three cases read the real tree through the check's own scan (`scanned_files`, `skipped_files`) and
 one runs the check as the Makefile does (`python -m tools.doc_citations_check`, from the product
 folder with the Build folder on `PYTHONPATH`).
+
+Outside this gate before and after this change: the guides under `OspreyFlow_Core/docs/` and the
+slice line's own scripts folder under the Build folder. The check searches only `SEARCH_ROOTS`
+(spec, process, tools, apps, services, packages, scripts, harness), and the root `scripts` is the
+product folder's, so neither is ever read; no case here plants a citation in them, because none
+could fail.
 
 `CLAUDE.md` rule 15: the planted violation has the shape the real ones take (a backticked
 repository path with a source extension, in a Markdown document, naming a file that is not
@@ -25,7 +31,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
-from pathlib import Path
+from pathlib import Path, PurePath
 
 import pytest
 from tools import doc_citations_check as check
@@ -54,7 +60,7 @@ STILL_CHECKED = (
     "spec/06_DECISIONS.md",
     "apps/workspace/README.md",
     "tools/x.md",
-    "scripts/slice_line/README.md",
+    "scripts/x.md",
     f"{LANE}/slice-line/README.md",
     f"{LANE}/slice-line/LINE_FAULTS_2026-11-18.md",
     f"{LANE}/other/x.md",
@@ -245,6 +251,30 @@ def test_on_the_real_tree_the_skip_covers_only_the_named_folders() -> None:
     assert f"{LANE}/slice-line/README.md" in scanned
     assert "process/07_BUILD_PLAN.md" in scanned
     assert not skipped & scanned
+
+
+def test_every_still_checked_place_is_in_a_folder_the_real_scan_reports_as_scanned() -> None:
+    """Anchors `STILL_CHECKED` to the real tree. The first folder of each place (`spec`, `apps`,
+    `tools`, `scripts`, `process`) is one the check's own scan reads files from today, so a planted
+    tree in this file has the shape the check sees, not a flat one the real scan would never walk."""
+    scanned = [check.rel(p, check.REPO_ROOT) for p in check.scanned_files()]
+    real_folders = {PurePath(name).parts[0] for name in scanned}
+
+    assert {"spec", "process", "tools", "scripts"} <= real_folders, sorted(real_folders)
+    for place in STILL_CHECKED:
+        assert PurePath(place).parts[0] in real_folders, place
+
+
+def test_a_folder_that_is_not_a_lane_paper_is_reported_as_scanned_on_the_real_tree() -> None:
+    """Takes a folder from the check's own scan (the product folder's `scripts/`, which holds
+    scanned files today) and shows its files are scanned and none is skipped."""
+    scanned = [check.rel(p, check.REPO_ROOT) for p in check.scanned_files()]
+    skipped = [check.rel(p, check.REPO_ROOT) for p in check.skipped_files()]
+    in_scripts = [name for name in scanned if name.startswith("scripts/")]
+
+    assert in_scripts, "the product folder's scripts/ holds scanned files"
+    assert not [name for name in skipped if name.startswith("scripts/")]
+    assert not check.is_lane_paper(in_scripts[0])
 
 
 def test_the_make_target_prints_the_skipped_count_as_its_last_line_on_the_real_tree() -> None:
