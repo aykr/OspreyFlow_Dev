@@ -1677,7 +1677,10 @@ concerns (`subject_kind` and `subject_id`, an id and never a name: a case, a pac
 rule), the handling level (empty where the export has none: a dataset release holding no pipeline) and the
 withheld flag, for every export the Conduit makes: a report, assessment or pack export, the report feed, the
 Reports view's figures, a dataset release and a rule file. A ledger row is written before the artefact is
-returned, and a row that cannot be written fails the export with a 503, as the audit writer does. `GET /v1/exports`
+returned, and a row that cannot be written fails the export with a 503, as the audit writer does. A report's
+withheld flag is true when the reader's rights lowered one of its alert or held figures: an alert the queue left out
+because the reader cannot read what it cites, an alert the reader's dataset reach took out of the query, or (for an
+editor's held figures) a held row their marking or reach leaves out; the KYC and POLE figures add nothing to it. `GET /v1/exports`
 reads them all by its one right, as it reads every case's. A held document's file shown in the document reader is
 an access audited per read, not an export. A platform backup and an object transfer are an operator's commands
 (the cloud profile's CronJob; `ospreyflow backup`), run outside the Conduit with no principal and no ledger

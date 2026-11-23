@@ -22,6 +22,7 @@ from services.api.investigations import (
 )
 
 from schemas.domain import Interval, Principal
+from tests.services.api.export_ledger_fakes import RefusingLedger
 
 AUTHOR = Principal(id="alice", clearance="OFFICIAL", org_unit="unit-1")
 COLLEAGUE = Principal(id="bob", clearance="OFFICIAL", org_unit="unit-1")
@@ -811,9 +812,8 @@ async def test_a_dashboard_reads_the_case_it_was_granted_and_no_other(
         async def resolve_principal(self, _token: str) -> Principal:
             return dashboard
 
-    class _Ledger:
-        async def record(self, *_: Any, **__: Any) -> None:
-            return None
+    class _Ledger(RefusingLedger):
+        pass
 
     from schemas.domain import ReportFigures
 

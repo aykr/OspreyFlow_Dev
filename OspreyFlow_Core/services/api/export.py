@@ -423,6 +423,18 @@ $$;
 """
 
 
+def require_subject(entry: ExportLedgerEntry) -> None:
+    """The ledger's refusal of a row that says nothing of what its export concerns (`ValueError`).
+    The store applies it before it writes, and a test's stand-in for the store applies it too, so a
+    route that drops `subject_kind` or `subject_id` fails against the stand-in as it does against
+    the real thing (rule 15: a fake models the dependency's refusals)."""
+    if not entry.subject_kind or not entry.subject_id:
+        raise ValueError(
+            f"ledger entry for {entry.artefact_kind!r} names no subject: a row says what the "
+            "export concerns"
+        )
+
+
 class ExportLedgerStore:
     """**Deliberately not `investigations`-scoped and not `owning_unit`-filtered** — ADR-047's own
     Gap 2 reasoning: the ledger's entire value to compliance is that it is readable by someone who
@@ -450,11 +462,7 @@ class ExportLedgerStore:
         the audit writer's own failure does), so an export whose record was not made is not made.
         The message names the kind of artefact and never the database's own words, which can
         carry the values of the row."""
-        if not entry.subject_kind or not entry.subject_id:
-            raise ValueError(
-                f"ledger entry for {entry.artefact_kind!r} names no subject: a row says what the "
-                "export concerns"
-            )
+        require_subject(entry)
         try:
             async with self._pool.acquire() as conn:
                 await conn.execute(

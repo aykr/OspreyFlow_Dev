@@ -157,6 +157,11 @@ class Store(RaiserReads):
     def held_alert_ids(self) -> set[str]:
         return {a.id for a in self.alerts}
 
+    async def left_out_by_reach(self, investigation_id: str, reader: Principal) -> bool:
+        """The reader has no dataset limit here, so reach removes nothing (a limited reader's is
+        `test_report_figures_withheld._ReachStore`)."""
+        return False
+
     async def list_queue(
         self, investigation_id: str, reader: Principal, **_: object
     ) -> list[QueueRow]:

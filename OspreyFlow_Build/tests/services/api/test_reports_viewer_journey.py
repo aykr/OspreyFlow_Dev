@@ -132,6 +132,10 @@ class _Nothing:
     async def record(self, *args: object, **kwargs: object) -> None:
         return None
 
+    async def left_out_by_reach(self, investigation_id: str, reader: Any) -> bool:
+        """The alert store's reach flag, for a reader with no dataset limit."""
+        return False
+
     async def chosen_of_case(self, investigation_id: str) -> list[Any]:
         return []
 
@@ -189,8 +193,11 @@ def _journey_client(
     async def _queue(*args: object, **kwargs: object) -> list[Any]:
         return list(rows)
 
+    async def _queue_and_left_out(*args: object, **kwargs: object) -> tuple[list[Any], bool]:
+        return list(rows), False
+
     monkeypatch.setattr(alert_queue, "monitoring_queue", _queue)
-    monkeypatch.setattr(reports, "monitoring_queue", _queue)
+    monkeypatch.setattr(reports, "monitoring_queue_and_left_out", _queue_and_left_out)
     nothing = _Nothing()
     for dep in (get_alerts_store, get_analytics, get_audit, get_compute, get_datasets, get_export_ledger, get_graph,
                 get_held_rows, get_identity_admin, get_principal_names, get_target_models,

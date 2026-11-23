@@ -33,7 +33,6 @@ from xml.etree import ElementTree
 
 import pytest
 from fastapi.testclient import TestClient
-from rule_standards import StoredRuleFiles, rule_files, to_bpmn, to_dmn
 from services.api import rule_standards_routes
 from services.api.app import (
     app,
@@ -45,18 +44,20 @@ from services.api.app import (
     get_principal,
     get_typology_rules,
 )
+from services.api.datasets import Dataset
 from services.api.investigations import (
     AccessLevel,
     InsufficientAccessError,
     Investigation,
     InvestigationNotFoundError,
 )
-from services.api.datasets import Dataset
 from services.api.typology_rules import TypologyRuleNotFoundError
 
+from rule_standards import StoredRuleFiles, rule_files, to_bpmn, to_dmn
 from schemas.domain import Principal, TypologyRule
 from schemas.rule_standards import RULE_FILE_MAX_CHARS
 from schemas.sentences import RuleSentence, SentenceRuleInput, SentenceRuleParams
+from tests.services.api.export_ledger_fakes import RefusingLedger
 from tests.services.api.test_rule_sentences import ONTOLOGY
 
 CASE = Investigation(id="case-s", name="C", created_at=datetime(2026, 1, 1, tzinfo=UTC),
@@ -181,14 +182,9 @@ class _Audit:
         self.entries.append(entry)
 
 
-class _Ledger:
-    """The export ledger's `record`, keeping what it was given (SE8b)."""
-
-    def __init__(self) -> None:
-        self.entries: list[Any] = []
-
-    async def record(self, entry: Any) -> None:
-        self.entries.append(entry)
+class _Ledger(RefusingLedger):
+    """The export ledger's `record`, keeping what it was given and refusing a row with no subject
+    as the real store does (SE8b, rule 15)."""
 
 
 @pytest.fixture

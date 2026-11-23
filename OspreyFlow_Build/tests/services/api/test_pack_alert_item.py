@@ -48,6 +48,7 @@ from schemas.domain import (
     ProvenanceState,
     SourceRef,
 )
+from tests.services.api.export_ledger_fakes import RefusingLedger
 from tests.services.api.test_packs import (
     CASE,
     CLEARED_READER,
@@ -170,8 +171,9 @@ class _Config:
 def aw(world: World) -> Iterator[AlertWorld]:  # noqa: F811
     made = AlertWorld(world)
 
-    class _Ledger:
+    class _Ledger(RefusingLedger):
         async def record(self, entry: ExportLedgerEntry) -> None:
+            await super().record(entry)
             made.ledger_entries.append(entry)
 
     app.dependency_overrides.update({

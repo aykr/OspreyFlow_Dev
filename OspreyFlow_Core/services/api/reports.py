@@ -256,13 +256,18 @@ async def alert_report_and_left_out(
     today: date,
     period_weeks: int = 12,
 ) -> tuple[ReportFigures, bool]:
-    """`alert_report`, and whether the queue left any alert out whole because the reader cannot read
-    what it cites: a yes or no, from the queue's own decision (SE8b)."""
+    """`alert_report`, and whether the reader's rights left any alert out of its figures: a yes or
+    no (SE8b). True when the queue left one out whole because the reader cannot read what it cites
+    (the queue's own decision), or when the reader's dataset reach removed one from the query
+    (`AlertStore.left_out_by_reach`: ADR-099 Amendment 3)."""
     now = datetime.now(UTC)
     start = today - timedelta(weeks=period_weeks)
     every_kind, left_out = await monitoring_queue_and_left_out(
         alerts, graph, analytics, investigation_id, reader
     )
+    # An alert on a dataset outside the reader's reach never reaches the queue's loop (the store's
+    # query drops it), so the loop cannot say it was left out: ask the store, with the same scope.
+    left_out = left_out or await alerts.left_out_by_reach(investigation_id, reader)
     typology = [q.alert for q in every_kind if q.kind == "typology"]
     by_week, by_age, outcomes, total = _alert_figures(typology, start=start, now=now)
     figures = ReportFigures(
@@ -412,14 +417,19 @@ async def case_report_and_withheld(
     from each figure's own computation, not from a stand-in. It is true when
 
     - the alert queue left out an alert whole because the reader cannot read what it cites
-      (`monitoring_queue_and_left_out`), which lowers every alert and monitoring figure; or
+      (`monitoring_queue_and_left_out`), or the reader's dataset reach took an alert out of the
+      query (`AlertStore.left_out_by_reach`), either of which lowers every alert and monitoring
+      figure; or
     - held rows are shown (`show_held`) and the case holds a row of any status the reader's marking
       or reach leaves out (`HeldRowStore.left_out_for`, the same clauses as the count).
 
-    **What it cannot say.** The KYC and POLE figures are counted over the whole graph as the reader
-    (`explore.counts`, `list_nodes`), and `GraphPort` gives no answer to what a reader's count left
-    out (that would be a count of what is hidden: rule 7). They add nothing to the flag, so for a
-    case that sends them it is a floor, not a ceiling (SE8b's report names this for the owner)."""
+    **What it cannot say.** An alert the queue's scope keeps from the reader for who it was given
+    to (a team's alone, a watch's owner's) is not the reader's rights lowering a figure but who the
+    alert is for, and sets nothing. The KYC and POLE figures are counted over the whole graph as the
+    reader (`explore.counts`, `list_nodes`), and `GraphPort` gives no answer to what a reader's
+    count left out (that would be a count of what is hidden: rule 7). They add nothing to the flag,
+    so for a case that sends them it is a floor, not a ceiling (SE8b's report names this for the
+    owner)."""
     figures, left_out = await alert_report_and_left_out(
         alerts, graph, analytics, investigation_id, reader, today=today, period_weeks=period_weeks
     )

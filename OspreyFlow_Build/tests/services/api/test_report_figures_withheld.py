@@ -13,7 +13,11 @@ plant both directions:
   is lower: the flag follows the lowering, not a constant;
 - figures whole but the case's working set holds material the reader may not view -> the flag is
   false (red against the first version);
-- an alert left out only by a status filter is not withheld from the reader.
+- an alert left out only by a status filter is not withheld from the reader;
+- an alert on a dataset outside the reader's reach, which the store's query drops before the queue
+  sees it (the second verifier's finding: the flag read only from the queue's loop said false for
+  figures the reach had lowered): the flag is true, from `AlertStore.left_out_by_reach`, whose own
+  query is held to `list_queue`'s scope.
 
 Held rows: the real `HeldRowStore.left_out_for` is Postgres (its live counterpart is
 `test_reports.py::test_the_held_flag_follows_what_the_reader_may_not_read`, owed), so here it is
@@ -34,18 +38,20 @@ from typing import Any
 
 import pytest
 from services.api import reports
+from services.api.alerts import AlertStore, QueueRow
 from services.api.held_rows import HeldRowStore
+
+from ontology.handling import load_uk_le_scheme
+from schemas.domain import Principal
 from tests.services.api.test_alert_evidence_withheld import (
     CASE,
     OVER_LINK,
     READER,
     V1,
     V2,
+    Store,
     _world,
 )
-
-from ontology.handling import load_uk_le_scheme
-from schemas.domain import Principal
 
 TODAY = date(2026, 11, 7)
 
@@ -81,10 +87,44 @@ class _Held:
         return status == "held" and any(c != "OFFICIAL" for c in self.rows)
 
 
+class _ReachStore(Store):
+    """The alert store for a reader whose dataset reach is `reach`: like the real one, its queue
+    never returns an alert on another dataset (the dropped row reaches no loop), and
+    `left_out_by_reach` says whether it dropped any. Both answers come from the one filter, as the
+    real store's come from one scope."""
+
+    def __init__(
+        self, alerts: list[Any], datasets: dict[str, str | None], reach: list[str]
+    ) -> None:
+        super().__init__(alerts)
+        self._datasets, self._reach = datasets, reach
+
+    def _in_reach(self, alert: Any) -> bool:
+        where = self._datasets.get(alert.id)
+        return where is None or where in self._reach
+
+    async def list_queue(
+        self, investigation_id: str, reader: Principal, **_: object
+    ) -> list[QueueRow]:
+        return [q for q in await super().list_queue(investigation_id, reader)
+                if self._in_reach(q.alert)]  # fmt: skip
+
+    async def left_out_by_reach(self, investigation_id: str, reader: Principal) -> bool:
+        return any(not self._in_reach(a) for a in self.alerts)
+
+
 async def _report(
-    hidden: set[str], alerts: list[Any], *, held: _Held | None = None, show_held: bool = False
+    hidden: set[str],
+    alerts: list[Any],
+    *,
+    held: _Held | None = None,
+    show_held: bool = False,
+    datasets: dict[str, str | None] | None = None,
+    reach: list[str] | None = None,
 ) -> tuple[Any, bool]:
     store, graph, analytics, _ = _world(hidden, alerts)
+    if reach is not None:
+        store = _ReachStore(alerts, datasets or {}, reach)
     return await reports.case_report_and_withheld(
         alerts=store, graph=_EmptyGraph(graph), analytics=analytics,  # type: ignore[arg-type]
         held=held or _Held([]),  # type: ignore[arg-type]
@@ -102,6 +142,23 @@ async def test_figures_lowered_by_what_the_reader_cannot_read_say_so() -> None:
     assert shown.alerts_total == whole.alerts_total - 1, "the figures were lowered"
     assert flag is True
     assert whole_flag is False, "nothing hidden: the flag is not a constant `True` either"
+
+
+async def test_figures_lowered_by_the_readers_dataset_reach_say_so() -> None:
+    """An alert on a dataset the reader's reach does not include is dropped by the store's query,
+    so it is in no figure and never reaches the queue's loop: the flag says it all the same. Red
+    with the flag read only from the loop (the shape the first fix had: `left_out` false)."""
+    on_other = {"v2": "ds-other"}
+    shown, flag = await _report(set(), [V1, V2], datasets=on_other, reach=["ds-mine"])
+    whole, whole_flag = await _report(
+        set(), [V1, V2], datasets=on_other, reach=["ds-mine", "ds-other"]
+    )
+    assert shown.alerts_total == whole.alerts_total - 1, "the figures were lowered"
+    assert flag is True
+    assert whole_flag is False, "every alert in reach: nothing lowered, not a constant `True`"
+    # an alert naming no dataset stays in reach (the store keeps it, `reach_clause`)
+    _, none_flag = await _report(set(), [V1, V2], datasets={"v2": None}, reach=["ds-mine"])
+    assert none_flag is False
 
 
 async def test_whole_figures_are_not_withheld_whatever_the_working_set_holds() -> None:
@@ -216,3 +273,44 @@ async def test_left_out_for_is_false_when_the_reader_may_read_every_row() -> Non
     store = _store(conn)
     reader = Principal(id="r", clearance="OFFICIAL", org_unit="unit-1")
     assert await store.left_out_for(CASE, reader) is False
+
+
+# --- the alert store's own query for the reach flag ----------------------------------------------
+
+
+@pytest.mark.parametrize("datasets", [["ds-1"], []])
+async def test_alerts_left_out_by_reach_is_asked_with_the_scope_and_reach_of_the_queue(
+    datasets: list[str],
+) -> None:
+    """The flag is counted over the same scope as `list_queue`, beside the same scope with the reach
+    clause: both read the one `queue_scope`, so a looser flag query cannot say 'nothing left out'
+    about alerts the queue drops. Red if the flag's scope or bound values drift from the queue's."""
+    reader = Principal(id="r", clearance="OFFICIAL", org_unit="unit-1", datasets=datasets)
+    conn = _Conn()
+    store = AlertStore(_Pool(conn), None)  # type: ignore[arg-type]
+    await store.list_queue(CASE, reader)
+    assert await store.left_out_by_reach(CASE, reader) is True
+    (listing_sql, listing_args), (flag_sql, flag_args) = conn.calls
+    scope = listing_sql.split("FROM alerts WHERE true", 1)[1].split(" ORDER BY")[0]
+    reach = " AND (dataset_id = ANY($7::text[]) OR dataset_id IS NULL)"
+    assert scope.endswith(reach), listing_sql
+    assert f"FROM alerts WHERE true{scope.removesuffix(reach)}" in flag_sql
+    assert f"FILTER (WHERE true{reach})" in flag_sql
+    assert flag_args == listing_args, "the same case, reader, teams, datasets and reach"
+
+
+async def test_a_reader_with_no_dataset_limit_loses_nothing_to_reach_and_costs_no_query() -> None:
+    conn = _Conn()
+    store = AlertStore(_Pool(conn), None)  # type: ignore[arg-type]
+    reader = Principal(id="r", clearance="OFFICIAL", org_unit="unit-1")
+    assert reader.datasets is None
+    assert await store.left_out_by_reach(CASE, reader) is False
+    assert conn.calls == []
+
+
+async def test_alerts_left_out_by_reach_is_false_when_the_reach_drops_none() -> None:
+    conn = _Conn()
+    conn.answer = {"every": 3, "readable": 3}
+    store = AlertStore(_Pool(conn), None)  # type: ignore[arg-type]
+    reader = Principal(id="r", clearance="OFFICIAL", org_unit="unit-1", datasets=["ds-1"])
+    assert await store.left_out_by_reach(CASE, reader) is False

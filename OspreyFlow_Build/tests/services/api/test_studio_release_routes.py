@@ -49,6 +49,7 @@ from schemas.ingest import (
     PipelineNodeKind,
     StudioRecipeStatus,
 )
+from tests.services.api.export_ledger_fakes import RefusingLedger
 from tests.services.api.test_app import _FakeAudit
 from tests.services.api.test_studio_recipe_routes import _draft, _FakeStudioRecipes
 from tests.services.api.test_studio_staging_routes import STORAGE, store  # noqa: F401
@@ -183,14 +184,9 @@ def ingest(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return root
 
 
-class _FakeLedger:
-    """The export ledger's `record`, keeping what it was given (SE8b)."""
-
-    def __init__(self) -> None:
-        self.entries: list[object] = []
-
-    async def record(self, entry: object) -> None:
-        self.entries.append(entry)
+class _FakeLedger(RefusingLedger):
+    """The export ledger's `record`, keeping what it was given and refusing a row with no subject
+    as the real store does (SE8b, rule 15)."""
 
 
 class _World:
