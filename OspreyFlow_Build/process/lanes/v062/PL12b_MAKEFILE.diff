@@ -15,9 +15,11 @@
  	$(IN_CORE) node --test $(BUILD)/tests/keycloak_theme/*.test.mjs
  
  # ADR-041: mechanical control for the fetch-then-check authorization bug class.
+diff --git a/OspreyFlow_Build/tests/glass_trees/test_design_gates_reach.py b/OspreyFlow_Build/tests/glass_trees/test_design_gates_reach.py
+index 1bb4308..004ed5f 100644
 --- a/OspreyFlow_Build/tests/glass_trees/test_design_gates_reach.py
 +++ b/OspreyFlow_Build/tests/glass_trees/test_design_gates_reach.py
-@@ -29,6 +29,13 @@
+@@ -29,6 +29,13 @@ Default tree's templates and the client modules. The same four gates read them,
  `tools.layout.PAGES_COPY_ROOTS` gives, so a gate that drops one is red; `tests/glass_trees/test_pages_foundation.py`
  holds that each gate reads a violation planted under each root.
  
@@ -31,7 +33,7 @@
  This file walks no part of the repository by `git ls-files`: it reads
  `OspreyFlow_Core/packages/design/` only (copied, never written).
  """
-@@ -40,7 +47,7 @@
+@@ -40,7 +47,7 @@ from collections.abc import Callable
  from pathlib import Path
  
  import pytest
@@ -40,7 +42,7 @@
  from tools.layout import CORE
  
  DESIGN = CORE / "packages" / "design"
-@@ -141,3 +148,31 @@
+@@ -141,3 +148,34 @@ def test_each_gate_names_the_pages_roots() -> None:
      for gate, roots in named.items():
          assert set(PAGES_ROOTS) <= roots, f"{gate} does not read {sorted(set(PAGES_ROOTS) - roots)}"
  
@@ -68,6 +70,9 @@
 +    core = planted.parent.parent.parent  # the copy is `<tmp>/packages/design`: its root is `<tmp>`
 +    for top in theme_rule_check.SCAN_ROOTS:  # the check refuses a root that is missing
 +        (core / top).mkdir(parents=True, exist_ok=True)
++    for name in theme_rule_check.SIGN_IN_FILES:  # ... and a named sign-in file that is missing
++        (core / name).parent.mkdir(parents=True, exist_ok=True)
++        (core / name).write_text("", encoding="utf-8")
 +    found = [f for f in theme_rule_check.find_theme_rules(core) if f.path.endswith(PLANT)]
 +    assert [(f.path, f.key, f.kind) for f in found] == [
 +        (f"packages/design/{PLANT}", '[data-brand="govuk"] .planted', "rule")
