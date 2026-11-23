@@ -282,6 +282,50 @@ written from the ADR text, the prototype's Pipelines list and the owner's ruling
   stop is above 0, and every control (the frame's switch) has its label. Scenario DM's DM12 proves it.
 - **The GOV.UK tree's page** is its own later build. This section is the Default tree's.
 
+### 1.3 The Model step (slice IS2a, 23 November 2026; ADR-140 Amendment 22 items 1, 3 and 4; ADR-152 decisions 6, 7, 12 and 13; X5 and X7)
+
+The Model step is the Studio page that shows one dataset's domain model and lets a person open, save and discard its draft. It is a
+server-rendered page of the `pages` service (`/studio/model`, in the Studio's frame: its dataset switch, readiness strip and five
+places, the first of which now links to it), built first for the Default tree. **There is no React Model step to copy**
+(`ModelTab.tsx` is a sentence and a placeholder), so its scenario (`08_ACCEPTANCE_SCENARIOS.md`, Scenario MS) is written from the
+decision records, the prototype's Model step and the owner's rulings of 21 and 23 November 2026, not from a screen.
+
+- **What a type record carries.** An entity type the dataset's model adds carries its class (one of the five POLE classes), its
+  identifiers and its matching rule: the rule for when two records are the same, which lives on the type record and not on each
+  pipeline's element (ADR-140 Amendment 22 item 3; the owner, 21 November). The matching rule names a field and what to do on a
+  match, `reference` (use the record held) or `create` (make a new one each time), the two values the matching code knows; the
+  field must be one of the type's identifiers or one of its indexed properties, because a lookup finds a record by those and no
+  others, and the Conduit refuses any other. A property record names its type, its value type and whether it is indexed. The
+  class, identifiers and properties are the ontology's own (`EntityTypeDef`, `PropertyDef`); the matching rule is new, and is
+  carried by the draft's entity-type extension (`ModelExtension`).
+- **What it shows.** The dataset's name; the draft's types as a table, and the live version's as another beside it, each with a
+  caption and the columns Type, Class, Identifiers, Matching rule and Properties, one row for each type with its name as the row's
+  header, and each property drawn in its type's row with whether it is indexed, in words. The POLE core and the packs are named
+  in a sentence, since they are the ontology's. Who holds the draft and since when is said in a sentence. A version with no types
+  of its own, no draft and no live model are each said in words, with no table.
+- **What it does.** A draft is opened, saved and discarded by native forms with a button each, carrying the anti-forgery token, the
+  case and, for a save and a discard, the **expected version**: the version the person's copy was read at, in a hidden field. The
+  page hands the Conduit that very number, the Conduit's store refuses a draft that is no longer that version, and **a stale one is
+  refused**: the page says the copy was out of date and what the draft is now, shows the draft as it now is and keeps what the
+  person typed. Save edits the starter packs' pinned versions; the type form's editing, reference lists and Make live are later
+  slices of this build.
+- **Who may act.** A draft is saved into, replaced and discarded by **only its creator** (C186; ADR-152 X5): the page offers the forms to
+  the creator and says who holds the draft to anyone else, and the Conduit refuses anyone else's request all the same, in words
+  that name who holds it and none of what is in it. The check is the store's and comes before the version check.
+- **Access.** The page reads and writes as the person, through the Conduit, which refuses a person without `edit_target_model` and
+  a dataset their cases do not read. A person without the right, a dataset no case of theirs loads into, one the Conduit no
+  longer opens and one that does not exist all read the same words, with no table, no form, no count, no type's name and no
+  dataset's id anywhere in the page (rules 3 and 7). Only the store's own words are shown for a refusal of a write; any other
+  answer is the page's own sentence.
+- **Failures.** A read or a write that failed is said in an alert (`role="alert"`), with the words from the page's own words module,
+  and is never drawn as an empty model (rule 2): what was typed is kept and nothing is said to have changed.
+- **Scripts off, and keyboard (rule 13).** The page works with scripts off: the lists are tables and the actions are forms. It adds
+  no action beyond links and forms, and each control is a native tab stop with its label; nothing needs a handler, and no tab stop
+  is above 0. Scenario MS's MS14 and MS17 prove it.
+- **The word is Pipeline.** The page says Pipeline and never "recipe" (ADR-140 Amendment 9 decision 1), and domain model and never
+  "target model".
+- **The GOV.UK tree's page** is its own later build. This section is the Default tree's.
+
 ## 2. Stage 1 — Connect
 
 Connectors are **profiles**, following the same pattern as map providers (ADR-016): a validated
