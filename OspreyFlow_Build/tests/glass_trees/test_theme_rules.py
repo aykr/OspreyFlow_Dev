@@ -11,9 +11,10 @@ this file is where it is shown red (rule 15).
 style-bearing files the check reads, in a temporary folder: under `OspreyFlow_Core`,
 `packages/design`, `packages/glass-shared/src`, `apps/workspace/src`, `apps/workspace/scripts`,
 `apps/pages` and `apps/harness/src` (the stylesheets, the templates, `fonts*.json`; `node_modules`
-and `dist` pruned by name), and the two sign-in theme files in `harness/` by name. Every plant is
-written into that copy under `tmp_path`; no real file is written. The real-tree cases run the check
-itself over `OspreyFlow_Core`, which reads the same folders (and `packages/themes`, absent today).
+and `__pycache__` pruned by name, the gitignored build output by exact path), and the two sign-in
+theme files in `harness/` by name. Every plant is written into that copy under `tmp_path`; no real
+file is written. The real-tree cases run the check itself over `OspreyFlow_Core`, which reads the
+same folders (and `packages/themes`, absent today). Two cases read `OspreyFlow_Core/.gitignore`.
 
 Every plant takes the shape the check really meets: the real brand rules are `[data-brand="govuk"]`
 blocks and `.…--govuk` modifier classes in stylesheets, and `[data-brand="govuk"]` rules inside a
@@ -43,7 +44,15 @@ WALKED = (
     "apps/harness/src",
 )
 SIGN_IN_FILES = ("harness/keycloak_theme.py", "harness/govuk_chrome.js")
-PRUNED = {"node_modules", "dist", ".git", "__pycache__"}
+#: What the copy leaves out: what `OspreyFlow_Core/.gitignore` ignores (by name for the first
+#: three, by exact path for the generated output).
+PRUNED = {"node_modules", ".git", "__pycache__"}
+GENERATED = {
+    "apps/workspace/dist",
+    "apps/harness/dist",
+    "apps/pages/dist",
+    "apps/workspace/public/assets/govuk",
+}
 
 
 def _style_bearing(path: Path) -> bool:
@@ -57,8 +66,12 @@ def template(tmp_path_factory: pytest.TempPathFactory) -> Path:
     """A copy of the files the check reads, built once; each case copies it again to plant in."""
     root = tmp_path_factory.mktemp("core_template")
     for top in WALKED:
+        (root / top).mkdir(parents=True, exist_ok=True)  # a root with no stylesheet still exists
         for here, dirs, names in os.walk(CORE / top):
-            dirs[:] = [d for d in dirs if d not in PRUNED]
+            here_relative = Path(here).relative_to(CORE).as_posix()
+            dirs[:] = [
+                d for d in dirs if d not in PRUNED and f"{here_relative}/{d}" not in GENERATED
+            ]
             for name in names:
                 source = Path(here) / name
                 if _style_bearing(source):
@@ -498,6 +511,29 @@ def test_a_rule_in_a_media_block_is_found_and_keyed_with_its_condition() -> None
     assert found_in(css) == [('@media (max-width: 640px) :: [data-brand="govuk"]', "rule")]
 
 
+def test_a_scope_at_rule_whose_prelude_names_a_theme_is_a_theme_rule() -> None:
+    css = "@scope (.govuk-header) { a { border-bottom: 0; } }"
+    assert found_in(css) == [("@scope (.govuk-header)", "rule")]
+    assert found_in('@scope ([data-brand="govuk"]) to (.x) { a { margin: 0; } }') == [
+        ('@scope ([data-brand="govuk"]) to (.x)', "rule")
+    ]
+    assert found_in("@media (min-width: 40em) { @scope (.govuk-header) { a { margin: 0; } } }") == [
+        ("@media (min-width: 40em) :: @scope (.govuk-header)", "rule")
+    ]
+    assert found_in("@scope (.card) { a { margin: 0; } }") == []
+
+
+def test_a_scope_at_rule_naming_a_theme_in_the_shared_scale_is_found(core: Path) -> None:
+    scale = core / "packages/design/scale.css"
+    scale.write_text(
+        scale.read_text(encoding="utf-8") + "\n@scope (.govuk-header) { a { margin: 0; } }\n",
+        encoding="utf-8",
+    )
+    assert triples(judged(core).new) == [
+        ("packages/design/scale.css", "@scope (.govuk-header)", "rule")
+    ]
+
+
 def test_a_modifier_class_and_a_govuk_package_class_are_theme_names() -> None:
     css = (
         ".admin-nav--govuk { width: 1px; } .govuk-places__item { margin: 0; } "
@@ -563,14 +599,112 @@ def test_a_stylesheet_with_a_block_that_never_closes_is_an_error_not_a_pass(
     "relative",
     [
         "apps/pages/dist/assets/zz.css",
+        "apps/workspace/dist/assets/zz.css",
+        "apps/harness/dist/assets/zz.css",
         "apps/pages/node_modules/govuk-frontend/zz.css",
-        "apps/workspace/src/public/assets/govuk/govuk-frontend.css",
         "packages/design/node_modules/x/zz.css",
     ],
 )
-def test_generated_and_installed_output_is_not_scanned(core: Path, relative: str) -> None:
+def test_gitignored_and_installed_output_is_not_scanned(core: Path, relative: str) -> None:
     plant(core, relative, '[data-brand="govuk"] .zz { margin: 0; }\n')
     assert_clean(core)
+
+
+@pytest.mark.parametrize(
+    "relative",
+    [
+        "apps/pages/public/assets/govuk/theme.css",
+        "apps/workspace/src/assets/govuk/x.css",
+        "apps/workspace/src/public/assets/govuk/govuk-frontend.css",
+        "apps/pages/server/dist/zz.css",
+        "packages/design/dist/zz.css",
+        "apps/workspace/src/dist/zz.css",
+    ],
+)
+def test_a_committed_folder_that_only_shares_a_generated_folders_name_is_scanned(
+    core: Path, relative: str
+) -> None:
+    """Only the gitignored paths are skipped: a hand-written GOV.UK stylesheet in a folder called
+    `assets/govuk` or `dist` elsewhere is exactly the violation the check exists to find."""
+    plant(core, relative, '[data-brand="govuk"] .zz { margin: 0; }\n')
+    assert triples(judged(core).new) == [(relative, '[data-brand="govuk"] .zz', "rule")]
+
+
+def test_the_generated_paths_the_tool_skips_are_the_ones_the_gitignore_names() -> None:
+    """The tool's skip list is read against the real `.gitignore`, so it cannot drift wider."""
+    ignored = (CORE / ".gitignore").read_text(encoding="utf-8").splitlines()
+    for path in trc.GENERATED:
+        assert f"/{path}/" in ignored, path
+
+
+# ------------------------------------------------------- every scan root is read, and must exist
+
+#: One planted stylesheet per root the brief names, and where it goes (`apps/workspace/scripts`
+#: holds only `.mjs` and `.d.mts` today, so a `.css` there is what shows the root is read).
+ROOT_PLANTS = {
+    "packages/design": "packages/design/zz_plant.css",
+    "packages/glass-shared/src": "packages/glass-shared/src/zz_plant.css",
+    "apps/workspace/src": "apps/workspace/src/zz_plant.css",
+    "apps/workspace/scripts": "apps/workspace/scripts/zz_plant.css",
+    "apps/pages": "apps/pages/zz_plant.css",
+    "apps/harness/src": "apps/harness/src/zz_plant.css",
+}
+
+
+def test_every_root_the_brief_names_is_a_scan_root_of_the_tool() -> None:
+    assert set(ROOT_PLANTS) <= set(trc.SCAN_ROOTS)
+    assert set(ROOT_PLANTS) == set(WALKED)  # the copy's roots and the plants' agree
+
+
+@pytest.mark.parametrize("root", sorted(ROOT_PLANTS))
+def test_a_theme_rule_planted_in_each_scan_root_is_found(core: Path, root: str) -> None:
+    relative = ROOT_PLANTS[root]
+    plant(core, relative, '[data-brand="govuk"] .zz { margin: 0; }\n')
+    assert triples(judged(core).new) == [(relative, '[data-brand="govuk"] .zz', "rule")]
+
+
+@pytest.mark.parametrize("root", sorted(ROOT_PLANTS))
+def test_a_root_dropped_from_the_scan_goes_unseen_so_the_plant_above_is_what_catches_it(
+    core: Path, root: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Red for the shape the plant guards: with `root` dropped from SCAN_ROOTS the plant is not
+    found. (The plant test above fails then; this shows it is the root that decides.)"""
+    plant(core, ROOT_PLANTS[root], '[data-brand="govuk"] .zz { margin: 0; }\n')
+    monkeypatch.setattr(trc, "SCAN_ROOTS", tuple(r for r in trc.SCAN_ROOTS if r != root))
+    assert ROOT_PLANTS[root] not in {f.path for f in trc.find_theme_rules(core)}
+
+
+@pytest.mark.parametrize("root", sorted(ROOT_PLANTS))
+def test_a_scan_root_that_is_gone_is_an_error_not_an_empty_walk(
+    core: Path, root: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    shutil.rmtree(core / root)
+    with pytest.raises(trc.ThemeScanError, match=root):
+        trc.find_theme_rules(core)
+    assert trc.main(core=core, allowlist_path=ALLOWLIST) == 1
+    assert root in capsys.readouterr().out
+
+
+def test_the_themes_folder_may_be_absent_until_a_theme_moves_into_it(core: Path) -> None:
+    assert not (core / "packages" / "themes").exists()
+    assert_clean(core)
+
+
+def test_each_scan_root_exists_on_the_real_tree_and_only_two_yield_no_file_today() -> None:
+    """The real roots are folders. `apps/workspace/scripts` (only `.mjs` and `.d.mts`, read only
+    inside a theme folder) and `packages/glass-shared/src` (only TypeScript) hold no stylesheet
+    today, so they yield no file: a recorded fact, not a silent blindness. The plants above show
+    a stylesheet landing in either is read; the other four roots must still yield files."""
+    by_root = {root: 0 for root in ROOT_PLANTS}
+    for path, _how in trc.scanned_files(CORE):
+        relative = path.relative_to(CORE).as_posix()
+        for root in by_root:
+            if relative.startswith(root + "/"):
+                by_root[root] += 1
+    for root in ROOT_PLANTS:
+        assert (CORE / root).is_dir(), root
+    empty = {root for root, n in by_root.items() if n == 0}
+    assert empty <= {"apps/workspace/scripts", "packages/glass-shared/src"}, by_root
 
 
 def test_a_file_outside_the_scan_roots_is_not_scanned(core: Path) -> None:
