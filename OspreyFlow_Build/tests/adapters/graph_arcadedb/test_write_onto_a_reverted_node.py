@@ -38,7 +38,7 @@ _REVERT = re.compile(
     # `withdrawn_by_load`, so a withdrawing refresh's later revert cannot bring it back. The
     # adapter has sent it since 28f3174; this expectation had not followed (L1.2a's brief).
     # SE9 (ADR-144 Amendment 7): the same statement sets when and by whom, with the flag.
-    r"UPDATE `(\w+)` SET reverted = true, reverted_at = :at, reverted_by = :by, "
+    r"UPDATE `(\w+)` SET reverted = true, reverted_at = :at, reverted_by = :whom, "
     r"withdrawn_by_load = null WHERE id IN :ids"
 )
 
@@ -94,7 +94,7 @@ class NodeStore:
                     # What the statement sets, both of it: the flag and the withdrawal cleared.
                     self.rows[i]["reverted"] = True
                     self.rows[i]["reverted_at"] = params["at"]
-                    self.rows[i]["reverted_by"] = params["by"]
+                    self.rows[i]["reverted_by"] = params["whom"]
                     self.rows[i]["withdrawn_by_load"] = None
             return []
         if command == "INSERT INTO IndexPending CONTENT :rows":

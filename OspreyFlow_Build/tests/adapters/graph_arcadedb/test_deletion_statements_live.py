@@ -21,6 +21,7 @@ from typing import Any
 
 import pytest
 
+from adapters.graph_arcadedb.naming import physical_type_name
 from adapters.graph_arcadedb.testing import arcadedb_adapter
 from conduit_common.identity import new_edge_id, new_node_id
 from ontology.handling import load_uk_le_scheme
@@ -30,6 +31,8 @@ from schemas.domain import EdgeWrite, Handling, NodeWrite, Provenance, Provenanc
 pytestmark = pytest.mark.store  # reaches ArcadeDB (tests/store_mark.py)
 
 ONTOLOGY = load_default_ontology()
+PERSON = physical_type_name("Person")
+LINK = physical_type_name("ASSOCIATE_OF")
 WHEN = datetime(2026, 1, 1, tzinfo=UTC)
 AT = datetime(2026, 11, 24, 9, 30, tzinfo=UTC)
 WHO = "analyst-1"
@@ -75,7 +78,7 @@ async def _seed(graph, datasets: list[str]):  # type: ignore[no-untyped-def]
 
 
 async def _row(graph, table: str, element_id: str) -> dict[str, Any]:  # type: ignore[no-untyped-def]
-    """The stored row, read through the base type (`V` for a node, `E` for a link): the deleting
+    """The stored row, read from its own type (`PERSON` for a node, `LINK` for a link): the deleting
     statements' own record, which no port read returns."""
     rows = await graph._client.sql(
         f"SELECT reverted, reverted_at, reverted_by, withdrawn_by_load FROM {table} WHERE id = :id",
@@ -99,9 +102,9 @@ async def test_a_deleting_write_records_when_and_by_whom_and_clears_the_withdraw
         await graph.revert_elements([a.id], [link.id], tx, by=WHO, at=AT)
         await graph.commit_transaction(tx)
 
-        _recorded(await _row(graph, "V", a.id), None)
-        _recorded(await _row(graph, "E", link.id), None)
-        untouched = await _row(graph, "V", b.id)
+        _recorded(await _row(graph, PERSON, a.id), None)
+        _recorded(await _row(graph, LINK, link.id), None)
+        untouched = await _row(graph, PERSON, b.id)
         assert untouched.get("reverted") in (None, False)
         assert untouched.get("reverted_by") is None
 
@@ -113,9 +116,9 @@ async def test_a_revert_by_load_records_when_and_by_whom_and_names_the_load() ->
         await graph.withdraw_elements([a.id], [link.id], "load-2", tx, by=WHO, at=AT)
         await graph.commit_transaction(tx)
 
-        _recorded(await _row(graph, "V", a.id), "load-2")
-        _recorded(await _row(graph, "E", link.id), "load-2")
-        untouched = await _row(graph, "V", b.id)
+        _recorded(await _row(graph, PERSON, a.id), "load-2")
+        _recorded(await _row(graph, LINK, link.id), "load-2")
+        untouched = await _row(graph, PERSON, b.id)
         assert untouched.get("reverted") in (None, False)
         assert untouched.get("withdrawn_by_load") is None
 
@@ -130,7 +133,7 @@ async def test_a_dataset_withdrawal_records_when_and_by_whom_and_names_the_withd
 
         assert (counts.nodes, counts.edges) == (2, 1)
         for node in (a, b):
-            _recorded(await _row(graph, "V", node.id), "layer-delete:case-a")
-        _recorded(await _row(graph, "E", link.id), "layer-delete:case-a")
+            _recorded(await _row(graph, PERSON, node.id), "layer-delete:case-a")
+        _recorded(await _row(graph, LINK, link.id), "layer-delete:case-a")
         for kept in (other[0].id, other[1].id):
-            assert (await _row(graph, "V", kept)).get("reverted") in (None, False)
+            assert (await _row(graph, PERSON, kept)).get("reverted") in (None, False)
