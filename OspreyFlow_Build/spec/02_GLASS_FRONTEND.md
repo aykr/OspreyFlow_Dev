@@ -383,8 +383,8 @@ the state with no script. *Kept* is **tab only** (the choice belongs to this tab
 its normal state on reload) or **this browser** (localStorage, under the key named in *Normal state*, for this analyst, never sent and not
 part of the case). The server-rendered pages' panel frame (`packages/glass-shared/src/layout/panelFrameStore.ts`, no
 React, no inline style) does what this table says, and the code declares the *Kept* column in `PANEL_ACTION_STORAGE`;
-`tests/glass_trees/test_panel_frame_spec_table.py` fails if the two differ. **With no script nothing here runs: every
-panel is open in its normal state, and the markup carries no control for any of these actions** (the owner: "scripts
+`tests/glass_trees/test_panel_frame_spec_table.py` fails if the two differ. **With no script nothing here runs, and nothing reads this browser's storage: every
+panel is open in its normal state (the default size, order and fold, never a kept one), and the markup carries no control for any of these actions** (the owner: "scripts
 off: every panel open in its normal state, no controls"). Where the React workspace's own behaviour differs from this
 table, this table wins (the owner: "spec/02 wins action by action").
 
@@ -392,13 +392,13 @@ table, this table wins (the owner: "spec/02 wins action by action").
 | --- | --- | --- | --- |
 | `hide-and-show-the-side-panel-by-keyboard` | tab only | Open and docked at a viewport of 1200px or wider; closed, opening over the canvas, below it | Open, as at a wide viewport, with no control |
 | `open-the-side-panel-to-the-full-width-and-return-by-keyboard` | tab only | Normal width (340px, or the width kept below), not full | Open at its normal width, with no control |
-| `hide-and-show-the-timeline-by-keyboard` | tab only | Folded: the 34px row alone | Open, its plot shown at the height kept or 130px, with no control |
-| `move-a-side-panel-up-and-down-by-keyboard` | this browser | Under `ospreyflow.side-panel-order`: The Inspector, Metrics, Query builder, then Find connections | Open in that order, with no control |
-| `move-a-side-panel-with-alt-arrows-by-keyboard` | this browser | Under `ospreyflow.side-panel-order`: The same order and the same store as the menu's *Move up* and *Move down* | Open in that order, with no control |
+| `hide-and-show-the-timeline-by-keyboard` | tab only | Folded: the 34px row alone | Open, its plot shown at 130px (the default), with no control |
+| `move-a-side-panel-up-and-down-by-keyboard` | this browser | Under `ospreyflow.side-panel-order`: The Inspector, Metrics, Query builder, then Find connections | Open in the default order, with no control |
+| `move-a-side-panel-with-alt-arrows-by-keyboard` | this browser | Under `ospreyflow.side-panel-order`: The same order and the same store as the menu's *Move up* and *Move down* | Open in the default order, with no control |
 | `fold-a-side-panel-by-keyboard` | this browser | Under `ospreyflow.side-panels-folded`: The Inspector open, the other panels folded beneath it (a value that is not a list of panels is ignored and this is used) | Every panel open (unfolded), since a folded panel could not be opened with no control |
 | `resize-the-side-panel-by-keyboard` | this browser | Under `ospreyflow.layout-sizes`: 340px wide, held between 300 and 480 (a width below 300 is raised to 300) and leaving the canvas 320 | Open at 340px, with no control |
 | `resize-a-stacked-panel-by-keyboard` | this browser | Under `ospreyflow.layout-sizes`: No height of its own: the open panels share the column; a height is at least 48px | Open, sharing the column, with no control |
-| `resize-the-timeline-by-keyboard` | this browser | Under `ospreyflow.layout-sizes`: 130px plot, held between 96px and seven tenths of the window | Open at its plot's height, with no control |
+| `resize-the-timeline-by-keyboard` | this browser | Under `ospreyflow.layout-sizes`: 130px plot, held between 96px and seven tenths of the window | Open at 130px (the default), with no control |
 | `close-and-open-the-details-panel-by-keyboard` | tab only | The canvas toolbar's *Details* open when the side panel is open (docked or overlaid) | Open, with no control |
 
 A stored value that is missing, corrupt or not of the shape expected is ignored, never an error: the normal state is
