@@ -2,10 +2,13 @@
 
 ## Round 2 (the conductor, 24 November 2026)
 
-1. The owner lifted his per-machine switch (`no-local-stacks` is now `no-local-stacks.off`): the Docker guard allows
-   `docker run` on this Mac. `test_page_addresses_caddy.py` run on the image `caddy:2.11.4-alpine`, no binary given:
-   **43 passed** (5.6 s). The fail-in-words behaviour where neither Docker nor a binary can run is unchanged, and section 1
-   below is **overtaken** by it (kept as the record of round 1).
+1. **The Caddy test did not run in this session's gate.** The conductor's message says the switch was lifted
+   (`no-local-stacks` renamed `no-local-stacks.off`), but on this Mac, at the time of the last run, `~/.ospreyflow/` holds
+   `no-local-stacks` (empty, dated 9 November) and no `.off` file, so the guard still refuses and the test failed in its own
+   words (42 errors in the Caddy file; everything else green). The image `caddy:2.11.4-alpine` is present. I did not point
+   `OSPREY_LEASE_DIR` elsewhere to get round the switch (that is the owner's decision), and I did not rename his file. An
+   earlier line here that said "43 passed" was a run made by hand with `OSPREY_LEASE_DIR` on an empty folder (section 1); it
+   is not a gate result. When the switch file is gone, the file needs no change.
 2. The override variable is renamed `OSPREY_CADDY_BINARY` (test, messages, docstring, this report, the README).
    `make test-file-coverage-check`: "1279 test file(s), 0 allowlisted, no new drift." The round-1 diff that wired the test
    as live-service (an `--ignore` in `ci.yml` and a Makefile hunk) is **withdrawn**; `PL7f_CI_YML.diff` keeps only the
@@ -179,3 +182,34 @@ only under its own brand). Checks: `npm test --workspace apps/pages` 718 passed;
 `citation-check`, `client-name-check` clean; the guide tests 122 passed. The whole of `tests/harness`, `tests/schemas`
 and `test_core_stands_alone.py` ran with one failure, the schema drift gate, caused by my own edit of the setting's
 description before I regenerated the types, and green after.
+
+## Round 2, the verifier's findings (sign-in: the owner's)
+
+**1. The realm client.** `realm.pages_client` now takes its origin from `derive` (`derived.public_origin` where the setting is
+on; `sites(config).glass` where it is off, which is the same one normaliser, `page_addresses.parse_origin`). Redirect, web
+origin and post-logout address are made from it. Case 7 registers `https://osprey.example.org/session/callback`; case 14
+registers the lower-case origin. Every place under `harness/` that touches `public_origin`, with whether it reads `derive`:
+`page_addresses.py` (makes it); `pages_service.py:133` (copies `derived.public_origin`); `realm.py` `pages_client` (reads
+`derive`, above); `register_sign_in.py:277` (calls `pages_client(config)`, so reads `derive`; its own `origin` at :260 is
+Superset's, from `SUPERSET_PUBLIC_ORIGIN`); `site.py` `sites()` (builds every address from `page_addresses.parse_origin`,
+`identity_name`, `dashboards_name` and `address`, so Keycloak's `KC_HOSTNAME` at `render.py:1253` and the Caddyfile's identity
+site are the same strings as the service's, and a default port is written nowhere); `cloud_platform/__init__.py:172` (an https
+check, no address); `webapp.py:402` (a placeholder value for a preview); `tls_check.py` (advice text); `site.py:92` (a header
+comment).
+
+**2. The tests.** `test_no_other_module_computes_an_address` now walks every module under `harness/` (the folder and its
+sub-folders) and looks for the raw setting and for `id.`/`bi.` names, not only for the variable names: each hit is listed in
+`ORIGIN_TOUCHES_ALLOWED` with its reason, and a listing that no longer matches a line fails. The `:443` stripping is gone from
+`test_the_derived_identity_is_the_address_the_deployment_already_names`. `test_keycloaks_issuer_the_realm_client_and_the_service_agree`
+compares, per table row, the issuer Keycloak will publish (from its rendered `KC_HOSTNAME`), the realm client's redirect, web
+origin and post-logout address, and the page service's settings, as strings. Red first (commit `e1fede0`): the verifier's
+cases 7 and 14 against the client as it was, Keycloak given a port the service is not, and a planted change to `derive`'s
+`public_origin` that turns a case red; each fails for the stated reason.
+
+**3. Case 7 stays derived, and why no measurement was needed.** The origin `https://host:443` is normalised once to
+`https://host`, and Keycloak is given `https://id.host` with no port: the same string as case 3 (an origin written without the
+port), which the deployment already serves. The issuer is therefore equal by construction on both sides, and no claim is made
+about what Keycloak would publish if it were handed `:443`, because it never is. If the owner prefers case 7 refused again
+(the conductor's fallback), it is one refusal in `derive` and the rows 7 and 8 flipped in the table. Backlog line, for the
+conductor: measure against a real Keycloak whether a hostname written with `:443` publishes `:443` in `iss`, so the deployment
+can say whether a written default port may ever be passed through.
