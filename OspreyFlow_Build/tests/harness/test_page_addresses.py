@@ -472,12 +472,12 @@ PLANTS: list[tuple[str, str, Any, str]] = [
     ("a listener on another port than the issuer's", "11-own-certificate-9443",
      {"extra_listener": 9999}, "the identity site is"),
     ("the alias for another name", "3-acme-default-port",
-     {"identity_alias": "id.other.example.org"}, "the identity site is"),
+     {"identity_alias": "id.other.example.org"}, "the proxy's aliases on osprey"),
     ("the trust variable taken away", "4-own-certificate-with-ca",
      {"trust": None}, "NODE_EXTRA_CA_CERTS is None"),
     ("an issuer on another realm", "15-access-key-acme",
      {"issuer": lambda got: got.issuer.replace("/realms/osprey", "/realms/other")},
-     "is not on the key's open list"),
+     "OSPREY_PAGES_OIDC_ISSUER is 'https://id.osprey.example.org/realms/other'"),
 ]  # fmt: skip
 
 
@@ -499,8 +499,7 @@ def test_each_planted_fault_is_red(plant: str, row_id: str, changes: Any, says: 
     ("row_id", "says"),
     [
         ("1-lite-plain-http", "must be an https address"),
-        ("1-small-plain-http", "must be an https address"),
-        ("8-plain-http-explicit-80", "must be the origin alone"),
+        ("8-lite-plain-http-explicit-80", "must be the origin alone"),
     ],
 )
 def test_a_refusal_that_returns_a_value_instead_is_red(row_id: str, says: str) -> None:
@@ -530,11 +529,6 @@ def test_a_refusal_that_returns_a_value_instead_is_red(row_id: str, says: str) -
                 extra_listener=None,
                 proxy_https_port=None,
                 trust=None,
-                sign_in={
-                    "OSPREY_PAGES_OIDC_ISSUER": issuer,
-                    "OSPREY_PAGES_CLIENT_ID": "osprey-pages",
-                    SECRET_VARIABLE: "${OSPREY_PAGES_CLIENT_SECRET:?set in the env file}",
-                },
             )
 
         return planted
@@ -583,3 +577,22 @@ def test_the_clash_model_is_red_when_the_port_refusal_is_taken_out(row_id: str) 
     assert any(f"port {port} is served as plain HTTP and as HTTPS" in line for line in found), found
     with pytest.raises(ValueError):
         render_of(config)
+
+
+@pytest.mark.parametrize("tail", ["/token", "/certs", "/.well-known/openid-configuration"])
+def test_the_key_check_is_red_when_the_issuers_fetch_is_not_on_the_open_list(tail: str) -> None:
+    """The issuer's discovery document, keys and token are what the service fetches from its own
+    origin, where no credential and no cookie is sent: each must be on the key's open list, or a
+    deployment that asks for the key cannot sign anyone in. The open list taken out one path at a
+    time, at the shape the renderer writes it (the constant `render_caddyfile` reads)."""
+    from harness import site
+
+    [row] = [r for r in ROWS if r["id"] == "15-access-key-acme"]
+    config = config_of(row)
+    assert findings(row, config, render_of(config)) == []
+    listed = tuple(p for p in site.OPEN_ON_THE_IDENTITY_PROVIDER if not p.endswith(tail))
+    assert len(listed) == len(site.OPEN_ON_THE_IDENTITY_PROVIDER) - 1
+    with mock.patch.object(site, "OPEN_ON_THE_IDENTITY_PROVIDER", listed):
+        found = findings(row, config, render_of(config))
+    assert any(f"{tail}" in line and "is not on the key's open list" in line for line in found), found
+    assert findings(row, config, render_of(config)) == []

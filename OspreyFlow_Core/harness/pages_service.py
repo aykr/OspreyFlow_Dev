@@ -3,14 +3,12 @@ Amendment 3, items 1 to 4; decision 7's route table and `OSPREY_PAGES_TREE`; inv
 
 The setting is one boolean in `osprey.yaml`, off by default, turned on for one deployment at a time
 by the owner (`schemas.deployment.PagesConfig`). **Off means unchanged, byte for byte**: every
-function here that adds something returns nothing while the setting is off, and the one that
-refuses (`refuse_a_cutover_without_the_service`) refuses a configuration that would otherwise
-render a deployment with neither front end. Nothing here is read from a profile, a brand or a
-release: `enabled` is the only input to "on".
+function here that adds something returns nothing while the setting is off. Nothing here is read
+from a profile, a brand or a release: `enabled` is the only input to "on".
 
 What "on" adds, in the shapes that can run it (local-lite is refused over plain HTTP or an
-untrusted certificate, and the cloud-platform shape has no sign-in for it yet: `refuse_*`; so, in
-effect, small and cluster: the compose file, the chart's values):
+untrusted certificate, and the cloud-platform shape has no sign-in for it yet, both by
+`harness.page_addresses`; so, in effect, small and cluster: the compose file, the chart's values):
 
 * the `pages` service (`harness.render.compose_services`; the chart's workloads and the lock are
   translated from it): its image is the owned `pages` image, its two secrets by reference to the
@@ -20,12 +18,15 @@ effect, small and cluster: the compose file, the chart's values):
 * the route table for the deployment's brand (`route_paths`): the Studio's paths on the default
   theme, `pages`' own paths on both, and every path once the GOV.UK tree is complete (I22), when
   there is no workspace service and no route to one;
-* an origin and an issuer the service starts with (`origin_problem`, round 9): both are made from
-  `network.public_origin`'s host and port, and the render refuses, in words, a form `config.ts`
-  would throw on (a port the scheme already uses, an IP address, a name that is not plain ASCII
-  DNS). `tests/harness/test_pages_setting.py` runs `config.ts` itself against every value;
 * `OSPREY_PAGES_TREE`, from `appearance.brand` (`default` or `govuk`), and the rest of the
   service's variables (`service_environment`).
+
+**Its addresses are not worked out here.** The origin, the issuer, the sign-in variables, the
+trust file, the identity alias and the identity listener's port are
+`harness.page_addresses.derive`'s, the only place that computes them (the owner's ruling of
+24 November 2026, slice PL7f); `service_environment` copies what it returns, and the refusals that
+used to live here (plain HTTP, the own certificate's trust, the cloud-platform shape, a default
+port, a port the proxy already uses, the cutover without the setting) moved there with their words.
 
 The state of the GOV.UK tree is `scripts.tree_parity.govuk_tree_state()` (PL7a1): the one function,
 asked when the render runs, never a second reading of it and never recorded.
@@ -33,9 +34,7 @@ asked when the render runs, never a second reading of it and never recorded.
 
 from __future__ import annotations
 
-import re
-
-from schemas.deployment import OspreyConfig, Profile
+from schemas.deployment import OspreyConfig
 
 #: The compose service's name, the chart's workload's, and the front proxy's upstream host.
 SERVICE = "pages"
@@ -54,62 +53,6 @@ OWN_PATHS = ("/session", "/assets/pages")
 #: The Studio's paths, on the default theme (decision 7: "on the default theme, the Studio's paths
 #: (`/studio/…`)"). On the GOV.UK theme a function's path goes to `pages` once its tree has it.
 STUDIO_PATHS = ("/studio",)
-
-
-#: Where the organisation's CA (`network.tls.ca`) is mounted into the service, read-only, and what
-#: node's `NODE_EXTRA_CA_CERTS` names: the service's discovery, key set and token request go to the
-#: identity name, whose certificate is the organisation's. Node keeps its own roots beside it.
-CA_IN_SERVICE = "/etc/ssl/organisation-ca.pem"
-
-
-class PageServiceNeedsHttps(ValueError):
-    """The page service is on, and its sign-in has no address the service accepts: the identity
-    address is neither https nor loopback (the owner's ruling of 23 November 2026)."""
-
-
-class PageServiceNeedsTrust(ValueError):
-    """The page service is on, and the identity name's certificate is one the service cannot verify:
-    the front proxy signs that name itself, with its own internal authority, which node does not
-    trust (round 5 of PL7a2b: the service's certificate check is not weakened or switched off)."""
-
-
-class PageServiceNeedsCa(ValueError):
-    """The page service is on, and the identity name is served with the organisation's own
-    certificate (`network.tls`) that names no CA: the certificate may come from a private root,
-    which node trusts only where `NODE_EXTRA_CA_CERTS` names it, and the render cannot tell by the
-    name (rounds 7 and 8 of PL7a2b: the service's certificate check is not weakened or switched
-    off)."""
-
-
-class PageServiceNeedsAnOrigin(ValueError):
-    """The page service is on, and `network.public_origin` is written in a form the service refuses
-    to start on, or cannot make its identity address from (round 9 of PL7a2b: a default port, an IP
-    address, a name that is not plain ASCII DNS)."""
-
-
-class PageServiceNeedsAnotherPort(ValueError):
-    """The page service is on, and the identity name's extra listener would land on a port the front
-    proxy already serves as plain HTTP inside its container, which Caddy refuses to load (round 10
-    of PL7a2b)."""
-
-
-class PageServiceNotOnThisShape(ValueError):
-    """The page service is on for the cloud-platform shape, which has no sign-in for it yet (the
-    owner's ruling of 23 November 2026, PL7a2b case C: ADR-148 Amendment 23 item 1 needs the chart's
-    egress to the identity provider and the page service's own Entra registration, a part of its
-    own)."""
-
-
-class PageServiceNotEnabled(ValueError):
-    """A GOV.UK deployment whose tree is complete would lose its workspace with nothing to take its
-    place (ADR-152 Amendment 3 item 4)."""
-
-
-#: The words of the refusal, as the amendment gives them.
-REFUSAL = (
-    "the GOV.UK tree is complete, so the workspace would be removed, and the page service is not "
-    "enabled for this deployment"
-)
 
 
 def enabled(config: OspreyConfig) -> bool:
@@ -132,33 +75,6 @@ def govuk_tree_is_complete(config: OspreyConfig) -> bool:
     from scripts import tree_parity
 
     return tree_parity.govuk_tree_state() == tree_parity.COMPLETE
-
-
-#: The words of the refusal for the cloud-platform shape.
-NEEDS_SIGN_IN_ON_CLOUD_PLATFORM = (
-    "pages.enabled is on, but the page service cannot run on the cloud-platform shape yet: people "
-    "would have no way to sign in to it there (the chart gives it no egress to the identity "
-    "provider, and it has no registration with the organisation's Entra ID: ADR-148 Amendment 23). "
-    "Leave pages.enabled off for this deployment until the page service is offered on the "
-    "cloud-platform shape"
-)
-
-
-def refuse_on_cloud_platform(config: OspreyConfig) -> None:
-    """The page service is not rendered for the cloud-platform shape (development or the proof of
-    concept) with the setting on: it would hold none of its three sign-in variables, and the chart
-    has no egress to the identity provider for it. No sign-in is built here, no egress is added and
-    the chart's policy is untouched; the part that gives the page service its Entra sign-in lifts
-    this. Off is the reference."""
-    if enabled(config) and config.profile is Profile.CLOUD_PLATFORM:
-        raise PageServiceNotOnThisShape(NEEDS_SIGN_IN_ON_CLOUD_PLATFORM)
-
-
-def refuse_a_cutover_without_the_service(config: OspreyConfig) -> None:
-    """Amendment 3 item 4: a GOV.UK deployment whose tree is complete and whose setting is off is
-    refused in words, rather than rendering a deployment with neither front end."""
-    if not enabled(config) and govuk_tree_is_complete(config):
-        raise PageServiceNotEnabled(REFUSAL)
 
 
 def workspace_removed(config: OspreyConfig) -> bool:
@@ -195,268 +111,26 @@ def caddy_matcher(paths: list[str]) -> str:
     )
 
 
-#: The words of the second refusal, with the identity address in them.
-NEEDS_HTTPS = (
-    "pages.enabled is on, but the identity address {identity} is neither https nor a loopback "
-    "address, and the page service does not sign people in over plain HTTP: serve the identity "
-    "address over HTTPS with a certificate the page service trusts, or leave pages.enabled off"
-)
-
-#: The words of the third refusal, with the identity address in them.
-NEEDS_TRUST = (
-    "pages.enabled is on, but the identity address {identity} is served with a certificate from "
-    "the front proxy's own internal authority, which the page service does not trust, so people "
-    "could not sign in: give the deployment an address with a certificate the page service trusts "
-    "(a public name, or network.tls on a Small), or leave pages.enabled off"
-)
-
-#: The words of the fourth refusal, with the identity address in them.
-NEEDS_CA = (
-    "pages.enabled is on, but the identity address {identity} is served with the deployment's own "
-    "certificate (network.tls), which names no CA, so the page service cannot tell which root to "
-    "trust for it and people could not sign in: give network.tls a ca (the root certificate that "
-    "signed it; a public authority's root will do), or leave pages.enabled off"
-)
-
-#: The names Caddy signs itself, with its own internal authority, rather than ask a public one
-#: (certmagic's `SubjectIsInternal`, with an IP address, which no public authority signs for).
-_INTERNAL_SUFFIXES = (".localhost", ".local", ".internal", ".home.arpa")
-
-
-def service_accepts_issuer(issuer: str) -> bool:
-    """`apps/pages/server/config.ts`'s `oidcSettings` refuses an issuer that is not `https`, bar an
-    `http` one whose host is exactly loopback (`localhost`, `[::1]`, `127.x.x.x`). That check is not
-    weakened: the render holds itself to it, here, and refuses where it cannot meet it."""
-    from urllib.parse import urlsplit
-
-    url = urlsplit(issuer)
-    host = url.hostname or ""
-    loopback = host in ("localhost", "::1") or re.fullmatch(r"127(\.\d{1,3}){3}", host)
-    return url.scheme == "https" or (url.scheme == "http" and bool(loopback))
-
-
-def refuse_sign_in_without_https(config: OspreyConfig) -> None:
-    """The page service is given its sign-in (all three variables) or it is not turned on: a
-    deployment whose identity address is neither https nor loopback (local-lite on plain HTTP: a
-    `.localhost` name is not loopback by the service's own rule) has no address to give it, and is
-    refused in plain words rather than rendered with a service whose sign-in cannot work."""
-    from harness.site import REALM, sites
-
-    names = sites(config)
-    if not service_accepts_issuer(f"{names.identity}/realms/{REALM}"):
-        raise PageServiceNeedsHttps(NEEDS_HTTPS.format(identity=names.identity))
-
-
-#: The words of the fifth refusal, with what is wrong and what to write in it.
-NEEDS_ORIGIN = (
-    "pages.enabled is on, but network.public_origin {problem}, and the page service refuses to "
-    "start on an address written that way, so people could not sign in: {fix}, or leave "
-    "pages.enabled off"
-)
-
-_LABEL = r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?"
-_DNS_NAME = re.compile(rf"{_LABEL}(?:\.{_LABEL})*", re.ASCII)
-#: A last label the service's URL parser reads as a number (decimal, or `0x` and hex digits), which
-#: makes the whole host an IPv4 address to it, whatever the labels before: `id.<host>` is then no
-#: name.
-_NUMBER_LAST = re.compile(r"[0-9]+|0[xX][0-9a-fA-F]*")
-
-
-def origin_problem(config: OspreyConfig) -> tuple[str, str] | None:
-    """What is wrong with `network.public_origin` for the page service, as (the problem, what to
-    write), or None where the values the render makes from it are ones the service starts with.
-
-    The render writes `OSPREY_PAGES_PUBLIC_ORIGIN` and `OSPREY_PAGES_OIDC_ISSUER` from the one host
-    and port (`harness.site.sites`: `scheme://[id.]host[:port]`), and `config.ts` (`publicOrigin`,
-    `oidcSettings`) accepts a value only where it is exactly what its URL parser makes of it:
-
-    * a port the scheme already uses (`:443` on https): the parser drops it, so the origin the
-      service is given is not its own `URL.origin`. Not rewritten here (the identity provider's own
-      `iss` may or may not carry the port: not measured): refused, naming the port;
-    * a host that is not a plain ASCII DNS name, lower case, letters, digits and hyphens between
-      dots (so no IP address in any form, which has no `id.` name; no bracketed IPv6; no non-ASCII,
-      percent-encoded or punycode name; no trailing dot; no last label the parser reads as a
-      number). This is stricter than the service in a few forms (a punycode name, a trailing dot,
-      an underscore): a host nobody could be sure of is refused, in words.
-
-    A user name, path, query or fragment is not part of what `sites` writes, a host's capitals are
-    lowered by it, and a port outside 0 to 65535 or not a number is refused by `sites` itself, with
-    the setting off as well: none of those reaches the service."""
-    from urllib.parse import urlsplit
-
-    from harness.site import sites
-
-    names = sites(config)
-    default = 443 if names.scheme == "https" else 80
-    written = urlsplit(config.network.public_origin.rstrip("/")).port
-    if written == default:
-        return (
-            f"carries the port :{default}, which {names.scheme} already uses when none is written",
-            f"write it without the port (for example {names.scheme}://{names.host})",
-        )
-    host = names.host
-    reason = None
-    if not _DNS_NAME.fullmatch(host):
-        reason = "is not a plain ASCII DNS name (letters, digits and hyphens between dots)"
-    elif _NUMBER_LAST.fullmatch(host.rsplit(".", 1)[-1]):
-        reason = "ends in a number, which makes it an IP address to the page service"
-    elif any(label.startswith("xn--") for label in host.split(".")):
-        reason = "is a punycode name"
-    if reason is not None:
-        return (
-            f"names the host {host!r}, which {reason}",
-            "give the deployment a DNS name written in lower case ASCII "
-            "(for example https://osprey.example.org), not an IP address",
-        )
-    return None
-
-
-def refuse_an_origin_the_service_refuses(config: OspreyConfig) -> None:
-    """The page service is given an origin and an issuer it starts with, or it is not turned on
-    (`origin_problem`): the owner's third instruction of round 9, that a sign-in which cannot work
-    is said so by the render, at render time, in words naming the setting. The service's own check
-    is not touched. Off is the reference, and a form refused elsewhere (a bad port, a missing
-    scheme) is refused as it always was."""
-    found = origin_problem(config)
-    if found is not None:
-        problem, fix = found
-        raise PageServiceNeedsAnOrigin(NEEDS_ORIGIN.format(problem=problem, fix=fix))
-
-
-def caddy_signs_itself(host: str) -> bool:
-    """Whether Caddy gives `host` a certificate from its own internal authority: `localhost`, a name
-    under `.localhost`, `.local`, `.internal` or `.home.arpa`, or an IP address (the names no public
-    authority signs for). Node does not trust that authority."""
-    import ipaddress
-
-    name = host.rstrip(".").lower()
-    try:
-        ipaddress.ip_address(name)
-    except ValueError:
-        return name == "localhost" or name.endswith(_INTERNAL_SUFFIXES)
-    return True
-
-
-def refuse_sign_in_without_trust(config: OspreyConfig) -> None:
-    """The page service is given a sign-in whose certificate it can verify, or it is not turned on.
-    An https identity address the proxy signs itself (local-lite's `.localhost` name: Lite has no
-    `network.tls`) is served with an authority node does not trust, so discovery would fail at
-    sign-in; no trust path is given (it would take the authority's root out of the proxy's data
-    volume, which holds its private key) and the service's check is not touched: the render refuses.
-    The organisation's own certificate (`network.tls`, its CA mounted where it is given) and a
-    public name are trusted. Plain HTTP is `refuse_sign_in_without_https`'s."""
-    from harness.site import sites
-
-    names = sites(config)
-    if names.scheme == "https" and config.network.tls is None and caddy_signs_itself(names.host):
-        raise PageServiceNeedsTrust(NEEDS_TRUST.format(identity=names.identity))
-
-
-def refuse_sign_in_without_ca(config: OspreyConfig) -> None:
-    """The organisation's own certificate (`network.tls`) with no `ca` is refused, on any name. It
-    may come from a private root, which node trusts only where `NODE_EXTRA_CA_CERTS` names it
-    (`service_environment` does that from `network.tls.ca`); the render cannot tell a private root
-    from a public one by the name (a private authority's name outside the suffixes Caddy keeps for
-    itself, `osprey.intra.example.gov.uk`, looks like any public one) and does not read the
-    certificate, so with no `ca` the sign-in could fail at sign-in time and the render refuses, in
-    words. A certificate signed by a public authority is no worse off: its root is harmless to give.
-    Nothing is trusted that was not named, and the service's check is not touched. (The host tools
-    also trust the deployment's own certificate file, ADR-114 Amendment 33, through OpenSSL's
-    partial-chain flag; whether node does the same for a bare leaf certificate was not measured, so
-    that fallback is not offered to the service.)"""
-    from harness.site import sites
-
-    names = sites(config)
-    tls = config.network.tls
-    if names.scheme == "https" and tls is not None and not tls.ca:
-        raise PageServiceNeedsCa(NEEDS_CA.format(identity=names.identity))
-
-
-def identity_listener_port(config: OspreyConfig) -> int | None:
-    """The port the front proxy must also listen on, inside its container, for the identity name,
-    so the page service reaches its issuer through the alias (round 5 of PL7a2b).
-
-    The issuer is the public identity name with the origin's port (Keycloak reports its issuer as
-    the public address whichever door a request came through, and the service checks the discovery
-    document against the address it asked, so an issuer carrying the proxy's in-container port would
-    be refused). The proxy's own in-container HTTPS port is 8443 with the organisation's certificate
-    and 443 otherwise, and the host's published port maps to it: the alias does not. So where the
-    origin's port is not the proxy's own, the identity site is given an address at the origin's
-    port too. Nothing is published, no network is added. None where no listener is needed, where
-    the page service is off, or where the origin is plain HTTP (refused above)."""
-    from harness.site import PROXY_HTTPS_PORT, sites
-
-    names = sites(config)
-    if not enabled(config) or names.scheme != "https":
-        return None
-    own = PROXY_HTTPS_PORT if config.network.tls is not None else 443
-    if names.port == own:
-        return None
-    refuse_a_clashing_listener(config, names.port)
-    return names.port
-
-
-#: The words of the sixth refusal: the identity address, the port, what the proxy uses it for.
-NEEDS_ANOTHER_PORT = (
-    "pages.enabled is on, but network.public_origin gives the identity address {identity} the port "
-    ":{port}, which the front proxy already serves as plain HTTP inside its container ({use}), and "
-    "one port cannot serve both plain HTTP and HTTPS, so the front proxy would not start: give "
-    "network.public_origin a different port, or leave pages.enabled off"
-)
-
-
-def refuse_a_clashing_listener(config: OspreyConfig, port: int) -> None:
-    """The identity listener is not put on a port the proxy already serves as plain HTTP inside its
-    container: Caddy refuses a Caddyfile with an HTTP site and an HTTPS site on one listener, and
-    the front proxy, the deployment's only door, would not start (round 10 of PL7a2b). The
-    plain-HTTP ports are those `render_caddyfile` writes: `PROXY_HTTP_PORT` beside the
-    organisation's certificate (its `http_port`: the health check and the redirect) and 80
-    otherwise (the catch-all), and the loopback doors the compose proxy carries (`loopback_doors`).
-    The proxy's own HTTPS port is not one: where the origin's port is it, no listener is added
-    (`identity_listener_port`). Refused in words, naming the setting and the port; the service's
-    own check is not touched."""
-    from harness.site import PROXY_HTTP_PORT, loopback_doors, sites
-
-    own = config.network.tls is not None
-    served = {PROXY_HTTP_PORT if own else 80: "its plain-HTTP port"}
-    served |= {
-        door: f"its loopback door to the {'graph store' if door == 2480 else 'Conduit'}"
-        for door, _upstream in loopback_doors(config)
-    }
-    if port in served:
-        raise PageServiceNeedsAnotherPort(
-            NEEDS_ANOTHER_PORT.format(identity=sites(config).identity, port=port, use=served[port])
-        )
-
-
-def identity_alias(config: OspreyConfig) -> str:
-    """The identity name (`id.<host>`) the proxy answers to on the internal network `osprey`, so the
-    page service reaches its issuer there with no route out (the owner's ruling of 23 November 2026:
-    ADR-114 Amendment 7, `egress_needs` not widened for the service)."""
-    from harness.site import sites
-
-    return f"id.{sites(config).host}"
-
-
 def service_environment(config: OspreyConfig, *, with_sign_in: bool) -> dict[str, str]:
     """The page service's own variables, as the compose file and a chart's workload carry them.
 
     The two secrets are **references** to the env file's names (`${NAME:?…}`), never values: the
     file is `deployment.env`, mode 600, and the cluster's Secret, where each is minted once. No
-    other secret reaches the service. `with_sign_in` is whether the deployment runs the identity
-    provider the service signs in against: where it does, the service is given **all three** sign-in
-    variables or the render refuses (`refuse_sign_in_without_https`), never fewer. The cloud
-    platform runs no identity provider of ours and is refused with the setting on before this is
-    reached (`refuse_on_cloud_platform`)."""
-    from harness.realm import PAGES_CLIENT_ID, PAGES_CLIENT_SECRET_KEY, PAGES_SESSION_SECRET_KEY
-    from harness.site import REALM, sites
+    other secret reaches the service. The addresses are `harness.page_addresses.derive`'s, copied:
+    `with_sign_in` is whether the deployment runs the identity provider the service signs in
+    against, where it does the service is given **all three** sign-in variables (and the trust file,
+    where it needs one) or `derive` refuses, never fewer. The cloud platform runs no identity
+    provider of ours and is refused with the setting on."""
+    from harness import page_addresses
+    from harness.realm import PAGES_SESSION_SECRET_KEY
 
-    names = sites(config)
+    derived = page_addresses.require(config, with_sign_in=with_sign_in)
+    assert derived is not None, "the page service's environment is asked for with the setting off"
     refer = "${%s:?set in the deployment env file}"
     environment = {
         "OSPREY_PAGES_TREE": tree(config),
         "OSPREY_PAGES_PORT": str(PAGES_PORT),
-        "OSPREY_PAGES_PUBLIC_ORIGIN": names.glass,
+        page_addresses.ORIGIN_VARIABLE: derived.public_origin,
         "OSPREY_PAGES_CONDUIT_URL": "http://api:8000",
         "OSPREY_PAGES_SESSION_SECRET": refer % PAGES_SESSION_SECRET_KEY,
         # The service's own database number and key prefix are its own defaults (decision 4); the
@@ -467,17 +141,7 @@ def service_environment(config: OspreyConfig, *, with_sign_in: bool) -> dict[str
         "VALKEY_PASSWORD": "${VALKEY_PASSWORD:-}",
     }
     if with_sign_in:
-        refuse_sign_in_without_https(config)
-        refuse_sign_in_without_trust(config)
-        refuse_sign_in_without_ca(config)
-    # The origin is checked by the service whether or not sign-in is given (the live-updates proxy
-    # compares an upgrade's `Origin` with it), and the issuer is made from the same host and port.
-    refuse_an_origin_the_service_refuses(config)
-    if with_sign_in:
-        environment["OSPREY_PAGES_OIDC_ISSUER"] = f"{names.identity}/realms/{REALM}"
-        environment["OSPREY_PAGES_CLIENT_ID"] = PAGES_CLIENT_ID
-        environment["OSPREY_PAGES_CLIENT_SECRET"] = refer % PAGES_CLIENT_SECRET_KEY
-        tls = config.network.tls
-        if config.profile is Profile.SMALL and tls is not None and tls.ca:
-            environment["NODE_EXTRA_CA_CERTS"] = CA_IN_SERVICE
+        environment.update(derived.sign_in())
+        if derived.trust:
+            environment[page_addresses.TRUST_VARIABLE] = derived.trust
     return environment

@@ -122,7 +122,20 @@ def _parse(output: str) -> dict[str, Result]:
 
 
 def _image_is_here() -> str | None:
-    """None where the image can be run; the words where it cannot."""
+    """None where the image can be run; the words where it cannot. Where the owner's per-machine
+    switch is held (`no-local-stacks`, 9 November 2026) the repository's Docker guard would skip
+    the first docker call, in the guard's own words, and the Caddyfiles would go unchecked without
+    a failure: so the switch is asked first, and this test fails in words instead of skipping."""
+    from tests.local_docker_guard import switch_path
+
+    switch = switch_path()
+    if switch.exists():
+        return (
+            f"the owner's switch {switch} is held, so the Docker guard (tests/local_docker_guard.py) "
+            "refuses every docker call a test makes and the image cannot be run here; the real "
+            "Caddy needs that decision of his (OSPREY_LEASE_DIR names the folder the guard reads "
+            "the switch from)"
+        )
     try:
         done = subprocess.run(
             ["docker", "image", "inspect", PROXY_IMAGE],

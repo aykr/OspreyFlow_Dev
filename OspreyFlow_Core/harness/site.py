@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from harness import pages_service
+from harness import page_addresses, pages_service
 from schemas.deployment import (
     PROFILE_CEILINGS,
     EntraSignInConfig,
@@ -70,6 +70,7 @@ def render_caddyfile(config: OspreyConfig, *, doors: bool = True) -> str:
     # ADR-152 Amendment 3 and decision 7: with the page service on, the paths of its route table go
     # to `pages`; once a GOV.UK tree is complete every path does, and there is no workspace (I22).
     # Off, none of this is written and the table is what it was.
+    derived = page_addresses.require(config) if pages_service.enabled(config) else None
     no_workspace = pages_service.workspace_removed(config)
     glass = pages_service.UPSTREAM if no_workspace else pages_service.WORKSPACE_UPSTREAM
     pages_paths = [] if no_workspace else pages_service.route_paths(config)
@@ -143,15 +144,11 @@ def render_caddyfile(config: OspreyConfig, *, doors: bool = True) -> str:
                 names.host, identity=name == f"id.{names.host}", handlers=handlers
             )
         address = f"{names.scheme}://{name}"
-        if (
-            name == f"id.{names.host}"
-            and doors
-            and (port := pages_service.identity_listener_port(config))
-        ):
+        if name == f"id.{names.host}" and doors and derived is not None and derived.extra_listener:
             # The page service reaches its issuer through the alias, inside the network, at the
             # origin's port: the proxy listens there for this name too (the compose proxy alone:
-            # `doors`, which a cluster, with no alias, does not have).
-            address = f"{address}, {address}:{port}"
+            # `doors`, which a cluster, with no alias, does not have). The port is `derive`'s.
+            address = f"{address}, {address}:{derived.extra_listener}"
         lines += ["", f"{address} {{", *given, *matchers, *handlers, "}"]
     # ADR-114 Amendment 7: the doors this machine alone uses, through the proxy, so the services
     # behind them need no published port — and so no route out (measured: a published port needs
@@ -279,6 +276,84 @@ def _bind(config: OspreyConfig, mapping: str) -> str:
     return f"{LOOPBACK}:{mapping}" if config.profile is Profile.LOCAL_LITE else mapping
 
 
+#: The ports the proxy serves plain HTTP on in some shape or other, whichever shape this deployment
+#: is: 80 where it obtains its own certificates, 8080 beside the organisation's certificate or on
+#: plain HTTP. An HTTPS origin on either is refused in every shape (the owner, 24 November 2026:
+#: `harness.page_addresses`).
+PLAIN_HTTP_PORTS = {
+    80: "its plain-HTTP port where it obtains its own certificates",
+    PROXY_HTTP_PORT: "its plain-HTTP port beside the organisation's certificate or on plain HTTP",
+}
+
+
+@dataclass(frozen=True)
+class ProxyPort:
+    """One port the front proxy uses: where it listens inside its container, where it is published
+    on the host (None where it is not), and how, in words, for a refusal that names it."""
+
+    container: int
+    host: int | None
+    use: str
+    #: The compose file's spelling of the published port; None where nothing is published.
+    mapping: str | None = None
+    #: The mapping that serves the deployment's own origin (its HTTPS port, or its HTTP one).
+    origin: bool = False
+    #: Whether the Caddyfile serves plain HTTP on it.
+    plain_http: bool = False
+
+
+def proxy_ports(config: OspreyConfig) -> list[ProxyPort]:
+    """Every port the compose proxy uses, in the order the compose file publishes them: the one
+    place that lists them. The compose file's `ports` are these `mapping`s, and
+    `harness.page_addresses` refuses an origin on any of the others, so a port added here is
+    covered at once."""
+    names = sites(config)
+    network = config.network
+    found: list[ProxyPort] = []
+    if names.scheme == "https" and network.tls is not None:
+        listen = f"{network.listen_address}:" if network.listen_address else ""
+        found.append(
+            ProxyPort(
+                PROXY_HTTPS_PORT, names.port, "its own HTTPS port",
+                f"{listen}{names.port}:{PROXY_HTTPS_PORT}", origin=True,
+            )
+        )  # fmt: skip
+        # The catch-all (the health check) is always on the plain-HTTP port; 80 is published to it
+        # only when `redirect_http` asks.
+        found.append(ProxyPort(PROXY_HTTP_PORT, None, "its plain-HTTP port", plain_http=True))
+        if network.redirect_http:
+            found.append(
+                ProxyPort(
+                    PROXY_HTTP_PORT, 80, "its plain-HTTP port, published for the redirect",
+                    f"{listen}80:{PROXY_HTTP_PORT}", plain_http=True,
+                )
+            )  # fmt: skip
+    elif names.scheme == "http":
+        found.append(
+            ProxyPort(
+                PROXY_HTTP_PORT, names.port, "its own HTTP port",
+                _bind(config, f"{names.port}:{PROXY_HTTP_PORT}"), origin=True, plain_http=True,
+            )
+        )  # fmt: skip
+    else:
+        # Caddy's automatic HTTPS: certificates for the client's own domain (proven in stage B6).
+        found.append(
+            ProxyPort(80, 80, "its plain-HTTP port", _bind(config, "80:80"), plain_http=True)
+        )
+        found.append(
+            ProxyPort(
+                443, names.port, "its own HTTPS port", _bind(config, f"{names.port}:443"),
+                origin=True,
+            )
+        )  # fmt: skip
+    for (door, _upstream), mapping in zip(loopback_doors(config), _door_ports(config), strict=True):
+        what = "graph store" if door == 2480 else "Conduit"
+        found.append(
+            ProxyPort(door, door, f"its loopback door to the {what}", mapping, plain_http=True)
+        )
+    return found
+
+
 def _door_ports(config: OspreyConfig) -> list[str]:
     published = [f"{LOOPBACK}:${{OSPREY_ARCADEDB_PORT:-2480}}:2480"]
     if config.network.expose_conduit:
@@ -297,18 +372,13 @@ def _door_ports(config: OspreyConfig) -> list[str]:
 PROXY_USER = "${OSPREY_PROXY_UID:?}:${OSPREY_PROXY_GID:?}"
 
 
-def _own_certificate_service(config: OspreyConfig, port: int) -> dict[str, Any]:
-    """The proxy with the organisation's certificate: 443 (the origin's port) alone, on every
-    interface or the one `network.listen_address` names; 80 only when `redirect_http` asks; run as
-    the key's owner; the two files mounted read-only; no `proxy-data` volume."""
+def _own_certificate_service(config: OspreyConfig) -> dict[str, Any]:
+    """The proxy with the organisation's certificate: the origin's port alone, on every interface
+    or the one `network.listen_address` names; 80 only when `redirect_http` asks (`proxy_ports`);
+    run as the key's owner; the two files mounted read-only; no `proxy-data` volume."""
     network = config.network
     assert network.tls is not None
-    listen = f"{network.listen_address}:" if network.listen_address else ""
-    ports = [f"{listen}{port}:{PROXY_HTTPS_PORT}"]
-    if network.redirect_http:
-        ports.append(f"{listen}80:{PROXY_HTTP_PORT}")
     return {
-        "ports": ports,
         "user": PROXY_USER,
         "environment": {
             "XDG_DATA_HOME": "/tmp/caddy",
@@ -332,25 +402,21 @@ def proxy_service(config: OspreyConfig) -> dict[str, Any]:
     names = sites(config)
     extra: dict[str, Any]
     if names.scheme == "https" and config.network.tls is not None:
-        extra = _own_certificate_service(config, names.port)
-        ports = extra.pop("ports")
+        extra = _own_certificate_service(config)
         health = f"http://127.0.0.1:{PROXY_HTTP_PORT}/healthz"
     elif names.scheme == "http":
-        ports = [_bind(config, f"{names.port}:{PROXY_HTTP_PORT}")]
         extra = {
             "user": "65534:65534",
             "environment": {"XDG_DATA_HOME": "/tmp/caddy", "XDG_CONFIG_HOME": "/tmp/caddy"},
         }
         health = f"http://127.0.0.1:{PROXY_HTTP_PORT}/healthz"
     else:
-        # Caddy's automatic HTTPS: certificates for the client's own domain (proven in stage B6).
-        ports = [_bind(config, "80:80"), _bind(config, f"{names.port}:443")]
         extra = {"volumes": ["proxy-data:/data"]}
         health = "http://127.0.0.1:80/healthz"
     service: dict[str, Any] = {
         "restart": "unless-stopped",
         "image": PROXY_IMAGE,
-        "ports": [*ports, *_door_ports(config)],
+        "ports": [entry.mapping for entry in proxy_ports(config) if entry.mapping],
         **extra,
     }
     service.setdefault("volumes", []).insert(0, "./Caddyfile:/etc/caddy/Caddyfile:ro")

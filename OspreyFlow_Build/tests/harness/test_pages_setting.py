@@ -818,9 +818,10 @@ def _real_start_up_check(environments: list[dict[str, str]]) -> list[str | None]
     return verdicts
 
 
-def _page_service_refuses(shape: str, files: dict[str, bytes]) -> list[str]:
-    """What the page service's real `loadConfig` throws for the environment this render gives it, as
-    the container would see it: empty is an environment the service starts with."""
+def _the_service_says(shape: str, files: dict[str, bytes]) -> list[str]:
+    """What the page service's real `loadConfig` (run by node, never emulated) throws for the
+    environment this render gives it, as the container would see it: empty is an environment the
+    service starts with."""
     service = pages_service(shape, files)
     assert service is not None
     [verdict] = _real_start_up_check([_resolved(shape, service["env"])])
@@ -834,7 +835,7 @@ def test_on_is_an_environment_the_page_service_starts_with(shape: str, brand: st
     with a path, a short or missing secret). Local-lite on plain HTTP, the demo's own address form,
     is the shape this caught: the service refuses its issuer, so the render refuses to turn the
     service on there (`test_turning_the_service_on_over_plain_http_is_refused_in_words`)."""
-    assert _page_service_refuses(shape, _render(shape, brand, **_on(shape))) == []
+    assert _the_service_says(shape, _render(shape, brand, **_on(shape))) == []
 
 
 # ---- 6a. plain HTTP: the render refuses, in words, rather than leave sign-in out ---------------
@@ -965,7 +966,6 @@ def _compose_files(config: Any) -> dict[str, bytes]:
         "https://osprey.internal",
         "https://osprey.local:9443",
         "https://localhost",
-        "https://10.1.2.3",
         "https://osprey.home.arpa",
     ],
 )
@@ -1050,7 +1050,7 @@ def test_the_trust_check_is_red_for_a_service_given_the_proxys_own_authority(bra
     proxy's internal authority signs for. The trust check reads the files, names it, and is clean
     for the same Small with a certificate of its own."""
     config = _small(brand, "https://osprey.internal")
-    with _patched("harness.pages_service", "refuse_sign_in_without_trust", _no_trust_refusal):
+    with _patched("harness.page_addresses", "_needs_trust", _no_trust_refusal):
         found = _trust_findings(_compose_files(config))
     assert any("internal authority" in line for line in found), found
     own = _small(brand, "https://osprey.internal", {"ca": "/etc/ospreyflow/tls/org-root.pem"})
@@ -1061,7 +1061,6 @@ INTERNAL_NAMES = [
     "https://osprey.internal",
     "https://osprey.local:9443",
     "https://localhost",
-    "https://10.1.2.3",
     "https://osprey.home.arpa",
 ]
 #: Every name an organisation's own certificate may be given on: the ones Caddy signs itself, and
@@ -1095,13 +1094,6 @@ def test_a_small_with_its_own_certificate_and_no_ca_is_refused(origin: str, bran
     identity = f"https://id.{parts.hostname}" + (f":{parts.port}" if parts.port else "")
     assert str(refused.value) == THE_CA_WORDS.format(identity=identity)
     assert type(refused.value).__name__ == "PageServiceNeedsCa"
-    if origin == "https://10.1.2.3":
-        # With a CA given, an IP address is still no name for the identity provider: the service's
-        # own parser refuses `id.10.1.2.3` (round 9: `test_every_origin_form_*`, the `ipv4` row).
-        with pytest.raises(ValueError, match="ends in a number") as no_name:
-            _compose_files(_small(brand, origin, own))
-        assert type(no_name.value).__name__ == "PageServiceNeedsAnOrigin"
-        return
     assert pages_service("small", _compose_files(_small(brand, origin, own))) is not None
 
 
@@ -1117,7 +1109,7 @@ def test_the_ca_trust_check_is_red_for_an_own_certificate_with_no_ca(
     no `NODE_EXTRA_CA_CERTS`, on a name inside Caddy's internal suffixes and on one outside them. The
     check reads the files and names it; it is clean for the same Small with a `ca`."""
     config = _small(brand, origin, {})
-    with _patched("harness.pages_service", "refuse_sign_in_without_ca", _no_trust_refusal):
+    with _patched("harness.page_addresses", "_needs_ca", _no_trust_refusal):
         files = _compose_files(config)
     found = _trust_findings(files)
     assert any("no CA for it" in line for line in found), found
@@ -1149,14 +1141,11 @@ def test_the_start_up_check_is_red_for_an_http_issuer_that_is_not_loopback(brand
     `http://id.<host>/realms/osprey` is written into the service's environment in local-lite. The
     service's own start-up refusal (emulated from `config.ts`) is clean first, red with it, naming
     the rule, and clean again."""
-    clean = _page_service_refuses("small", _render("small", brand, **_on("small")))
-    assert clean == []
-    with _patched(
-        "harness.pages_service", "refuse_sign_in_without_https", _no_refusal_for_plain_http
-    ):
-        found = _page_service_refuses("local-lite", _render("local-lite", brand, **ON))
+    assert _the_service_says("small", _render("small", brand, **_on("small"))) == []
+    with _patched("harness.page_addresses", "_needs_https", _no_refusal_for_plain_http):
+        found = _the_service_says("local-lite", _render("local-lite", brand, **ON))
     assert any("OSPREY_PAGES_OIDC_ISSUER must be an https address" in line for line in found), found
-    assert _page_service_refuses("small", _render("small", brand, **_on("small"))) == []
+    assert _the_service_says("small", _render("small", brand, **_on("small"))) == []
 
 
 #: A valid environment for the service, bar what a case changes: every value a case does not name
@@ -1206,11 +1195,11 @@ def test_the_rule_the_render_applies_is_the_services_own(
     """Held to what `apps/pages/server/config.ts` really does with each address (round 9: run, not
     emulated): the render's rule never accepts an address the service refuses, and is exactly as
     strict everywhere but the one form its parser widens. A loopback look-alike host is not one."""
-    import harness.pages_service as the_service
+    from harness import page_addresses
 
     [real] = _real_accepts_issuers([issuer])
     assert real is accepted
-    rule = the_service.service_accepts_issuer(issuer)
+    rule = page_addresses._service_accepts_issuer(issuer)
     assert not (rule and not real), "the render accepts an issuer the service refuses"
     if same:
         assert rule is accepted
@@ -1335,7 +1324,7 @@ def test_the_cloud_check_is_red_for_a_render_that_holds_a_service_without_its_si
     sign-in variables (the chart has no identity provider of ours and no egress to Entra ID), which
     the same sign-in check every other shape is held to reports; with the refusal in, there is no
     render to hold at all."""
-    with _patched("harness.pages_service", "refuse_on_cloud_platform", _no_cloud_refusal):
+    with _patched("harness.page_addresses", "_on_cloud_platform", _no_cloud_refusal):
         found = _sign_in_variable_findings(shape, _render(shape, brand, **ON))
     assert found and "0 of the three sign-in variables" in found[0], found
     with pytest.raises(ValueError, match="cannot run on the cloud-platform shape"):
@@ -1767,7 +1756,6 @@ CLASH_CASES = {
 }  # fmt: skip
 #: Ports the proxy does not serve as plain HTTP in that shape: each renders, and has no clash.
 CLEAR_CASES = {
-    "own-certificate-80": ("https://osprey.example.org:80", {"ca": CA_ON_THE_HOST}, False),
     "own-certificate-8000-no-door": (
         "https://osprey.example.org:8000", {"ca": CA_ON_THE_HOST}, False,
     ),
@@ -1775,7 +1763,6 @@ CLEAR_CASES = {
         "https://osprey.example.org:8443", {"ca": CA_ON_THE_HOST}, True,
     ),
     "own-certificate-9443": ("https://osprey.example.org:9443", {"ca": CA_ON_THE_HOST}, True),
-    "public-name-8080": ("https://osprey.example.org:8080", None, False),
     "public-name-8000-no-door": ("https://osprey.example.org:8000", None, False),
     "public-name-8443": ("https://osprey.example.org:8443", None, False),
 }  # fmt: skip
@@ -1872,13 +1859,13 @@ def test_the_clash_check_is_red_when_the_refusal_is_taken_out(case: str, brand: 
     origin, own, expose, port, _use = CLASH_CASES[case]
 
     def no_refusal(real: Callable[..., Any]) -> Callable[..., Any]:
-        def planted(config: Any, port: int) -> None:
+        def planted(config: Any) -> None:
             return None
 
         return planted
 
     config = _small_exposing(brand, origin, own, expose)
-    with _patched("harness.pages_service", "refuse_a_clashing_listener", no_refusal):
+    with _patched("harness.page_addresses", "_port_taken", no_refusal):
         files = _compose_files(config)
     caddyfile = files["Caddyfile"].decode("utf-8")
     assert f"https://id.osprey.example.org:{port}" in caddyfile
@@ -1893,9 +1880,13 @@ def test_a_cluster_proxy_has_no_identity_listener_to_clash(brand: str) -> None:
     """The cluster's proxy is rendered with no alias and no doors, so it gets no second identity
     address, whatever port the origin carries: nothing is refused there."""
     from harness.site import render_caddyfile
+    from schemas.deployment import OspreyConfig
 
-    config = _small(brand, "https://osprey.example.org:8080", {"ca": CA_ON_THE_HOST})
-    text = render_caddyfile(config, doors=False)
+    raw = ref.raw_config("cluster")
+    raw["network"]["public_origin"] = "https://osprey.example.org:8080"
+    raw["appearance"] = {**raw.get("appearance", {}), "brand": brand}
+    raw["pages"] = {"enabled": True}
+    text = render_caddyfile(OspreyConfig.model_validate(raw), doors=False)
     block = [a for _n, a in _labels(text) if "https://id.osprey.example.org" in a]
     assert block == [["https://id.osprey.example.org"]]
 
@@ -1921,11 +1912,11 @@ def _small_with_its_own_certificate(brand: str, **tls: str) -> dict[str, Any]:
 
 def _ca_findings(service: dict[str, Any]) -> list[str]:
     """Where the organisation's CA is mounted into `pages` and where node is told to read it."""
-    from harness import pages_service as service_module
+    from harness import page_addresses
 
     mounted = [v for v in service.get("volumes", []) if v.startswith(f"{CA_ON_THE_HOST}:")]
     named = service["environment"].get("NODE_EXTRA_CA_CERTS")
-    wanted = service_module.CA_IN_SERVICE
+    wanted = page_addresses.CA_IN_SERVICE
     found = []
     if mounted != [f"{CA_ON_THE_HOST}:{wanted}:ro"]:
         found.append(f"the organisation's CA is not mounted read-only at {wanted}")
@@ -1945,7 +1936,7 @@ def test_the_service_trusts_the_organisations_ca_it_signs_in_through(brand: str)
 
 
 def test_the_ca_check_is_red_for_a_service_that_is_not_told_to_read_it() -> None:
-    from harness import pages_service as service_module
+    from harness import page_addresses
 
     def without_the_variable(real: Callable[..., Any]) -> Callable[..., Any]:
         def planted(config: Any, **kwargs: Any) -> dict[str, str]:
@@ -1959,7 +1950,7 @@ def test_the_ca_check_is_red_for_a_service_that_is_not_told_to_read_it() -> None
         found = _ca_findings(_small_with_its_own_certificate("govuk", ca=CA_ON_THE_HOST))
     # The mount follows the variable (both are written, or neither), so both findings are reported.
     assert "NODE_EXTRA_CA_CERTS does not name the mounted CA" in found, found
-    assert service_module.CA_IN_SERVICE
+    assert page_addresses.CA_IN_SERVICE
 
 
 # ---- 6b'''. the shared key (`network.access_key`, ADR-114 Amendment 41) with the service on (round 8) --
@@ -2450,6 +2441,10 @@ def test_the_real_check_refuses_each_origin_form_it_is_said_to(
 #:   service would not start on it (or, where marked, the render is stricter than the service needs).
 #: * "elsewhere": refused before the page service by the settings validation or by `sites`, with
 #:   the setting off as well (not this slice's, and unchanged).
+#:
+#: Changed by PL7f (the owner's table of 24 November 2026): an explicit default port is left off the
+#: origin and rendered (case 7, `harness.page_addresses.derive`), and a path, a query, a fragment or a
+#: user name is refused (case 13) where the render used to drop it.
 ORIGIN_FORMS = [
     ("plain", "https://osprey.example.org", "rendered", "https://osprey.example.org", False),
     (
@@ -2470,19 +2465,13 @@ ORIGIN_FORMS = [
         False,
     ),
     ("upper-host", "https://OSPREY.Example.ORG", "rendered", "https://osprey.example.org", False),
-    (
-        "userinfo",
-        "https://user:pw@osprey.example.org",
-        "rendered",
-        "https://osprey.example.org",
-        False,
-    ),
-    ("path", "https://osprey.example.org/app", "rendered", "https://osprey.example.org", False),
-    ("query", "https://osprey.example.org?x=1", "rendered", "https://osprey.example.org", False),
-    ("fragment", "https://osprey.example.org#x", "rendered", "https://osprey.example.org", False),
-    ("default-port", "https://osprey.example.org:443", "refused", None, True),
-    ("default-port-zeros", "https://osprey.example.org:0443", "refused", None, True),
-    ("default-port-userinfo", "https://user:pw@osprey.example.org:443", "refused", None, True),
+    ("userinfo", "https://user:pw@osprey.example.org", "refused", None, False),
+    ("path", "https://osprey.example.org/app", "refused", None, False),
+    ("query", "https://osprey.example.org?x=1", "refused", None, False),
+    ("fragment", "https://osprey.example.org#x", "refused", None, False),
+    ("default-port", "https://osprey.example.org:443", "rendered", "https://osprey.example.org", False),
+    ("default-port-zeros", "https://osprey.example.org:0443", "rendered", "https://osprey.example.org", False),
+    ("default-port-userinfo", "https://user:pw@osprey.example.org:443", "refused", None, False),
     ("ipv4", "https://10.1.2.3", "refused", None, True),
     ("ipv4-port", "https://10.1.2.3:9443", "refused", None, True),
     ("ipv4-decimal", "https://2130706433", "refused", None, True),
@@ -2590,7 +2579,7 @@ def test_the_refusal_is_the_only_thing_between_a_form_and_a_service_that_cannot_
     refusal is what keeps a service that cannot start from being rendered); where it does not, the
     refusal is the render being stricter than it need be, and the real check says so."""
     with _patched(
-        "harness.pages_service", "refuse_an_origin_the_service_refuses", _no_refusal_at_all
+        "harness.page_addresses", "_origin_problem", _no_refusal_at_all
     ):
         files = _small_files(brand, origin, pages=True)
     assert not isinstance(files, ValueError), f"{name}: another refusal stands in the way: {files}"
@@ -2610,7 +2599,7 @@ def _no_refusal_at_all(real: Callable[..., Any]) -> Callable[..., Any]:
     [
         ("https://osprey.example.org", "rendered"),
         ("https://osprey.example.org:9443", "rendered"),
-        ("https://osprey.example.org:443", "refused"),
+        ("https://osprey.example.org:443", "rendered"),
         ("https://10.1.2.3", "refused"),
     ],
 )
@@ -2624,16 +2613,21 @@ def test_the_cluster_shape_holds_the_same_origin_rule(origin: str, outcome: str)
     assert not isinstance(on, ValueError), on
     public, _issuer, verdict = _what_the_render_gave("cluster", on)
     assert verdict is None, verdict
-    assert public == origin
+    assert public == origin.removesuffix(":443")
 
 
 @pytest.mark.parametrize("brand", BRANDS)
-def test_a_cluster_at_a_default_port_is_refused_in_words(brand: str) -> None:
-    """Not the trust refusal's: a public name, so the origin rule is the one that answers."""
+def test_a_cluster_at_a_default_port_is_given_the_origin_without_it(brand: str) -> None:
+    """Case 7 for the cluster (PL7f: the default port is left off, not refused): the origin and the
+    issuer the service is given carry no `:443`, and the service starts on them."""
     on = _cluster_files("https://osprey.example.org:443", pages=True)
-    assert isinstance(on, ValueError)
-    assert type(on).__name__ == "PageServiceNeedsAnOrigin"
-    assert "the port :443" in str(on)
+    assert not isinstance(on, ValueError), on
+    public, issuer, verdict = _what_the_render_gave("cluster", on)
+    assert (public, issuer) == (
+        "https://osprey.example.org",
+        "https://id.osprey.example.org/realms/osprey",
+    )
+    assert verdict is None, verdict
 
 
 # ---- 11a. every value the render passes, against every check config.ts makes -------------------
@@ -2706,3 +2700,34 @@ def test_every_secret_the_deployment_mints_is_one_the_real_check_accepts(shape: 
     }
     [verdict] = _real_start_up_check([env])
     assert verdict is None, verdict
+
+
+#: The two ports the proxy serves plain HTTP on in another shape than this deployment's: an HTTPS
+#: origin on either is refused whichever certificate it has (PL7f, the owner's table of
+#: 24 November 2026, cases 12 and 19). They were rendered before (Caddy loads those Caddyfiles: the
+#: render is stricter than Caddy, on purpose; `test_page_addresses_caddy.py` measures it).
+PLAIN_HTTP_IN_ANOTHER_SHAPE = {
+    "own-certificate-80": ("https://osprey.example.org:80", {"ca": CA_ON_THE_HOST}, 80),
+    "public-name-8080": ("https://osprey.example.org:8080", None, 8080),
+}
+
+
+@pytest.mark.parametrize("brand", BRANDS)
+@pytest.mark.parametrize("case", PLAIN_HTTP_IN_ANOTHER_SHAPE)
+def test_an_https_origin_on_a_plain_http_port_of_another_shape_is_refused(
+    case: str, brand: str
+) -> None:
+    origin, own, port = PLAIN_HTTP_IN_ANOTHER_SHAPE[case]
+    with pytest.raises(ValueError) as refused:
+        _compose_files(_small(brand, origin, own))
+    assert type(refused.value).__name__ == "PageServiceNeedsAnotherPort"
+    words = str(refused.value)
+    assert words.startswith("pages.enabled is on, but network.public_origin gives")
+    assert f":{port}" in words and "plain HTTP" in words
+    raw = _small(brand, origin, own).model_dump(mode="json", exclude_unset=True)
+    raw["pages"] = {"enabled": False}
+    from harness.render import render
+
+    from schemas.deployment import OspreyConfig
+
+    assert render(OspreyConfig.model_validate(raw), resolver=ref.resolver).artefacts

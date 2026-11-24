@@ -57,7 +57,7 @@ from typing import Any, cast
 
 import yaml
 
-from harness import pages_service
+from harness import page_addresses, pages_service
 from harness.images import (
     DigestResolver,
     ServiceImage,
@@ -1070,18 +1070,18 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
             # `/healthz` (a Node image has no `wget`, so the check is Node's own `fetch`); it needs
             # the session store, and the identity provider it signs people in against where there
             # is one.
-            pages_environment = pages_service.service_environment(
-                config, with_sign_in=any(other.service == "keycloak" for other in images)
+            signs_in = any(other.service == "keycloak" for other in images)
+            derived = page_addresses.require(config, with_sign_in=signs_in)
+            assert derived is not None
+            service["environment"] = pages_service.service_environment(
+                config, with_sign_in=signs_in
             )
-            service["environment"] = pages_environment
-            signs_in = "OSPREY_PAGES_OIDC_ISSUER" in pages_environment
-            if "NODE_EXTRA_CA_CERTS" in pages_environment:
-                # The organisation's own CA, read-only, where node is told to look (as Keycloak's
-                # truststore is given it, below): the identity name's certificate is theirs.
+            if signs_in and derived.trust:
+                # The organisation's own CA, read-only, where `derive` says node is told to look
+                # (as Keycloak's truststore is given it, below): the identity name's certificate
+                # is theirs.
                 assert config.network.tls is not None and config.network.tls.ca
-                service["volumes"] = [
-                    f"{config.network.tls.ca}:{pages_service.CA_IN_SERVICE}:ro",
-                ]
+                service["volumes"] = [f"{config.network.tls.ca}:{derived.trust}:ro"]
             service["depends_on"] = {
                 dependency: {"condition": "service_healthy"}
                 for dependency in ("valkey", *(("keycloak",) if signs_in else ()))
@@ -1545,14 +1545,17 @@ def _place_on_networks(config: OspreyConfig, services: dict[str, Any]) -> None:
     for name, service in services.items():
         service["networks"] = ["osprey", "egress"] if name in reaching_out else ["osprey"]
     pages = services.get(pages_service.SERVICE)
-    if pages is not None and "OSPREY_PAGES_OIDC_ISSUER" in pages.get("environment", {}):
+    if pages is not None and "keycloak" in services:
         # The page service fetches its issuer itself, at sign-in, and the issuer is the public
         # identity name (openid-client checks the discovery document's `issuer` against the address
         # it asked, so the Conduit's internal Keycloak address is not one it can be given). The
         # service stays on the internal network alone (ADR-114 Amendment 7: no route out; not
-        # `egress_needs`): the proxy answers to the identity name inside `osprey`, by an alias.
+        # `egress_needs`): the proxy answers to the identity name inside `osprey`, by the alias
+        # `derive` returns.
+        derived = page_addresses.require(config)
+        assert derived is not None
         services["proxy"]["networks"] = {
-            "osprey": {"aliases": [pages_service.identity_alias(config)]},
+            "osprey": {"aliases": [derived.identity_alias]},
             "egress": {},
         }
 
@@ -2079,8 +2082,9 @@ def render(
     local-daemon one.
     """
     # ADR-152 Amendment 3 item 4: a GOV.UK deployment whose tree is complete and whose page service
-    # is not enabled is refused in words, in every shape, before anything is rendered.
-    pages_service.refuse_a_cutover_without_the_service(config)
+    # is not enabled is refused in words, in every shape, before anything is rendered; so is a page
+    # service whose address cannot sign anyone in (`harness.page_addresses`, the one place).
+    page_addresses.require(config)
     if resolver is None:
         resolver = (
             unresolved_digest_resolver if allow_unpinned else daemon_then_registry_digest_resolver

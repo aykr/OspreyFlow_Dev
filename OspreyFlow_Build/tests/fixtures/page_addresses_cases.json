@@ -33,7 +33,7 @@
   {
    "case": 1,
    "id": "1-small-plain-http",
-   "label": "small, plain HTTP",
+   "label": "small, plain HTTP (the schema refuses it before the page service is asked)",
    "raised_in": "PL7a2b rounds 1, 3",
    "config": {
     "shape": "small",
@@ -48,13 +48,14 @@
    },
    "expect": {
     "refuse": {
-     "key": "needs_https",
-     "error": "PageServiceNeedsHttps",
+     "key": "schema",
+     "error": "ValidationError",
      "words": [
-      "neither https nor a loopback address",
-      "over plain HTTP"
+      "network.public_origin",
+      "plain HTTP"
      ],
-     "names_setting": true
+     "names_setting": false,
+     "by": "schema"
     }
    }
   },
@@ -429,12 +430,12 @@
   },
   {
    "case": 8,
-   "id": "8-plain-http-explicit-80",
-   "label": "small, plain HTTP with an explicit :80",
+   "id": "8-lite-plain-http-explicit-80",
+   "label": "local-lite, plain HTTP with an explicit :80 (a Small cannot be plain HTTP)",
    "raised_in": "PL7a2b round 8",
    "config": {
-    "shape": "small",
-    "origin": "http://osprey.example.org:80",
+    "shape": "local-lite",
+    "origin": "http://reference.ospreyflow.localhost:80",
     "own_certificate": null,
     "expose_conduit": false,
     "redirect_http": false,
