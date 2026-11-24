@@ -70,9 +70,7 @@ def handling_sql(
     Returns three bound values; the caller passes `principal.org_unit` as the fourth, at the call
     itself, so the principal is seen in the query (ADR-041's gate)."""
     order = scheme.classification
-    allowed = (
-        order[: order.index(principal.clearance) + 1] if principal.clearance in order else []
-    )
+    allowed = order[: order.index(principal.clearance) + 1] if principal.clearance in order else []
     restricted = sorted(
         c for c, d in scheme.handling_codes.items() if d.dissemination == "restricted"
     )
@@ -136,8 +134,13 @@ async def _without_finding_words(conn: asyncpg.Connection, held: list[HeldRow]) 
     except asyncpg.UndefinedTableError:
         names = {}
     return [
-        h.model_copy(update={"reason": f"it matched “{names[h.rule_id]}”" if h.rule_id in names
-                             else "it matched the rule"})  # fmt: skip
+        h.model_copy(
+            update={
+                "reason": f"it matched “{names[h.rule_id]}”"
+                if h.rule_id in names
+                else "it matched the rule"
+            }
+        )  # fmt: skip
         if h.reason.startswith(_OLD_MATCH_REASON)
         else h
         for h in held
@@ -209,6 +212,28 @@ class HeldRowStore:
                 *extra,
             )
             return await _without_finding_words(conn, [_row_to_held(r) for r in rows])
+
+    async def left_out_for(
+        self, investigation_id: str, principal: Principal, *, status: HeldRowStatus = "held"
+    ) -> bool:
+        """Whether `list_authorized` leaves out any row of this status in the case: a yes or no,
+        never a count (SE8b: what a report's ledger row says as `withheld` for its held figures).
+        The same marking and reach clauses as `list_authorized`, counted beside every row of the
+        case in one query, so the two cannot be asked differently."""
+        marking, marking_params = handling_sql(self._scheme, principal, 3)
+        reach, extra = reach_clause(principal, 7)
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT count(*) AS every,"
+                f" count(*) FILTER (WHERE true{marking}{reach}) AS readable"
+                " FROM held_rows WHERE investigation_id = $1 AND status = $2",
+                investigation_id,
+                status,
+                *marking_params,
+                principal.org_unit,
+                *extra,
+            )
+        return row is not None and row["every"] > row["readable"]
 
     async def get_authorized(
         self, held_id: str, investigation_id: str, principal: Principal

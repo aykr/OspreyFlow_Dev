@@ -132,6 +132,12 @@ class _Nothing:
     async def record(self, *args: object, **kwargs: object) -> None:
         return None
 
+    async def left_out_on_borrowed_layer(
+        self, investigation_id: str, reader: Any, borrowed: str | None
+    ) -> bool:
+        """The alert store's borrowed-layer flag, for a reader whose rights leave out none."""
+        return False
+
     async def chosen_of_case(self, investigation_id: str) -> list[Any]:
         return []
 
@@ -140,6 +146,10 @@ class _Nothing:
 
     async def display_names(self, ids: list[str]) -> dict[str, str]:
         return {}
+
+    async def withheld_for(self, investigation_id: str, principal: Principal) -> bool:
+        """The case's standing sentence the figures' ledger row carries (SE8b)."""
+        return False
 
     async def type_counts(self, principal: Principal) -> Any:
         from schemas.explore import TypeCounts
@@ -176,6 +186,7 @@ def _journey_client(
         get_principal_names,
         get_superset_embedder,
         get_target_models,
+        get_working_set,
     )  # fmt: skip
     from services.api.explore import ExploreService
 
@@ -184,11 +195,15 @@ def _journey_client(
     async def _queue(*args: object, **kwargs: object) -> list[Any]:
         return list(rows)
 
+    async def _queue_and_left_out(*args: object, **kwargs: object) -> tuple[list[Any], bool]:
+        return list(rows), False
+
     monkeypatch.setattr(alert_queue, "monitoring_queue", _queue)
-    monkeypatch.setattr(reports, "monitoring_queue", _queue)
+    monkeypatch.setattr(reports, "monitoring_queue_and_left_out", _queue_and_left_out)
     nothing = _Nothing()
     for dep in (get_alerts_store, get_analytics, get_audit, get_compute, get_datasets, get_export_ledger, get_graph,
-                get_held_rows, get_identity_admin, get_principal_names, get_target_models):  # fmt: skip
+                get_held_rows, get_identity_admin, get_principal_names, get_target_models,
+                get_working_set):  # fmt: skip
         app.dependency_overrides[dep] = lambda: nothing
     explore = ExploreService(nothing, None)  # type: ignore[arg-type]
     ontology = load_deployment_ontology()

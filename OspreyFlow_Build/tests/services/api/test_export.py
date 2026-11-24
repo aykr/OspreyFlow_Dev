@@ -584,7 +584,9 @@ async def test_export_ledger_entry_survives_investigation_deletion(
         try:
             for own in ("investigation_grants", "investigation_access_history",
                         "investigation_tab_state"):  # fmt: skip
-                await conn.execute(f"DELETE FROM {own} WHERE investigation_id = $1", investigation.id)
+                await conn.execute(
+                    f"DELETE FROM {own} WHERE investigation_id = $1", investigation.id
+                )
             await conn.execute("DELETE FROM investigations WHERE id = $1", investigation.id)
         finally:
             await conn.close()
@@ -910,8 +912,141 @@ async def test_a_ledger_entry_round_trips_as_a_yes_or_no(ledger) -> None:
         item_count=2,
         withheld=True,
         manifest_policy="disclose",
+        subject_kind="case",
+        subject_id="inv-roundtrip",
     )
     await ledger.record(entry)
     listed = [e for e in await ledger.list_all(COMPLIANCE) if e.id == entry.id]
     assert listed == [entry]
     assert "withheld_count" not in listed[0].model_dump()
+
+
+async def test_an_export_with_no_case_round_trips_with_its_subject(ledger) -> None:
+    """SE8b, live: a row with no case and no marking is written and read back, with the dataset it
+    concerns; the table's own check refuses a row that concerns nothing."""
+    entry = ExportLedgerEntry(
+        id=new_id(),
+        investigation_id=None,
+        principal_id=COMPLIANCE.id,
+        artefact_kind="dataset_release",
+        handling_level=None,
+        exported_at=datetime.now(UTC),
+        item_count=3,
+        withheld=False,
+        manifest_policy="disclose",
+        subject_kind="dataset",
+        subject_id="ds-roundtrip",
+    )
+    await ledger.record(entry)
+    assert [e for e in await ledger.list_all(COMPLIANCE) if e.id == entry.id] == [entry]
+    conn = await asyncpg.connect(DSN)
+    try:
+        with pytest.raises(asyncpg.CheckViolationError):
+            await conn.execute(
+                "INSERT INTO export_ledger (id, principal_id, artefact_kind, exported_at, "
+                "item_count, withheld, manifest_policy) "
+                "VALUES ($1, 'p-1', 'dataset_release', now(), 1, FALSE, 'omit')",
+                new_id(),
+            )
+    finally:
+        await conn.close()
+
+
+async def test_a_release_row_is_left_out_of_the_read_of_a_reader_who_may_not_know_it(
+    ledger,
+) -> None:
+    """SE8b, live (owed where the line's live step is off for builders): the real query keeps a
+    no-case dataset row from a ledger reader whose reach leaves the dataset out. The compliance role
+    alone, and a reader of another dataset, are given the rule file's row and not the release's;
+    the administrator, and a principal that carries the dataset, are given both. Red with the
+    condition removed. (`GET /v1/exports` is given the first kind only: outside a case its principal
+    carries no reach, so there only the administrator is admitted: see
+    `test_export_ledger_completeness.py::test_at_the_ledger_route_only_the_administrator_is_given_a_release_row`.)"""
+    dataset = f"ds-{new_id()}"
+    release = ExportLedgerEntry(
+        id=new_id(), investigation_id=None, principal_id=ANALYST.id,
+        artefact_kind="dataset_release", handling_level="OFFICIAL", exported_at=datetime.now(UTC),
+        item_count=2, withheld=False, manifest_policy="omit", subject_kind="dataset",
+        subject_id=dataset,
+    )  # fmt: skip
+    rule = release.model_copy(update={
+        "id": new_id(), "artefact_kind": "rule_file", "handling_level": None,
+        "subject_kind": "rule", "subject_id": f"rule-{new_id()}",
+    })  # fmt: skip
+    await ledger.record(release)
+    await ledger.record(rule)
+
+    async def seen(reader: Principal) -> set[str]:
+        return {e.id for e in await ledger.list_all(reader)} & {release.id, rule.id}
+
+    compliance = COMPLIANCE.model_copy(update={"datasets": []})
+    assert await seen(compliance) == {rule.id}
+    assert await seen(compliance.model_copy(update={"datasets": ["ds-other"]})) == {rule.id}
+    reads_it = compliance.model_copy(update={"datasets": [dataset]})
+    assert await seen(reads_it) == {release.id, rule.id}
+    admin = Principal(id="admin-1", clearance="OFFICIAL", org_unit="unit-9",
+                      roles=["osprey-admin"], datasets=[])  # fmt: skip
+    assert await seen(admin) == {release.id, rule.id}
+
+
+_PRE_SE8B_SHAPE = """
+CREATE TABLE {table} (
+    id TEXT PRIMARY KEY,
+    investigation_id TEXT NOT NULL,
+    principal_id TEXT NOT NULL,
+    artefact_kind TEXT NOT NULL,
+    handling_level TEXT NOT NULL,
+    exported_at TIMESTAMPTZ NOT NULL,
+    item_count INTEGER NOT NULL,
+    withheld BOOLEAN NOT NULL,
+    manifest_policy TEXT NOT NULL,
+    justification_given BOOLEAN NOT NULL DEFAULT FALSE,
+    originator_reference_given BOOLEAN NOT NULL DEFAULT FALSE
+)
+"""
+
+
+async def test_a_ledger_from_before_se8b_takes_an_export_with_no_case_and_keeps_its_rows() -> None:
+    """Violation caught: a migration that rewrites or drops the rows it finds, one that is not safe
+    to run twice, one that leaves the case required, or one that leaves no check that a row
+    concerns something. A table in the shape before SE8b, with a row in it: after the migration,
+    run three times, the row is as it was (its subject columns empty), the case and the marking may
+    be empty, a row with no case and a subject is taken, and one with neither is refused."""
+    from services.api.export import ledger_migration_sql
+
+    table = f"export_ledger_pre_{new_id().lower()}"
+    conn = await asyncpg.connect(DSN)
+    try:
+        await conn.execute(_PRE_SE8B_SHAPE.format(table=table))
+        await conn.execute(
+            f"INSERT INTO {table} (id, investigation_id, principal_id, artefact_kind, "  # noqa: S608
+            "handling_level, exported_at, item_count, withheld, manifest_policy) "
+            "VALUES ('old-1', 'inv-1', 'p-1', 'subgraph', 'OFFICIAL', now(), 5, TRUE, 'omit')"
+        )
+        before = await _ledger_rows(conn, table)
+
+        for _ in range(3):
+            await conn.execute(ledger_migration_sql(table))
+
+        columns = await _columns(conn, table)
+        assert columns["investigation_id"] == "YES" and columns["handling_level"] == "YES"
+        assert {"subject_kind", "subject_id"} <= set(columns)
+        (after,) = await _ledger_rows(conn, table)
+        kept = {k: v for k, v in after[1].items() if k not in {"subject_kind", "subject_id"}}
+        assert (after[0], kept) == (before[0][0], before[0][1])
+        assert after[1]["subject_kind"] is None and after[1]["subject_id"] is None
+
+        await conn.execute(
+            f"INSERT INTO {table} (id, principal_id, artefact_kind, exported_at, item_count, "  # noqa: S608
+            "withheld, manifest_policy, subject_kind, subject_id) "
+            "VALUES ('rel-1', 'p-1', 'dataset_release', now(), 2, FALSE, 'omit', 'dataset', 'd-1')"
+        )
+        with pytest.raises(asyncpg.CheckViolationError):
+            await conn.execute(
+                f"INSERT INTO {table} (id, principal_id, artefact_kind, exported_at, "  # noqa: S608
+                "item_count, withheld, manifest_policy) "
+                "VALUES ('rel-2', 'p-1', 'dataset_release', now(), 2, FALSE, 'omit')"
+            )
+    finally:
+        await conn.execute(f"DROP TABLE IF EXISTS {table}")
+        await conn.close()
