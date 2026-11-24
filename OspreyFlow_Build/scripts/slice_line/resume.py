@@ -68,6 +68,8 @@ import shlex
 import subprocess
 import sys
 import time
+
+import yaml
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -118,7 +120,10 @@ def owner_lines(slice_id: str, action: str) -> int:
 
 
 def authority(slice_id: str, action: str) -> str:
-    """The owner's unused line for this slice, action and day, as the log names it; refused when there is none."""
+    """The owner's unused line for this slice, action and day, as the log names it; refused when there is none. With
+    the conductor's own word (--own), own_authority stands in its place, for its five actions alone."""
+    if OWN is not None:
+        return own_authority(slice_id, action)
     have = owner_lines(slice_id, action)
     tag = f"resume.tsv {today()}"
     used = sum(1 for r in c.owner_changes() if r["slice"] == slice_id and r["detail"].startswith(f"{tag} {action}:"))
@@ -129,6 +134,101 @@ def authority(slice_id: str, action: str) -> str:
         raise Refused(f"the owner's line '{slice_id}\t{action}\t{today()}' in resume.tsv is already used ({used} use(s) "
                       "logged in owner-changes.tsv): one line, one use. Nothing changed.")
     return f"{tag} {action}"
+
+
+# ------------------------------------------------------------------ the conductor's own word (P1)
+
+#: The owner, 24 November 2026 ("cut my paperwork"), with his answers the same day: the conductor gives its own word for
+#: these actions alone, as `resume.py <ID> <action> --own "<reason>"` (resume.tsv stays the owner's: the guard still
+#: refuses the conductor every line in it); each use is logged in owner-changes.tsv with its reason (OWN_TAG, which the
+#: budget counts) and shown on the board (self-clears.tsv, cause "own"). Never for a part whose open findings or stop
+#: name a key, a credential or a security rule, nor for a part the owner has parked; at the budget, it stops for him.
+OWN_ACTIONS = ("retire", "send-back", "add-round", "move-seat", "clear-stop")
+OWN_BUDGET = 20
+OWN_TAG = "conductor (own"
+#: Set by main() from --own: {"action": the action run, "reason": its reason}; the tag once own_authority gave it.
+OWN: dict | None = None
+REPLACED_BY = re.compile(r"\breplaced by ([A-Za-z0-9][A-Za-z0-9_-]*)\b")
+
+
+def own_uses_today() -> int:
+    return sum(1 for r in c.owner_changes() if r["at"][:10] == today() and r["detail"].startswith(OWN_TAG))
+
+
+def dial_rounds_most() -> int:
+    """The highest rounds limit any setting of the owner's dial.yaml gives (his answer: add-round no further)."""
+    try:
+        settings = (yaml.safe_load(c.DIAL_FILE.read_text()) or {}).get("settings") or {}
+        return max(int(v.get("rounds")) for v in settings.values() if isinstance(v, dict))
+    except (OSError, ValueError, TypeError, yaml.YAMLError):
+        raise Refused(f"the owner's dial ({c.DIAL_FILE}) gives no rounds limit the line can read: the conductor's own "
+                      "add-round needs one. Nothing changed.") from None
+
+
+def own_authority(slice_id: str, action: str) -> str:
+    """The conductor's own word for this action, as the log names it; refused in words otherwise. `action` is the
+    authority asked for (send-back past the limit asks for add-round as well); OWN["action"] is the action run."""
+    run, reason = OWN.get("action"), str(OWN.get("reason") or "").strip()
+    if run not in OWN_ACTIONS:
+        raise Refused(f"the conductor's own word is for {', '.join(OWN_ACTIONS)} alone, not {run}: that needs the "
+                      "owner's resume.tsv line. Nothing changed.")
+    if not reason:
+        raise Refused("the conductor's own word needs its reason (--own \"<reason>\"). Nothing changed.")
+    if c.parked(slice_id):
+        raise Refused(f"the owner has parked {slice_id} ({c.parked(slice_id)} in resume.tsv): the conductor's own word "
+                      "never acts on it. Nothing changed.")
+    used = own_uses_today()
+    if used >= OWN_BUDGET:
+        raise Refused(f"the conductor's own word has given its {OWN_BUDGET} for today ({today()}, UTC): at the budget it "
+                      f"stops for the owner, whose resume.tsv line is needed. Nothing changed.")
+    st, rec = c.state(slice_id), c.rec_dir(slice_id)
+    tip = st.get("tip") or ""
+    hit = security_hit(stop_words(st, rec, tip) + "\n" + reason)
+    if hit:
+        raise Refused(f"{slice_id}'s open findings or stop name a key, a credential or a security rule "
+                      f"({hit.group(0)!r}): the conductor's own word never acts on one; it is the owner's. Nothing changed.")
+    what = action
+    if run == "retire":
+        m = REPLACED_BY.search(reason)
+        if not m or m.group(1) == slice_id:
+            raise Refused("the conductor retires only a part another has replaced: its reason names it ('replaced by "
+                          "<ID>'). Nothing changed.")
+        other = m.group(1)
+        try:
+            c.slice_row(other)
+        except (Exception, SystemExit):  # noqa: BLE001
+            raise Refused(f"{other} has no row in {c.SLICES_REL}: not a part that replaced {slice_id}. Nothing changed.") \
+                from None
+        if (c.rec_dir(other) / "retired.json").exists():
+            raise Refused(f"{other} is retired itself: it replaced nothing. Nothing changed.")
+    if run == "send-back":
+        if st.get("phase") != "refused" or st.get("refused_for") != "gate" or not tip:
+            raise Refused(f"the conductor sends back on its own word only a verified part the merge gate refused by its "
+                          f"own test ({slice_id} is {st.get('phase')}, refused for {st.get('refused_for') or 'nothing'}). "
+                          "Nothing changed.")
+        gate = c.read_json(rec / f"verify-gate-{tip}.json") or {}
+        files = [str(f.get("file") or "") for f in gate.get("findings") or [] if isinstance(f, dict)]
+        try:
+            own = set(c.git(["diff", "--name-only", f"main...{tip}"], c.REPO).splitlines())
+        except RuntimeError:
+            own = set()
+        if not files or not all(f in own for f in files):
+            raise Refused(f"the gate's refusal of {slice_id} at {tip[:10]} names a test that is not its own "
+                          f"({', '.join(f for f in files if f not in own) or 'none named'}): the conductor reruns the merge "
+                          "(board: refused by another test), it does not send the part back. Nothing changed.")
+        what = f"send-back at {tip[:10]}"
+        if any(r["slice"] == slice_id and r["detail"].startswith(OWN_TAG) and what in r["detail"]
+               for r in c.owner_changes()):
+            raise Refused(f"the conductor has sent {slice_id} back at {tip[:10]} on its own word already: once a tip; "
+                          "the owner's line is needed. Nothing changed.")
+    if action == "add-round":
+        most, rnd = dial_rounds_most(), int(st.get("round", 1))
+        if rnd + 1 > most:
+            raise Refused(f"one more round for {slice_id} would be round {rnd + 1}, past the highest rounds limit the "
+                          f"dial gives ({most}): that is the owner's. Nothing changed.")
+    tag = f"{OWN_TAG}, {today()}, use {used + 1} of {OWN_BUDGET}) {what} ({reason})"
+    OWN["tag"] = tag
+    return tag
 
 
 # ------------------------------------------------------------------ the worktree
@@ -308,7 +408,7 @@ def round_after_refusal(slice_id: str, wt: Path, st: dict, rec: Path, rnd: int, 
     red = red_stopped(slice_id, rec)
     if red:
         refuse(f"{slice_id} has been stopped for red checks ({red}): its rounds are the owner's")
-    hit = SECURITY_WORDS.search(stop_words(st, rec, tip))  # the self-clear's word check, unchanged
+    hit = security_hit(stop_words(st, rec, tip))  # the self-clear's word check, unchanged
     if hit:
         refuse(f"the refusal names a key, a credential or a security rule ({hit.group(0)!r} in its findings)")
     cause = refusal_cause(rec, tip)
@@ -485,7 +585,7 @@ def before_the_limit(slice_id: str, phase: str, rnd: int, limit: int, tip: str, 
 def no_key_finding(verify: dict) -> None:
     """The owner's word of 21 November 2026 (his file 003): a fault that can expose a key, show it back, log it or send
     it where it was not given is never accepted, at any round, on the standing word or on his own line."""
-    hit = SECURITY_WORDS.search(" ".join(" ".join(str(f.get(k, "")) for k in ("file", "what", "evidence"))
+    hit = security_hit(" ".join(" ".join(str(f.get(k, "")) for k in ("file", "what", "evidence"))
                                          for f in verify["findings"]))
     if hit:
         raise Refused(f"a finding names a key, a credential or a security rule ({hit.group(0)!r}): the owner's accept "
@@ -541,7 +641,7 @@ def standing_accept(slice_id: str, frozen: dict, st: dict, rec: Path) -> list[st
     newest_record_is(slice_id, tip)
     legacy = rs.is_legacy(verify)
     only_gaps(verify["findings"], legacy)
-    hit = SECURITY_WORDS.search(" ".join(" ".join(str(f.get(k, "")) for k in ("file", "what", "evidence"))
+    hit = security_hit(" ".join(" ".join(str(f.get(k, "")) for k in ("file", "what", "evidence"))
                                          for f in verify["findings"]))
     if hit:  # LINE_FIXES_5_BRIEF.md, 3: a security or key finding is never covered by the standing word
         raise Refused(f"a finding names a key, a credential or a security rule ({hit.group(0)!r}): never accepted on "
@@ -571,10 +671,12 @@ def move_seat(slice_id: str, args: list[str] | tuple[str, ...]) -> list[str]:
     tag = f"resume.tsv {today()} move-seat {seat} {to}"
     used = sum(1 for r in c.owner_changes()
                if r["slice"] == slice_id and r["action"] == "move-seat" and r["detail"].startswith(tag + ":"))
-    if not have:
+    if OWN is not None:  # the conductor's own word (P1), checked after the account's own conditions below
+        pass
+    elif not have:
         raise Refused(f"no line '{chr(9).join(want)}' in {c.RESUME_FILE} (the owner's word, today, UTC): nothing "
                       "changed.")
-    if used >= have:
+    elif used >= have:
         raise Refused(f"the owner's line '{chr(9).join(want)}' in resume.tsv is already used ({used} use(s) logged in "
                       "owner-changes.tsv): one line, one use. Nothing changed.")
     known = c.known_accounts()
@@ -596,6 +698,8 @@ def move_seat(slice_id: str, args: list[str] | tuple[str, ...]) -> list[str]:
                       "Nothing changed.")
     if not c.signed_in(to):
         raise Refused(f"account {to} is signed out: the owner signs in to it first. Nothing changed.")
+    if OWN is not None:
+        tag = own_authority(slice_id, "move-seat") + f" {seat} {to}"
     path = c.rec_dir(slice_id) / "state.json"
     raw = c.read_json(path) or {}
     raw[key] = to
@@ -699,6 +803,16 @@ OWNERS_ROUND = 8
 #: word, in any case, on purpose: a word too many leaves the stop with the owner, as before; a word too few never can.
 SECURITY_WORDS = re.compile(r"key|credential|secret|token|passw|security|secure|auth|oidc|cve|vulnerab|certificate|"
                             r"encrypt|signing|guard\.py|emails\.sha256|sha256", re.I)
+#: The known keyboard phrases, taken out of the words before SECURITY_WORDS is matched (the owner, 24 November 2026:
+#: PL8a's accept was refused over "an analyst's key press", the third keyboard false match). These only, each a whole
+#: phrase: any other "key" still matches, so an unknown use still stops. The other words are not touched.
+KEYBOARD_PHRASES = re.compile(r"\b(?:key ?press(?:es)?|keydown|keyup|keyboard-only|keyboard|home key|end key|arrow keys|"
+                              r"the (?:enter|escape|tab) key|key bindings?|key shortcuts?)\b", re.I)
+
+
+def security_hit(text: str):
+    """SECURITY_WORDS' match in `text` once the known keyboard phrases are taken out, or None."""
+    return SECURITY_WORDS.search(KEYBOARD_PHRASES.sub(" ", text))
 
 
 def unapplied(slice_id: str, action: str) -> list[str]:
@@ -741,7 +855,7 @@ def owners_alone(slice_id: str, frozen: dict, st: dict, rec: Path, stop: str, ti
     if rnd >= OWNERS_ROUND:
         raise Refused(f"{slice_id} is in round {rnd}: any stop at the eighth round is the owner's alone. It waits for "
                       "the owner's line. Nothing changed.")
-    hit = SECURITY_WORDS.search(stop_words(st, rec, tip))
+    hit = security_hit(stop_words(st, rec, tip))
     if hit:
         raise Refused(f"{slice_id}'s stop names a key, a credential or a security rule ({hit.group(0)!r} in its "
                       "findings): the line never clears it. It waits for the owner's line. Nothing changed.")
@@ -929,7 +1043,7 @@ def row_with_checks(slice_id: str, checks: str) -> None:
     tmp.replace(f)
 
 
-def self_clear(slice_id: str, frozen: dict, st: dict, rec: Path, wt: Path) -> list[str]:
+def self_clear(slice_id: str, frozen: dict, st: dict, rec: Path, wt: Path, own: bool = False) -> list[str]:
     """The line's own clearance of a stop, with no line from the owner (LINE_FIXES_5_BRIEF.md, A), or a refusal in
     words. The exclusions come first and hold whatever the cause; then (b), the narrower diagnosis, then (a)."""
     stop = stop_of(st, rec)
@@ -942,6 +1056,8 @@ def self_clear(slice_id: str, frozen: dict, st: dict, rec: Path, wt: Path) -> li
     tip = c.git(["rev-parse", frozen["branch"]], c.REPO)
     owners_alone(slice_id, frozen, st, rec, stop, tip)
     grant, why = c.standing_grant(CLS)  # the owner's file 012, A2: on his standing permission, within its budget
+    if own:  # P1: the conductor's own clear-stop, on its own budget, for the same proven causes alone
+        grant, why = {"own": own_authority(slice_id, "clear-stop")}, "on"
     if not grant:
         raise Refused(f"{slice_id}'s stop waits for the owner's line: the line clears a stop itself only on his standing "
                       f"permission ({CLS}), and {why}. Nothing changed.")
@@ -953,7 +1069,14 @@ def self_clear(slice_id: str, frozen: dict, st: dict, rec: Path, wt: Path) -> li
         raise Refused(f"{slice_id}'s red stop is its own ({mine}): the line never clears a red in the slice's own "
                       "acceptance or its own tests. It waits for the owner's line. Nothing changed.")
     red = c.read_json(rec / "red_stop.json") or {}
-    use = f"; on the owner's standing permission ({CLS}), use {grant['used'] + 1} of {grant['per_day']} today"
+    use = (f"; on the conductor's own word ({grant['own']})" if own else
+           f"; on the owner's standing permission ({CLS}), use {grant['used'] + 1} of {grant['per_day']} today")
+
+    def logged(stop_: str, cause: str, what_: str) -> None:
+        if own:  # the conductor's budget counts this row; main() shows it on the board
+            c.log_owner_change(slice_id, "clear-stop", f"{grant['own']}: cause {cause}: {what_}")
+        else:
+            c.log_standing_use(slice_id, CLS, "self-clear", stop_, cause, what_, {"red_stop": red})
     log = c.DATA / "dry-runs" / f"{slice_id}-self-clear-{int(time.time())}.log"
     log.parent.mkdir(parents=True, exist_ok=True)
     why_b, removal = cause_b(slice_id, frozen, st, rec, tip, log) if stop == "red" else ("not a red stop", {})
@@ -976,7 +1099,7 @@ def self_clear(slice_id: str, frozen: dict, st: dict, rec: Path, wt: Path) -> li
         what = (f"removed {removed} from the checks (a check the slice did not write, failing identically on main's "
                 f"own tree; committed {sha[:10]}; the acceptance unchanged); red stop at {tip[:10]} cleared; building, "
                 f"round {st.get('round', 1)} unchanged{use}")
-        c.log_standing_use(slice_id, CLS, "self-clear", "red", "b", what, {"red_stop": red})
+        logged("red", "b", what)
         return [f"{slice_id}: cleared by the line (cause b): {what}.", *said]
     why_c, names = cause_c(slice_id, rec, wt) if stop == "red" else ("not a red stop", [])
     if not why_c:
@@ -986,7 +1109,7 @@ def self_clear(slice_id: str, frozen: dict, st: dict, rec: Path, wt: Path) -> li
         what = (f"the red stop at {tip[:10]} was the scan map's alone, and main now has the row for {', '.join(names)} "
                 f"(written since by the conductor; a builder cannot add one); cleared; building, round "
                 f"{st.get('round', 1)} unchanged{use}")
-        c.log_standing_use(slice_id, CLS, "self-clear", "red", "c", what, {"red_stop": red})
+        logged("red", "c", what)
         return [f"{slice_id}: cleared by the line (cause c): {what}.", *said]
     why_a = cause_a(slice_id, frozen, wt, tip)
     if not why_a:
@@ -1001,7 +1124,7 @@ def self_clear(slice_id: str, frozen: dict, st: dict, rec: Path, wt: Path) -> li
         said = back_to_building(slice_id, wt)
         what = (f"main {main} merged into the branch (clean; the slice's acceptance and checks unchanged); {stop} stop "
                 f"at {tip[:10]} cleared; building, round {st.get('round', 1)} unchanged{use}")
-        c.log_standing_use(slice_id, CLS, "self-clear", stop, "a", what, {"red_stop": red})
+        logged(stop, "a", what)
         return [f"{slice_id}: cleared by the line (cause a): {what}.", *said]
     raise Refused(f"{slice_id}'s stop is not one the line clears: not (b): {why_b}; not (c): {why_c}; not (a): {why_a}. "
                   "It waits for the "
@@ -1097,6 +1220,9 @@ def act(slice_id: str, action: str, standing_only: bool = False, args: list[str]
             c.log_owner_change(slice_id, action, f"{tag}: round {rnd} -> {rnd + 1}, limit {limit} -> {limit + 1}")
             return [f"{slice_id}: one more round ({rnd + 1} of {limit + 1}); building.", *said]
 
+        if action == "clear-stop" and OWN is not None:  # the owner's answer: only a cause self-clear proves the line's
+            return self_clear(slice_id, frozen, st, rec, wt, own=True)
+
         if action == "clear-stop":
             if phase != "stopped" or not (rec / "red_stop.json").exists():
                 raise Refused(f"{slice_id} is not stopped on red checks (phase {phase}, no red_stop.json).")
@@ -1137,6 +1263,8 @@ def act(slice_id: str, action: str, standing_only: bool = False, args: list[str]
             try:
                 tag = authority(slice_id, "add-round")
             except Refused as no_line:  # the owner's file 012, A1: his standing permission in place of the line
+                if OWN is not None:  # the conductor's own word was refused: said as such, never the standing one
+                    raise
                 return round_after_refusal(slice_id, wt, st, rec, rnd, limit, str(no_line))
             said = back_to_building(slice_id, wt, round=rnd + 1, rounds_limit=limit + 1)
             c.log_owner_change(slice_id, action, f"{tag}: past the limit; round {rnd} -> {rnd + 1}, limit {limit} -> {limit + 1}")
@@ -1198,11 +1326,21 @@ def main() -> int:
     ap.add_argument("slice")
     ap.add_argument("action", choices=ACTIONS)
     ap.add_argument("args", nargs="*", help="move-seat: the seat (builder or verifier) and the account")
+    ap.add_argument("--own", metavar="REASON", default=None,
+                    help="the conductor's own word, in place of the owner's line: " + ", ".join(OWN_ACTIONS) + " alone")
     a = ap.parse_args()
+    global OWN
     try:
         if a.args and a.action != "move-seat":
             raise Refused(f"{a.action} takes no arguments ({' '.join(a.args)}). Nothing changed.")
+        if a.own is not None:
+            if a.action not in OWN_ACTIONS:
+                raise Refused(f"the conductor's own word is for {', '.join(OWN_ACTIONS)} alone, not {a.action}: that "
+                              "needs the owner's resume.tsv line. Nothing changed.")
+            OWN = {"action": a.action, "reason": a.own}
         said = act(a.slice, a.action, args=a.args)
+        if OWN and OWN.get("tag"):  # shown on the board beside the line's own clearances
+            c.log_self_clear(a.slice, a.action, "own", f"{OWN['tag']}: {said[0] if said else 'done'}")
     except (Refused, ms.Refused) as e:
         print(f"Refused: {e}", file=sys.stderr)
         return 1

@@ -213,6 +213,69 @@ def branch_exists(b: str) -> bool:
     return bool(b) and bool(c.git(["branch", "--list", b], c.REPO, check=False))
 
 
+#: The backlog the conductor keeps; a row that names a test and calls it a flake makes that test a known flake.
+BACKLOG_REL = f"{c.V062_REL}/BACKLOG.md"
+FLAKE_ROW = re.compile(r"(?:\bRow (\d+)\b|^(\d+)\. )")
+TEST_PATH = re.compile(r"`([^`\s]+?\.py)(?:::[^`]*)?`")
+
+
+def known_flakes() -> dict[str, str]:
+    """{test file as the backlog names it: its row}: each backlog line that calls a test a flake (the owner, 23 November
+    2026). A row that names a test for another reason does not make it one."""
+    try:
+        text = (c.REPO / BACKLOG_REL).read_text()
+    except OSError:
+        return {}
+    flakes = {}
+    for line in text.splitlines():
+        m = FLAKE_ROW.search(line)
+        if m and re.search(r"\bflake\b", line, re.I):
+            for path in TEST_PATH.findall(line):
+                flakes.setdefault(path, m.group(1) or m.group(2))
+    return flakes
+
+
+def gate_refusals(sid: str, tip: str) -> int:
+    """How many times the full gate refused this tip of this slice (merge_slice.py's refusals.tsv, one row a refusal)."""
+    try:
+        lines = (c.DATA / "refusals.tsv").read_text().splitlines()[1:]
+    except OSError:
+        return 0
+    return sum(1 for ln in lines if (p := ln.split("\t")) and len(p) >= 4 and p[1] == sid and p[2] == tip
+               and p[3].startswith("the full gate"))
+
+
+def refused_by_others(sid: str, st: dict, rec: Path) -> str | None:
+    """When the gate refused a verified part's tip once, only on tests that are not its own files or that the backlog
+    lists as known flakes, those tests in words: the conductor runs its merge again. Else None: a stop for the owner,
+    as before (a test of its own, a record that names none or none to read, or a second refusal of the same tip).
+    PL14a, 23 November 2026: refused on test_pl4d3d_declared_units.py, a file it never touched, and shown as waiting
+    for the owner's send-back. Once, not always (the owner's answer, 24 November): AD2 on 18 November was refused by
+    test_admin_sections.py, not its own file, and the fault was its own; a rerun is red again, and then it is the
+    owner's."""
+    tip = st.get("tip") or ""
+    if not tip or gate_refusals(sid, tip) > 1:
+        return None
+    gate = c.read_json(rec / f"verify-gate-{tip}.json") if tip else None
+    files = [str(f.get("file") or "") for f in (gate or {}).get("findings") or [] if isinstance(f, dict)]
+    if not files or not all(files):
+        return None
+    try:
+        diff = c.git(["diff", "--name-only", f"main...{tip}"], c.REPO)
+    except RuntimeError:
+        return None                                       # the part's own files cannot be read: a stop, as before
+    own, flakes, said = set(diff.splitlines()), known_flakes(), []
+    for f in dict.fromkeys(files):
+        row = next((r for p, r in flakes.items() if f == p or f.endswith("/" + p)), None)
+        if row:
+            said.append(f"{Path(f).name}, a known flake (backlog row {row})")
+        elif f not in own:
+            said.append(Path(f).name)
+        else:
+            return None
+    return "; ".join(said)
+
+
 def record(path: Path, problems: list[str], sid: str) -> dict | None:
     """One record file: a dict, or None when there is none. A file that is there but unreadable, or not a JSON
     object, is skipped and reported to the owner: one bad record never stops the board."""
@@ -303,6 +366,11 @@ def one_slice(s: dict, ids: set, rows: list[dict], builds: dict, problems: list[
         cause = st.get("last_refusal_cause") or str(st.get("note") or "").split(";")[0] or "its own run"
         state, source = "verifying", "merge refusal naming no test of the part's"
         note = f"verified; the Mac's gate failed ({cause}), not this part's tests: run its merge again"
+    elif (st.get("phase") == "refused" and st.get("refused_for") == "gate" and passed
+          and (others := refused_by_others(sid, st, rec))):
+        # the owner, 23 November 2026: not the part's fault and not the owner's; the conductor runs its merge again
+        state, source = "verifying", "merge refusal by another test"
+        note = f"verified; refused by another test ({others}), with the conductor to rerun"
     elif st.get("phase") == "refused":  # the dashboard knows four states: a refused slice waits as a stopped one
         state, source = "stopped", "merge refusal"
         note = (f"refused by the gate: {st.get('refused_tests', 0)} tests" if st.get("refused_for") == "gate"
@@ -410,6 +478,7 @@ def part_of(state: str | None, st: dict, passed: bool, progress: dict | None, se
         srv = (view or {}).get("state")
         return {"part": "verified", "part_said": note,
                 "waiting_for": "a merge run again" if "run its merge again" in note else
+                "the conductor to rerun" if "with the conductor to rerun" in note else
                 "the server" if srv in ("running", "none") else "the merge slot"}
     if state == "verifying":
         return {"part": "verifying", "part_said": note, "waiting_for": "" if "verifier" in seats else "a seat"}

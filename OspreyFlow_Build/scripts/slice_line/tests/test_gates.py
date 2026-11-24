@@ -773,7 +773,9 @@ def gate(world):
          'for f in ${FAKE_LIVE:-}; do echo "$f"; done\nexit 0')
     # the server's run queue, as ssh reads it: FAKE_QUEUE lines, one per check (the last repeats), "first|makes"
     fake(bin_ / "ssh", "ssh", calls,
+         'case " $* " in *" ${FAKE_SSH_DOWN:-no-such-host} "*) exit 255;; esac\n'
          'n=$(wc -l < "' + str(t / "ssh.count") + '" 2>/dev/null || echo 0); echo x >> "' + str(t / "ssh.count") + '"\n'
+         '[ -n "${FAKE_SSH_SLEEP:-}" ] && sleep "$FAKE_SSH_SLEEP"\n'
          '[ -n "${FAKE_SSH_EXIT:-}" ] && exit "$FAKE_SSH_EXIT"\n'
          'row=$(printf "%s\\n" ${FAKE_QUEUE:-"|"} | awk -v n="$n" \'{r[NR]=$0} END {print (n+1 <= NR) ? r[n+1] : r[NR]}\')\n'
          'first=${row%%|*}; makes=${row#*|}\n'
@@ -802,7 +804,7 @@ def gate(world):
 
 
 def run_gate(g, nodes=("node24", "node22"), fail="", venv_python="3.12.9", live="", queue="|", ssh_exit="",
-             lease_fail=""):
+             lease_fail="", ssh_sleep="", lease_dir=None, ssh_down="", limit=None):
     env = dict(g["env"])
     # the caller's shell as on this Mac: the main checkout's venv active and first on PATH
     env["VIRTUAL_ENV"] = str(g["main_venv"].parent)
@@ -811,12 +813,18 @@ def run_gate(g, nodes=("node24", "node22"), fail="", venv_python="3.12.9", live=
     env["FAKE_MAKE_FAIL"] = fail
     env["FAKE_VENV_PYTHON"] = venv_python
     env["UV_PYTHON"] = "3.13"  # the caller's own choice, as on this Mac: never the gate's
-    env.update(FAKE_LIVE=live, FAKE_QUEUE=queue, FAKE_SSH_EXIT=ssh_exit, FAKE_LEASE_FAIL=lease_fail)
+    env.update(FAKE_LIVE=live, FAKE_QUEUE=queue, FAKE_SSH_EXIT=ssh_exit, FAKE_LEASE_FAIL=lease_fail,
+               FAKE_SSH_SLEEP=ssh_sleep, FAKE_SSH_DOWN=ssh_down)
+    env["OSPREY_LEASE_DIR"] = str(lease_dir or g["tmp"] / "lease")      # never the owner's own per-machine file
     log = g["tmp"] / "gate.log"
     code = ("import sys; from pathlib import Path; sys.path.insert(0, sys.argv[1]); import merge_slice as m; "
-            "m.QUEUE_POLL_SECONDS = 0.05; sys.exit(m.full_gate(Path(sys.argv[2]), 'base', Path(sys.argv[3])))")
-    p = subprocess.run([g["py"], "-c", code, str(g["lines"]), str(g["tree"]), str(log)], env=env,
-                       capture_output=True, text=True, check=False)
+            "m.QUEUE_POLL_SECONDS = 0.05; m.QUEUE_CALL_SECONDS = 2; "
+            "sys.exit(m.full_gate(Path(sys.argv[2]), 'base', Path(sys.argv[3])))")
+    try:
+        p = subprocess.run([g["py"], "-c", code, str(g["lines"]), str(g["tree"]), str(log)], env=env,
+                           capture_output=True, text=True, check=False, timeout=limit)
+    except subprocess.TimeoutExpired:                       # a gate that waits: red at once, never a hang
+        return 124, [], f"the gate was still running after {limit} s"
     rows = [ln.split("\t") for ln in g["calls"].read_text().splitlines()] if g["calls"].exists() else []
     calls = [dict(zip(("name", "args", "cwd", "venv", "ports", "node", "python", "uv_python"), r)) for r in rows]
     return p.returncode, calls, (log.read_text() if log.exists() else "") + p.stderr
@@ -946,13 +954,57 @@ def test_the_live_step_on_waits_for_the_queue_then_runs_under_the_lease(gate):
 @pytest.mark.parametrize(("queue", "ssh_exit", "said"), [
     ("demo|", "", "has 'demo' first"),
     ("|4242", "", "make is running there"),
-    ("|", "255", "could not be read"),
+    ("|", "1", "could not be read"),                               # reached, its queue not read: still a blocker
 ])
 def test_the_live_step_on_refuses_when_the_queue_does_not_clear(gate, queue, ssh_exit, said):
     live_step(gate, on=True, wait=0)
     rc, calls, out = run_gate(gate, live=LIVE, queue=queue, ssh_exit=ssh_exit)
     assert rc == 4 and said in out and "did not clear" in out, out
     assert not lease_calls(calls)
+
+
+# The owner, 24 November 2026 (the test server down, possibly for hours): an unreachable stack host never hangs or
+# refuses a merge: the queue check on it ends in seconds and the merge carries on, with a note in its log; and the
+# per-machine override of the stack hosts (<lease dir>/stack_hosts.tsv) is read in place of the tracked file.
+
+
+@pytest.mark.parametrize(("ssh_exit", "ssh_sleep", "said"), [("255", "", "exit 255"), ("", "30", "no answer in 2 s")],
+                         ids=["ssh-cannot-reach-it", "no-answer"])
+def test_an_unreachable_stack_host_is_noted_and_the_merge_carries_on(gate, ssh_exit, ssh_sleep, said):
+    live_step(gate, on=True, wait=60)
+    t0 = time.monotonic()
+    rc, calls, out = run_gate(gate, live=LIVE, ssh_exit=ssh_exit, ssh_sleep=ssh_sleep, limit=60)
+    assert rc == 0, out
+    assert time.monotonic() - t0 < 30, "the queue check waited"                  # seconds, never the 60 minutes
+    assert "NOTE: the run queue on testbox" in out and said in out and "the merge carries on" in out, out
+    assert out.count("NOTE: the run queue on testbox") == 1, out                 # once, not on every poll
+    assert "Waiting for the server's run queue" not in out, out                  # not one poll waited on it
+    assert lease_calls(calls) == ["acquire", "up", "live", "down", "release"]
+
+
+def test_an_unreachable_host_is_noted_once_and_not_asked_again_while_another_host_is_waited_for(gate):
+    live_step(gate, on=True, wait=1)
+    own = gate["tmp"] / "own-lease"
+    own.mkdir()
+    (own / "stack_hosts.tsv").write_text("b\ttestbox\nc\totherbox\n")
+    rc, calls, out = run_gate(gate, live=LIVE, queue="demo| |", ssh_down="testbox", lease_dir=own, limit=60)
+    assert rc == 0, out
+    asked = [a for c_ in calls if c_["name"] == "ssh" for a in c_["args"].split() if a in ("testbox", "otherbox")]
+    assert asked.count("testbox") == 1 and asked.count("otherbox") == 2, asked   # otherbox waited for; testbox once
+    assert out.count("NOTE: the run queue on testbox") == 1, out
+
+
+@pytest.mark.parametrize(("own_file", "hosts"), [("# every stack on this machine while the server is down\n", set()),
+                                                ("b\totherbox\n", {"otherbox"})], ids=["every-stack-here", "another-host"])
+def test_the_per_machine_hosts_file_is_read_in_place_of_the_tracked_one(gate, own_file, hosts):
+    live_step(gate, on=True, wait=1)
+    own = gate["tmp"] / "own-lease"
+    own.mkdir()
+    (own / "stack_hosts.tsv").write_text(own_file)
+    rc, calls, out = run_gate(gate, live=LIVE, lease_dir=own)
+    assert rc == 0, out
+    asked = {a for c_ in calls if c_["name"] == "ssh" for a in c_["args"].split() if a in ("testbox", "otherbox")}
+    assert asked == hosts, calls                                                 # never the tracked file's testbox
 
 
 @pytest.mark.parametrize("body", ["", "live_step: maybe\n", "live_step: true\nqueue_wait_minutes: soon\n", None])

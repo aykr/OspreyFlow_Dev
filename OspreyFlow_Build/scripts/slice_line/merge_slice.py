@@ -56,10 +56,9 @@ import server_gate  # noqa: E402
 import scan_select  # noqa: E402
 
 #: The owner's files in the records folder: no slice changes them and records mode never commits them.
-OWNER_FILES = (f"{c.V062_REL}/dial.yaml", f"{c.V062_REL}/accounts.yaml", f"{c.V062_REL}/live_step.yaml",
-               f"{c.V062_REL}/resume.tsv", f"{c.V062_REL}/standing.tsv")
+OWNER_FILES = server_gate.OWNER_FILES
 #: A slice's scan rows, waiting on main for its merge (1b): the conductor's records, never a slice's branch.
-SCAN_ROWS_REL = f"{c.V062_REL}/scan_rows"
+SCAN_ROWS_REL = server_gate.SCAN_ROWS_REL
 LINE_MAP_REL = "OspreyFlow_Build/scripts/slice_line/scan_map.tsv"
 PROTECTED_PREFIXES = (
     "OspreyFlow_Core/Makefile", ".github/", "OspreyFlow_Core/osprey.yaml", "OspreyFlow_Core/data/", ".claude/",
@@ -341,20 +340,42 @@ def live_step_setting() -> tuple[bool, int]:
     return on, wait
 
 
+def hosts_file(tree: Path) -> Path:
+    """The stack hosts: the owner's per-machine override (24 November 2026, the test server down), the lease folder's
+    stack_hosts.tsv, when it exists, as stack_lease.sh reads it; else the tracked scripts/lane_stack_hosts.tsv."""
+    own = Path(os.environ.get("OSPREY_LEASE_DIR") or Path.home() / ".ospreyflow") / "stack_hosts.tsv"
+    return own if own.is_file() else tree / "OspreyFlow_Build/scripts/lane_stack_hosts.tsv"
+
+
 def queue_hosts(tree: Path) -> list[str]:
-    """Every host a test stack runs on (scripts/lane_stack_hosts.tsv): the queue is checked on each."""
-    f = tree / "OspreyFlow_Build/scripts/lane_stack_hosts.tsv"
+    """Every host a test stack runs on (hosts_file): the queue is checked on each."""
+    f = hosts_file(tree)
     rows = [ln.split("\t") for ln in (f.read_text().splitlines() if f.exists() else []) if ln and not ln.startswith("#")]
     return sorted({r[1].strip() for r in rows if len(r) >= 2 and r[1].strip()})
 
 
+#: How long the queue check waits on a stack host (the owner, 24 November 2026: an unreachable host never hangs or
+#: refuses a merge): ssh's own connect limit, and the whole call's.
+QUEUE_CONNECT_SECONDS = 5
+QUEUE_CALL_SECONDS = 15
+#: The words a queue check on an unreachable host begins with: noted, not waited for.
+UNREACHABLE = "unreachable:"
+
+
 def queue_blocker(host: str) -> str | None:
     """Why the merger may not run on `host` now, or None: the queue (osprey-runs/QUEUE) is empty or has the merger
-    first, and no make runs there. A host that cannot be read is a blocker, never taken as clear."""
+    first, and no make runs there. A host ssh cannot reach in seconds (exit 255, or no answer within
+    QUEUE_CALL_SECONDS) is said as UNREACHABLE, which the wait notes and does not wait for; a host reached whose queue
+    cannot be read is a blocker, never taken as clear."""
     queue = f"{os.environ.get('OSPREY_REMOTE_ROOT', 'osprey-runs')}/QUEUE"
-    p = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=20", host,
-                        f"head -n 1 {queue} 2>/dev/null; echo '<<end>>'; pgrep -x make || true"],
-                       capture_output=True, text=True, check=False)
+    try:
+        p = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", f"ConnectTimeout={QUEUE_CONNECT_SECONDS}", host,
+                            f"head -n 1 {queue} 2>/dev/null; echo '<<end>>'; pgrep -x make || true"],
+                           capture_output=True, text=True, check=False, timeout=QUEUE_CALL_SECONDS)
+    except subprocess.TimeoutExpired:
+        return f"{UNREACHABLE} {host}: no answer in {QUEUE_CALL_SECONDS} s"
+    if p.returncode == 255:
+        return f"{UNREACHABLE} {host}: ssh could not reach it (exit 255)"
     if p.returncode != 0 or "<<end>>" not in p.stdout:
         return f"{host}: its run queue could not be read (ssh exit {p.returncode})"
     first, _, makes = p.stdout.partition("<<end>>")
@@ -369,8 +390,15 @@ def queue_blocker(host: str) -> str | None:
 def wait_for_queue(tree: Path, wait_minutes: int, log: Path) -> str | None:
     """Wait until every stack host's queue is clear; the last blocker if `wait_minutes` pass first."""
     deadline = time.monotonic() + wait_minutes * 60
+    gone: list[str] = []
     while True:
-        blockers = [b for h in queue_hosts(tree) if (b := queue_blocker(h))]
+        said = [(h, queue_blocker(h)) for h in queue_hosts(tree) if h not in gone]
+        for h, b in said:
+            if b and b.startswith(UNREACHABLE):
+                gone.append(h)
+                log.open("a").write(f"\nNOTE: the run queue on {b[len(UNREACHABLE):].strip()}: not waited for; the merge "
+                                    "carries on.\n")
+        blockers = [b for _, b in said if b and not b.startswith(UNREACHABLE)]
         if not blockers:
             return None
         log.open("a").write("\nWaiting for the server's run queue: " + "; ".join(blockers) + "\n")
@@ -1191,6 +1219,23 @@ def refusal_cause(words: str, log: Path) -> str:
     return "another refusal"
 
 
+def log_rerun(slice_id: str, tip: str) -> None:
+    """A merge of a tip the merge has refused before, run again by the conductor (the owner, 24 November 2026: a merge
+    rerun is the conductor's, logged and shown, and uses none of its daily budget): one row in owner-changes.tsv, never
+    starting "conductor (own" (the budget's rows), and one on the board beside the line's own clearances."""
+    try:
+        lines = (c.DATA / REFUSALS).read_text().splitlines()[1:]
+    except OSError:
+        return
+    before = [p for ln in lines if (p := ln.split("\t")) and len(p) >= 4 and p[1] == slice_id and p[2] == tip]
+    if not before:
+        return
+    what = (f"conductor: the merge of {tip[:10]} run again after {len(before)} refusal(s), the last {before[-1][3]} at "
+            f"{before[-1][0]}; not counted in the conductor's budget")
+    c.log_owner_change(slice_id, "merge-rerun", what)
+    c.log_self_clear(slice_id, "refused", "rerun", what)
+
+
 def record_refusal(slice_id: str, tip: str, cause: str) -> None:
     f = c.DATA / REFUSALS
     if not f.exists():
@@ -1225,25 +1270,55 @@ def server_hold(slice_id: str) -> str | None:
     return server_gate.slot_hold(slice_id, tip)
 
 
+#: A rerun whose every named target has no rule in either Makefile: nothing could be rerun (not red, not green).
+UNPLACED = 4
+
+
+def has_rule(makefile: Path, target: str) -> bool:
+    try:
+        text = makefile.read_text()
+    except OSError:
+        return False
+    return re.search(rf"^{re.escape(target)}:(?!=)", text, re.M) is not None
+
+
+def rerun_steps(tree: Path, mk: Path, tests: list[str], targets: list[str]) -> tuple[list, list[str]]:
+    """The rerun's steps, each (words, command, folder), and the targets neither Makefile has a rule for. A target runs
+    from the Makefile that has its rule: Build's own first (OspreyFlow_Build, as before), else Core's (OspreyFlow_Core).
+    PL12b, 23 November 2026: the server named test-js (a Core target, which make test runs as make -C ../OspreyFlow_Core
+    test-js) and test; the rerun ran make -k test-js test in OspreyFlow_Build, make said "No rule to make target
+    `test-js'", and the rerun was red though every test in it passed: PL12b was held from the slot all night."""
+    steps = []
+    if tests:
+        mk.write_text("server-rerun:\n\t$(IN_CORE) $(PYTEST) $(RERUN_TESTS)\n")
+        steps.append(("the server's failing tests, rerun", ["make", "-f", "Makefile", "-f", str(mk), "server-rerun",
+                                                            "RERUN_TESTS=" + " ".join(tests)], tree / "OspreyFlow_Build"))
+    build = [t for t in targets if has_rule(tree / "OspreyFlow_Build/Makefile", t)]
+    core = [t for t in targets if t not in build and has_rule(tree / "OspreyFlow_Core/Makefile", t)]
+    if build:
+        steps.append(("the server's failing targets, rerun", ["make", "-k", *build], tree / "OspreyFlow_Build"))
+    if core:
+        steps.append(("the server's failing Core targets, rerun", ["make", "-k", *core], tree / "OspreyFlow_Core"))
+    return steps, [t for t in targets if t not in build and t not in core]
+
+
 def rerun_named(tree: Path, log: Path, tests: list[str], targets: list[str]) -> int:
     """The demo server's named failures, rerun on the Mac in the gate's own environment (ci_env): the tests by
     make test's own pytest command (the Makefile's IN_CORE and PYTEST, through a second makefile beside the log, the
-    Makefile itself unchanged), and a failing target with no test named by make -k. 0 when every one is green."""
+    Makefile itself unchanged), and each failing target with no test named by make -k, from the Makefile that has its
+    rule (rerun_steps). 0 when every one is green; UNPLACED when nothing named could be placed."""
+    steps, unplaced = rerun_steps(tree, log.with_suffix(".mk"), tests, targets)
+    if unplaced:
+        log.open("a").write(f"\nNOT PLACED: no Makefile of the tree has a rule for {', '.join(unplaced)}: not rerun; the "
+                            "merge's whole gate settles it.\n")
+    if not steps:
+        return UNPLACED
     try:
         env = ci_env(tree, log)
     except (NetworkError, GateEnvError) as e:
         log.open("a").write(f"\nREFUSED: the rerun's environment: {e}\n")
         return 3
-    codes = []
-    if tests:
-        mk = log.with_suffix(".mk")
-        mk.write_text("server-rerun:\n\t$(IN_CORE) $(PYTEST) $(RERUN_TESTS)\n")
-        codes.append(run_step("the server's failing tests, rerun", ["make", "-f", "Makefile", "-f", str(mk), "server-rerun",
-                                                                    "RERUN_TESTS=" + " ".join(tests)],
-                              tree / "OspreyFlow_Build", log, env, []))
-    if targets:
-        codes.append(run_step("the server's failing targets, rerun", ["make", "-k", *targets], tree / "OspreyFlow_Build",
-                              log, env, [], tests=False))
+    codes = [run_step(words, cmd, cwd, log, env, [], tests=words.endswith("tests, rerun")) for words, cmd, cwd in steps]
     return next((x for x in codes if x), 0)
 
 
@@ -1264,10 +1339,13 @@ def counted_gate(slice_id: str, tip: str, base: str, after: Path, log: Path) -> 
         return {**out, "why": "the owner's switch (server_counts) is off"}
     if why:
         return {**out, "why": why}
-    plan = server_gate.remainder(e, after, log.with_suffix(".remainder.mk"))
-    log.open("a").write(f"\nthe demo server's run {rid} counts for {', '.join(plan['taken'])}; the Mac runs: "
-                        f"{'; '.join(plan['mac']) or 'nothing of the full gate'}\n")
-    return {**out, "counted": True, "taken": plan["taken"], "mac_ran": plan["mac"], "plan": plan}
+    records = server_gate.records_moved(e, base, tip, tree)[0] if e.get("main") != base and not e.get("index") else []
+    plan = server_gate.remainder(e, after, log.with_suffix(".remainder.mk"), records)
+    log.open("a").write(f"\nthe demo server's run {rid} counts for {', '.join(plan['taken'])}"
+                        + (f", across {len(records)} records commits' files" if records else "")
+                        + f"; the Mac runs: {'; '.join(plan['mac']) or 'nothing of the full gate'}\n")
+    out = {**out, "counted": True, "taken": plan["taken"], "mac_ran": plan["mac"], "plan": plan}
+    return {**out, "records_moved": records} if records else out
 
 
 #: The Mac's rerun of a server's red; the line's tests stand it in, as they stand in FULL_GATE.
@@ -1306,11 +1384,14 @@ def server_rerun(slice_id: str) -> str:
     finally:
         drop_tree(tree)
         shutil.rmtree(tree, ignore_errors=True)
-    result = "green" if code == 0 else "red"
+    result = "green" if code == 0 else "unplaced" if code == UNPLACED else "red"
     c.write_json(server_gate.rerun_record(slice_id, rid), {
         "slice": slice_id, "tip": tip, "main": base, "run_id": rid, "result": result, "tests": tests, "targets": bare,
         "seconds": seconds, "log": log.name, "at": c.now()})
     named = ", ".join(tests + bare)
+    if result == "unplaced":
+        return (f"{slice_id}: the server's red ({named}) names nothing a Makefile of the tree has a rule for: not rerun, "
+                "recorded; it queues for the merge, whose whole gate settles it.")
     if result == "green":
         return (f"{slice_id}: the server's red ({named}) is green on the Mac ({seconds} s): an environment difference, "
                 f"recorded; it queues for the merge as before.")
@@ -1351,6 +1432,7 @@ def merge(slice_id: str) -> dict:
         prog.rec["tip"] = tip
         if subprocess.run(["git", "merge-base", "--is-ancestor", tip, base], cwd=c.REPO).returncode == 0:
             raise Refused(f"{branch} is already on main.")
+        log_rerun(slice_id, tip)
         accepted = acceptance(slice_id, tip)
         verify = accepted["verifier"] if accepted else verifier_pass(slice_id, tip)
         touched = c.git(["diff", "--name-only", f"{base}...{tip}"], c.REPO).splitlines()

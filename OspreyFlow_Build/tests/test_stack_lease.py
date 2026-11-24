@@ -1755,3 +1755,102 @@ def test_the_npm_lock_survives_the_prune_so_npm_ci_runs_only_when_the_lock_chang
     assert not list(core.rglob("npm.lock")), "the lock's hash was written inside the copy"
     (wt / "OspreyFlow_Core" / "package-lock.json").write_text('{"lockfileVersion": 3, "changed": true}\n')
     assert run() == 2, "a changed package-lock.json did not install again"
+
+
+# The owner, 24 November 2026 (the test server down, possibly for hours): a per-machine override of the stack hosts,
+# <lease dir>/stack_hosts.tsv, read in place of scripts/lane_stack_hosts.tsv when it exists; and at most three stacks
+# up on this machine at once, so stacks b to g can run here without overloading it. The tracked file and the cases
+# above that read it are unchanged.
+
+
+def _hosts_docker(tmp_path: Path, up_here: tuple[str, ...] = ()) -> tuple[str, Path]:
+    """A docker that logs DOCKER_HOST with each call, and answers a bare `ps --format {{.Names}}` with `up_here`."""
+    log = tmp_path / "docker.log"
+    names = "\\n".join(up_here)
+    script = (f'#!/bin/sh\necho "host=${{DOCKER_HOST:-here}} $*" >> "{log}"\n'
+              f'if [ "$1" = ps ] && ! echo "$*" | grep -q -- --filter; then printf "{names}\\n"; exit 0; fi\n'
+              f"{_PG_AT_400}exit 0\n")
+    return script, log
+
+
+def _stack(s: str) -> tuple[str, ...]:
+    return tuple(f"osprey-test-{s}-{k}" for k in ("arcadedb", "pg", "valkey", "objectstore", "clickhouse", "opensearch"))
+
+
+def test_the_per_machine_hosts_file_makes_a_server_stack_local(lease, tmp_path: Path) -> None:
+    (lease.lock.parent).mkdir(parents=True, exist_ok=True)
+    (lease.lock.parent / "no-local-stacks").write_text("")
+    assert lease("acquire", "case", "conformance", "b").returncode == 0      # b on the server, by the tracked file
+    lease("release", "case")
+    (lease.lock.parent / "stack_hosts.tsv").write_text("# stack\thost: every stack here while the server is down\n")
+    refused = lease("acquire", "case", "conformance", "b")
+    assert refused.returncode == 1 and "runs on this machine" in refused.stderr, refused.stderr
+
+
+def test_the_per_machine_hosts_file_names_the_host_up_starts_a_stack_on(lease, tmp_path: Path) -> None:
+    (lease.lock.parent).mkdir(parents=True, exist_ok=True)
+    (lease.lock.parent / "stack_hosts.tsv").write_text("b\totherbox\n")
+    lease("acquire", "case", "conformance", "b")
+    script, log = _hosts_docker(tmp_path)
+    _DOCKER["hosts"] = script
+    try:
+        lease("up", "case", docker="hosts")
+    finally:
+        del _DOCKER["hosts"]
+    starts = [ln for ln in log.read_text().splitlines() if " start " in f" {ln} "]
+    assert starts and all(ln.startswith("host=ssh://otherbox ") for ln in starts), starts
+
+
+@pytest.mark.parametrize(("up_here", "allowed"), [((), True), (("b", "c"), True), (("b", "c", "d"), False),
+                                                  (("b", "c", "d", "f"), False)])
+def test_at_most_three_stacks_are_up_on_this_machine_at_once(lease, tmp_path: Path, up_here, allowed) -> None:
+    (lease.lock.parent).mkdir(parents=True, exist_ok=True)
+    (lease.lock.parent / "stack_hosts.tsv").write_text("# every stack here\n")
+    lease("acquire", "case", "conformance", "e")
+    script, log = _hosts_docker(tmp_path, tuple(n for s in up_here for n in _stack(s)))
+    _DOCKER["hosts"] = script
+    try:
+        p = lease("up", "case", docker="hosts")
+    finally:
+        del _DOCKER["hosts"]
+    started = [ln for ln in (log.read_text().splitlines() if log.exists() else []) if " start " in f" {ln} "]
+    if allowed:
+        assert p.returncode == 0 and started, p.stderr
+    else:
+        assert p.returncode == 1 and "the most at once (3)" in p.stderr and not started, p.stderr
+
+
+def test_a_server_stack_is_not_counted_against_this_machine(lease, tmp_path: Path) -> None:
+    """b, c and d up on the server (the tracked hosts file) leave room for e here: only local stacks are counted."""
+    (lease.lock.parent).mkdir(parents=True, exist_ok=True)
+    (lease.lock.parent / "stack_hosts.tsv").write_text("b\totherbox\nc\totherbox\nd\totherbox\n")
+    lease("acquire", "case", "conformance", "e")
+    script, log = _hosts_docker(tmp_path, tuple(n for s in "bcd" for n in _stack(s)))
+    _DOCKER["hosts"] = script
+    try:
+        p = lease("up", "case", docker="hosts")
+    finally:
+        del _DOCKER["hosts"]
+    assert p.returncode == 0, p.stderr
+
+
+def test_a_server_stack_starts_while_three_are_up_here(lease, tmp_path: Path) -> None:
+    """The cap is this machine's: a stack on its host is started whatever is up here."""
+    (lease.lock.parent).mkdir(parents=True, exist_ok=True)
+    (lease.lock.parent / "stack_hosts.tsv").write_text("b\totherbox\n")
+    lease("acquire", "case", "conformance", "b")
+    script, log = _hosts_docker(tmp_path, tuple(n for s in "cde" for n in _stack(s)))
+    _DOCKER["hosts"] = script
+    try:
+        p = lease("up", "case", docker="hosts")
+    finally:
+        del _DOCKER["hosts"]
+    assert p.returncode == 0, p.stderr
+
+
+def test_a_local_stack_is_not_started_when_docker_cannot_say_what_is_up(lease, tmp_path: Path) -> None:
+    (lease.lock.parent).mkdir(parents=True, exist_ok=True)
+    (lease.lock.parent / "stack_hosts.tsv").write_text("# every stack here\n")
+    lease("acquire", "case", "conformance", "e")
+    p = lease("up", "case", docker="broken")
+    assert p.returncode == 1 and "could not say which stacks are up here" in p.stderr, p.stderr
