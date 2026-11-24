@@ -59,6 +59,15 @@ export const ROLES: { id: string; label: string }[] = [
   { id: "rule_author", label: "Rule author" },
 ];
 const ROLE_IDS = new Set(ROLES.map((r) => r.id));
+/** Whether a catalogue's built-in list names every role the form offers, each with its rights (`list_roles_route` always
+ * does). Anything less is not read in full: a role missing from it would be offered as if it gave nothing. */
+function namesEveryRoleOffered(builtIn: unknown): builtIn is { id: string; rights: string[] }[] {
+  if (!Array.isArray(builtIn)) return false;
+  return ROLES.every((role) => {
+    const named = builtIn.find((b) => b && typeof b === "object" && (b as { id?: unknown }).id === role.id) as { rights?: unknown } | undefined;
+    return Array.isArray(named?.rights) && named.rights.length > 0 && named.rights.every((r) => typeof r === "string");
+  });
+}
 /** The Super user preset (ADR-145 Amendment 5 point 2): three roles given together, never one. */
 export const SUPER_USER = ["analyst", "data_engineer", "rule_author"];
 
@@ -1334,8 +1343,10 @@ export function People({ api, rights = null }: { api: AdminApi; rights?: Readonl
   const readContext = () => {
     listRoles(api)
       .then((c) => {
-        // An answer that is not a catalogue is not one: a form drawn from it would offer every role (AD5).
-        if (!c || !Array.isArray(c.built_in) || !Array.isArray(c.custom)) return setRolesRead(unavailableUnlessRead);
+        // An answer that is not a catalogue in full is not one: a form drawn from it would offer every role, Admin included,
+        // to a giver who does not hold its rights (`rightsOf` reads a role the catalogue lacks as giving nothing). The real
+        // route always names every built-in role with its rights (AD5).
+        if (!c || !Array.isArray(c.custom) || !namesEveryRoleOffered(c.built_in)) return setRolesRead(unavailableUnlessRead);
         setCtx((x) => ({
           ...x,
           custom: c.custom,
