@@ -1826,3 +1826,150 @@ describe("the source: no inline style, no React, no drawing library", () => {
     expect(source).not.toMatch(/function (normaliseLayoutSizes|normaliseSidePanelOrder|clamp)\b/);
   });
 });
+
+// ---------------------------------------------------------------- round 7: a bound that is not a whole number, and the root's guard
+//
+// Round 6's verifier: a sash's `data-max` of 350.5 (any fraction of .5 or more) was held by the writer to 350.5, and
+// `layoutSizes` then stored the rounded 351; the attach saw 351 above 350.5, asked for the same write, got no change, and
+// returned "wrote" so it never drew. Sizes are whole pixels: a bound is a whole number of them (rounded down, since a
+// size above the bound is out of range), so what is written is never above what is drawn as the maximum. And if a write
+// ever does change nothing, the state is drawn all the same: a frame is never left undrawn.
+
+describe("a sash's data-max that is not a whole number: held, drawn, and the frame is never left undrawn", () => {
+  const stored = () => JSON.parse(localStorage.getItem(LAYOUT_SIZES_KEY) ?? "{}") as { sideWidth?: number; timelineHeight?: number; panelHeights?: Record<string, number> };
+
+  function fractional(bound: { side?: string; timeline?: string; panel?: string }, before?: () => void) {
+    before?.();
+    const parts = page();
+    if (bound.side) parts.controls.sideSash.attributes.set("data-max", bound.side);
+    if (bound.timeline) parts.controls.timelineSash.attributes.set("data-max", bound.timeline);
+    if (bound.panel) parts.controls.panelSash.attributes.set("data-max", bound.panel);
+    const store = createPanelFrameStore({ viewport: () => VIEWPORTS.roomy as Viewport });
+    live.push(store);
+    attachPanelFrame(parts.root as unknown as PanelFrameRoot, store);
+    return { ...parts, store };
+  }
+
+  describe.each(["350.5", "350.7", "350.2", "350.99"])("a column bound of %s", (text) => {
+    const whole = Math.floor(Number(text));
+    it("a stored 480 is held to the whole pixels under the bound, the frame is drawn, and later actions still draw", () => {
+      const { side, controls, body, store } = fractional({ side: text }, () => {
+        localStorage.setItem(LAYOUT_SIZES_KEY, JSON.stringify({ sideWidth: 480 }));
+        forgetLayoutSizesForTest();
+      });
+      expect(side.getAttribute("data-panel-mode"), "the frame was never drawn").toBe("normal");
+      expect(controls.sideSash.getAttribute("aria-valuenow")).toBe(String(whole));
+      expect(controls.sideSash.getAttribute("aria-valuemax")).toBe(String(whole));
+      expect(side.getAttribute("data-side-width")).toBe(String(whole));
+      expect(stored().sideWidth).toBe(whole);
+      controls.hide.dispatch("click");
+      expect(side.getAttribute("data-panel-mode")).toBe("collapsed");
+      controls.foldMetrics.dispatch("click");
+      expect(body.metrics.hidden).toBe(false);
+      // Growing from the bound stays at it, in memory, storage and as drawn.
+      controls.sideSash.dispatch("keydown", { key: "ArrowLeft", shiftKey: true });
+      expect(controls.sideSash.getAttribute("aria-valuenow")).toBe(String(whole));
+      expect(stored().sideWidth).toBe(whole);
+      store.destroy();
+    });
+  });
+
+  it("the timeline's and the stacked panel's fractional bounds are held the same way, and the pointer's sets too", () => {
+    const { timeline, controls, store } = fractional({ timeline: "130.5", panel: "60.5" });
+    store.actions.setTimelineHeight(5000);
+    store.actions.setPanelHeight("metrics", 5000);
+    expect(timeline.getAttribute("data-timeline-height")).toBe("130");
+    expect(controls.timelineSash.getAttribute("aria-valuenow")).toBe("130");
+    expect(controls.timelineSash.getAttribute("aria-valuemax")).toBe("130");
+    expect(stored().timelineHeight).toBe(130);
+    expect(controls.panelSash.getAttribute("aria-valuenow")).toBe("60");
+    expect(controls.panelSash.getAttribute("aria-valuemax")).toBe("60");
+    expect(stored().panelHeights?.metrics).toBe(60);
+    timeline.getAttribute("data-panel-open");
+    expect(timeline.getAttribute("data-panel-open")).toBe("false");
+  });
+
+  it("Home and the arrows on a sash with a fractional bound never store above the whole pixels under it", () => {
+    const { controls } = fractional({ side: "340.5", timeline: "130.5" });
+    for (const key of ["Home", "ArrowLeft", "ArrowUp"]) {
+      controls.sideSash.dispatch("keydown", { key, shiftKey: true });
+      controls.timelineSash.dispatch("keydown", { key, shiftKey: true });
+      expect(stored().sideWidth ?? 0, `${key}: column`).toBeLessThanOrEqual(340);
+      expect(stored().timelineHeight ?? 0, `${key}: timeline`).toBeLessThanOrEqual(130);
+      expect(Number(controls.sideSash.getAttribute("aria-valuenow")), `${key}: column drawn`).toBeLessThanOrEqual(Number(controls.sideSash.getAttribute("aria-valuemax")));
+    }
+  });
+
+  // The attach draws even when the writer changes nothing (the defence under the rounding above): a store whose writers
+  // refuse every set, as one that held the value already would, with a size above the sash's bound in its state.
+  it("a writer that changes nothing does not leave the frame undrawn: the state is drawn as it is", () => {
+    const { root, side, timeline, controls } = page();
+    controls.sideSash.attributes.set("data-max", "350");
+    controls.timelineSash.attributes.set("data-max", "100");
+    controls.panelSash.attributes.set("data-max", "60");
+    const state = {
+      sideMode: "normal",
+      timelineOpen: true,
+      order: [...SIDE_PANEL_IDS],
+      folded: [] as string[],
+      sideWidth: 480,
+      timelineHeight: 400,
+      panelHeights: { metrics: 300 },
+      limits: { sideWidth: 480, timelineHeight: 560, panelHeight: 1200 },
+    };
+    const listeners = new Set<(next: typeof state, previous: typeof state) => void>();
+    const refusing = {
+      getState: () => state,
+      subscribe: (listener: (next: typeof state, previous: typeof state) => void) => {
+        listeners.add(listener);
+        return () => void listeners.delete(listener);
+      },
+      destroy: () => undefined,
+      actions: new Proxy({}, { get: () => () => undefined }),
+    } as unknown as PanelFrameStore;
+    attachPanelFrame(root as unknown as PanelFrameRoot, refusing);
+    expect(side.getAttribute("data-panel-mode"), "the frame was not drawn when the writer changed nothing").toBe("normal");
+    expect(timeline.getAttribute("data-panel-open")).toBe("true");
+    expect(controls.sideSash.getAttribute("aria-valuenow")).not.toBeNull();
+    // Each later state is drawn too, even while a size is still above its bound.
+    listeners.forEach((listener) => listener({ ...state, sideMode: "collapsed" }, state));
+    expect(side.getAttribute("data-panel-mode")).toBe("collapsed");
+  });
+});
+
+describe("attach: the root's guard, with the root nested in an element that has an action, a header or a sash of its own", () => {
+  /** The root inside a wrapper carrying the attributes a click or a key would otherwise find first. */
+  function nested() {
+    const parts = page();
+    const wrapper = new FakeElement("div", { "data-action": "hide-side-panel", "data-panel-header": "metrics", "data-sash": "side-width" });
+    wrapper.append(parts.root);
+    const inner = new FakeElement("p");
+    parts.root.append(inner);
+    const store = open();
+    attachPanelFrame(parts.root as unknown as PanelFrameRoot, store);
+    return { ...parts, wrapper, inner, store };
+  }
+
+  it("a click on a plain element inside the root does not run the wrapper's action", () => {
+    const { inner, store } = nested();
+    inner.dispatch("click");
+    expect(store.getState().sideMode).toBe("normal");
+  });
+
+  it("Alt+Arrow on a plain element inside the root does not move the panel the wrapper's header names", () => {
+    const { inner, store } = nested();
+    const event = inner.dispatch("keydown", { key: "ArrowDown", altKey: true });
+    expect(event.defaultPrevented).toBe(false);
+    expect(store.getState().order).toEqual([...SIDE_PANEL_IDS]);
+  });
+
+  it("an arrow key on a plain element inside the root does not resize through the wrapper's sash", () => {
+    const { wrapper, inner, store } = nested();
+    wrapper.attributes.set("data-action", "resize");
+    wrapper.attributes.delete("data-panel-header"); // the header's own branch would answer first
+    const event = inner.dispatch("keydown", { key: "ArrowLeft" });
+    expect(event.defaultPrevented).toBe(false);
+    expect(getLayoutSizes().sideWidth).toBe(DEFAULT_SIDE_WIDTH);
+    expect(store.getState().sideWidth).toBe(DEFAULT_SIDE_WIDTH);
+  });
+});
