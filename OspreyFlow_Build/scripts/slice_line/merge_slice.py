@@ -1284,6 +1284,49 @@ def refusal_cause(words: str, log: Path) -> str:
     return "another refusal"
 
 
+#: A test file, in any of the tree's shapes: no planted fault may touch one (the owner's answer, 24 November 2026).
+TEST_PATH = re.compile(r"(^|/)(tests?|__tests__|keyboard)/|(^|/)test_[^/]*\.py$|_test\.py$|\.(test|spec)\.[cm]?[jt]sx?$|"
+                       r"(^|/)conftest\.py$")
+#: A red that is not an assertion's: the planted fault broke an import, a collection or the command (dry_run.MALFORMED's
+#: kind), which makes any test red and proves nothing of the part's tests.
+NOT_ASSERTION = re.compile(r"ERROR collecting|errors? during collection|ImportError|ModuleNotFoundError|SyntaxError|"
+                           r"IndentationError|NameError|no tests ran|file or directory not found|Cannot find module|"
+                           r"Failed to load|Transform failed", re.I)
+ASSERTION = re.compile(r"AssertionError|^E\s+assert|AssertionError|expect\(|Expected|Received|\bassert\b", re.M)
+
+
+def plant_files(plant: str) -> list[str]:
+    """The files a planted fault's patch changes, from its own headers."""
+    return sorted({m.group(1) for m in re.finditer(r"^\+\+\+ b/(\S+)", plant, re.M)} |
+                  {m.group(1) for m in re.finditer(r"^--- a/(\S+)", plant, re.M)})
+
+
+def plant_unfair(plant: str, acceptance_files: list[str]) -> str | None:
+    """Why a planted fault is not a fair one (None when it is): it must change product files only, never a test or an
+    acceptance file, and change at least one."""
+    files = plant_files(plant)
+    if not files:
+        return "it names no file it changes"
+    tests = [f for f in files if TEST_PATH.search(f) or f in acceptance_files]
+    if tests:
+        return "it changes a test or acceptance file (" + ", ".join(tests[:5]) + "), not product code alone"
+    return None
+
+
+def apply_plant(tree: Path, plant: str) -> str | None:
+    p = subprocess.run(["git", "apply", "--whitespace=nowarn", "-"], cwd=str(tree), input=plant, capture_output=True,
+                       text=True)
+    return None if p.returncode == 0 else (p.stderr.strip() or f"git apply exit {p.returncode}")[:300]
+
+
+def not_assertion_red(out: str) -> str | None:
+    """Why this red output is not an assertion's (None when it is)."""
+    bad = NOT_ASSERTION.search(out)
+    if bad:
+        return bad.group(0)
+    return None if ASSERTION.search(out) else "no assertion in its output"
+
+
 def log_rerun(slice_id: str, tip: str) -> None:
     """A merge of a tip the merge has refused before, run again by the conductor (the owner, 24 November 2026: a merge
     rerun is the conductor's, logged and shown, and uses none of its daily budget): one row in owner-changes.tsv, never
@@ -1492,6 +1535,9 @@ def merge(slice_id: str) -> dict:
         if not c.frozen_matches(frozen, row):
             raise Refused(f"main's backlog row for {slice_id} no longer matches its frozen acceptance and checks: "
                           "a change needs the owner's word (refreeze.py).")
+        if not c.plant_matches(slice_id, frozen):
+            raise Refused(f"main's planted fault for {slice_id} ({c.PLANTS_REL}/{slice_id}.patch) is not the one frozen "
+                          "when it started: a change needs the owner's word (resume.py refreeze).")
         branch = frozen["branch"]
         tip = c.git(["rev-parse", branch], c.REPO)
         prog.rec["tip"] = tip
@@ -1530,7 +1576,25 @@ def merge(slice_id: str) -> dict:
             env_before = slice_env(before, log, slot, envs / "before", pytest_base=envs / "pytest-before")
         except GateEnvError as e:
             raise Refused(f"the acceptance run's environment could not be built: {e}. See {log}")
-        if run(frozen["acceptance"], before, log, shell=True, env=env_before) == 0:
+        plant = c.plant_text(slice_id) if frozen.get("plant") else ""
+        if plant:  # a test-only part (item 2): green on the base, red with the conductor's planted fault
+            why = plant_unfair(plant, files)
+            if why:
+                raise Refused(f"{slice_id}'s planted fault is not a fair one: {why}. See {c.PLANTS_REL}/{slice_id}.patch")
+            if run(frozen["acceptance"], before, log, shell=True, env=env_before) != 0:
+                raise Refused("a test-only part's acceptance must be green on the base without its planted fault (it "
+                              "adds tests, no code), and it is red there. See " + str(log))
+            why = apply_plant(before, plant)
+            if why:
+                raise Refused(f"{slice_id}'s planted fault does not apply to the base: {why}")
+            start = log.stat().st_size if log.exists() else 0
+            if run(frozen["acceptance"], before, log, shell=True, env=env_before) == 0:
+                raise Refused("the acceptance test passes with the planted fault applied: it was never red. See " + str(log))
+            why = not_assertion_red(log.read_bytes()[start:].decode(errors="replace"))
+            if why:
+                raise Refused(f"the acceptance is red with the planted fault, but not on an assertion ({why}): a fault "
+                              "that breaks an import or a collection makes any test red. See " + str(log))
+        elif run(frozen["acceptance"], before, log, shell=True, env=env_before) == 0:
             raise Refused("the acceptance test passes without the slice's code: it was never red. See " + str(log))
 
         # 6. green on the merge result

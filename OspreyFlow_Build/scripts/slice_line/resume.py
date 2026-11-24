@@ -1197,10 +1197,23 @@ def act(slice_id: str, action: str, standing_only: bool = False, args: list[str]
             return self_clear(slice_id, frozen, st, rec, wt)
 
         if action == "refreeze":
-            _old, new = changed_row(slice_id, c.FROZEN_KEYS, briefs_aside=True)
-            if all((frozen.get(k) or "") == new[k] for k in c.FROZEN_KEYS):
-                raise Refused(f"{slice_id}'s row in the working copy is what is already frozen.")
+            try:
+                _old, new = changed_row(slice_id, c.FROZEN_KEYS, briefs_aside=True)
+            except Refused:
+                if c.plant_matches(slice_id, frozen):
+                    raise
+                new = {k: frozen.get(k) or "" for k in c.FROZEN_KEYS}  # the row untouched: the planted fault alone moved
+            same_row = all((frozen.get(k) or "") == new[k] for k in c.FROZEN_KEYS)
+            if same_row and c.plant_matches(slice_id, frozen):
+                raise Refused(f"{slice_id}'s row in the working copy is what is already frozen, and so is its planted "
+                              "fault.")
             tag = authority(slice_id, action)
+            if same_row:  # the planted fault alone changed on main (item 2): its new hash is frozen, the row is not
+                fz = c.refreeze(slice_id, "owner (resume.tsv)")
+                c.log_owner_change(slice_id, action, f"{tag}: the planted fault refrozen: "
+                                                     f"{str(fz['history'][-1].get('plant') or 'none')[:12]} -> "
+                                                     f"{str(fz.get('plant') or 'none')[:12]}")
+                return [f"{slice_id}: its planted fault refrozen from main; its phase is unchanged ({phase})."]
             sha = commit_row(slice_id, f"docs(process): {slice_id}'s frozen commands, on the owner's word (resume.py refreeze)")
             fz = c.refreeze(slice_id, "owner (resume.tsv)")
             c.log_owner_change(slice_id, action, f"{tag}: committed {sha[:10]}; " +
