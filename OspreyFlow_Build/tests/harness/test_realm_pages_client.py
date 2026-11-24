@@ -76,6 +76,8 @@ from tests.harness.test_register_sign_in import (
 
 ORIGIN = "http://localhost:9999"  # `_config()`'s public origin
 CALLBACK = f"{ORIGIN}/session/callback"
+#: Slice PL9b: where Keycloak sends its logout token (the service's own route, `apps/pages/server/oidc.ts`).
+BACKCHANNEL = "/session/back-channel-logout"
 
 
 @pytest.fixture
@@ -118,6 +120,14 @@ def faults(client: dict[str, Any], origin: str = ORIGIN) -> list[str]:
         found.append("a redirect address holds a wildcard")
     if attributes.get("post.logout.redirect.uris") != f"{origin}/":
         found.append("the post-logout address is not <origin>/")
+    if attributes.get("backchannel.logout.url") != f"{origin}{BACKCHANNEL}":
+        found.append("the back-channel logout address is not <origin>/session/back-channel-logout")
+    if attributes.get("backchannel.logout.session.required") != "true":
+        found.append("the back-channel logout token is not required to name the session (sid)")
+    if attributes.get("backchannel.logout.revoke.offline.tokens") != "false":
+        found.append("the back-channel logout does not say it leaves offline tokens alone")
+    if client.get("frontchannelLogout") is not False:
+        found.append("front-channel logout is on (it is not built: it is named for Entra ID only)")
     if "secret" in client:
         found.append("a secret is in the document (it is set through the admin API)")
     mappers = {m["name"]: m for m in client.get("protocolMappers", [])}
@@ -190,6 +200,23 @@ PLANTS: dict[str, Callable[[dict[str, Any]], None]] = {
         redirectUris=["http://localhost:1/session/callback"]
     ),
     "a secret in the document": lambda c: c.update(secret="planted-in-the-document"),
+    "a wildcard post-logout address": lambda c: c["attributes"].update(
+        {"post.logout.redirect.uris": f"{ORIGIN}/*"}
+    ),
+    "the post-logout address without the slash": lambda c: c["attributes"].update(
+        {"post.logout.redirect.uris": ORIGIN}
+    ),
+    "no back-channel logout address": lambda c: c["attributes"].pop("backchannel.logout.url"),
+    "the back-channel address on another origin": lambda c: c["attributes"].update(
+        {"backchannel.logout.url": f"http://localhost:1{BACKCHANNEL}"}
+    ),
+    "the back-channel address on another path": lambda c: c["attributes"].update(
+        {"backchannel.logout.url": f"{ORIGIN}/logout"}
+    ),
+    "the back-channel token not required to name the session": lambda c: c["attributes"].update(
+        {"backchannel.logout.session.required": "false"}
+    ),
+    "front-channel logout on": lambda c: c.update(frontchannelLogout=True),
     "the audience mapper removed": _without_audience,
     "the audience naming another client": _other_audience,
     "the audience in the ID token only": _audience_in_the_id_token_only,
@@ -205,6 +232,22 @@ def test_the_check_names_each_planted_fault(plant: str) -> None:
     assert faults(client) == []
     PLANTS[plant](client)
     assert faults(client), f"the check let '{plant}' through"
+
+
+def test_the_back_channel_address_is_the_origin_the_client_is_registered_for() -> None:
+    config = OspreyConfig.model_validate(
+        yaml.safe_load("network:\n  public_origin: https://osprey.example.org\n")
+    )
+    attributes = pages_client(config)["attributes"]
+    assert attributes["backchannel.logout.url"] == f"https://osprey.example.org{BACKCHANNEL}"
+    assert attributes["post.logout.redirect.uris"] == "https://osprey.example.org/"
+
+
+def test_the_back_channel_address_is_the_services_own_route() -> None:
+    """The service answers `/session/back-channel-logout` (`apps/pages/server/oidc.ts`): a rename on
+    one side would leave the provider's logout calls going nowhere, and the person signed in."""
+    service = (CORE / "apps" / "pages" / "server" / "oidc.ts").read_text(encoding="utf-8")
+    assert f'"{BACKCHANNEL}"' in service
 
 
 def test_an_existing_deployments_realm_document_is_unchanged() -> None:
@@ -238,6 +281,37 @@ def test_registration_registers_the_pages_client_on_an_existing_realm(
     assert faults({k: v for k, v in client.items() if k not in ("id", "secret")}) == []
     assert any(line.startswith(f"sign-in client {PAGES_CLIENT_ID}") for line in lines)
     assert secret not in "\n".join(lines), "a secret is never printed"
+
+
+def test_a_client_registered_before_logout_was_built_is_brought_up_to_date(
+    keycloak: FakeKeycloak, tmp_path: Path
+) -> None:
+    """A deployment applied since PL9a holds the client without the logout settings: a repair or an
+    apply must bring them in, or its people stay signed in at the provider after a sign-out. Its
+    secret and every address it holds are left as they are."""
+    secret = _secret()
+    env = _env(tmp_path, f"{PAGES_CLIENT_SECRET_KEY}={secret}")
+    register_sign_in.register(issuer=ISSUER, realm="osprey", env_path=env, config=_config())
+    (client,) = _pages_clients(keycloak)
+    for key in (
+        "backchannel.logout.url",
+        "backchannel.logout.session.required",
+        "backchannel.logout.revoke.offline.tokens",
+    ):
+        client["attributes"].pop(key)
+    client["frontchannelLogout"] = True
+    before_secret = client["secret"]
+
+    lines = register_sign_in.register(issuer=ISSUER, realm="osprey", env_path=env, config=_config())
+    (client,) = _pages_clients(keycloak)
+    assert client["attributes"]["backchannel.logout.url"] == f"{ORIGIN}{BACKCHANNEL}"
+    assert client["attributes"]["backchannel.logout.session.required"] == "true"
+    assert client["frontchannelLogout"] is False
+    assert client["secret"] == before_secret
+    stored = {k: v for k, v in client.items() if k not in ("id", "secret")}
+    assert faults(stored) == []
+    assert any("already registered; redirect address brought up to date" in line for line in lines)
+    assert secret not in "\n".join(lines)
 
 
 def test_a_server_without_demo_accounts_gets_it_too(keycloak: FakeKeycloak) -> None:
