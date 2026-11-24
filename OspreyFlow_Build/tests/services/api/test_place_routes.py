@@ -87,6 +87,10 @@ PLACE_RULES: list[tuple[str, frozenset[str], str]] = [
     # promotions stay the Glass's (the rule below).
     (r"^/v1/datasets/\{dataset_id\}/(promotions|removed-cases|layer-merges)",
      frozenset({"ingest"}), "the Studio's Analyst promotions (ingest/runs/promotions.tsx)"),
+    # IS6a: a dataset's run order, read and saved on the Studio's dataset map (`edit_pipelines`, the Studio's right); the page is
+    # the pages service's own (apps/pages/server/datasetMap.ts), and the workspace's generic dataset calls reach it by their shape.
+    (r"^/v1/datasets/\{dataset_id\}/run-order$", frozenset({"ingest"}),
+     "the Studio's dataset map (apps/pages/server/datasetMap.ts)"),
     # ADR-147 Amendment 2: a dataset's gazetteers, a load into it (`run_pipelines`, the Studio's
     # right). The Glass's map changes them too, beside its place search (platform-b's P6,
     # `map/gazetteers.ts`), bound in `App.tsx`, which this scan places nowhere, so it does not see
