@@ -769,7 +769,11 @@ describe("the upper limits come from the live window, through the attach path, a
     expect(store.getState().timelineHeight).toBe(560);
     expect(stored().timelineHeight).toBe(560);
     expect(controls.timelineSash.getAttribute("aria-valuenow")).toBe("560");
-    expect(reload().getState().timelineHeight).toBe(560);
+    // A reload under the same window keeps it; a store given no function reads the real window, which a test has none of.
+    forgetLayoutSizesForTest();
+    const again = createPanelFrameStore({ viewport });
+    live.push(again);
+    expect(again.getState().timelineHeight).toBe(560);
   });
 
   it("a page's own data-max on the sash may lower the limit and never lift it", () => {
@@ -837,6 +841,8 @@ describe("the upper limits come from the live window, through the attach path, a
     windowHeight = 500;
     workWidth = 650;
     localStorage.setItem(LAYOUT_SIZES_KEY, JSON.stringify({ sideWidth: 480, timelineHeight: 4000, panelHeights: { metrics: 9000, inspector: 120 } }));
+    // A page that goes away leaves its listeners behind in other tests; a reload is a read from storage afresh.
+    forgetLayoutSizesForTest();
     const store = createPanelFrameStore({ viewport });
     live.push(store);
     const state = store.getState();
@@ -848,6 +854,7 @@ describe("the upper limits come from the live window, through the attach path, a
     // Corrupt values are ignored, as before, not "clamped" into something that looks chosen.
     localStorage.setItem(LAYOUT_SIZES_KEY, JSON.stringify({ sideWidth: "wide", timelineHeight: null, panelHeights: { metrics: "tall" } }));
     forgetLayoutSizesForTest();
+    workWidth = 1000;
     const second = createPanelFrameStore({ viewport });
     live.push(second);
     expect([second.getState().sideWidth, second.getState().timelineHeight, second.getState().panelHeights]).toEqual([DEFAULT_SIDE_WIDTH, DEFAULT_TIMELINE_HEIGHT, {}]);

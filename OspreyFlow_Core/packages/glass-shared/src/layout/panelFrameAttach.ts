@@ -19,7 +19,10 @@
 //   [data-action="<name>"]         a control; one of ACTIONS below, with `data-panel="<id>"` where it names a panel
 //   [data-action="resize"][data-sash="side-width|panel-height|timeline-height"]
 //                                  a sash; its arrow keys and Home resize (16 pixels, 64 with Shift), with
-//                                  `data-panel`, `data-from` (the measured height) and `data-max` where they apply
+//                                  `data-panel`, `data-from` (the measured height) and `data-max` where they apply.
+//                                  The upper limits are not the markup's to give: the store reads the live window at
+//                                  each key press (`Viewport` in `panelFrameStore.ts`), so a window resized after the
+//                                  page was written is still held. `data-max` can only lower a limit, never lift it.
 //
 // It listens on the root it is given, once for clicks and once for keys, and acts on an element only when it is inside
 // that root and carries a name it knows. It does not look beyond the root, and an unknown name does nothing.

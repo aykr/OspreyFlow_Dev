@@ -20,6 +20,13 @@
 // The minimum side width is 300 (the owner's ruling of 24 November 2026). A width set below it is raised to it, not
 // refused, as `layoutSizes.ts` does; a width above the widest allowed is held there.
 //
+// The upper limits are the store's own, read from the live window at each resize (the spec table: the timeline no
+// taller than seven tenths of the window; the column no wider than 480 and leaving the canvas 320; a stacked panel no
+// taller than the window). A server-rendered page cannot keep them in its markup, since the window changes after the
+// page is written, so the store asks one function, `Viewport`, each time (the default reads the window as
+// `sidePanelState.isWide()` reads `innerWidth`; a test or a page gives its own). A `maxPx` a caller passes can only
+// lower a limit, never lift it. A stored size above today's limit is brought down when it is read and at each key press.
+//
 // With no script, nothing in this folder runs: every panel is in its normal state with no controls (the markup a page
 // writes carries none).
 import { createStore } from "zustand/vanilla";
@@ -27,6 +34,7 @@ import { createStore } from "zustand/vanilla";
 import type { PANEL_FRAME_ACTIONS } from "../keyboard/actionRegistry";
 import {
   MAX_SIDE_WIDTH,
+  MIN_CANVAS_WIDTH,
   MIN_PANEL_HEIGHT,
   MIN_SIDE_WIDTH,
   MIN_TIMELINE_HEIGHT,
@@ -100,9 +108,51 @@ export interface PanelFrameState {
   panelHeights: LayoutSizes["panelHeights"];
 }
 
-/** What a page knows and the store does not: how much room there is. */
+/** How much room there is now: the window's height and the work area's width, in pixels. */
+export interface ViewportSize {
+  windowHeight: number;
+  workWidth: number;
+}
+
+/** Asked at each resize, so a window that has changed since the page was written is the one the limits come from. */
+export type Viewport = () => ViewportSize;
+
+export interface PanelFrameStoreOptions {
+  viewport?: Viewport;
+}
+
+/** The timeline is held to this share of the window's height, so the canvas keeps the rest (as the workspace does). */
+export const TIMELINE_HEIGHT_SHARE = 0.7;
+
+/** Taken as the window's size where there is none to read (no window at all), so no limit is ever missing. */
+const FALLBACK_VIEWPORT: ViewportSize = { windowHeight: 768, workWidth: 1280 };
+
+/** The default `Viewport`: the window's inner size, read at each call; the work area is as wide as the window. */
+export const windowViewport: Viewport = () => {
+  const win = (globalThis as { window?: { innerWidth?: unknown; innerHeight?: unknown } }).window;
+  const positive = (value: unknown, fallback: number): number =>
+    typeof value === "number" && Number.isFinite(value) && value > 0 ? value : fallback;
+  return {
+    windowHeight: positive(win?.innerHeight, FALLBACK_VIEWPORT.windowHeight),
+    workWidth: positive(win?.innerWidth, FALLBACK_VIEWPORT.workWidth),
+  };
+};
+
+/** The upper limit of each size for a viewport, never below that size's own minimum. */
+export function upperLimits(viewport: ViewportSize): { sideWidth: number; timelineHeight: number; panelHeight: number } {
+  return {
+    sideWidth: Math.min(MAX_SIDE_WIDTH, Math.max(MIN_SIDE_WIDTH, Math.floor(viewport.workWidth - MIN_CANVAS_WIDTH))),
+    timelineHeight: Math.max(MIN_TIMELINE_HEIGHT, Math.round(viewport.windowHeight * TIMELINE_HEIGHT_SHARE)),
+    panelHeight: Math.max(MIN_PANEL_HEIGHT, Math.round(viewport.windowHeight)),
+  };
+}
+
+/** What a page knows and the store does not. */
 export interface SizeLimits {
-  /** The widest (or tallest) the page allows. The column never goes below its minimum whatever this says. */
+  /**
+   * A bound a page may add. It can only lower the limit the store reads from the window, never lift it, and a size
+   * never goes below its minimum whatever this says.
+   */
   maxPx?: number;
 }
 
@@ -191,9 +241,39 @@ function writeFolded(folded: readonly SidePanelId[]): void {
 
 const finite = (px: number): boolean => typeof px === "number" && Number.isFinite(px);
 
-export function createPanelFrameStore(): PanelFrameStore {
+export function createPanelFrameStore(options: PanelFrameStoreOptions = {}): PanelFrameStore {
+  const readViewport = options.viewport ?? windowViewport;
   let folded = readFolded();
   let timelineOpen = false;
+
+  /** The limits for the window as it is now. A function that throws or gives nonsense is the fallback window. */
+  const limitsNow = () => {
+    let size: ViewportSize = FALLBACK_VIEWPORT;
+    try {
+      const read = readViewport();
+      if (finite(read?.windowHeight) && finite(read?.workWidth)) size = read;
+    } catch {
+      // Keep the fallback: a limit is never missing.
+    }
+    return upperLimits(size);
+  };
+
+  /** A page's `maxPx` lowers a limit and never lifts it; a size never goes under its own minimum. */
+  const lowered = (limit: number, minimum: number, maxPx?: number): number =>
+    Math.max(minimum, maxPx !== undefined && finite(maxPx) ? Math.min(limit, maxPx) : limit);
+
+  /** Brings every kept size down to today's limit (a stored one, or one a smaller window now rules out). */
+  const enforce = (): void => {
+    const sizes = getLayoutSizes();
+    const limits = limitsNow();
+    if (sizes.sideWidth > limits.sideWidth) setSideWidth(limits.sideWidth);
+    if (sizes.timelineHeight > limits.timelineHeight) setTimelineHeight(limits.timelineHeight);
+    for (const id of SIDE_PANEL_IDS) {
+      const own = sizes.panelHeights[id];
+      if (own !== undefined && own > limits.panelHeight) setPanelHeight(id, limits.panelHeight);
+    }
+  };
+  enforce();
 
   const snapshot = (): PanelFrameState => {
     const sizes = getLayoutSizes();
@@ -216,7 +296,7 @@ export function createPanelFrameStore(): PanelFrameStore {
   sidePanelListeners.add(sync);
 
   const sideWidthWithin = (px: number, limits?: SizeLimits): number =>
-    clamp(px, MIN_SIDE_WIDTH, Math.min(MAX_SIDE_WIDTH, limits?.maxPx ?? MAX_SIDE_WIDTH));
+    clamp(px, MIN_SIDE_WIDTH, lowered(limitsNow().sideWidth, MIN_SIDE_WIDTH, limits?.maxPx));
 
   const actions: PanelFrameActions = {
     hideSidePanel: () => setSidePanelMode("collapsed"),
@@ -255,14 +335,16 @@ export function createPanelFrameStore(): PanelFrameStore {
     },
     setPanelHeight(id, px, limits) {
       if (!isSidePanelId(id) || !finite(px)) return;
-      setPanelHeight(id, limits?.maxPx === undefined ? px : clamp(px, MIN_PANEL_HEIGHT, limits.maxPx));
+      setPanelHeight(id, clamp(px, MIN_PANEL_HEIGHT, lowered(limitsNow().panelHeight, MIN_PANEL_HEIGHT, limits?.maxPx)));
     },
     setTimelineHeight(px, limits) {
       if (!finite(px)) return;
-      setTimelineHeight(limits?.maxPx === undefined ? px : clamp(px, MIN_TIMELINE_HEIGHT, limits.maxPx));
+      setTimelineHeight(clamp(px, MIN_TIMELINE_HEIGHT, lowered(limitsNow().timelineHeight, MIN_TIMELINE_HEIGHT, limits?.maxPx)));
     },
     resizeByKey(axis, key, context = {}) {
       const step = key.shiftKey ? SASH_LARGE_STEP : SASH_STEP;
+      // The window may have changed since the last key: bring what is kept down to it before stepping from it.
+      enforce();
       const state = store.getState();
       const panel = isSidePanelId(context.panel) ? context.panel : null;
       // A vertical sash (the column's) grows leftwards, a stacked panel's grows downwards, the timeline's upwards
@@ -289,7 +371,10 @@ export function createPanelFrameStore(): PanelFrameStore {
   };
 
   return {
-    getState: () => store.getState(),
+    getState() {
+      enforce();
+      return store.getState();
+    },
     subscribe: (listener) => store.subscribe(listener),
     actions,
     destroy() {
