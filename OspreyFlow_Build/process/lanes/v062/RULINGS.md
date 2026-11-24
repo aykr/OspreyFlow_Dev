@@ -3,6 +3,10 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 24 November 2026: the release is 0.7.0 (D227, the owner, in chat, about 05:40 UTC)
+
+**One release at the end of this plan, numbered 0.7.0. No interim release.** (1) **Rename once, now: the product's `VERSION` and every text still to be written (the CHANGELOG heading, release notes, guides) say 0.7.0. Records already written that say v0.6.2 stay as they are; the lane folders (`v062`) are not renamed. Every slice brief from now is written with 0.7.0** (RL1b does the rename). (2) **RL2 is the release, in the plan after the last builds; its brief is drafted (`slices/RL2.md`, no row):** every release blocker in the backlog cleared, the owed live tests run, GitHub green on the release commit, an upgrade test from 0.6.1 (`start --build` and apply), release notes in the owner's wording rules, images signed, the maintainer's manifest. **Publishing is the owner's word.** (3) **The owed live tests: run as their parts land, under the stack lease, a batch at a time between merges; the count is reported each morning and must reach zero before RL2.** **The conductor's finding the same day: the count (325 distinct files on 24 November) falls only by the merge script's live step writing `live-paid.json`; a run by hand does not pay it (the records are written only by the line's own scripts).**
+
 ## 24 November 2026: the owner's rulings on the drafts; the adviser's standing rules (D225); the server (the owner, in chat, about 05:00 to 05:30 UTC)
 
 **The server:** the owner cleared port 55434 (nothing listens; no model loaded) and told the conductor to resend PL12b, PL7c and SE8b (once its round is done); **if a run is refused for a port again, tell him at once with the port and the time.**
