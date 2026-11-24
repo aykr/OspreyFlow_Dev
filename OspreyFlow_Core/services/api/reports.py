@@ -431,13 +431,22 @@ async def case_report_and_withheld(
     - held rows are shown (`show_held`) and the case holds a row of any status the reader's marking
       or reach leaves out (`HeldRowStore.left_out_for`, the same clauses as the count).
 
-    **What it cannot say.** An alert the queue's scope keeps from the reader for who it was given
-    to (a team's alone, a watch's owner's) is not the reader's rights lowering a figure but who the
-    alert is for, and sets nothing. The KYC and POLE figures are counted over the whole graph as the
-    reader (`explore.counts`, `list_nodes`), and `GraphPort` gives no answer to what a reader's
-    count left out (that would be a count of what is hidden: rule 7). They add nothing to the flag,
-    so for a case that sends them it is a floor, not a ceiling (SE8b's report names this for the
-    owner)."""
+    **The flag is a floor, not a ceiling.** It is true when the reader's rights lowered an alert
+    figure or a held-row figure (the cases above). It does **not yet see the KYC and POLE
+    figures**: they are counted as the reader (`explore.counts`, `list_nodes`), so the reader's
+    rights can lower them, and a lowered KYC or POLE total is recorded `withheld=False` today. That
+    is a known gap, not a design decision: only the graph adapter can say what its own count left
+    out (rule 3: the Conduit may not compute an unfiltered count and compare), so the complete fix
+    is a port change in a part of its own (SE8c: the counts result gains a `withheld` boolean from
+    the adapter, and this flag becomes one `any` over every figure source). The owner's ruling of
+    23 November 2026 (option A) covers the alert part only; the KYC and POLE gap is the
+    conductor's finding, reported to the owner on 24 November 2026. The known-floor cases are
+    pinned in `test_report_figures_withheld.py` (`..._is_a_known_floor_until_SE8c`): when SE8c
+    lands they are the tests that flip.
+
+    An alert the queue's scope keeps from the reader for who it was given to (a team's alone, a
+    watch's owner's) is not the reader's rights lowering a figure but who the alert is for, and
+    sets nothing."""
     figures, left_out = await alert_report_and_left_out(
         alerts, graph, analytics, investigation_id, reader, today=today, period_weeks=period_weeks
     )

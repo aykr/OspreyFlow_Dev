@@ -461,3 +461,130 @@ async def test_left_out_on_the_borrowed_layer_asks_with_the_scope_of_the_queue()
     pool.put(_mine("mine", "ds-borrowed"))
     assert await store.left_out_on_borrowed_layer(CASE, reader, "ds-borrowed") is True
     assert await store.left_out_on_borrowed_layer(CASE, reader, "ds-other") is False
+
+
+# --- the known floor: the KYC and POLE figures the flag does not yet see ----------------------------
+#
+# `spec/03_CONDUIT_MIDDLEWARE.md`, the sentence "The flag is a floor, not a ceiling": the KYC and
+# POLE figures are counted as the reader, the reader's rights can lower them, and the flag does not
+# see it, so a lowered total is recorded `withheld=False` today. These two cases state that gap
+# (rule 12). They assert today's answer, deliberately, under a name that says so. **When SE8c
+# lands (the counts result gains a `withheld` boolean from the adapter, and the flag becomes one
+# `any` over every figure source) these are the tests that flip: change the last assertion to
+# `is True`.**
+
+_CLEARED = READER.model_copy(update={"clearance": "SECRET"})
+
+
+class _CountingGraph:
+    """The graph as the adapter answers `type_counts`: the principal's own counts, lower for a
+    reader whose clearance is lower. Only the answer differs between readers; nothing in it says
+    that a count was lowered (rule 7), as the real port does not."""
+
+    def __init__(self) -> None:
+        self.asked_as: list[str] = []
+
+    async def type_counts(self, principal: Principal) -> Any:
+        from schemas.explore import TypeCounts
+
+        self.asked_as.append(principal.clearance)
+        people = 5 if principal.clearance == "SECRET" else 3
+        return TypeCounts(nodes={"Person": people}, edges={"MEMBER_OF": 2})
+
+
+def _counted_at() -> datetime:
+    return datetime(2026, 11, 7, tzinfo=UTC)
+
+
+async def _pole_report(reader: Principal) -> tuple[Any, bool]:
+    from services.api.explore import ExploreService
+
+    from ontology.packs import load_deployment_ontology
+
+    store, graph, analytics, _ = _world(set(), [])
+    return await reports.case_report_and_withheld(
+        alerts=store, graph=_EmptyGraph(graph), analytics=analytics,  # type: ignore[arg-type]
+        held=_Held([]),  # type: ignore[arg-type]
+        compute=None,  # type: ignore[arg-type]
+        explore=ExploreService(_CountingGraph(), None, now=_counted_at),  # type: ignore[arg-type]
+        ontology=load_deployment_ontology(),
+        domains=["aml"], investigation_id=CASE, reader=reader, today=TODAY,
+    )  # fmt: skip
+
+
+async def test_a_pole_total_lowered_by_the_readers_rights_is_a_known_floor_until_SE8c() -> None:
+    """The real `ExploreService.counts` over a graph whose count the reader's clearance lowers (3
+    people for the reader, 5 for a cleared one). The POLE total really is lower; the flag says
+    `False`: the known gap (spec 03, "a floor, not a ceiling"). Flips to `True` with SE8c."""
+    cleared, cleared_flag = await _pole_report(_CLEARED)
+    lowered, flag = await _pole_report(READER)
+    person = lambda f: next(c for c in f.pole.classes if c.pole_class.value == "person").total  # noqa: E731
+    assert (person(cleared), person(lowered)) == (5, 3), "the figure really was lowered"
+    assert cleared_flag is False
+    assert flag is False  # SE8c: `is True`
+
+
+class _KycGraph:
+    """Two customers, each verified by a document; the second is visible only to a SECRET reader.
+    Answers `list_nodes`, `expand` and `get_node` as the adapter does for the principal given, a
+    hidden node being absent from every answer and from none of them by name."""
+
+    def __init__(self, inner: Any) -> None:
+        self._inner = inner
+        self._nodes = {
+            "p-1": SimpleNamespace(
+                id="p-1", type="Person", properties={"family_name": "A"}, level=0
+            ),
+            "p-2": SimpleNamespace(
+                id="p-2", type="Person", properties={"family_name": "B"}, level=1
+            ),
+            "d-1": SimpleNamespace(id="d-1", type="Document", properties={}, level=0),
+            "d-2": SimpleNamespace(id="d-2", type="Document", properties={}, level=1),
+        }
+        self._verified_by = {"p-1": "d-1", "p-2": "d-2"}
+
+    def _seen(self, principal: Principal) -> dict[str, Any]:
+        top = 1 if principal.clearance == "SECRET" else 0
+        return {k: n for k, n in self._nodes.items() if n.level <= top}
+
+    async def list_nodes(self, entity_type: str, principal: Principal, **kwargs: Any) -> Any:
+        found = [n for n in self._seen(principal).values() if n.type == entity_type]
+        return SimpleNamespace(nodes=found, next_cursor=None)
+
+    async def get_node(self, node_id: str, principal: Principal, **kwargs: Any) -> Any:
+        return self._seen(principal).get(node_id)
+
+    async def expand(self, req: Any, principal: Principal) -> Any:
+        seen = self._seen(principal)
+        if req.edge_types != ["VERIFIED_BY"]:
+            return SimpleNamespace(nodes=[], edges=[])
+        if req.direction == "in":  # the holders of these documents
+            held = [p for p, d in self._verified_by.items() if d in req.node_ids]
+            return SimpleNamespace(nodes=[seen[p] for p in held if p in seen], edges=[])
+        docs = [self._verified_by[p] for p in req.node_ids if p in self._verified_by]
+        return SimpleNamespace(nodes=[seen[d] for d in docs if d in seen], edges=[])
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._inner, name)
+
+
+async def _kyc_report(reader: Principal) -> tuple[Any, bool]:
+    store, graph, analytics, _ = _world(set(), [])
+    return await reports.case_report_and_withheld(
+        alerts=store, graph=_KycGraph(graph), analytics=analytics,  # type: ignore[arg-type]
+        held=_Held([]),  # type: ignore[arg-type]
+        compute=None, explore=None, ontology=None,  # type: ignore[arg-type]
+        domains=["fibo"], investigation_id=CASE, reader=reader, today=TODAY,
+    )  # fmt: skip
+
+
+async def test_a_kyc_total_lowered_by_the_readers_rights_is_a_known_floor_until_SE8c() -> None:
+    """The real `_kyc_figures` (`_customers`, `assess`) over a graph whose answers the reader's
+    clearance lowers: a cleared reader's book holds two customers, this reader's one. The KYC total
+    really is lower; the flag says `False`: the known gap (spec 03, "a floor, not a ceiling").
+    Flips to `True` with SE8c."""
+    cleared, cleared_flag = await _kyc_report(_CLEARED)
+    lowered, flag = await _kyc_report(READER)
+    assert (cleared.kyc.customers, lowered.kyc.customers) == (2, 1), "the figure really was lowered"
+    assert cleared_flag is False
+    assert flag is False  # SE8c: `is True`

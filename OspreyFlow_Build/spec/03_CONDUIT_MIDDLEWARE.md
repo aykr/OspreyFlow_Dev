@@ -1681,8 +1681,15 @@ returned, and a row that cannot be written fails the export with a 503, as the a
 withheld flag is true when the reader's rights lowered one of its alert or held figures: an alert the queue left out
 because the reader cannot read what it cites, an alert on the layer a case borrows read-only from its original case when the
 reader holds no level on that original (the one refusal in a case's read set that is the reader's own rights), or (for an
-editor's held figures) a held row their marking or reach leaves out; the KYC and POLE figures add nothing to it. The case's own dataset scope is not the reader's rights and sets nothing: an
-owned or team monitor or hotlist alert raised on a dataset the case does not read is not a figure of that case. `GET /v1/exports`
+editor's held figures) a held row their marking or reach leaves out. The case's own dataset scope is not the reader's rights and sets nothing: an
+owned or team monitor or hotlist alert raised on a dataset the case does not read is not a figure of that case (the owner's ruling of
+23 November 2026, option A, which covers the alert part of the flag). **The flag is a floor, not a ceiling.** It does not yet see the
+KYC and POLE figures, which are counted as the reader, so the reader's rights can lower them: a lowered KYC or POLE total is
+recorded `withheld=False` today. This is a known gap, not a design decision (the conductor's finding, reported to the owner on
+24 November 2026). Only the graph adapter can say what its own count left out (rule 3: the Conduit may not compute an unfiltered count and
+compare), so the complete fix is a port change in a part of its own, SE8c: the counts result gains a `withheld` boolean from the
+adapter, and the report's flag becomes one `any` over every figure source. `test_report_figures_withheld.py` pins today's answer
+(`..._is_a_known_floor_until_SE8c`); when SE8c lands those are the tests that flip. `GET /v1/exports`
 reads them all by its one right, as it reads every case's, with one condition on a row that has no case:
 a dataset's release row is in the read only for a reader who may know the dataset, the condition being in the query's
 `WHERE`. At `GET /v1/exports` that reader is the administrator alone, who lists every dataset: the route takes the plain
