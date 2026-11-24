@@ -94,6 +94,49 @@ def test_a_deployment_rendered_from_main_between_releases_is_never_up_to_date(
     assert notice["update_available"] is False
 
 
+def _code_tree(tmp_path: Path, form: str) -> Path:
+    """A code tree whose `checkout_version` returns each form it can (ADR-114 Amendment 47):
+    `dev-<sha>` (clean git tree, VERSION `-dev`), `v0.7.0-dev` (the stamped text: a tree with no git),
+    and a bare tag (VERSION `v0.6.1`)."""
+    code = tmp_path / f"code-{form}"
+    code.mkdir()
+    (code / "VERSION").write_text("v0.6.1\n" if form == "tag" else "v0.7.0-dev\n")
+    if form == "stamped":
+        return code
+    git = ["git", "-C", str(code), "-c", "user.name=t", "-c", "user.email=t@example.invalid"]
+    subprocess.run(["git", "init", "-q", str(code)], check=True)
+    subprocess.run([*git, "add", "VERSION"], check=True)
+    subprocess.run([*git, "commit", "-q", "-m", "x"], check=True)
+    return code
+
+
+@pytest.mark.parametrize(
+    ("form", "says_up_to_date"), [("sha", False), ("stamped", False), ("tag", True)]
+)
+def test_every_form_checkout_version_returns_is_worded_right(
+    tmp_path: Path,
+    github: tuple[_GitHub, str],
+    capsys: pytest.CaptureFixture[str],
+    form: str,
+    says_up_to_date: bool,
+) -> None:
+    """The three forms a deployment can be rendered with: `dev-<sha>` and `v0.7.0-dev` are builds from the checkout and
+    are never told they are up to date (the newest published release is v0.6.1); a bare tag that is the newest is."""
+    from harness.release import checkout_version
+
+    fake, base = github
+    fake.releases = [_release("v0.6.1")]
+    current = checkout_version(_code_tree(tmp_path, form))
+    assert current.startswith("dev-") if form == "sha" else True
+    assert current == {"stamped": "v0.7.0-dev", "tag": "v0.6.1"}.get(form, current)
+    directory = _deployment(tmp_path, current)
+    assert _check(directory, _checkout(tmp_path, "https://github.com/acme/ospreyflow"), base) == 0
+    said = capsys.readouterr().out
+    assert ("Up to date" in said) is says_up_to_date
+    if not says_up_to_date:
+        assert f"builds from its checkout ({current})" in said
+
+
 def test_a_check_that_fails_is_written_too_and_exits_non_zero(
     tmp_path: Path, github: tuple[_GitHub, str], capsys: pytest.CaptureFixture[str]
 ) -> None:
