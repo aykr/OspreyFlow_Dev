@@ -208,34 +208,37 @@ export function attachPanelFrame(root: PanelFrameRoot, store: PanelFrameStore): 
   /**
    * A sash's `data-max` is a bound the writer applies on every path. The key path passes it; a size that arrived without
    * it (a stored value, the pointer's set, a window resize) is above it only until here, where the one writer is asked to
-   * hold it to the bound before anything is drawn. Returns whether it wrote, in which case the new state is drawn by the
-   * subscription and this one is not.
+   * hold it to the bound before anything is drawn. Each write makes a state of its own, which the subscription renders.
    */
-  const holdToBounds = (state: PanelFrameState): boolean => {
+  const holdToBounds = (state: PanelFrameState): void => {
     for (const sash of all(root, "[data-sash]")) {
       const maxPx = numberAttribute(sash, "data-max");
       if (maxPx === undefined) continue;
       const axis = sash.getAttribute("data-sash");
       if (axis === "side-width" && state.sideWidth > lowerLimit(state.limits.sideWidth, MIN_SIDE_WIDTH, maxPx)) {
         store.actions.setSideWidth(state.sideWidth, { maxPx });
-        return true;
+        return;
       }
       if (axis === "timeline-height" && state.timelineHeight > lowerLimit(state.limits.timelineHeight, MIN_TIMELINE_HEIGHT, maxPx)) {
         store.actions.setTimelineHeight(state.timelineHeight, { maxPx });
-        return true;
+        return;
       }
       const id = sash.getAttribute("data-panel") as SidePanelId;
       const own = axis === "panel-height" ? state.panelHeights[id] : undefined;
       if (own !== undefined && own > lowerLimit(state.limits.panelHeight, MIN_PANEL_HEIGHT, maxPx)) {
         store.actions.setPanelHeight(id, own, { maxPx });
-        return true;
+        return;
       }
     }
-    return false;
   };
+  /** How many states have been rendered, so a write that made none (it changed nothing) is told from one that did. */
+  let renders = 0;
   const render = (state: PanelFrameState): void => {
-    // Each write makes a state of its own, drawn by the subscription; this loop ends when no sash is above its bound.
-    if (!holdToBounds(state)) draw(root, state);
+    const mine = ++renders;
+    holdToBounds(state);
+    // A write that changed something rendered its own state, inside the call above, and that one is drawn. One that
+    // changed nothing rendered none: this state is drawn as it is, so the frame is never left undrawn and the loop ends.
+    if (renders === mine) draw(root, state);
   };
   // Subscribed before the first draw: a write made to hold a size to its bound is drawn by the subscription.
   const unsubscribe = store.subscribe(render);

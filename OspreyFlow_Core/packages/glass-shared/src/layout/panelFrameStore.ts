@@ -174,9 +174,12 @@ export function upperLimits(viewport: ViewportSize): { sideWidth: number; timeli
 /**
  * A page's `maxPx` lowers a limit and never lifts it; a size never goes under its own minimum. The one place this is
  * worked out: the writer applies it, and the attach draws it as `aria-valuemax`, so the two cannot differ.
+ *
+ * Sizes are whole pixels (`layoutSizes` rounds each one it stores), so a bound is too: a `maxPx` of 350.5 allows 350, not
+ * the 351 that rounding 350.5 would store above it. Rounded down, what is written is never above what is drawn as the maximum.
  */
 export function lowerLimit(limit: number, minimum: number, maxPx?: number): number {
-  return Math.max(minimum, maxPx !== undefined && Number.isFinite(maxPx) ? Math.min(limit, maxPx) : limit);
+  return Math.max(minimum, maxPx !== undefined && Number.isFinite(maxPx) ? Math.min(limit, Math.floor(maxPx)) : limit);
 }
 
 /** What a page knows and the store does not. */
