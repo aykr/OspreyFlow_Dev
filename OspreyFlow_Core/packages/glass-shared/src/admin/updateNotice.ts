@@ -18,6 +18,12 @@ function when(iso: string): string {
   return `Checked ${day} at ${time} UTC.`;
 }
 
+/** A build from the checkout, not a release (ADR-114 Amendment 47; `harness/update.py` says the same): `dev-<commit>`,
+ * or the release the code is heading to, `v<x>.<y>.<z>-dev`. Only a bare tag is a release. */
+function buildsFromCheckout(version: string): boolean {
+  return version.startsWith("dev-") || /^v\d+\.\d+\.\d+-dev$/.test(version);
+}
+
 export function updateWords(version: string | null | undefined, update: UpdateNotice | null | undefined): UpdateWords {
   if (!update) {
     return { tone: "plain", headline: "Not checked for updates yet.", detail: `${HOST} ospreyflow update --check` };
@@ -25,7 +31,7 @@ export function updateWords(version: string | null | undefined, update: UpdateNo
   if (update.problem) {
     return { tone: "problem", headline: "The last update check could not answer.", detail: `${when(update.checked_at)} ${update.problem}` };
   }
-  if ((version ?? update.current).startsWith("dev-")) {
+  if (buildsFromCheckout(version ?? update.current)) {
     return {
       tone: "plain",
       headline: "This deployment builds from its checkout; it moves with git pull and ospreyflow start --build.",
