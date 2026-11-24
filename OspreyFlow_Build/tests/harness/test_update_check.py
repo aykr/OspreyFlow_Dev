@@ -77,6 +77,23 @@ def test_a_deployment_built_from_its_checkout_is_told_how_it_moves(
     assert "builds from its checkout (dev-abc1234)" in said and "v0.5.0" in said
 
 
+def test_a_deployment_rendered_from_main_between_releases_is_never_up_to_date(
+    tmp_path: Path, github: tuple[_GitHub, str], capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A deployment stamped `v0.7.0-dev` (main's VERSION before the cut, from a tree with changes or without git: ADR-114
+    Amendment 47) is the release it is heading to, not that release: the check says it builds from its checkout, and
+    offers no update, never "Up to date"."""
+    fake, base = github
+    fake.releases = [_release("v0.6.1")]
+    directory = _deployment(tmp_path, "v0.7.0-dev")
+    assert _check(directory, _checkout(tmp_path, "https://github.com/acme/ospreyflow"), base) == 0
+    said = capsys.readouterr().out
+    assert "Up to date" not in said
+    assert "builds from its checkout (v0.7.0-dev)" in said and "v0.6.1" in said
+    notice = json.loads((directory / "state" / "update.json").read_text())
+    assert notice["update_available"] is False
+
+
 def test_a_check_that_fails_is_written_too_and_exits_non_zero(
     tmp_path: Path, github: tuple[_GitHub, str], capsys: pytest.CaptureFixture[str]
 ) -> None:
