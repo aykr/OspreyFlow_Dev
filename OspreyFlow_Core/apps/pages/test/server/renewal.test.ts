@@ -26,7 +26,8 @@
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { DEFAULT_BACKOFF_MS, RENEWAL_MARGIN_SECONDS } from "../../server/accessToken.js";
+import { DEFAULT_BACKOFF_MS, RENEWAL_MARGIN_SECONDS, accessTokenFor, createRenewal } from "../../server/accessToken.js";
+import type { SessionRecord } from "../../server/sessionPolicy.js";
 import { SESSION_KEY_PREFIX } from "../../server/sessionStore.js";
 import type { SessionStore } from "../../server/sessionStore.js";
 import { captureOutput } from "../support/capture.js";
@@ -225,6 +226,62 @@ describe("single flight", () => {
     expect(r.fake.sessions.get(person.sid)?.ended, "the provider did not revoke the session").toBe(false);
     expect((await callConduit(r, person)).status).toBe(200);
     expect((await authOf(r, person))["refreshToken"]).toBe(r.fake.issued[1]!.refreshToken);
+  });
+});
+
+describe("accessTokenFor on its own", () => {
+  const NOW = Date.UTC(2026, 10, 24, 9, 0, 0);
+  const record = (): SessionRecord => ({
+    v: 1,
+    subject: "sub-alex",
+    displayName: "Alex",
+    accessToken: "access-0",
+    refreshToken: "refresh-0",
+    csrfToken: "csrf-of-this-session",
+    createdAt: NOW - 600_000,
+    idpSessionExpiresAt: NOW + 1_800_000,
+    accessTokenExpiresAt: NOW + 30_000, // inside the margin
+  });
+  const hooks = { persist: () => Promise.resolve(), end: () => Promise.resolve() };
+
+  it("hands every caller of one session the new token from the call itself, after one exchange", async () => {
+    const presented: string[] = [];
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const renewal = createRenewal({
+      now: () => NOW,
+      log: () => undefined,
+      refresh: async (token) => {
+        presented.push(token);
+        await gate;
+        return { accessToken: "access-1", refreshToken: "refresh-1", accessTokenExpiresAt: NOW + 300_000 };
+      },
+    });
+    // Three copies of one session, as three requests each load their own.
+    const copies = [record(), record(), record()];
+    for (const copy of copies) renewal.bind(copy, hooks);
+    const calls = copies.map((copy) => accessTokenFor(copy));
+    release();
+    expect(await Promise.all(calls)).toEqual(["access-1", "access-1", "access-1"]);
+    expect(presented, "one exchange, with the token the session held").toEqual(["refresh-0"]);
+    for (const copy of copies) {
+      expect(copy.refreshToken).toBe("refresh-1");
+      expect(copy.accessTokenExpiresAt).toBe(NOW + 300_000);
+    }
+    // A copy read before the exchange, asked afterwards, is brought up to date and not exchanged for.
+    const late = record();
+    renewal.bind(late, hooks);
+    expect(await accessTokenFor(late)).toBe("access-1");
+    expect(presented).toEqual(["refresh-0"]);
+    expect(late.refreshToken).toBe("refresh-1");
+  });
+
+  it("returns a record that no request has bound as it is, and exchanges nothing", async () => {
+    const lone = record();
+    expect(await accessTokenFor(lone)).toBe("access-0");
+    expect(lone.refreshToken).toBe("refresh-0");
   });
 });
 
