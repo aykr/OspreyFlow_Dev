@@ -1354,6 +1354,142 @@ describe("one writer: no entry point writes a size above the live limits, read s
   });
 });
 
+// ---------------------------------------------------------------- round 5: aria-valuemax from the live limit
+//
+// A sash that has `aria-valuenow` and `aria-valuemin` but no `aria-valuemax` describes a range that does not contain its
+// own value (WAI-ARIA gives a focusable separator a maximum of 100 when none is set). The store keeps the live upper
+// limit in its state (`limits`, from the one limit function) and the attach draws it as `aria-valuemax` on every sash,
+// lowered by the sash's own `data-max` exactly as the writer lowers it, and again when the window changes. Every read
+// below is of the drawn attribute straight after the call, never through `getState()`.
+
+describe("aria-valuemax: every sash says the limit the writer applies, under each of the three viewports", () => {
+  let now: Viewport = VIEWPORTS.roomy as Viewport;
+  const viewport = () => now;
+
+  /** A fake window the attach may hear a resize on, reached as a real element reaches it: `ownerDocument.defaultView`. */
+  function fakeWindow() {
+    const listeners: Array<() => void> = [];
+    return {
+      listeners,
+      addEventListener: (_type: string, listener: () => void) => void listeners.push(listener),
+      removeEventListener: (_type: string, listener: () => void) => void listeners.splice(listeners.indexOf(listener), 1),
+      resize: () => listeners.slice().forEach((listener) => listener()),
+    };
+  }
+
+  function attached(start: Viewport, sashAttributes: Record<string, string> = {}) {
+    now = start;
+    const parts = page();
+    for (const sash of [parts.controls.sideSash, parts.controls.timelineSash, parts.controls.panelSash]) {
+      for (const [name, value] of Object.entries(sashAttributes)) sash.attributes.set(name, value);
+    }
+    const win = fakeWindow();
+    Object.defineProperty(parts.root, "ownerDocument", { value: { activeElement: null, defaultView: win } });
+    const store = createPanelFrameStore({ viewport });
+    live.push(store);
+    attachPanelFrame(parts.root as unknown as PanelFrameRoot, store);
+    return { ...parts, store, win };
+  }
+
+  const drawnMax = (sash: FakeElement) => sash.getAttribute("aria-valuemax");
+  const num = (value: string | null) => (value === null ? NaN : Number(value));
+
+  const CASES5: Array<[string, Viewport, Viewport]> = [];
+  for (const [name, v] of Object.entries(VIEWPORTS)) {
+    CASES5.push([`${name}, window already that size`, v, v]);
+    CASES5.push([`${name}, window shrank to it`, VIEWPORTS.roomy as Viewport, v]);
+  }
+
+  describe.each(CASES5)("%s", (_title, startedAs, nowIs) => {
+    it("the column's, the timeline's and the stacked panel's sashes draw the limit of the window as it is, from the first draw", () => {
+      const page5 = attached(startedAs);
+      expect(num(drawnMax(page5.controls.sideSash)), "column, first draw").toBe(limitsOf(startedAs).side);
+      expect(num(drawnMax(page5.controls.timelineSash)), "timeline, first draw").toBe(limitsOf(startedAs).timeline);
+      expect(num(drawnMax(page5.controls.panelSash)), "stacked, first draw").toBe(limitsOf(startedAs).panel);
+      now = nowIs;
+      page5.win.resize();
+      expect(num(drawnMax(page5.controls.sideSash)), "column, after a window resize").toBe(limitsOf(nowIs).side);
+      expect(num(drawnMax(page5.controls.timelineSash)), "timeline, after a window resize").toBe(limitsOf(nowIs).timeline);
+      expect(num(drawnMax(page5.controls.panelSash)), "stacked, after a window resize").toBe(limitsOf(nowIs).panel);
+    });
+
+    it("the value pushed as far as it goes is the maximum drawn beside it, and the maximum is the limit the writer applies", () => {
+      const page5 = attached(startedAs);
+      now = nowIs;
+      for (let press = 1; press <= 60; press += 1) {
+        page5.controls.sideSash.dispatch("keydown", { key: "ArrowLeft", shiftKey: true });
+        page5.controls.timelineSash.dispatch("keydown", { key: "ArrowUp", shiftKey: true });
+        page5.controls.panelSash.dispatch("keydown", { key: "ArrowDown", shiftKey: true });
+      }
+      const side = limitsOf(nowIs).side;
+      const timeline = limitsOf(nowIs).timeline;
+      const panel = limitsOf(nowIs).panel;
+      expect(num(drawnMax(page5.controls.sideSash))).toBe(side);
+      expect(num(page5.controls.sideSash.getAttribute("aria-valuenow"))).toBe(side);
+      expect(num(drawnMax(page5.controls.timelineSash))).toBe(timeline);
+      expect(num(page5.controls.timelineSash.getAttribute("aria-valuenow"))).toBe(timeline);
+      expect(num(drawnMax(page5.controls.panelSash))).toBe(panel);
+      expect(num(page5.controls.panelSash.getAttribute("aria-valuenow"))).toBe(panel);
+      // A range that contains its own value, on every sash.
+      for (const sash of [page5.controls.sideSash, page5.controls.timelineSash, page5.controls.panelSash]) {
+        expect(num(sash.getAttribute("aria-valuemin"))).toBeLessThanOrEqual(num(sash.getAttribute("aria-valuenow")));
+        expect(num(sash.getAttribute("aria-valuenow"))).toBeLessThanOrEqual(num(drawnMax(sash)));
+      }
+    });
+
+    it("the state carries the limit it was drawn from", () => {
+      const page5 = attached(startedAs);
+      now = nowIs;
+      page5.store.actions.fitToWindow();
+      const seen = page5.store.getState().limits;
+      expect([seen.sideWidth, seen.timelineHeight, seen.panelHeight]).toEqual([limitsOf(nowIs).side, limitsOf(nowIs).timeline, limitsOf(nowIs).panel]);
+    });
+  });
+
+  it("a window that changes without changing any size still redraws the maximum (the sizes stayed, the range moved)", () => {
+    const page5 = attached({ windowHeight: 1200, workWidth: 1600 });
+    expect(num(page5.controls.timelineSash.getAttribute("aria-valuenow"))).toBe(DEFAULT_TIMELINE_HEIGHT);
+    expect(num(drawnMax(page5.controls.timelineSash))).toBe(840);
+    now = { windowHeight: 1000, workWidth: 1600 };
+    page5.win.resize();
+    expect(num(page5.controls.timelineSash.getAttribute("aria-valuenow"))).toBe(DEFAULT_TIMELINE_HEIGHT);
+    expect(num(drawnMax(page5.controls.timelineSash))).toBe(700);
+  });
+
+  it("a page's data-max lowers the maximum drawn, and never lifts it: the drawn maximum is the limit the writer applies", () => {
+    const lowerOne = attached(VIEWPORTS.roomy as Viewport, { "data-max": "400" });
+    expect(num(drawnMax(lowerOne.controls.sideSash))).toBe(400);
+    expect(num(drawnMax(lowerOne.controls.timelineSash))).toBe(400);
+    for (let press = 1; press <= 40; press += 1) lowerOne.controls.sideSash.dispatch("keydown", { key: "ArrowLeft", shiftKey: true });
+    expect(num(lowerOne.controls.sideSash.getAttribute("aria-valuenow"))).toBe(400);
+    const liftOne = attached(VIEWPORTS.tight as Viewport, { "data-max": "9000" });
+    expect(num(drawnMax(liftOne.controls.sideSash))).toBe(300);
+    expect(num(drawnMax(liftOne.controls.timelineSash))).toBe(560);
+    // A bound under the minimum never makes the maximum smaller than the minimum.
+    const under = attached(VIEWPORTS.roomy as Viewport, { "data-max": "10" });
+    expect(num(drawnMax(under.controls.sideSash))).toBe(300);
+    expect(num(drawnMax(under.controls.timelineSash))).toBe(96);
+  });
+
+  it("the attach stops listening to the window when it is undone, and does not need a window to draw", () => {
+    const page5 = attached(VIEWPORTS.roomy as Viewport);
+    expect(page5.win.listeners).toHaveLength(1);
+    const noWindow = page();
+    const store = createPanelFrameStore({ viewport });
+    live.push(store);
+    const detach = attachPanelFrame(noWindow.root as unknown as PanelFrameRoot, store);
+    expect(num(drawnMax(noWindow.controls.sideSash))).toBe(limitsOf(now).side);
+    detach();
+    const win = fakeWindow();
+    const again = page();
+    Object.defineProperty(again.root, "ownerDocument", { value: { activeElement: null, defaultView: win } });
+    const undo = attachPanelFrame(again.root as unknown as PanelFrameRoot, store);
+    expect(win.listeners).toHaveLength(1);
+    undo();
+    expect(win.listeners).toHaveLength(0);
+  });
+});
+
 describe("one writer, in the source: every layoutSizes setter and reset is called inside `writeSize` and nowhere else", () => {
   const WRITER_NAMES = ["setSideWidth", "setTimelineHeight", "setPanelHeight", "resetSideWidth", "resetTimelineHeight", "resetPanelHeight"];
   const BEGIN = "// writer: begin";
