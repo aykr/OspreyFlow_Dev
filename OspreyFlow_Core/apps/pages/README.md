@@ -22,6 +22,22 @@ browser files. No React, anywhere (`scripts/no_react_check.mjs`).
 4. If it needs a script, write `modules/<name>.ts` and name it in the `scripts` block: a `script` element of type `module` whose `src` is `asset('modules/<name>.ts')`. Never inline code, never a `style` attribute.
 5. Add the module to `PAGES` in `server/pageList.ts`; the session check, the anti-forgery check and the headers are applied to it, and a path or id claimed twice is refused at start-up.
 
+## The two trees and the switch (slice GR2a; ADR-152 decisions 6 and 7)
+
+The service serves one tree for the whole deployment: `OSPREY_PAGES_TREE=default` (also when the setting is left out) or `govuk`;
+any other value is refused at start in words. It is read in one place, `server/config.ts`. **The switch decides which tree serves
+every route, `/` included: no path was added for Home**, the layout, the error page and Home are drawn in the chosen tree's
+templates (`tree-default/` or `tree-govuk/`). The pages of both trees are in the one table, `server/pageList.ts`: a `PageModule`
+names its `trees` (the Default tree's alone when it names none), and a route a tree has no page for is not registered, so it answers
+as a path nothing serves. A GOV.UK page may exist before its Default twin (the owner, 24 November 2026). `tree-govuk/routes.yaml`
+lists the GOV.UK tree's paths (the state `scripts/tree_parity.py` derives), and `test/govuk/help.test.ts` holds it to the table.
+
+The first GOV.UK page is Help (`server/help.ts`, `tree-govuk/help.njk`, scenario HP). Its words are the shared package's
+(`packages/glass-shared/src/help/roles.ts`): `server/views/helpWords.ts` imports them, `tsc` checks it against
+`server/types/glassShared.d.ts`, and `apps/pages/scripts/build.mjs` bundles it with the package's source so the compiled service imports no
+workspace package. The GOV.UK tree's tests are in `test/govuk/` (vitest here, and `keyboard/` and `scripts-off/` for Playwright with
+`test/govuk/playwright.config.ts`); `npm run test:keyboard` runs the Default tree's walk (`keyboard/`) and then this one.
+
 ## Building and serving the assets
 
 `npm run build --workspace apps/pages` compiles the server, copies the templates and `FUNCTIONS.yaml` into `dist/`, and runs

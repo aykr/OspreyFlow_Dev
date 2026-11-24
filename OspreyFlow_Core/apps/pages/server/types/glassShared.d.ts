@@ -2,7 +2,7 @@
  * What the compiled service's build is told `@ospreyflow/glass-shared` exports, for the one file that imports it
  * (`server/views/helpWords.ts`; slice GR2a). `tsconfig.build.json` maps the package's name to this file, so that `tsc` checks the
  * server against these types and never reads the shared package's own source (its relative imports are written for a bundler, and
- * it uses the browser's types, which this service's build does not have). The package's real source is what runs: `scripts/build.mjs`
+ * it uses the browser's types, which this service's build does not have). The package's real source is what runs: `apps/pages/scripts/build.mjs`
  * bundles `helpWords.ts` with it after `tsc`, so the compiled service imports no workspace package at run time.
  *
  * Only what the service uses is declared. The root `npm run typecheck` reads the real package, not this file, and

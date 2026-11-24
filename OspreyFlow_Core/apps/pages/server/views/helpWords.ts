@@ -12,7 +12,7 @@
  * and nothing here is withheld (rule 7 has no count to protect on a page of static words).
  *
  * The build bundles this file with the shared package's source, so the compiled service imports no workspace package it would
- * not have at run time (`scripts/build.mjs`).
+ * not have at run time (`apps/pages/scripts/build.mjs`).
  */
 import {
   HELP_TITLE,
