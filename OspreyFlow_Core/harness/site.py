@@ -48,18 +48,27 @@ class Sites:
     glass: str
     identity: str
     dashboards: str
+    #: The names the proxy answers to, from `harness.page_addresses` (the one place making them).
+    identity_host: str
+    dashboards_host: str
 
 
 def sites(config: OspreyConfig) -> Sites:
-    origin = urlparse(config.network.public_origin.rstrip("/"))
-    scheme, host = origin.scheme, origin.hostname or ""
-    port = origin.port or (443 if scheme == "https" else 80)
-    suffix = f":{origin.port}" if origin.port else ""
-
-    def named(prefix: str) -> str:
-        return f"{scheme}://{prefix}{host}{suffix}"
-
-    return Sites(scheme, host, port, named(""), named("id."), named("bi."))
+    """Every address of the deployment, made from `page_addresses.parse_origin`'s one reading of
+    `network.public_origin`: the scheme's default port is never written (PL7f round 2)."""
+    scheme, host, port = page_addresses.parse_origin(config)
+    identity_host = page_addresses.identity_name(host)
+    dashboards_host = page_addresses.dashboards_name(host)
+    return Sites(
+        scheme,
+        host,
+        port,
+        page_addresses.address(scheme, host, port),
+        page_addresses.address(scheme, identity_host, port),
+        page_addresses.address(scheme, dashboards_host, port),
+        identity_host,
+        dashboards_host,
+    )
 
 
 def render_caddyfile(config: OspreyConfig, *, doors: bool = True) -> str:
@@ -74,9 +83,9 @@ def render_caddyfile(config: OspreyConfig, *, doors: bool = True) -> str:
     no_workspace = pages_service.workspace_removed(config)
     glass = pages_service.UPSTREAM if no_workspace else pages_service.WORKSPACE_UPSTREAM
     pages_paths = [] if no_workspace else pages_service.route_paths(config)
-    routes = [(names.host, glass), (f"id.{names.host}", "keycloak:8080")]
+    routes = [(names.host, glass), (names.identity_host, "keycloak:8080")]
     if config.reporting.superset:
-        routes.append((f"bi.{names.host}", "superset:8088"))
+        routes.append((names.dashboards_host, "superset:8088"))
     plain = names.scheme == "http"
     own = config.network.tls is not None
     lines = [
@@ -108,7 +117,7 @@ def render_caddyfile(config: OspreyConfig, *, doors: bool = True) -> str:
         lines += ["", f"import {IN_PROXY}"]
     given = [f"\ttls {CERT_IN_PROXY} {KEY_IN_PROXY}"] if own else []
     for name, upstream in routes:
-        if name == f"id.{names.host}" and config.appearance.brand == "govuk":
+        if name == names.identity_host and config.appearance.brand == "govuk":
             # ADR-132 Amendment 2: the sign-in page's GOV.UK stylesheet and fonts come from the
             # Glass, on the sign-in page's own name, so they are same-origin there.
             handlers = [
@@ -141,10 +150,10 @@ def render_caddyfile(config: OspreyConfig, *, doors: bool = True) -> str:
         )
         if gate:
             handlers = _behind_the_key(
-                names.host, identity=name == f"id.{names.host}", handlers=handlers
+                names.host, identity=name == names.identity_host, handlers=handlers
             )
         address = f"{names.scheme}://{name}"
-        if name == f"id.{names.host}" and doors and derived is not None and derived.extra_listener:
+        if name == names.identity_host and doors and derived is not None and derived.extra_listener:
             # The page service reaches its issuer through the alias, inside the network, at the
             # origin's port: the proxy listens there for this name too (the compose proxy alone:
             # `doors`, which a cluster, with no alias, does not have). The port is `derive`'s.
@@ -637,9 +646,9 @@ def answer_the_deployment_here(config: OspreyConfig) -> None:
     tls = config.network.tls
     if config.profile is not Profile.SMALL or tls is None:
         return
-    host = sites(config).host.lower()
+    names = sites(config)
     address = config.network.listen_address or LOOPBACK
-    for name in (host, f"id.{host}", f"bi.{host}"):
+    for name in (names.host.lower(), names.identity_host.lower(), names.dashboards_host.lower()):
         _HERE[name] = address
     _answer_here()
     _trust([tls.certificate, *([tls.ca] if tls.ca else [])])
@@ -658,8 +667,8 @@ def carry_the_pass(config: OspreyConfig, directory: Path) -> None:
     deployment's three names alone, never elsewhere. Nothing for a deployment that does not ask."""
     if not config.network.access_key:
         return
-    host = sites(config).host.lower()
-    for name in (host, f"id.{host}", f"bi.{host}"):
+    names = sites(config)
+    for name in (names.host.lower(), names.identity_host.lower(), names.dashboards_host.lower()):
         _PASSES[name] = directory
     import urllib.request
 

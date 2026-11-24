@@ -255,6 +255,41 @@ _NUMBER_LAST = re.compile(r"[0-9]+|0[xX][0-9a-fA-F]*")
 _INTERNAL_SUFFIXES = (".localhost", ".local", ".internal", ".home.arpa")
 
 
+# ---- the one normaliser: the origin, the identity name and the dashboards' name ---------------
+
+
+def parse_origin(config: OspreyConfig) -> tuple[str, str, int]:
+    """`network.public_origin` as (scheme, host, port): the host in lower case, the port the origin
+    names or the scheme's own. **The only place that reads the origin's text.** `harness.site.sites`
+    takes it from here, so every address the deployment writes (Keycloak's `KC_HOSTNAME`, the
+    proxy's sites, a sign-in client's redirect, the service's origin and issuer) is made from this
+    one reading (PL7f round 2: the origin `https://host:443` was kept with its port in one place and
+    dropped in another)."""
+    origin = urlsplit(config.network.public_origin.rstrip("/"))
+    scheme, host = origin.scheme, origin.hostname or ""
+    return scheme, host, origin.port or default_port(scheme)
+
+
+def default_port(scheme: str) -> int:
+    return 443 if scheme == "https" else 80
+
+
+def address(scheme: str, host: str, port: int) -> str:
+    """`<scheme>://<host>`, with the port only where it is not the scheme's own: the form the
+    service accepts (`raw === new URL(raw).origin`) and a browser sends."""
+    return f"{scheme}://{host}" + (f":{port}" if port != default_port(scheme) else "")
+
+
+def identity_name(host: str) -> str:
+    """The identity provider's name: `id.` in front of the host."""
+    return f"id.{host}"
+
+
+def dashboards_name(host: str) -> str:
+    """The dashboards' name: `bi.` in front of the host."""
+    return f"bi.{host}"
+
+
 # ---- what each check says ---------------------------------------------------------------------
 
 
@@ -346,7 +381,7 @@ def _needs_https(config: OspreyConfig) -> Refusal | None:
 
     names = _sites(config)
     if not _service_accepts_issuer(f"{names.identity}/realms/{REALM}"):
-        return Refusal("needs_https", NEEDS_HTTPS.format(identity=_identity(names)))
+        return Refusal("needs_https", NEEDS_HTTPS.format(identity=names.identity))
     return None
 
 
@@ -392,7 +427,7 @@ def _port_taken(config: OspreyConfig) -> Refusal | None:
         else NEEDS_ANOTHER_PORT_ELSEWHERE
     )
     return Refusal(
-        "port_taken", template.format(identity=_identity(names), port=names.port, use=use)
+        "port_taken", template.format(identity=names.identity, port=names.port, use=use)
     )
 
 
@@ -413,7 +448,7 @@ def _needs_trust(config: OspreyConfig) -> Refusal | None:
     volume, which holds its private key) and the service's check is not touched."""
     names = _sites(config)
     if names.scheme == "https" and config.network.tls is None and _caddy_signs_itself(names.host):
-        return Refusal("needs_trust", NEEDS_TRUST.format(identity=_identity(names)))
+        return Refusal("needs_trust", NEEDS_TRUST.format(identity=names.identity))
     return None
 
 
@@ -427,15 +462,8 @@ def _needs_ca(config: OspreyConfig) -> Refusal | None:
     names = _sites(config)
     tls = config.network.tls
     if names.scheme == "https" and tls is not None and not tls.ca:
-        return Refusal("needs_ca", NEEDS_CA.format(identity=_identity(names)))
+        return Refusal("needs_ca", NEEDS_CA.format(identity=names.identity))
     return None
-
-
-def _identity(names: Sites) -> str:
-    """The identity address as the words name it: `id.` in front of the host, the origin's port
-    where it is not the scheme's own (the address `derive` returns as `identity`)."""
-    default = 443 if names.scheme == "https" else 80
-    return f"{names.scheme}://id.{names.host}" + (f":{names.port}" if names.port != default else "")
 
 
 # ---- the one place -----------------------------------------------------------------------------
@@ -472,9 +500,6 @@ def derive(config: OspreyConfig, *, with_sign_in: bool = True) -> PageAddresses 
             return refused
 
     names = _sites(config)
-    default = 443 if names.scheme == "https" else 80
-    suffix = f":{names.port}" if names.port != default else ""
-    identity = f"{names.scheme}://id.{names.host}{suffix}"
     tls = config.network.tls
     has_proxy = config.profile in (Profile.LOCAL_LITE, Profile.SMALL)
     own_port = PROXY_HTTPS_PORT if tls is not None else 443
@@ -482,12 +507,12 @@ def derive(config: OspreyConfig, *, with_sign_in: bool = True) -> PageAddresses 
     extra = names.port if proxy_https_port is not None and names.port != proxy_https_port else None
     has_ca = config.profile is Profile.SMALL and tls is not None and bool(tls.ca)
     trust = CA_IN_SERVICE if has_ca else None
-    issuer = f"{identity}/realms/{REALM}"
+    issuer = f"{names.identity}/realms/{REALM}"
     return PageAddresses(
-        public_origin=f"{names.scheme}://{names.host}{suffix}",
-        identity=identity,
+        public_origin=names.glass,
+        identity=names.identity,
         issuer=issuer,
-        identity_alias=f"id.{names.host}",
+        identity_alias=names.identity_host,
         identity_port=names.port,
         extra_listener=extra,
         proxy_https_port=proxy_https_port,
