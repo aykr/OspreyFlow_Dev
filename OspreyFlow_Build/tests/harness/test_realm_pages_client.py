@@ -29,7 +29,15 @@ shown to the same check that passes the real client, so the check cannot be one 
   `test_apply_mints_both_secrets_once_and_keeps_them`, `test_a_reapply_that_re_mints_is_caught`,
   `test_no_secret_is_written_anywhere_but_deployment_env`;
 - the fake provider that grants what Keycloak refuses (rule 15) —
-  `test_the_fake_provider_refuses_what_keycloak_refuses`.
+  `test_the_fake_provider_refuses_what_keycloak_refuses`;
+- a back-channel logout address Keycloak's own container cannot reach (round 3 of PL9b: the public origin,
+  which no name on the internal network answers to) — `test_the_back_channel_address_is_one_keycloak_reaches`
+  (compose: `small`; chart: `cluster`; the cloud-platform shapes refuse the page service) and its
+  `..._fails_for_each_plant`, whose plants are the shapes the renderer really emits.
+
+**What the render tests read.** `tools.reference_render`'s `render_shape` (the stored reference folders are
+not read; it renders and returns files in memory) and nothing else of the tree: the compose file's services
+and networks, and the chart's values (workloads and ports). No other folder is walked.
 """
 
 from __future__ import annotations
@@ -63,6 +71,7 @@ from harness.realm import (
 )
 
 from schemas.deployment import OspreyConfig
+from tools import reference_render as ref
 from tools.layout import CORE
 from tests.harness.fake_idp import FakeIdentityProvider
 from tests.harness.test_named_render import _named_config
@@ -78,6 +87,9 @@ ORIGIN = "http://localhost:9999"  # `_config()`'s public origin
 CALLBACK = f"{ORIGIN}/session/callback"
 #: Slice PL9b: where Keycloak sends its logout token (the service's own route, `apps/pages/server/oidc.ts`).
 BACKCHANNEL = "/session/back-channel-logout"
+#: Round 3 of PL9b: Keycloak makes that call itself, server to server, inside the deployment's internal network, so
+#: the address is the page service's own (its service name and port, plain HTTP): never the public origin.
+BACKCHANNEL_URL = f"http://pages:8090{BACKCHANNEL}"
 
 
 @pytest.fixture
@@ -120,8 +132,11 @@ def faults(client: dict[str, Any], origin: str = ORIGIN) -> list[str]:
         found.append("a redirect address holds a wildcard")
     if attributes.get("post.logout.redirect.uris") != f"{origin}/":
         found.append("the post-logout address is not <origin>/")
-    if attributes.get("backchannel.logout.url") != f"{origin}{BACKCHANNEL}":
-        found.append("the back-channel logout address is not <origin>/session/back-channel-logout")
+    if attributes.get("backchannel.logout.url") != BACKCHANNEL_URL:
+        found.append(
+            "the back-channel logout address is not the page service's own, http://pages:8090"
+            "/session/back-channel-logout"
+        )
     if attributes.get("backchannel.logout.session.required") != "true":
         found.append("the back-channel logout token is not required to name the session (sid)")
     if attributes.get("backchannel.logout.revoke.offline.tokens") != "false":
@@ -210,8 +225,14 @@ PLANTS: dict[str, Callable[[dict[str, Any]], None]] = {
     "the back-channel address on another origin": lambda c: c["attributes"].update(
         {"backchannel.logout.url": f"http://localhost:1{BACKCHANNEL}"}
     ),
+    "the back-channel address on the public origin": lambda c: c["attributes"].update(
+        {"backchannel.logout.url": f"{ORIGIN}{BACKCHANNEL}"}
+    ),
     "the back-channel address on another path": lambda c: c["attributes"].update(
-        {"backchannel.logout.url": f"{ORIGIN}/logout"}
+        {"backchannel.logout.url": f"http://pages:8090/logout"}
+    ),
+    "the back-channel address through the proxy": lambda c: c["attributes"].update(
+        {"backchannel.logout.url": f"https://id.localhost{BACKCHANNEL}"}
     ),
     "the back-channel token not required to name the session": lambda c: c["attributes"].update(
         {"backchannel.logout.session.required": "false"}
@@ -234,13 +255,17 @@ def test_the_check_names_each_planted_fault(plant: str) -> None:
     assert faults(client), f"the check let '{plant}' through"
 
 
-def test_the_back_channel_address_is_the_origin_the_client_is_registered_for() -> None:
-    config = OspreyConfig.model_validate(
-        yaml.safe_load("network:\n  public_origin: https://osprey.example.org\n")
-    )
-    attributes = pages_client(config)["attributes"]
-    assert attributes["backchannel.logout.url"] == f"https://osprey.example.org{BACKCHANNEL}"
-    assert attributes["post.logout.redirect.uris"] == "https://osprey.example.org/"
+def test_the_back_channel_address_is_the_page_services_own_not_the_public_origin() -> None:
+    """Keycloak posts the logout token from its own container; the realm client carries exactly the
+    page service's address on the internal network, whatever the deployment's public origin is. The
+    post-logout address is the browser's, so it stays the public origin."""
+    for origin in ("https://osprey.example.org", "https://osprey.example.org:9443", ORIGIN):
+        config = OspreyConfig.model_validate(
+            yaml.safe_load(f"network:\n  public_origin: {origin}\n")
+        )
+        attributes = pages_client(config)["attributes"]
+        assert attributes["backchannel.logout.url"] == BACKCHANNEL_URL
+        assert attributes["post.logout.redirect.uris"] == f"{origin}/"
 
 
 def test_the_back_channel_address_is_the_services_own_route() -> None:
@@ -248,6 +273,134 @@ def test_the_back_channel_address_is_the_services_own_route() -> None:
     one side would leave the provider's logout calls going nowhere, and the person signed in."""
     service = (CORE / "apps" / "pages" / "server" / "oidc.ts").read_text(encoding="utf-8")
     assert f'"{BACKCHANNEL}"' in service
+
+
+# --- the back-channel address, from where Keycloak runs (round 3 of PL9b; rule 15) ---
+
+#: The shapes that can run the page service with a sign-in: a compose file (`small`) and a chart
+#: (`cluster`). Local-lite is refused over its plain-HTTP or self-signed address, and the cloud-platform
+#: shapes have no sign-in for it (`PageServiceNotOnThisShape`): `test_the_other_shapes_refuse_the_service`.
+ON_SHAPES = ("small", "cluster")
+CLOUD_SHAPES = ("cloud-platform", "cloud-platform-poc")
+PAGES_ON = {"pages": {"enabled": True}}
+
+
+def _on_config(shape: str) -> OspreyConfig:
+    return ref.config_for(shape, "ospreyflow", **PAGES_ON)  # type: ignore[no-any-return]
+
+
+def _compose_names(services: dict[str, Any]) -> dict[str, dict[str, set[str]]]:
+    """Each network of a compose file, and on it each name that reaches a service: the service's own
+    name and the aliases it is given there (the proxy's `id.<host>`). A service on no listed network
+    is on none (the file's own default network is not used by this renderer)."""
+    names: dict[str, dict[str, set[str]]] = {}
+    for service, body in services.items():
+        networks = body.get("networks", [])
+        listed = networks.items() if isinstance(networks, dict) else [(n, {}) for n in networks]
+        for network, options in listed:
+            reached = names.setdefault(network, {})
+            for name in {service, *((options or {}).get("aliases", []))}:
+                reached.setdefault(name, set()).add(service)
+    return names
+
+
+def reach_faults(shape: str, url: str, files: dict[str, bytes]) -> list[str]:
+    """Why Keycloak's own container cannot POST to `url`, in words; empty when it can. Read from the
+    render: Keycloak's networks, who answers to the URL's host on them, and the port that service
+    listens on. Never from the realm client's own text."""
+    config = _on_config(shape)
+    parts = urllib.parse.urlsplit(url)
+    host, port = parts.hostname or "", parts.port or 80
+    found: list[str] = []
+    public = urllib.parse.urlsplit(config.network.public_origin).hostname
+    if host == public or host.endswith(f".{public}"):
+        found.append(f"the host {host} is the public origin's: Keycloak's container does not resolve it")
+    if parts.scheme != "http":
+        found.append("the page service listens on plain HTTP inside the network")
+    if shape == "small":
+        services = yaml.safe_load(files["compose.yaml"].decode("utf-8"))["services"]
+        names = _compose_names(services)
+        mine = [n for n, reached in names.items() if "keycloak" in set().union(*reached.values())]
+        answering: set[str] = set()
+        for network in mine:
+            answering |= names[network].get(host, set())
+        listens = int(services["pages"]["environment"]["OSPREY_PAGES_PORT"])
+        if not mine:
+            found.append("Keycloak is on no network")
+        if "keycloak" in answering:
+            found.append(f"the host {host} is Keycloak's own container")
+        if answering != {"pages"}:
+            found.append(
+                f"on Keycloak's networks {sorted(mine)} the host {host} reaches "
+                f"{sorted(answering) or 'nothing'}, not the page service"
+            )
+    else:
+        workloads = {w["name"]: w for w in yaml.safe_load(files["values.yaml"].decode())["workloads"]}
+        listens = {p["port"] for p in workloads["pages"].get("ports", [])}.pop()
+        if "keycloak" not in workloads:
+            found.append("the chart has no Keycloak")
+        # A workload with ports has a Service of its own name (`templates/services.yaml`).
+        if host != "pages" or not workloads["pages"].get("ports"):
+            found.append(f"the host {host} is not the page service's Service")
+    if port != listens:
+        found.append(f"the port {port} is not the one the page service listens on ({listens})")
+    return found
+
+
+@pytest.mark.parametrize("shape", ON_SHAPES)
+def test_the_back_channel_address_is_one_keycloak_reaches(shape: str) -> None:
+    """The realm client's back-channel address, from the render: on a network Keycloak is on, the host
+    is the page service's own name, on the port it listens on, over plain HTTP, and it is not the
+    public origin. (Keycloak makes this call from its own container, server to server: in a rendered
+    compose deployment the `osprey` network has no route out, and the proxy answers there only to
+    `id.<host>`.)"""
+    files = ref.render_shape(shape, "ospreyflow", **PAGES_ON)
+    url = pages_client(_on_config(shape))["attributes"]["backchannel.logout.url"]
+    assert reach_faults(shape, url, files) == []
+    parts = urllib.parse.urlsplit(url)
+    assert (parts.scheme, parts.hostname, parts.port, parts.path) == (
+        "http",
+        "pages",
+        8090,
+        BACKCHANNEL,
+    )
+
+
+def _plants(shape: str) -> dict[str, str]:
+    config = _on_config(shape)
+    origin = config.network.public_origin
+    host = urllib.parse.urlsplit(origin).hostname
+    return {
+        # What the realm client registered before this round.
+        "the public origin": f"{origin}{BACKCHANNEL}",
+        "the proxy's identity name": f"http://id.{host}:8090{BACKCHANNEL}",
+        "the loopback name (Keycloak's own container)": f"http://localhost:8090{BACKCHANNEL}",
+        "Keycloak's own service name": f"http://keycloak:8090{BACKCHANNEL}",
+        "the page service over TLS": f"https://pages:8090{BACKCHANNEL}",
+        "the page service on another port": f"http://pages:8080{BACKCHANNEL}",
+        "a name no service has": f"http://pages-service:8090{BACKCHANNEL}",
+    }
+
+
+@pytest.mark.parametrize("shape", ON_SHAPES)
+def test_the_back_channel_check_fails_for_each_plant(shape: str) -> None:
+    """The check that passes the real address is red for each address a deployment could have been
+    given, in the shape the renderer emits (rule 15): the old value among them."""
+    files = ref.render_shape(shape, "ospreyflow", **PAGES_ON)
+    for name, url in _plants(shape).items():
+        assert reach_faults(shape, url, files), f"the check let {name} through"
+
+
+def test_the_other_shapes_refuse_the_service() -> None:
+    """The shapes without a back-channel address to check say so: the page service is refused there,
+    in words, so no realm client for it is registered with an address nobody checked."""
+    from harness.pages_service import PageServiceNeedsHttps, PageServiceNotOnThisShape
+
+    for shape in CLOUD_SHAPES:
+        with pytest.raises(PageServiceNotOnThisShape):
+            ref.render_shape(shape, "ospreyflow", **PAGES_ON)
+    with pytest.raises(PageServiceNeedsHttps):
+        ref.render_shape("local-lite", "ospreyflow", **PAGES_ON)
 
 
 def test_an_existing_deployments_realm_document_is_unchanged() -> None:
