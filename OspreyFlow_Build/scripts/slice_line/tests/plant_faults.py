@@ -636,6 +636,16 @@ M = [
  ("merge_slice.py", "        blockers = [b for _, b in said if b and not b.startswith(UNREACHABLE)]", "        blockers = [b for _, b in said if b]", "unreachable_stack_host_is_noted"),
  ("merge_slice.py", "\"carries on.\\n\")", "\"carries on.\\n\") if False else None", "unreachable_stack_host_is_noted"),
  ("merge_slice.py", "for h in queue_hosts(tree) if h not in gone]", "for h in queue_hosts(tree)]", "noted_once_and_not_asked_again"),
+ # the owner, 23 and 24 November 2026: a merge refused once by another test, or a known flake, is the conductor's to rerun
+ ("board.py", '          and (others := refused_by_others(sid, st, rec))):', '          and False):', "pl14a_refused_by_a_test_not_its_own"),
+ ("board.py", '                "the conductor to rerun" if "with the conductor to rerun" in note else\n', '', "pl14a_refused_by_a_test_not_its_own"),
+ ("board.py", '    if not tip or gate_refusals(sid, tip) > 1:', '    if not tip:', "second_refusal_of_the_same_tip"),
+ ("board.py", 'p[1] == sid and p[2] == tip\n', 'p[1] == sid\n', "refusal_of_an_earlier_tip"),
+ ("board.py", '        elif f not in own:', '        elif True:', "failing_test_in_the_parts_own_files"),
+ ("board.py", '        else:\n            return None\n    return "; ".join(said)', '    return "; ".join(said)', "one_own_test_beside_another"),
+ ("board.py", '        if m and re.search(r"\\bflake\\b", line, re.I):', '        if m:', "names_a_test_but_not_as_a_flake"),
+ ("board.py", '    if not files or not all(files):', '    if not files:', "gate_record_naming_no_test_file"),
+ ("board.py", "        row = next((r for p, r in flakes.items() if f == p or f.endswith(\"/\" + p)), None)", "        row = None", "known_flake_in_the_parts_own_files"),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.
