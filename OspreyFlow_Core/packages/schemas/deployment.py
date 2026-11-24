@@ -1773,8 +1773,8 @@ class PagesConfig(BaseModel):
         default=False,
         description=(
             "Default: false. Whether this deployment runs the page service, the server-rendered "
-            "pages. true or false, nothing else: it is turned on for one deployment at a time, "
-            "by the owner, in that deployment's own file."
+            "pages. The setting exists and is off; it is not for use yet, and nothing is "
+            "switched on by it for a deployment you run. true or false, nothing else."
         ),
     )
 
