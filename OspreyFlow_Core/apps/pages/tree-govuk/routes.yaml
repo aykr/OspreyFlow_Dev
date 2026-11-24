@@ -1,0 +1,9 @@
+# The GOV.UK tree's route list (ADR-152 Amendment 1, decision 1; invariant I6): the paths of the pages the tree has, one to a line.
+# `scripts/tree_parity.py` reads it to say whether the tree is complete (every row of FUNCTIONS.yaml has its route here, less the
+# owner-agreed lines of PARITY_EXCEPTIONS.yaml); nothing records "complete" and nobody writes it.
+#
+# A path enters this list with its page, and a row's `route` in FUNCTIONS.yaml is the same path. `server/pageList.ts` is the one
+# table of both trees' pages; `test/govuk/help.test.ts` (HP9) fails if this list and the pages that name `govuk` differ.
+# `/` is not here: it is the service's own route, and the tree switch (`OSPREY_PAGES_TREE`) decides which tree draws it.
+routes:
+  - /help

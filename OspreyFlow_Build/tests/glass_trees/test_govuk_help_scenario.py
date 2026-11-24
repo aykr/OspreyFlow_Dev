@@ -392,7 +392,7 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
     ("a page test case with no scenario row", _without_row("HP9"), scenario_problems, "titled HP9"),
     ("a row run on the other tree", _replace("spec_08", "| GOV.UK |", "| Default |"), scenario_problems, "GOV.UK tree's"),
     ("the session sentence left out", _replace("spec_08", "needs no sign-in beyond the session", "needs a session"), scenario_problems, "beyond the session"),
-    ("words a source does not hold", _replace("spec_08", "Roles, teams and Authors", "Roles, teams and Writers"), citation_problems, "does not hold"),
+    ("words a source does not hold", _replace("spec_08", 'roles.ts` "Roles, teams and Authors"', 'roles.ts` "Roles, teams and Writers"'), citation_problems, "does not hold"),
     ("the switch left out of spec/02", _replace("spec_02", "OSPREY_PAGES_TREE", "THE_TREE_SETTING"), spec_02_problems, "OSPREY_PAGES_TREE"),
     ("the ruling left out of spec/02", _replace("spec_02", "before its Default twin", "later"), spec_02_problems, "Default twin"),
     ("the help row without its route", _row("functions", "help", route=""), function_problems, "route"),

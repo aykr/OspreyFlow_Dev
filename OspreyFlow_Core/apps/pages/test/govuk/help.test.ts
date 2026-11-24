@@ -37,6 +37,8 @@ import {
   rightSays,
 } from "@ospreyflow/glass-shared";
 
+import type * as Real from "@ospreyflow/glass-shared";
+
 import { createApp } from "../../server/app.js";
 import { loadConfig } from "../../server/config.js";
 import { help } from "../../server/help.js";
@@ -45,6 +47,7 @@ import type { PageModule } from "../../server/pages.js";
 import { MemorySessionStore } from "../../server/sessionStore.js";
 import { main } from "../../server/start.js";
 import type { Running } from "../../server/start.js";
+import type * as Stub from "../../server/types/glassShared.js";
 import { captureOutput } from "../support/capture.js";
 import { fakeConduit } from "../support/fakeConduit.js";
 import type { FakeConduit } from "../support/fakeConduit.js";
@@ -52,6 +55,20 @@ import { csrfFromPage, cookieFrom, request } from "../support/http.js";
 import { testClock } from "../support/clock.js";
 import { generateSecret } from "../support/secret.js";
 import { bearer, providerFor, textOf } from "../support/studioWorld.js";
+
+// The compiled service is checked against `server/types/glassShared.d.ts`, not the package's source (`tsconfig.build.json`); this holds
+// each declaration to the package's own type, so that a shape `roles.ts` changes and the stub still has as it was fails `npm run typecheck`.
+type Conforms<Real, Stub> = Real extends Stub ? true : never;
+export const STUB_CONFORMS_TO_THE_PACKAGE: [
+  Conforms<typeof Real.HELP_TITLE, typeof Stub.HELP_TITLE>,
+  Conforms<typeof Real.PLACE_WORDS, typeof Stub.PLACE_WORDS>,
+  Conforms<typeof Real.ROLE_WORDS, typeof Stub.ROLE_WORDS>,
+  Conforms<typeof Real.LEVEL_WORDS, typeof Stub.LEVEL_WORDS>,
+  Conforms<typeof Real.TEAM_WORDS, typeof Stub.TEAM_WORDS>,
+  Conforms<typeof Real.RIGHT_WORDS, typeof Stub.RIGHT_WORDS>,
+  Conforms<typeof Real.rightName, typeof Stub.rightName>,
+  Conforms<typeof Real.rightSays, typeof Stub.rightSays>,
+] = [true, true, true, true, true, true, true, true];
 
 const PAGES_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const CORE = join(PAGES_DIR, "..", "..");
@@ -144,11 +161,13 @@ interface Stop {
 /** Every stop a keyboard has, in document order: links with an address, buttons, inputs, and anything with a tab stop of 0. */
 function focusable(html: string): Stop[] {
   const stops: Stop[] = [];
-  for (const m of strip(html).matchAll(/<(a|button|input|select|textarea)\b([^>]*)>([\s\S]*?)(?=<\/\1>|$)/g)) {
-    const [, tag, attrs, inner] = m as unknown as [string, string, string, string];
+  // A link or a button holds its text up to its own closing tag; an input, select or textarea is read from its opening tag alone.
+  for (const m of strip(html).matchAll(/<(a|button)\b([^>]*)>([\s\S]*?)<\/\1>|<(input|select|textarea)\b([^>]*)>/g)) {
+    const tag = (m[1] ?? m[4]) as string;
+    const attrs = (m[2] ?? m[5]) as string;
     if (tag === "input" && /\stype="hidden"/.test(attrs)) continue;
     if (tag === "a" && attr(attrs, "href") === undefined) continue;
-    stops.push({ tag, href: attr(attrs, "href"), text: textOf(inner) });
+    stops.push({ tag, href: attr(attrs, "href"), text: textOf(m[3] ?? "") });
   }
   return stops;
 }
@@ -227,6 +246,7 @@ function scriptsOffProblems(html: string): string[] {
 }
 
 /** The page with what changes between two people or two requests taken out: the anti-forgery token and the script nonce. */
+const withoutNonce = (html: string): string => html.replace(/nonce="[^"]*"/g, 'nonce="N"');
 const sameFor = (html: string, csrf: string): string => html.split(csrf).join("CSRF").replace(/nonce="[^"]*"/g, 'nonce="N"');
 
 // ------------------------------------------------------------------------------------------------ the page
@@ -309,7 +329,6 @@ describe("the tree's own Help page (the govuk tree)", () => {
       pages: PAGES,
       tree: "govuk",
       forward: { conduitUrl: conduit.url, bodyMaxBytes: 1024, uploadMaxBytes: 1024, upstreamTimeoutSeconds: 2 },
-      sessionEvents: { report: async () => undefined },
     });
     const who = await signIn(app);
     const page = await request(app).get("/help").set("Cookie", who.cookie);
@@ -393,7 +412,10 @@ describe("OSPREY_PAGES_TREE decides which tree serves every route, `/` included"
     const refused = await request(server).get("/session/callback");
     expect(refused.status).toBe(503);
     expect(refused.text).toContain("Sign-in not available");
-    expect(structureProblems(home.text)).toEqual([]);
+    // The frame is the tree's own: a skip link first, the one main landmark, and nothing that needs a script.
+    expect(focusable(home.text)[0]).toMatchObject({ href: "#main", text: "Skip to main content" });
+    expect(scriptsOffProblems(home.text)).toEqual([]);
+    expect(refused.text).toContain('data-tree="govuk"');
   });
 
   it.each([
@@ -445,7 +467,8 @@ describe("OSPREY_PAGES_TREE decides which tree serves every route, `/` included"
   });
 
   it("HP7: what decides a route's tree is the module's own list: the same Help page, named for both, is served by both (rule 15)", async () => {
-    const both: PageModule = { ...help, trees: ["default", "govuk"] };
+    // The handler answers in words of its own, so that the Default tree (which has no Help template) is not what is being tested.
+    const both: PageModule = { ...help, trees: ["default", "govuk"], handler: (_req, res) => void res.type("text/plain").send("served") };
     for (const tree of ["default", "govuk"] as const) {
       const app = createApp({
         store: new MemorySessionStore({ clock: testClock() }),
@@ -455,11 +478,11 @@ describe("OSPREY_PAGES_TREE decides which tree serves every route, `/` included"
         tree,
       });
       const who = await signIn(app);
-      expect((await request(app).get("/help").set("Cookie", who.cookie)).status, tree).toBe(200);
+      const res = await request(app).get("/help").set("Cookie", who.cookie);
+      expect([res.status, res.text], tree).toEqual([200, "served"]);
     }
     // And a page left to the default says no tree at all: it is the Default tree's, as every page was before there was a switch.
-    const plain: PageModule = { ...help, trees: undefined as unknown as PageModule["trees"] };
-    delete (plain as { trees?: unknown }).trees;
+    const { trees: _named, ...plain } = both;
     const app = createApp({ store: new MemorySessionStore({ clock: testClock() }), identityProvider: providerFor("unused-bearer"), sessionSecret: generateSecret(48), pages: [plain], tree: "govuk" });
     const who = await signIn(app);
     expect((await request(app).get("/help").set("Cookie", who.cookie)).status).toBe(404);
@@ -474,7 +497,7 @@ describe("OSPREY_PAGES_TREE decides which tree serves every route, `/` included"
         const nowhere = await unknown("/nothing-is-served-here", signed);
         expect(there.status, `${path} signed in: ${signed}`).toBe(404);
         expect(there.status).toBe(nowhere.status);
-        expect(there.text.replace(/\/studio[^<\s]*/g, "PATH")).toBe(nowhere.text.replace("/nothing-is-served-here", "PATH"));
+        expect(withoutNonce(there.text).replace(/\/studio[^<\s]*/g, "PATH")).toBe(withoutNonce(nowhere.text).replace("/nothing-is-served-here", "PATH"));
       }
     }
     // The same in the other tree, for the route the Default tree has no page for.
@@ -482,7 +505,7 @@ describe("OSPREY_PAGES_TREE decides which tree serves every route, `/` included"
     const helpHere = await getAs(other.server, other.who, "/help");
     const nowhere = await getAs(other.server, other.who, "/nothing-is-served-here");
     expect(helpHere.status).toBe(nowhere.status);
-    expect(helpHere.text.replace("/help", "PATH")).toBe(nowhere.text.replace("/nothing-is-served-here", "PATH"));
+    expect(withoutNonce(helpHere.text).replace("/help", "PATH")).toBe(withoutNonce(nowhere.text).replace("/nothing-is-served-here", "PATH"));
   });
 });
 

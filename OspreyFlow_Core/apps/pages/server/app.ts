@@ -13,11 +13,11 @@ import { ASSETS_PREFIX, assetUrl, assetsHandler } from "./assets.js";
 import type { AssetsSetting } from "./assets.js";
 import { DEFAULT_BODY_STALL_MS, pageBodyStall } from "./bodyStall.js";
 import { accessTokenFor } from "./accessToken.js";
-import type { ForwardSettings } from "./config.js";
+import type { ForwardSettings, PagesTree } from "./config.js";
 import { csrfProtection } from "./csrf.js";
 import { forwarder, v1Gate } from "./forward.js";
 import { PagesSessionStore } from "./expressStore.js";
-import { registerPages, uploadPathsOf } from "./pages.js";
+import { registerPages, servedBy, uploadPathsOf } from "./pages.js";
 import type { PageModule } from "./pages.js";
 import { securityHeaders } from "./headers.js";
 import { IdentityProviderRefused, IdentityProviderUnavailable, isRefusalReason } from "./identity.js";
@@ -70,6 +70,11 @@ export interface AppDeps {
   assets?: AssetsSetting;
   /** Pages in the route-module convention (`pages.ts`): checked now, so a fault is a refusal to start, in words. */
   pages?: readonly PageModule[];
+  /**
+   * The tree this service serves (`OSPREY_PAGES_TREE`, read once in `config.ts`): its templates are the folder the views are
+   * searched in, and its pages are the ones of `pages` that name it. The default tree when left out.
+   */
+  tree?: PagesTree;
   /** The `FUNCTIONS.yaml` ids a page may name, when a test wants its own list instead of the file's. */
   functionIds?: ReadonlySet<string>;
   /** Template folders searched after the tree's own: a test's throw-away fixture page lives in one. */
@@ -89,8 +94,8 @@ export interface AppDeps {
   sessionEventTimeoutMs?: number;
 }
 
-/** The Default tree's templates (ADR-152 decisions 6 and 7: one tree per deployment, the default today). `dist/tree-default` in the build. */
-const TREE = fileURLToPath(new URL("../tree-default", import.meta.url));
+/** A tree's templates (ADR-152 decisions 6 and 7: one tree per deployment). `dist/tree-<name>` in the build, which copies each. */
+const treeFolder = (tree: PagesTree): string => fileURLToPath(new URL(`../tree-${tree}`, import.meta.url));
 
 /** `Secure` and `HttpOnly` always, `SameSite=Lax`, no `Domain`: the cookie holds one signed, opaque identifier. */
 const COOKIE_OPTIONS = { httpOnly: true, secure: true, sameSite: "lax", path: "/" } as const;
@@ -123,7 +128,8 @@ export function createApp(deps: AppDeps): Express {
         })
       : undefined);
   // Checked before anything is built: two pages on one path, or an id that is no row of FUNCTIONS.yaml, stops the start.
-  const mountPages = deps.pages ? registerPages(deps.pages, deps.functionIds) : undefined;
+  const tree = deps.tree ?? "default";
+  const mountPages = deps.pages ? registerPages(deps.pages, deps.functionIds, tree) : undefined;
   const app = express();
 
   if (sessionEvents) app.locals["sessionEvents"] = sessionEvents;
@@ -132,7 +138,7 @@ export function createApp(deps: AppDeps): Express {
   // The front proxy terminates TLS and says so in `X-Forwarded-Proto`; `express-session` sends a `Secure`
   // cookie only on a request it believes arrived over TLS. Only a hop on a private address is believed.
   app.set("trust proxy", "loopback, linklocal, uniquelocal");
-  nunjucks.configure([TREE, ...(deps.viewDirs ?? [])], { autoescape: true, express: app, noCache: false });
+  nunjucks.configure([treeFolder(tree), ...(deps.viewDirs ?? [])], { autoescape: true, express: app, noCache: false });
   app.set("view engine", "njk");
   // What the Studio pages (slice IS5a) read from the app: the Conduit's address and limits, the store that holds a staged
   // release folder, the clock and the log. Settings, never a request's own.
@@ -196,7 +202,7 @@ export function createApp(deps: AppDeps): Express {
     res.locals["csrfToken"] = req.session?.auth?.csrfToken;
     next();
   });
-  app.use(csrfProtection({ uploadPaths: deps.pages ? uploadPathsOf(deps.pages) : new Set<string>() }));
+  app.use(csrfProtection({ uploadPaths: deps.pages ? uploadPathsOf(deps.pages.filter((page) => servedBy(page, tree))) : new Set<string>() }));
 
   app.get("/", (req, res) => {
     const auth = req.session.auth;
