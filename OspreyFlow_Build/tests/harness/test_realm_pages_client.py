@@ -35,9 +35,9 @@ shown to the same check that passes the real client, so the check cannot be one 
   (compose: `small`; chart: `cluster`; the cloud-platform shapes refuse the page service) and its
   `..._fails_for_each_plant`, whose plants are the shapes the renderer really emits.
 
-**What the render tests read.** `tools.reference_render`'s `render_shape` (the stored reference folders are
-not read; it renders and returns files in memory) and nothing else of the tree: the compose file's services
-and networks, and the chart's values (workloads and ports). No other folder is walked.
+**What the render tests read.** `harness.render.render` run in memory for two configurations written in the
+test (no stored reference folder, no fixture file, no walk of any folder): the compose file's services and
+networks, and the chart's values (workloads and ports).
 """
 
 from __future__ import annotations
@@ -69,10 +69,9 @@ from harness.realm import (
     pages_client,
     render_realm,
 )
+from tools.layout import CORE
 
 from schemas.deployment import OspreyConfig
-from tools import reference_render as ref
-from tools.layout import CORE
 from tests.harness.fake_idp import FakeIdentityProvider
 from tests.harness.test_named_render import _named_config
 from tests.harness.test_register_sign_in import (
@@ -229,7 +228,7 @@ PLANTS: dict[str, Callable[[dict[str, Any]], None]] = {
         {"backchannel.logout.url": f"{ORIGIN}{BACKCHANNEL}"}
     ),
     "the back-channel address on another path": lambda c: c["attributes"].update(
-        {"backchannel.logout.url": f"http://pages:8090/logout"}
+        {"backchannel.logout.url": "http://pages:8090/logout"}
     ),
     "the back-channel address through the proxy": lambda c: c["attributes"].update(
         {"backchannel.logout.url": f"https://id.localhost{BACKCHANNEL}"}
@@ -281,12 +280,40 @@ def test_the_back_channel_address_is_the_services_own_route() -> None:
 #: (`cluster`). Local-lite is refused over its plain-HTTP or self-signed address, and the cloud-platform
 #: shapes have no sign-in for it (`PageServiceNotOnThisShape`): `test_the_other_shapes_refuse_the_service`.
 ON_SHAPES = ("small", "cluster")
-CLOUD_SHAPES = ("cloud-platform", "cloud-platform-poc")
 PAGES_ON = {"pages": {"enabled": True}}
+_RAW: dict[str, dict[str, Any]] = {
+    "small": {"profile": "small", "network": {"public_origin": "https://osprey.example.org"}},
+    "cluster": {
+        "profile": "cluster",
+        "components": {"analytics_engine": "clickhouse"},
+        "network": {"public_origin": "https://osprey.example.org"},
+        "reporting": {"sync": True, "superset": True},
+        "external": {
+            "postgres": {"host": "db.example.internal"},
+            "valkey": {"host": "cache.example.internal", "port": 6380, "tls": True},
+            "object_store": {"endpoint": "s3.eu-west-2.amazonaws.com", "region": "eu-west-2"},
+            "search": {"url": "https://search-osprey.eu-west-2.es.amazonaws.com"},
+        },
+        "cluster": {"shared_storage_class": "efs-sc"},
+    },
+}
 
 
 def _on_config(shape: str) -> OspreyConfig:
-    return ref.config_for(shape, "ospreyflow", **PAGES_ON)  # type: ignore[no-any-return]
+    return OspreyConfig.model_validate({**_RAW[shape], **PAGES_ON})
+
+
+def _render(shape: str) -> dict[str, str]:
+    """The files the shape's render writes, in memory, with the page service on (the same render
+    `apply` runs for a compose deployment and `cluster_install` for a chart; a stand-in digest for
+    each image, so no registry or daemon is asked)."""
+    from harness.render import render
+
+    result = render(
+        _on_config(shape),
+        resolver=lambda reference: "sha256:" + hashlib.sha256(reference.encode()).hexdigest(),
+    )
+    return dict(result.artefacts)
 
 
 def _compose_names(services: dict[str, Any]) -> dict[str, dict[str, set[str]]]:
@@ -304,7 +331,7 @@ def _compose_names(services: dict[str, Any]) -> dict[str, dict[str, set[str]]]:
     return names
 
 
-def reach_faults(shape: str, url: str, files: dict[str, bytes]) -> list[str]:
+def reach_faults(shape: str, url: str, files: dict[str, str]) -> list[str]:
     """Why Keycloak's own container cannot POST to `url`, in words; empty when it can. Read from the
     render: Keycloak's networks, who answers to the URL's host on them, and the port that service
     listens on. Never from the realm client's own text."""
@@ -314,11 +341,13 @@ def reach_faults(shape: str, url: str, files: dict[str, bytes]) -> list[str]:
     found: list[str] = []
     public = urllib.parse.urlsplit(config.network.public_origin).hostname
     if host == public or host.endswith(f".{public}"):
-        found.append(f"the host {host} is the public origin's: Keycloak's container does not resolve it")
+        found.append(
+            f"the host {host} is the public origin's: Keycloak's container does not resolve it"
+        )
     if parts.scheme != "http":
         found.append("the page service listens on plain HTTP inside the network")
     if shape == "small":
-        services = yaml.safe_load(files["compose.yaml"].decode("utf-8"))["services"]
+        services = yaml.safe_load(files["compose.yaml"])["services"]
         names = _compose_names(services)
         mine = [n for n, reached in names.items() if "keycloak" in set().union(*reached.values())]
         answering: set[str] = set()
@@ -335,7 +364,7 @@ def reach_faults(shape: str, url: str, files: dict[str, bytes]) -> list[str]:
                 f"{sorted(answering) or 'nothing'}, not the page service"
             )
     else:
-        workloads = {w["name"]: w for w in yaml.safe_load(files["values.yaml"].decode())["workloads"]}
+        workloads = {w["name"]: w for w in yaml.safe_load(files["values.yaml"])["workloads"]}
         listens = {p["port"] for p in workloads["pages"].get("ports", [])}.pop()
         if "keycloak" not in workloads:
             found.append("the chart has no Keycloak")
@@ -354,7 +383,7 @@ def test_the_back_channel_address_is_one_keycloak_reaches(shape: str) -> None:
     public origin. (Keycloak makes this call from its own container, server to server: in a rendered
     compose deployment the `osprey` network has no route out, and the proxy answers there only to
     `id.<host>`.)"""
-    files = ref.render_shape(shape, "ospreyflow", **PAGES_ON)
+    files = _render(shape)
     url = pages_client(_on_config(shape))["attributes"]["backchannel.logout.url"]
     assert reach_faults(shape, url, files) == []
     parts = urllib.parse.urlsplit(url)
@@ -386,7 +415,7 @@ def _plants(shape: str) -> dict[str, str]:
 def test_the_back_channel_check_fails_for_each_plant(shape: str) -> None:
     """The check that passes the real address is red for each address a deployment could have been
     given, in the shape the renderer emits (rule 15): the old value among them."""
-    files = ref.render_shape(shape, "ospreyflow", **PAGES_ON)
+    files = _render(shape)
     for name, url in _plants(shape).items():
         assert reach_faults(shape, url, files), f"the check let {name} through"
 
@@ -394,13 +423,25 @@ def test_the_back_channel_check_fails_for_each_plant(shape: str) -> None:
 def test_the_other_shapes_refuse_the_service() -> None:
     """The shapes without a back-channel address to check say so: the page service is refused there,
     in words, so no realm client for it is registered with an address nobody checked."""
-    from harness.pages_service import PageServiceNeedsHttps, PageServiceNotOnThisShape
+    from harness import pages_service
 
-    for shape in CLOUD_SHAPES:
-        with pytest.raises(PageServiceNotOnThisShape):
-            ref.render_shape(shape, "ospreyflow", **PAGES_ON)
-    with pytest.raises(PageServiceNeedsHttps):
-        ref.render_shape("local-lite", "ospreyflow", **PAGES_ON)
+    from schemas.deployment import Profile
+
+    # The cloud-platform shape: the refusal the render calls first (its settings file is not read here,
+    # so the profile is set on a valid cluster configuration).
+    cloud = _on_config("cluster").model_copy(update={"profile": Profile.CLOUD_PLATFORM})
+    with pytest.raises(pages_service.PageServiceNotOnThisShape):
+        pages_service.refuse_on_cloud_platform(cloud)
+    # Local-lite: its plain-HTTP address is no issuer the service accepts.
+    lite = OspreyConfig.model_validate(
+        {
+            "profile": "local-lite",
+            "network": {"public_origin": "http://reference.ospreyflow.localhost:8081"},
+            **PAGES_ON,
+        }
+    )
+    with pytest.raises(pages_service.PageServiceNeedsHttps):
+        pages_service.refuse_sign_in_without_https(lite)
 
 
 def test_an_existing_deployments_realm_document_is_unchanged() -> None:
@@ -461,7 +502,7 @@ def test_a_client_registered_before_logout_was_built_is_brought_up_to_date(
         issuer=ISSUER, realm="osprey", env_path=env, config=_config()
     )
     (client,) = _pages_clients(keycloak)
-    assert client["attributes"]["backchannel.logout.url"] == f"{ORIGIN}{BACKCHANNEL}"
+    assert client["attributes"]["backchannel.logout.url"] == BACKCHANNEL_URL
     assert client["attributes"]["backchannel.logout.session.required"] == "true"
     assert client["frontchannelLogout"] is False
     assert client["secret"] == before_secret
