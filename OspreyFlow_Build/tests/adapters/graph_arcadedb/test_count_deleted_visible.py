@@ -164,7 +164,7 @@ async def test_a_revert_sets_when_and_by_whom_in_the_statement_that_sets_the_fla
         assert (row["reverted_at"], row["reverted_by"]) == (AT.isoformat(), "analyst-1")
     # The flag and the record are one statement: no UPDATE sets one without the other.
     updates = [c for c in store.sql_sent if c.startswith("UPDATE ")]
-    assert updates and all("reverted_at = :at, reverted_by = :by" in c for c in updates)
+    assert updates and all("reverted_at = :at, reverted_by = :whom" in c for c in updates)
 
 
 async def test_a_revert_that_names_no_one_still_records_the_time() -> None:
@@ -214,10 +214,11 @@ async def test_withdraw_and_layer_withdrawal_set_when_and_by_whom_with_the_flag(
     assert len(sets) >= 2
     for command, params in sets:
         assert re.search(
-            r"SET reverted = true, reverted_at = :at, reverted_by = :by, withdrawn_by_load = :\w+ ",
+            r"SET reverted = true, reverted_at = :at, reverted_by = :whom, "
+            r"withdrawn_by_load = :\w+ ",
             command,
         ), command
-        assert params["at"] == AT.isoformat() and params["by"] in ("analyst-2", "analyst-3")
+        assert params["at"] == AT.isoformat() and params["whom"] in ("analyst-2", "analyst-3")
 
 
 async def test_a_restore_clears_when_and_by_whom_with_the_flag() -> None:

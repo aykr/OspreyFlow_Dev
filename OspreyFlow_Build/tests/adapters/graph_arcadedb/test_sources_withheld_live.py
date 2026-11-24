@@ -18,7 +18,9 @@ Needs a live ArcadeDB (`make conformance` runs the directory): run alone with
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 
+from adapters.graph_arcadedb.naming import physical_type_name
 from adapters.graph_arcadedb.testing import arcadedb_adapter
 from conduit_common.identity import new_edge_id, new_node_id
 from ontology.handling import load_uk_le_scheme
@@ -241,3 +243,115 @@ async def test_the_remaining_read_paths_withhold_and_name_by_the_readers_scope()
                 a.id, reader, edge_type="ASSOCIATE_OF", min_shared=1
             )
             assert shared.contacts and all(expect(s.node) for s in shared.contacts)
+
+
+# --- SE9c: the three deletion statements, on real ArcadeDB -----------------------------------
+# On `2e13b10` each of them named `:by`, which ArcadeDB's SQL refuses as a parameter name, and
+# 80 live tests failed on GitHub; no fake could say so. One case for each path, each over a node
+# and a link: `revert_elements` (the deleting write), `withdraw_elements` (the revert by load) and
+# `withdraw_layer` (the dataset withdrawal). Each reads the flag, `reverted_at`, `reverted_by` and
+# the withdrawn-by-load marking back. The pure twin, which names the refused parameter names, is
+# `test_deletion_statement_parameters.py`. They live in this file because it is already wired
+# into CI's live job and the offline job's ignore list: a new live file needs the owner's diffs
+# to the CI workflow and the build's make file.
+
+PERSON = physical_type_name("Person")
+LINK = physical_type_name("ASSOCIATE_OF")
+AT = datetime(2026, 11, 24, 9, 30, tzinfo=UTC)
+WHO = "analyst-1"
+
+
+def _deleted_person(datasets: list[str]) -> NodeWrite:
+    return NodeWrite(
+        id=new_node_id(),
+        type="Person",
+        properties={"family_name": "Quillfeather"},
+        provenance=PROVENANCE,
+        handling=HANDLING,
+        created_by=WHO,
+        created_at=WHEN,
+        datasets=datasets,
+    )
+
+
+async def _seed_for_deletion(graph, datasets: list[str]):  # type: ignore[no-untyped-def]
+    """Two people and a link between them, each in `datasets`, committed."""
+    a, b = _deleted_person(datasets), _deleted_person(datasets)
+    link = EdgeWrite(
+        id=new_edge_id(),
+        type="ASSOCIATE_OF",
+        source=a.id,
+        target=b.id,
+        provenance=PROVENANCE,
+        handling=HANDLING,
+        created_by=WHO,
+        created_at=WHEN,
+        datasets=datasets,
+    )
+    tx = await graph.begin_transaction()
+    await graph.upsert_nodes([a, b], tx)
+    await graph.upsert_edges([link], tx)
+    await graph.commit_transaction(tx)
+    return a, b, link
+
+
+async def _stored_row(graph, table: str, element_id: str) -> dict[str, Any]:  # type: ignore[no-untyped-def]
+    """The stored row, read from its own type (`PERSON` for a node, `LINK` for a link): the deleting
+    statements' own record, which no port read returns."""
+    rows = await graph._client.sql(
+        f"SELECT reverted, reverted_at, reverted_by, withdrawn_by_load FROM {table} WHERE id = :id",
+        params={"id": element_id},
+    )
+    assert len(rows) == 1, f"{element_id} is stored once, in {table}"
+    return rows[0]
+
+
+def _recorded_deletion(row: dict[str, Any], withdrawn_by_load: str | None) -> None:
+    assert row["reverted"] is True
+    assert row["reverted_by"] == WHO
+    assert row["reverted_at"] == AT.isoformat()
+    assert row.get("withdrawn_by_load") == withdrawn_by_load
+
+
+async def test_a_deleting_write_records_when_and_by_whom_and_clears_the_withdrawal() -> None:
+    async with arcadedb_adapter(ONTOLOGY, load_uk_le_scheme()) as graph:
+        a, b, link = await _seed_for_deletion(graph, ["layer-1"])
+        tx = await graph.begin_transaction()
+        await graph.revert_elements([a.id], [link.id], tx, by=WHO, at=AT)
+        await graph.commit_transaction(tx)
+
+        _recorded_deletion(await _stored_row(graph, PERSON, a.id), None)
+        _recorded_deletion(await _stored_row(graph, LINK, link.id), None)
+        untouched = await _stored_row(graph, PERSON, b.id)
+        assert untouched.get("reverted") in (None, False)
+        assert untouched.get("reverted_by") is None
+
+
+async def test_a_revert_by_load_records_when_and_by_whom_and_names_the_load() -> None:
+    async with arcadedb_adapter(ONTOLOGY, load_uk_le_scheme()) as graph:
+        a, b, link = await _seed_for_deletion(graph, ["layer-1"])
+        tx = await graph.begin_transaction()
+        await graph.withdraw_elements([a.id], [link.id], "load-2", tx, by=WHO, at=AT)
+        await graph.commit_transaction(tx)
+
+        _recorded_deletion(await _stored_row(graph, PERSON, a.id), "load-2")
+        _recorded_deletion(await _stored_row(graph, LINK, link.id), "load-2")
+        untouched = await _stored_row(graph, PERSON, b.id)
+        assert untouched.get("reverted") in (None, False)
+        assert untouched.get("withdrawn_by_load") is None
+
+
+async def test_a_dataset_withdrawal_records_when_and_by_whom_and_names_the_withdrawal() -> None:
+    async with arcadedb_adapter(ONTOLOGY, load_uk_le_scheme()) as graph:
+        a, b, link = await _seed_for_deletion(graph, ["layer-1"])
+        other = await _seed_for_deletion(graph, ["layer-2"])
+        tx = await graph.begin_transaction()
+        counts = await graph.withdraw_layer("layer-1", "layer-delete:case-a", tx, by=WHO, at=AT)
+        await graph.commit_transaction(tx)
+
+        assert (counts.nodes, counts.edges) == (2, 1)
+        for node in (a, b):
+            _recorded_deletion(await _stored_row(graph, PERSON, node.id), "layer-delete:case-a")
+        _recorded_deletion(await _stored_row(graph, LINK, link.id), "layer-delete:case-a")
+        for kept in (other[0].id, other[1].id):
+            assert (await _stored_row(graph, PERSON, kept)).get("reverted") in (None, False)

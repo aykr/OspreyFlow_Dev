@@ -2049,9 +2049,9 @@ class GraphArcadeDBAdapter:
         for _, type_name, ids in plan:
             await self._client.sql(
                 f"UPDATE `{groovy_identifier(type_name)}` SET reverted = true, "
-                "reverted_at = :at, reverted_by = :by, withdrawn_by_load = null "
+                "reverted_at = :at, reverted_by = :whom, withdrawn_by_load = null "
                 "WHERE id IN :ids",
-                params={"ids": ids, "at": when, "by": by},
+                params={"ids": ids, "at": when, "whom": by},
                 session_id=tx,
             )
         await self._index_pending(  # ADR-150 decision 1: a deletion
@@ -2078,9 +2078,9 @@ class GraphArcadeDBAdapter:
         for type_name, ids in plan:
             await self._client.sql(
                 f"UPDATE `{groovy_identifier(type_name)}` SET reverted = true, "
-                "reverted_at = :at, reverted_by = :by, withdrawn_by_load = :load "
+                "reverted_at = :at, reverted_by = :whom, withdrawn_by_load = :load "
                 "WHERE id IN :ids AND reverted = false",
-                params={"ids": ids, "load": load_id, "at": when, "by": by},
+                params={"ids": ids, "load": load_id, "at": when, "whom": by},
                 session_id=tx,
             )
         await self._index_pending(list(node_ids), tx)  # ADR-150 decision 1: a deletion
@@ -2187,9 +2187,9 @@ class GraphArcadeDBAdapter:
                 for chunk in _id_chunks(ids):
                     await self._client.sql(
                         f"UPDATE `{name}` SET reverted = true, reverted_at = :at, "
-                        "reverted_by = :by, withdrawn_by_load = :w "
+                        "reverted_by = :whom, withdrawn_by_load = :w "
                         "WHERE id IN :ids AND reverted = false",
-                        params={"ids": chunk, "w": withdrawal, "at": when, "by": by},
+                        params={"ids": chunk, "w": withdrawal, "at": when, "whom": by},
                         session_id=tx,
                     )
                 if kind == "vertex":  # ADR-150 decision 1: a deleted case layer
