@@ -13,7 +13,8 @@
             "domain_model",
             "pipeline",
             "reference_list",
-            "list_rows"
+            "list_rows",
+            "run_order"
           ],
           "title": "Role",
           "type": "string"
@@ -96,6 +97,19 @@
           },
           "title": "Reference Lists",
           "type": "array"
+        },
+        "run_order": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]{0,99}(/[A-Za-z0-9_-][A-Za-z0-9._-]{0,99}){0,3}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Run Order"
         }
       },
       "required": [

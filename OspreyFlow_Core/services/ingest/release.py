@@ -42,6 +42,8 @@ from schemas.release import (
     ReleasedDomainModel,
     ReleasedPipeline,
     ReleasedReferenceList,
+    ReleasedRunOrder,
+    ReleasedRunOrderLink,
     ReleaseFile,
     ReleaseMetadata,
     ReleaseSpec,
@@ -51,6 +53,7 @@ from .pipeline import pipeline_from_recipe
 
 MANIFEST = "release.yaml"
 MODEL_FILE = "model.yaml"
+RUN_ORDER_FILE = "run-order.yaml"
 #: A list of more rows than this keeps its rows at home (decision 4: "a small list's rows").
 MAX_LIST_ROWS = 10_000
 #: A bundle's whole size, read or written: an upload is bounded, never unbounded.
@@ -89,6 +92,8 @@ class Bundle:
     model: ReleasedDomainModel
     pipelines: list[ReleasedPipeline] = field(default_factory=list)
     lists: list[ReleasedReferenceList] = field(default_factory=list)
+    #: The run order among the bundle's pipelines (IS6a), when it has one.
+    run_order: ReleasedRunOrder | None = None
     #: Each list's rows by the list's name, for the lists whose rows travelled.
     list_rows: dict[str, list[dict[str, str]]] = field(default_factory=dict)
 
@@ -191,6 +196,25 @@ def _scan(files: Mapping[str, bytes], secrets: Collection[str]) -> list[str]:
     return problems
 
 
+def released_run_order(
+    pipelines: Sequence[StudioRecipeDraft],
+    runs_after: Mapping[str, Sequence[str]],
+    exported_version: int,
+) -> ReleasedRunOrder | None:
+    """The links among `pipelines` alone, by their ids, in a fixed order; `None` when none of
+    them runs after another. A link that names a pipeline the bundle does not carry is left out:
+    the bundle holds the order between the pipelines it holds."""
+    carried = {d.recipe_id for d in pipelines}
+    links = [
+        ReleasedRunOrderLink(pipeline=p, after=kept)
+        for p, after in sorted(runs_after.items())
+        if p in carried and (kept := sorted({q for q in after if q in carried}))
+    ]
+    if not links or exported_version < 1:
+        return None
+    return ReleasedRunOrder(exported_version=exported_version, runs_after=links)
+
+
 def build_bundle(
     *,
     name: str,
@@ -200,9 +224,11 @@ def build_bundle(
     lists: Sequence[ListToRelease],
     connections: Collection[str],
     secrets: Collection[str],
+    run_order: ReleasedRunOrder | None = None,
 ) -> dict[str, bytes]:
     """The bundle's files by path, the manifest (`release.yaml`) among them. Refused in words
-    (`ReleaseRefused`), with nothing returned, when a file would hold a credential."""
+    (`ReleaseRefused`), with nothing returned, when a file would hold a credential. `run_order`
+    is the dataset's order among `pipelines` (`released_run_order`), written as `run-order.yaml`."""
     try:
         metadata = ReleaseMetadata(name=name, version=version)
     except ValidationError as error:
@@ -230,6 +256,12 @@ def build_bundle(
         files[path] = _yaml(_pipeline_of(draft).model_dump(mode="json"))
         roles[path] = "pipeline"
         pipeline_paths.append(path)
+
+    run_order_path: str | None = None
+    if run_order is not None:
+        files[RUN_ORDER_FILE] = _yaml(run_order.model_dump(mode="json"))
+        roles[RUN_ORDER_FILE] = "run_order"
+        run_order_path = RUN_ORDER_FILE
 
     list_paths: list[str] = []
     for item in sorted(lists, key=lambda i: i.reference.name):
@@ -267,6 +299,7 @@ def build_bundle(
             domain_model=MODEL_FILE,
             packs=released_model.packs,
             pipelines=pipeline_paths,
+            run_order=run_order_path,
             reference_lists=list_paths,
             connections=sorted(set(connections)),
             files=[
@@ -344,6 +377,7 @@ def read_bundle(files: Mapping[str, bytes]) -> Bundle:
         manifest.spec.domain_model: "domain_model",
         **{p: "pipeline" for p in manifest.spec.pipelines},
         **{p: "reference_list" for p in manifest.spec.reference_lists},
+        **({manifest.spec.run_order: "run_order"} if manifest.spec.run_order else {}),
     }
     for path, role in expected.items():
         if path in named and named[path].role != role:
@@ -370,6 +404,19 @@ def read_bundle(files: Mapping[str, bytes]) -> Bundle:
         _model(p, ReleasedReferenceList, _load_yaml(p, files[p], problems), problems)
         for p in manifest.spec.reference_lists
     ]
+    run_order: ReleasedRunOrder | None = None
+    if manifest.spec.run_order:
+        run_order = _model(
+            manifest.spec.run_order,
+            ReleasedRunOrder,
+            _load_yaml(manifest.spec.run_order, files[manifest.spec.run_order], problems),
+            problems,
+        )
+        carried = {p.pipeline_id for p in pipelines if p is not None}
+        if run_order is not None and any(
+            p not in carried for link in run_order.runs_after for p in (link.pipeline, *link.after)
+        ):
+            problems.append(f"{manifest.spec.run_order} names a pipeline the bundle does not carry")
     for pipeline in pipelines:
         if pipeline is not None and pipeline.pipeline is not None:
             try:
@@ -405,6 +452,7 @@ def read_bundle(files: Mapping[str, bytes]) -> Bundle:
         model=model,
         pipelines=[p for p in pipelines if p is not None],
         lists=[x for x in lists if x is not None],
+        run_order=run_order,
         list_rows=list_rows,
     )
 

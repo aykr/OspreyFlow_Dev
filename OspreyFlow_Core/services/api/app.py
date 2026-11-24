@@ -485,6 +485,7 @@ from schemas.rights import (
 )
 from schemas.rule_editor import RuleDatasetOffer, RuleTestResult
 from schemas.rule_standards import ImportedRule
+from schemas.run_order import RunOrderSave, RunOrderView
 from schemas.screening import (
     ScreeningLists,
     ScreeningListsOverview,
@@ -659,6 +660,15 @@ from .custom_roles import (
     giver_may_give,
     leaves_no_people_manager,
     role_refusal,
+)
+from .dataset_run_order import (
+    InMemoryRunOrderStore,
+    PostgresRunOrderStore,
+    RunOrderRefused,
+    RunOrderStore,
+    pipelines_of,
+    save_run_order,
+    view_of,
 )
 from .dataset_scope import (
     CompositeReadOnlyError,
@@ -1303,6 +1313,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     questions_store = await PostgresQuestionStore.connect(config.postgres.dsn)
     # ADR-144: the saved views of each case, holding no data.
     case_view_store = await PostgresCaseViewStore.connect(config.postgres.dsn)
+    # IS6a: each dataset's run order (the pipelines' "runs after" links), versioned.
+    run_order_store = await PostgresRunOrderStore.connect(config.postgres.dsn)
     # ADR-143 decisions 4 and 5: what each board holds, by id, and the watches drawing sets.
     board_item_store = await PostgresBoardItemStore.connect(config.postgres.dsn)
     promotion_store = await PostgresPromotionStore.connect(config.postgres.dsn)
@@ -1515,6 +1527,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.list_rows = ParquetListRows(ObjectStorageConfig.from_env())
     app.state.target_models = target_model_store
     app.state.case_views = case_view_store
+    app.state.run_orders = run_order_store
     app.state.board_items = board_item_store
     app.state.promotions = promotion_store
     app.state.extraction_candidates = extraction_candidates
@@ -1723,6 +1736,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.list_store = None
         await case_view_store.close()
         app.state.case_views = None
+        await run_order_store.close()
+        app.state.run_orders = None
         await board_item_store.close()
         app.state.board_items = None
         await promotion_store.close()
@@ -1907,6 +1922,19 @@ def get_target_models(request: Request) -> TargetModelStore:
 
 
 TargetModelsDep = Annotated[TargetModelStore, Depends(get_target_models)]
+
+
+def get_run_orders(request: Request) -> RunOrderStore:
+    """IS6a. The lifespan sets the Postgres store; a test app with no lifespan gets an in-memory
+    one."""
+    store = getattr(request.app.state, "run_orders", None)
+    if store is None:
+        store = InMemoryRunOrderStore()
+        request.app.state.run_orders = store
+    return store
+
+
+RunOrdersDep = Annotated[RunOrderStore, Depends(get_run_orders)]
 
 
 async def _rules_on_list_refresh(state: Any, done: ListImport, owner: str) -> None:
@@ -3743,6 +3771,14 @@ async def _model_refused_handler(request: Request, exc: TargetModelRefused) -> J
     """A change to a dataset's domain model refused in words, before anything was written (ADR-140
     decision 5)."""
     return JSONResponse(status_code=409, content={"error": "model_refused", "detail": str(exc)})
+
+
+@app.exception_handler(RunOrderRefused)
+async def _run_order_refused_handler(request: Request, exc: RunOrderRefused) -> JSONResponse:
+    """A save of a dataset's run order refused in words, before anything was written (IS6a): a
+    stale number is 409, an order that cannot be (a cycle, a pipeline the saver may not name) is
+    422."""
+    return JSONResponse(status_code=exc.status, content={"error": exc.error, "detail": str(exc)})
 
 
 @app.exception_handler(ReadOnlyLayerError)
@@ -12221,6 +12257,65 @@ async def _audit_model(
     )
 
 
+# --- Studio › the dataset map: the order pipelines run in (IS6a; ADR-141 Amendment 2) -----------
+
+
+@app.get(
+    "/v1/datasets/{dataset_id}/run-order",
+    dependencies=[Depends(require_right(Right.EDIT_PIPELINES))],
+)
+async def read_dataset_run_order(
+    dataset_id: StudioDatasetDep,
+    principal: PrincipalDep,
+    studio_recipes: StudioRecipesDep,
+    run_orders: RunOrdersDep,
+) -> RunOrderView:
+    """The dataset's stored run order, as the reader may see it: the "runs after" links among the
+    pipelines they may see (read as they read the pipelines), no entry for a pipeline left with
+    none, and no count of what was left out. Number 0, with no person and no time, when none has
+    been saved. Behind the dataset's own gate (404, as for a dataset that does not exist, for
+    anyone whose cases do not read it) and `edit_pipelines`, the right the dataset map needs to
+    read the pipelines at all."""
+    visible = pipelines_of(await studio_recipes.list_all(principal), dataset_id)
+    return view_of(dataset_id, await run_orders.current(dataset_id), visible)
+
+
+@app.put(
+    "/v1/datasets/{dataset_id}/run-order",
+    dependencies=[Depends(require_right(Right.EDIT_PIPELINES))],
+)
+async def save_dataset_run_order(
+    dataset_id: StudioDatasetDep,
+    body: RunOrderSave,
+    principal: PrincipalDep,
+    studio_recipes: StudioRecipesDep,
+    run_orders: RunOrdersDep,
+    audit: AuditDep,
+) -> RunOrderView:
+    """Saves the order as the person now has it, confirming the number of the stored order they
+    read (the body's `expected_version`, required: a body with none is 422, and 0 is the number
+    of "none saved"). An order that has moved on is refused 409 `run_order_refused` in words, with
+    nothing changed. A cycle among the pipelines the saver sees is refused 422
+    `run_order_cycle`, naming them; a pipeline that is not one of this dataset's the saver may
+    see is refused 422 in one set of words whatever the reason. An undeployed pipeline may be in
+    the order. What the saver cannot see is kept as it was. Nothing is run."""
+    saved, visible = await save_run_order(
+        run_orders,
+        dataset_id,
+        principal,
+        body.entries,
+        expected_version=body.expected_version,
+        recipes=await studio_recipes.list_all(principal),
+    )
+    await audit.record(
+        principal=principal,
+        action="save_run_order",
+        resolved_query={"dataset_id": dataset_id, "version": saved.version},
+        result_cardinality=1,
+    )
+    return view_of(dataset_id, saved, visible)
+
+
 # --- Studio › Releases (ADR-140 Amendment 9 decision 4) -----------------------------------------
 
 #: Export reads the live model and the published pipelines; behind the dataset's own gate.
@@ -12248,6 +12343,7 @@ async def export_dataset_release(
     sources: SourcesDep,
     handling_scheme: HandlingSchemeDep,
     audit: AuditDep,
+    run_orders: RunOrdersDep,
     name: Annotated[str, Query(min_length=1, max_length=253)],
     version: Annotated[str, Query(min_length=1, max_length=64)],
 ) -> ReleaseExport:
@@ -12267,6 +12363,7 @@ async def export_dataset_release(
             sources=sources,
             scheme=handling_scheme,
             secrets=deployment_secrets(),
+            run_orders=run_orders,
         )
     except BundleRefused as refused:
         return JSONResponse(  # type: ignore[return-value]
@@ -12298,6 +12395,7 @@ async def import_dataset_release(
     audit: AuditDep,
     handling_scheme: HandlingSchemeDep,
     ontology: OntologyDep,
+    run_orders: RunOrdersDep,
     dry_run: bool = False,
     replace_own_draft: str | None = None,
 ) -> ReleaseImportPlan:
@@ -12358,6 +12456,7 @@ async def import_dataset_release(
             recipes=studio_recipes,
             rows_kept=rows_kept,
             replace_own_draft=confirmed,
+            run_orders=run_orders,
         )
     except DraftHeld as held:
         refused_now = plan.model_copy(

@@ -21,6 +21,7 @@ from services.ingest.release import (
     build_bundle,
     pipeline_for,
     read_bundle,
+    released_run_order,
 )
 
 from schemas.dataset_model import ReferenceList, TargetModel
@@ -32,6 +33,7 @@ from schemas.ingest import (
     StudioRecipeDraft,
     StudioRecipeStatus,
 )
+from schemas.release import ReleasedRunOrder, ReleasedRunOrderLink
 
 OWNER = "acct-owner-7731"
 PUBLISHER = "acct-publisher-5520"
@@ -358,3 +360,96 @@ def test_a_lists_rows_that_are_not_utf8_are_refused_in_words() -> None:
     files[MANIFEST] = yaml.safe_dump(manifest, sort_keys=False).encode()
     with pytest.raises(ReleaseRefused, match="not a CSV that can be read"):
         read_bundle(files)
+
+
+# --- IS6a: the run order travels (ADR-141 Amendment 2 point 6) ----------------------------------------
+
+
+def _two() -> list[StudioRecipeDraft]:
+    return [
+        _pipeline(recipe_id="rcp-a", label="Alpha"),
+        _pipeline(recipe_id="rcp-b", label="Beta"),
+        _pipeline(recipe_id="rcp-c", label="Gamma"),
+    ]
+
+
+def test_the_run_order_among_the_carried_pipelines_is_exported_and_read_back_whole() -> None:
+    carried = _two()
+    order = released_run_order(carried, {"rcp-b": ["rcp-a"], "rcp-c": ["rcp-b", "rcp-a"]}, 4)
+    assert order is not None and order.exported_version == 4
+    files = _bundle(pipelines=carried, run_order=order)
+    manifest = yaml.safe_load(files[MANIFEST])
+    assert manifest["spec"]["run_order"] == "run-order.yaml"
+    assert {"path": "run-order.yaml", "role": "run_order"} == {
+        k: v for k, v in next(f for f in manifest["spec"]["files"] if f["path"] == "run-order.yaml").items()
+        if k != "sha256"
+    }  # fmt: skip
+    # The file holds the links by the pipelines' own ids in the bundle, and nothing of who saved it or when.
+    written = yaml.safe_load(files["run-order.yaml"])
+    assert written == {
+        "exported_version": 4,
+        "runs_after": [
+            {"pipeline": "rcp-b", "after": ["rcp-a"]},
+            {"pipeline": "rcp-c", "after": ["rcp-a", "rcp-b"]},
+        ],
+    }
+    read = read_bundle(files)
+    assert read.run_order == order
+
+
+def test_a_link_to_a_pipeline_the_bundle_does_not_carry_is_left_out_and_never_named() -> None:
+    carried = _two()[:2]
+    order = released_run_order(
+        carried,
+        {"rcp-b": ["rcp-a", "rcp-hidden"], "rcp-hidden": ["rcp-a"], "rcp-a": ["rcp-hidden"]},
+        2,
+    )
+    assert order is not None
+    assert [(k.pipeline, k.after) for k in order.runs_after] == [("rcp-b", ["rcp-a"])]
+    assert "rcp-hidden" not in _text(_bundle(pipelines=carried, run_order=order))
+    # Nothing left once the carried ones are all that is counted: no file, and no field in the manifest.
+    assert released_run_order(carried, {"rcp-a": ["rcp-hidden"]}, 2) is None
+    plain = _bundle(pipelines=carried, run_order=None)
+    assert "run-order.yaml" not in plain
+    assert yaml.safe_load(plain[MANIFEST])["spec"]["run_order"] is None
+    assert read_bundle(plain).run_order is None
+
+
+def test_an_order_naming_a_pipeline_the_bundle_does_not_hold_is_refused_whole() -> None:
+    planted = ReleasedRunOrder(
+        exported_version=1,
+        runs_after=[ReleasedRunOrderLink(pipeline="rcp-b", after=["rcp-not-here"])],
+    )
+    files = _bundle(pipelines=_two(), run_order=planted)
+    with pytest.raises(ReleaseRefused) as refused:
+        read_bundle(files)
+    assert "run-order.yaml names a pipeline the bundle does not carry" in str(refused.value)
+
+
+def test_a_changed_run_order_file_and_one_the_manifest_does_not_name_are_refused() -> None:
+    carried = _two()
+    order = released_run_order(carried, {"rcp-b": ["rcp-a"]}, 1)
+    files = _bundle(pipelines=carried, run_order=order)
+    changed = dict(files)
+    changed["run-order.yaml"] = files["run-order.yaml"].replace(b"rcp-a", b"rcp-c")
+    with pytest.raises(ReleaseRefused, match="SHA-256 differs"):
+        read_bundle(changed)
+    # A manifest listing the file under another role is refused, as for every other file.
+    manifest = yaml.safe_load(files[MANIFEST])
+    for entry in manifest["spec"]["files"]:
+        if entry["path"] == "run-order.yaml":
+            entry["role"] = "pipeline"
+    wrong = {**files, MANIFEST: yaml.safe_dump(manifest, sort_keys=False).encode()}
+    with pytest.raises(
+        ReleaseRefused, match="run-order.yaml is listed as pipeline, not as run_order"
+    ):
+        read_bundle(wrong)
+    # A bundle written before the order existed (no `run_order` field at all) still reads.
+    manifest = yaml.safe_load(files[MANIFEST])
+    older = {k: v for k, v in files.items() if k != "run-order.yaml"}
+    manifest["spec"].pop("run_order")
+    manifest["spec"]["files"] = [
+        f for f in manifest["spec"]["files"] if f["path"] != "run-order.yaml"
+    ]
+    older[MANIFEST] = yaml.safe_dump(manifest, sort_keys=False).encode()
+    assert read_bundle(older).run_order is None

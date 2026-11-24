@@ -13,9 +13,11 @@ here; the real Postgres stores are run by the leased live set over the same rout
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
@@ -28,11 +30,13 @@ from services.api.app import (
     get_list_store,
     get_ontology,
     get_principal,
+    get_run_orders,
     get_sources,
     get_staging_storage,
     get_studio_recipes,
     get_target_models,
 )
+from services.api.dataset_run_order import InMemoryRunOrderStore
 from services.api.list_connector import InMemoryListStore, ParquetListRows
 from services.api.sources import InMemorySourceStore
 from services.ingest.release import MANIFEST
@@ -46,6 +50,7 @@ from schemas.ingest import (
     PipelineGraph,
     PipelineNode,
     PipelineNodeKind,
+    StudioRecipeDraft,
     StudioRecipeStatus,
 )
 from tests.services.api.test_app import _FakeAudit
@@ -203,6 +208,7 @@ class _World:
             [{"code": "A", "name": "A wing"}],
         )  # fmt: skip
         self.audit = _FakeAudit()
+        self.run_orders = InMemoryRunOrderStore()
 
     def install(self, principal: Principal) -> TestClient:
         app.dependency_overrides.update(
@@ -215,6 +221,7 @@ class _World:
                 get_sources: lambda: InMemorySourceStore(),
                 get_staging_storage: lambda: STORAGE,
                 get_audit: lambda: self.audit,
+                get_run_orders: lambda: self.run_orders,
                 get_handling_scheme: lambda: load_uk_le_scheme(),
                 get_ontology: lambda: load_default_ontology(),
             }
@@ -420,10 +427,13 @@ def test_a_round_trip_lands_the_same_pipeline_model_and_list(
     second.models.live_model = None
     second.rows = ParquetListRows(STORAGE)
     second.audit = _FakeAudit()
+    second.run_orders = InMemoryRunOrderStore()
     client = second.install(ENGINEER)
     answer = client.post("/v1/datasets/pid/release/import", json={"files": files})
     assert answer.status_code == 200, answer.text
-    assert ("reference_list", "new_draft") in {(i["role"], i["action"]) for i in answer.json()["items"]}
+    assert ("reference_list", "new_draft") in {
+        (i["role"], i["action"]) for i in answer.json()["items"]
+    }
     wings = ReferenceList(id="lst-wings", dataset_id="pid", name="wings", kind="reference",
                           key_column="code", version=1)  # fmt: skip
     assert second.rows.read(wings) == [{"code": "A", "name": "A wing"}]
@@ -433,7 +443,9 @@ def test_a_round_trip_lands_the_same_pipeline_model_and_list(
         update={"status": StudioRecipeStatus.PUBLISHED, "dataset_id": "pid", "version": 3,
                 "recipe_id": "rcp-1"}
     )  # fmt: skip
-    second.models.live_model = second.models.draft_model.model_copy(update={"state": "live", "version": 2})
+    second.models.live_model = second.models.draft_model.model_copy(
+        update={"state": "live", "version": 2}
+    )
     again = _export(client)
 
     def comparable(text: str) -> dict[str, object]:
@@ -498,7 +510,9 @@ def test_another_persons_draft_is_refused_in_words_naming_them(
     held = _held_by(world, "analyst-7")
     world.recipes.create_calls.clear()
     # A confirmation naming their draft's own version, the strongest an importer could send.
-    answer = _import(client, files, dry_run=dry_run, **({"replace_own_draft": 3} if confirmed else {}))
+    answer = _import(
+        client, files, dry_run=dry_run, **({"replace_own_draft": 3} if confirmed else {})
+    )
     assert answer.status_code == 422, answer.text
     plan = answer.json()
     (words,) = [p for p in plan["refused"] if "in-progress draft" in p]
@@ -683,3 +697,237 @@ def test_the_import_passes_the_version_it_planned_to_the_save(store: Path, inges
     assert given == [3]
     assert answer.status_code == 409 and "version 4" in answer.json()["detail"]
     assert world.models.saved == [] and world.recipes.create_calls == []
+
+
+# --- IS6a: the run order travels with the release (ADR-141 Amendment 2 point 6) -------------------------------
+
+
+class _Many(_FakeStudioRecipes):
+    """Several recipes, as the real store holds them: `list_all` gives the unit's own, each import's draft gets an
+    id of its own, and a write lands on the recipe it names (the single-recipe fake above overwrites its one)."""
+
+    def __init__(self, *drafts: StudioRecipeDraft) -> None:
+        super().__init__(None)
+        self.rows: dict[str, StudioRecipeDraft] = {d.recipe_id: d for d in drafts}
+
+    async def list_all(self, principal: Principal) -> list[StudioRecipeDraft]:
+        return [d for d in self.rows.values() if d.owning_unit == principal.org_unit]
+
+    async def create_draft(self, principal: Principal, **kwargs: object) -> StudioRecipeDraft:
+        self.create_calls.append(kwargs)
+        made = _draft(
+            **{**kwargs, "recipe_id": f"new-{len(self.create_calls)}", "owning_unit": principal.org_unit,
+               "dataset_id": "pid"}  # type: ignore[arg-type]
+        )  # fmt: skip
+        self.rows[made.recipe_id] = made
+        return made
+
+    async def update_pipeline(
+        self, recipe_id: str, principal: Principal, *, pipeline: object
+    ) -> StudioRecipeDraft:
+        self.rows[recipe_id] = self.rows[recipe_id].model_copy(update={"pipeline": pipeline})
+        return self.rows[recipe_id]
+
+    async def update_row_template(
+        self, recipe_id: str, principal: Principal, **kwargs: object
+    ) -> StudioRecipeDraft:
+        self.rows[recipe_id] = _draft(**{**self.rows[recipe_id].model_dump(), **kwargs})
+        return self.rows[recipe_id]
+
+
+def _published(ingest: Path, recipe_id: str, label: str, **over: object) -> StudioRecipeDraft:
+    location = str(ingest / "pid" / "visits.csv")
+    return _draft(
+        recipe_id=recipe_id, version=3, status=StudioRecipeStatus.PUBLISHED, label=label,
+        source_location=location, handling=_HANDLING, legal_basis="Synthetic", dataset_id="pid",
+        pipeline=_graph(location), created_by="owner-9", published_by="owner-9", **over,
+    )  # fmt: skip
+
+
+def _by_label(world: _World, links: dict[str, list[str]]) -> dict[str, list[str]]:
+    assert isinstance(world.recipes, _Many)
+    label = {r.recipe_id: r.label for r in world.recipes.rows.values()}
+    return {label[p]: sorted(label[q] for q in after) for p, after in links.items()}
+
+
+def test_the_run_order_travels_and_lands_as_a_new_version_among_the_imported_drafts(
+    store: Path, ingest: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Export from one dataset with an order and a draft pipeline linked to it, import into another that holds its own
+    order already: the new drafts run in the exported order, the order already there is kept, and the number moves."""
+    first = _World(ingest)
+    first.recipes = _Many(
+        _published(ingest, "rcp-a", "Alpha"), _published(ingest, "rcp-b", "Beta"),
+        _published(ingest, "rcp-c", "Gamma"),
+        # Not deployed: it is not exported, and its links go with it.
+        _published(ingest, "rcp-d", "Delta").model_copy(update={"status": StudioRecipeStatus.DRAFT}),
+    )  # fmt: skip
+    asyncio.run(
+        first.run_orders.save(
+            "pid", {"rcp-b": ["rcp-a"], "rcp-c": ["rcp-b"], "rcp-d": ["rcp-a"], "rcp-a": ["rcp-d"]},
+            ENGINEER, expected_version=0,
+        )
+    )  # fmt: skip
+    files = _export(first.install(ENGINEER))
+    app.dependency_overrides.clear()
+    written = yaml.safe_load(files["run-order.yaml"])
+    assert written["exported_version"] == 1
+    assert {k["pipeline"]: k["after"] for k in written["runs_after"]} == {
+        "rcp-b": ["rcp-a"], "rcp-c": ["rcp-b"],
+    }  # fmt: skip
+    everything = "".join(files.values())
+    assert "rcp-d" not in everything and "Delta" not in everything
+    assert "saved_by" not in files["run-order.yaml"] and ENGINEER.id not in files["run-order.yaml"]
+
+    from services.ingest import staging
+
+    from tests.services.api.test_studio_staging_routes import LocalStore
+
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    monkeypatch.setattr(staging, "filesystem", lambda config: LocalStore(elsewhere))
+    second = _World.__new__(_World)
+    second.recipes = _Many(
+        _published(ingest, "own-1", "Mine"), _published(ingest, "own-2", "Also mine")
+    )
+    second.models, second.rows, second.audit = _Models(), ParquetListRows(STORAGE), _FakeAudit()
+    second.models.live_model = None
+    second.run_orders = InMemoryRunOrderStore()
+    asyncio.run(second.run_orders.save("pid", {"own-2": ["own-1"]}, ENGINEER, expected_version=0))
+    client = second.install(ENGINEER)
+
+    # A dry run says what it would do and writes no order.
+    plan = client.post(
+        "/v1/datasets/pid/release/import", params={"dry_run": True}, json={"files": files}
+    )
+    assert plan.status_code == 200, plan.text
+    assert any("run order among 2 of its pipelines" in n for n in plan.json()["notes"])
+    before = asyncio.run(second.run_orders.current("pid"))
+    assert before is not None and before.version == 1
+
+    answer = client.post("/v1/datasets/pid/release/import", json={"files": files})
+    assert answer.status_code == 200, answer.text
+    now = asyncio.run(second.run_orders.current("pid"))
+    assert now is not None and now.version == 2 and now.saved_by == ENGINEER.id
+    # The exported order, by the labels of the drafts it landed on, and the dataset's own order kept.
+    assert _by_label(second, now.runs_after) == {
+        "Beta": ["Alpha"], "Gamma": ["Beta"], "Also mine": ["Mine"],
+    }  # fmt: skip
+    # No id from the other environment is left in it.
+    named = [x for p, after in now.runs_after.items() for x in (p, *after)]
+    assert not any("rcp-" in x for x in named)
+    # The first number is kept, and nothing is deployed: the imported drafts are not "published".
+    assert [v.version for v in asyncio.run(second.run_orders.versions("pid"))] == [1, 2]
+    assert all(
+        d.status is StudioRecipeStatus.DRAFT
+        for rid, d in second.recipes.rows.items()
+        if rid.startswith("new-")
+    )
+
+
+def test_a_release_with_no_order_writes_none_and_a_pipeline_left_out_takes_its_links_with_it(
+    store: Path, ingest: Path
+) -> None:
+    world = _World(ingest)
+    world.recipes = _Many(_published(ingest, "rcp-a", "Alpha"))
+    client = world.install(ENGINEER)
+    files = _export(client)
+    assert "run-order.yaml" not in files
+    assert yaml.safe_load(files[MANIFEST])["spec"]["run_order"] is None
+    assert client.post("/v1/datasets/pid/release/import", json={"files": files}).status_code == 200
+    assert asyncio.run(world.run_orders.current("pid")) is None
+    # A link to a pipeline marked above the exporter's view is not carried, and the bundle never says it existed.
+    marked = _World(ingest)
+    marked.recipes = _Many(
+        _published(ingest, "rcp-a", "Alpha"),
+        _published(ingest, "rcp-s", "Secret one").model_copy(
+            update={"handling": {**_HANDLING, "classification": "SECRET"}}
+        ),
+    )  # fmt: skip
+    asyncio.run(
+        marked.run_orders.save(
+            "pid", {"rcp-a": ["rcp-s"], "rcp-s": ["rcp-a"]}, ENGINEER, expected_version=0
+        )
+    )
+    answer = marked.install(ENGINEER).get(
+        "/v1/datasets/pid/release", params={"name": "pid-release", "version": "1"}
+    )
+    assert answer.status_code == 200, answer.text
+    assert "run-order.yaml" not in answer.json()["files"]
+    assert "rcp-s" not in "".join(answer.json()["files"].values())
+    assert answer.json()["left_out"] == 1
+
+
+def test_an_import_whose_order_would_make_a_pipeline_run_after_itself_is_refused_and_writes_nothing(
+    store: Path, ingest: Path
+) -> None:
+    from services.ingest.release import build_bundle
+
+    from schemas.release import ReleasedRunOrder, ReleasedRunOrderLink
+
+    pipelines = [
+        _published(ingest, "rcp-a", "Alpha"),
+        _published(ingest, "rcp-b", "Beta"),
+        _published(ingest, "rcp-c", "Gamma"),
+    ]
+    cycle = ReleasedRunOrder(
+        exported_version=1,
+        runs_after=[
+            ReleasedRunOrderLink(pipeline="rcp-a", after=["rcp-b"]),
+            ReleasedRunOrderLink(pipeline="rcp-b", after=["rcp-a"]),
+            ReleasedRunOrderLink(pipeline="rcp-c", after=["rcp-a"]),
+        ],
+    )  # fmt: skip
+    model = TargetModel(
+        dataset_id="pid", version=2, state="live", created_at=_AT, created_by="owner-9"
+    )
+    built = build_bundle(
+        name="pid-release", version="1", model=model, pipelines=pipelines, lists=[],
+        connections=[], secrets=[], run_order=cycle,
+    )  # fmt: skip
+    files = {path: data.decode() for path, data in built.items()}
+    world = _World(ingest)
+    world.recipes = _Many()
+    client = world.install(ENGINEER)
+    answer = client.post("/v1/datasets/pid/release/import", json={"files": files})
+    assert answer.status_code == 422, answer.text
+    words = " ".join(answer.json()["refused"])
+    assert "“Alpha”" in words and "“Beta”" in words and "“Gamma”" not in words
+    assert world.recipes.create_calls == [] and world.models.saved == []
+    assert asyncio.run(world.run_orders.current("pid")) is None
+
+
+def test_the_import_never_overwrites_an_order_that_moved_under_it(
+    store: Path, ingest: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The write reads the stored order and saves with its number, so a save that lands in between is not lost: the
+    import reads again and joins."""
+    world = _World(ingest)
+    world.recipes = _Many(_published(ingest, "rcp-a", "Alpha"), _published(ingest, "rcp-b", "Beta"))
+    asyncio.run(world.run_orders.save("pid", {"rcp-b": ["rcp-a"]}, ENGINEER, expected_version=0))
+    files = _export(world.install(ENGINEER))
+    seen: list[int] = []
+    real = world.run_orders.save
+
+    async def moving(*args: Any, expected_version: int, **kw: Any) -> Any:
+        seen.append(expected_version)
+        if len(seen) == 1:  # another person saves between the import's read and its save
+            await real(
+                "pid",
+                {"rcp-b": ["rcp-a"], "own": ["rcp-a"]},
+                OTHER,
+                expected_version=expected_version,
+            )
+        return await real(*args, expected_version=expected_version, **kw)
+
+    monkeypatch.setattr(world.run_orders, "save", moving)
+    answer = world.install(ENGINEER).post("/v1/datasets/pid/release/import", json={"files": files})
+    assert answer.status_code == 200, answer.text
+    assert seen == [1, 2]
+    final = asyncio.run(world.run_orders.current("pid"))
+    assert final is not None and final.version == 3 and final.runs_after["own"] == ["rcp-a"]
+
+
+OTHER = Principal(
+    id="other-2", clearance="OFFICIAL", org_unit="unit-1", roles=["source_author"], datasets=["pid"]
+)

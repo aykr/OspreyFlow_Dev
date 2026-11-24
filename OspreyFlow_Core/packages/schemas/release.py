@@ -36,7 +36,7 @@ _SHA256 = r"^[0-9a-f]{64}$"
 _SEGMENT = r"[A-Za-z0-9_-][A-Za-z0-9._-]{0,99}"
 _BUNDLE_PATH = rf"^{_SEGMENT}(/{_SEGMENT}){{0,3}}$"
 
-ReleaseFileRole = Literal["domain_model", "pipeline", "reference_list", "list_rows"]
+ReleaseFileRole = Literal["domain_model", "pipeline", "reference_list", "list_rows", "run_order"]
 
 
 class ReleaseMetadata(BaseModel):
@@ -63,6 +63,10 @@ class ReleaseSpec(BaseModel):
     #: The starter packs the model pins, each at its version.
     packs: dict[str, int] = Field(default_factory=dict)
     pipelines: list[str] = Field(default_factory=list)
+    #: The dataset's run order among the pipelines the bundle carries (IS6a; ADR-141 Amendment 2
+    #: point 6), or `None` when none of them runs after another. A bundle without the field is
+    #: one written before it, and reads as having no order.
+    run_order: str | None = Field(default=None, pattern=_BUNDLE_PATH)
     reference_lists: list[str] = Field(default_factory=list)
     #: The connections the pipelines' sources read through, **by name only**: the receiving
     #: environment has its own of that name, with its own secret.
@@ -112,6 +116,27 @@ class ReleasedPipeline(BaseModel):
     pack_versions: dict[str, int] | None = None
     #: `schemas.ingest.PipelineGraph`, as `services.api.studio_staging.pipeline_yaml` writes it.
     pipeline: dict[str, Any] | None = None
+
+
+class ReleasedRunOrderLink(BaseModel):
+    """One pipeline and the pipelines it runs after, each by its `pipeline_id` in this bundle."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    pipeline: str = Field(min_length=1)
+    after: list[str] = Field(min_length=1)
+
+
+class ReleasedRunOrder(BaseModel):
+    """The run order's file: the links among the bundle's own pipelines, never who saved it or
+    when. An import writes it as a new version of the receiving dataset's order, its pipelines
+    mapped to the drafts the import makes."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: The number of the stored order it was exported from, for the record.
+    exported_version: int = Field(ge=1)
+    runs_after: list[ReleasedRunOrderLink] = Field(min_length=1)
 
 
 class ReleasedReferenceList(BaseModel):
@@ -193,6 +218,8 @@ ALL_MODELS: list[type[BaseModel]] = [
     ReleasedDomainModel,
     ReleasedPipeline,
     ReleasedReferenceList,
+    ReleasedRunOrderLink,
+    ReleasedRunOrder,
     ReleaseImportItem,
     ReleaseImportPlan,
     ReleaseBundleInput,

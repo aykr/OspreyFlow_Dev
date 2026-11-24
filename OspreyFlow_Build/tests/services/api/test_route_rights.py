@@ -45,6 +45,9 @@ ROUTE_RIGHTS = {
     # asks publish_pipelines, import edit_pipelines (each route names both).
     "export_dataset_release": "edit_target_model",
     "import_dataset_release": "edit_target_model",
+    # IS6a: a dataset's run order, behind the dataset's own gate; read and save both need edit_pipelines.
+    "read_dataset_run_order": "edit_pipelines",
+    "save_dataset_run_order": "edit_pipelines",
     # ADR-141 (phase 10): owned externally, the run API, the quota bar and Operations' figures.
     "read_pipeline_owned_externally": "schedule_pipelines",
     "mark_pipeline_owned_externally": "schedule_pipelines",
