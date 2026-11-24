@@ -514,14 +514,18 @@ class FakeElement {
   get hidden(): boolean {
     return this.attributes.has("hidden");
   }
+  /** This element and each ancestor, nearest first. */
+  chain(): FakeElement[] {
+    const out: FakeElement[] = [this];
+    for (let up = this.parent; up; up = up.parent) out.push(up);
+    return out;
+  }
   contains(node: FakeElement | null): boolean {
-    for (let at: FakeElement | null = node; at; at = at.parent) if (at === this) return true;
-    return false;
+    return node !== null && node.chain().includes(this);
   }
   closest(selector: string): FakeElement | null {
     const name = /^\[([a-z-]+)\]$/.exec(selector)?.[1];
-    for (let at: FakeElement | null = this; at; at = at.parent) if (name && at.attributes.has(name)) return at;
-    return null;
+    return this.chain().find((at) => name !== undefined && at.attributes.has(name)) ?? null;
   }
   querySelectorAll(selector: string): FakeElement[] {
     const match = /^\[([a-z-]+)(?:="([^"]*)")?\]$/.exec(selector);
@@ -552,7 +556,7 @@ class FakeElement {
       },
       ...init,
     };
-    for (let at: FakeElement | null = this; at; at = at.parent) (at.listeners.get(type) ?? []).slice().forEach((listener) => listener(event));
+    for (const at of this.chain()) (at.listeners.get(type) ?? []).slice().forEach((listener) => listener(event));
     return event;
   }
 }
