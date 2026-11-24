@@ -1,0 +1,18 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index 42dbc1b..924f695 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -1409,6 +1409,13 @@ jobs:
+         run: >-
+           OSPREY_TEST_CADDY="$RUNNER_TEMP/caddy" PYTHONPATH=.:packages:../OspreyFlow_Build uv run pytest
+           -c ../OspreyFlow_Build/pytest.ini -p no:randomly ../OspreyFlow_Build/tests/harness/test_access_key_proxy.py
++      # PL7f: every case of the page service's table, each rendered Caddyfile through `caddy validate` (the
++      # proxy image's own Caddy: the test runs the image, and falls back to this binary where Docker cannot).
++      # GitHub is a second place; the Mac's gate is the first.
++      - name: The page service's cases, every rendered Caddyfile, against the real proxy
++        run: >-
++          OSPREY_CADDY_BINARY="$RUNNER_TEMP/caddy" PYTHONPATH=.:packages:../OspreyFlow_Build uv run pytest
++          -c ../OspreyFlow_Build/pytest.ini -p no:randomly ../OspreyFlow_Build/tests/harness/test_page_addresses_caddy.py
+ 
+   # ADR-114 Amendment 43: a deployment's own PostgreSQL holds what its number counts. A real PostgreSQL
+   # started with exactly the rendered command, two real Conduits at their pools' ceiling, every other

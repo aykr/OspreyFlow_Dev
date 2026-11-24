@@ -6,9 +6,9 @@ Both apply cleanly (`git apply --check`) to this branch's base. A protected file
    row in `spec/ADR_RESERVATIONS.md`. It records the three changes the owner made to the table of cases on
    24 November 2026 and the rule that `derive` is the only place the page service's addresses are computed.
    `spec/05_DEPLOYMENT.md` section 2.8 already says the same in the specification (the brief's step 0).
-2. `PL7f_CI_YML_AND_MAKEFILE.diff` — wires `tests/harness/test_page_addresses_caddy.py` as a live-service test, as
-   `tools/test_file_coverage_check.py` requires (it reads `OSPREY_TEST_CADDY`): ignored by the `test` job in
-   `.github/workflows/ci.yml` and by `make test` in `OspreyFlow_Build/Makefile`, and run by GitHub's
-   `access-key-proxy-test` job (GitHub is the second place; the Mac's gate is the first). **Until it is applied,
-   `make test-file-coverage-check` names the file** ("in neither the `test` job's ignore list nor any live-service job").
-   Shown in memory: red without the diff's wiring, clean with it.
+2. `PL7f_CI_YML.diff` — adds `tests/harness/test_page_addresses_caddy.py` to GitHub's `access-key-proxy-test` job, with
+   the Caddy binary taken from the image given in `OSPREY_CADDY_BINARY` (GitHub is the second place; the Mac's gate is the
+   first). **Nothing in it is needed for the merge gate:** the test is an ordinary test (it reads no `OSPREY_TEST_*`
+   variable, so `tools/test_file_coverage_check.py` does not call it a live-service test), it runs in `make test` and the
+   `test` job, and `make test-file-coverage-check` is clean without it. (Round 1 of this slice wired it as live-service
+   through a Makefile hunk and an `--ignore`; round 2 removed both, on the conductor's ruling.)

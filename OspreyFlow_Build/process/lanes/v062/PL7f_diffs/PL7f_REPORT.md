@@ -1,5 +1,16 @@
 # Slice PL7f, round 1: report
 
+## Round 2 (the conductor, 24 November 2026)
+
+1. The owner lifted his per-machine switch (`no-local-stacks` is now `no-local-stacks.off`): the Docker guard allows
+   `docker run` on this Mac. `test_page_addresses_caddy.py` run on the image `caddy:2.11.4-alpine`, no binary given:
+   **43 passed** (5.6 s). The fail-in-words behaviour where neither Docker nor a binary can run is unchanged, and section 1
+   below is **overtaken** by it (kept as the record of round 1).
+2. The override variable is renamed `OSPREY_CADDY_BINARY` (test, messages, docstring, this report, the README).
+   `make test-file-coverage-check`: "1279 test file(s), 0 allowlisted, no new drift." The round-1 diff that wired the test
+   as live-service (an `--ignore` in `ci.yml` and a Makefile hunk) is **withdrawn**; `PL7f_CI_YML.diff` keeps only the
+   GitHub step that runs the test in the proxy job. Nothing else changed.
+
 ## 1. The decision that is the owner's (found building, not in the table)
 
 **On this Mac the real-Caddy test cannot run in the gate.** The owner's per-machine switch of 9 November 2026
@@ -7,7 +18,7 @@
 every test that calls the docker CLI, in its own words: "a server-only test". The server has no container tooling. So
 under the guard no merge passes through the real Caddy, which is what the owner's condition of 23 November asks.
 The guard is not mine to loosen (an exemption is the owner's). What the test does, so it never skips quietly: it asks
-the switch first and **fails in words** where it is held (and no Caddy 2.11 binary is given in `OSPREY_TEST_CADDY`), so on
+the switch first and **fails in words** where it is held (and no Caddy 2.11 binary is given in `OSPREY_CADDY_BINARY`), so on
 this Mac the gate is red on that one file until he decides. Options, recommendation first:
 
 1. **Exempt this one test's one command in the guard** (`docker run --rm --network none`, three read-only mounts, the
@@ -53,8 +64,8 @@ rendered environment.
 (node); reads, as text, the top-level `*.py` of `OspreyFlow_Core/harness/` and `harness/cloud_platform/__init__.py` (no
 recursion); writes only to `tmp_path`. `test_page_addresses_caddy.py`: the same table and renderers and `PROXY_IMAGE`;
 writes a Caddyfile per case, a self-made certificate and the shared-key file under `tmp_path`; runs the image.
-`pageAddresses.test.ts`: the table and `config.ts`. **It is a live-service test by `tools/test_file_coverage_check.py`**
-(it reads `OSPREY_TEST_CADDY`): see the diff in section 5.
+`pageAddresses.test.ts`: the table and `config.ts`. **It is an ordinary test for `tools/test_file_coverage_check.py`**
+(round 2: its binary override is `OSPREY_CADDY_BINARY`, not an `OSPREY_TEST_*` variable), so it runs in `make test`.
 
 ## 3. The table, case by case (what `derive` returns; what the real Caddy said)
 
@@ -150,9 +161,8 @@ not run, never as passed.
 
 ## 5. Diffs for the owner (none applied): `README.md` beside this file
 
-`PL7f_ADR152_AM5.diff` (Amendment 5 text and its reservation row); `PL7f_CI_YML_AND_MAKEFILE.diff` (the Caddy test is
-ignored by the `test` job and `make test`, and run by `access-key-proxy-test`). Until the second is applied
-`make test-file-coverage-check` names the Caddy test; shown in memory red without the wiring and clean with it.
+`PL7f_ADR152_AM5.diff` (Amendment 5 text and its reservation row); `PL7f_CI_YML.diff` (the GitHub step that runs the Caddy
+test in `access-key-proxy-test`; not needed for the merge gate, and `make test-file-coverage-check` is clean without it).
 
 ## 6. The text
 

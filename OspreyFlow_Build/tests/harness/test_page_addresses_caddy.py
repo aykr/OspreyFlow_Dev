@@ -26,7 +26,7 @@ skips). **This test runs the image the deployment uses** (`harness.site.PROXY_IM
 `access-key-proxy-test` job also has Docker and the image's Caddy; GitHub is no merge gate (the
 release's), so it is a second place (a diff for the owner adds this file to that job's command). The
 test server has no container tooling: there it is listed as not run, never as passed. **It does not
-skip:** if neither the image can be run nor a Caddy 2.11 binary (`OSPREY_TEST_CADDY`) is given, it
+skip:** if neither the image can be run nor a Caddy 2.11 binary (`OSPREY_CADDY_BINARY`) is given, it
 fails in words. The repository's Docker guard (`tests/local_docker_guard.py`) is kept satisfied
 as the other docker-calling tests keep it: Docker is reached only through `subprocess` (which the
 guard wraps, so on a machine that holds `no-local-stacks` the guard's own skip, in its own words,
@@ -149,8 +149,8 @@ def _image_is_here() -> str | None:
 
 
 def _binary() -> str | None:
-    """A Caddy 2.11 binary given by `OSPREY_TEST_CADDY` (GitHub's job takes it from the image)."""
-    given = os.environ.get("OSPREY_TEST_CADDY")
+    """A Caddy 2.11 binary given by `OSPREY_CADDY_BINARY` (GitHub's job takes it from the image)."""
+    given = os.environ.get("OSPREY_CADDY_BINARY")
     if not given or not Path(given).is_file():
         return None
     version = subprocess.run([given, "version"], capture_output=True, text=True, check=False)
@@ -165,7 +165,7 @@ def _validate_all(files: dict[str, str], folder: Path) -> dict[str, Result]:
     binary = _binary() if problem else None
     assert problem is None or binary is not None, (
         f"the real Caddy cannot be run, so the Caddyfiles are unchecked: {problem}. Pull "
-        f"{PROXY_IMAGE} on a machine with Docker, or set OSPREY_TEST_CADDY to a Caddy 2.11 binary. "
+        f"{PROXY_IMAGE} on a machine with Docker, or set OSPREY_CADDY_BINARY to a Caddy 2.11 binary. "
         "This test does not skip."
     )
     cases, etc, certs = folder / "cases", folder / "etc", folder / "certs"
@@ -324,9 +324,9 @@ def test_a_machine_with_no_caddy_fails_in_words_and_does_not_skip(
 ) -> None:
     """Rule 15 for the guard itself: where the image cannot be run and no binary is given, the test
     fails, saying why. Planted at the shape the helper sees: `docker` is not on the path and no
-    `OSPREY_TEST_CADDY` is set."""
+    `OSPREY_CADDY_BINARY` is set."""
     monkeypatch.setenv("PATH", str(tmp_path))
-    monkeypatch.delenv("OSPREY_TEST_CADDY", raising=False)
+    monkeypatch.delenv("OSPREY_CADDY_BINARY", raising=False)
     assert shutil.which("docker") is None
     with pytest.raises(AssertionError, match="the real Caddy cannot be run.*does not skip"):
         _validate_all({"a": "{\n}\n"}, tmp_path / "run")
