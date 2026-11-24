@@ -50,8 +50,8 @@ launch's one-time token before the prompt is sent (the prompt goes over stream-j
 
 ## Gates and their proofs
 
-`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (707 cases) plants each violation in the shape its real call
-site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (600 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
+`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (713 cases) plants each violation in the shape its real call
+site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (609 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
 
 | Gate | Where | What refuses |
 | --- | --- | --- |
@@ -281,6 +281,7 @@ says that cost is a list-price estimate, not a bill.
 - **Before the slot** (004, 1): with the owner's switch `server_counts` on, a slice whose demo-server result (fetched by run id, never read from the note) is red for its tip is not given the merge slot until `merge_slice.py server-rerun <ID>` reruns the named tests (or targets) on the Mac: green, it queues; red, it goes back to its builder.
 - **The server's green counts** (004, 2): for a finished pass with the same main tip, slice tip and candidate tree hash, the gate runs only each `ci` target (and Core `check` target) the result does not name as passed, and `make test` whole unless passed (then only the test files the server did not run); anything else, the whole gate. `merged.json` says what was taken and why not.
 - **A green stands across records commits** (item 4; the owner's approval, 23 November 2026): when main has moved since the server's run only by records commits, by the rule `land()` lands a merge by (each a `Slice-Records` commit with one parent, together changing only records-folder files that are not scan rows, the owner's files or a file the slice changed), and the server's candidate, made again here from its main and the slice's tip, is the tree it gives, and the Mac's candidate differs from it in exactly those files as main has them, the result counts (`records_moved` in the merge record). The Mac then still runs every target that reads the records folder: `slice-line-check`, `citation-check`, `client-name-check`, `live-collect`, every test whose `scan_map.tsv` row covers the folder, and `test_live_select.py`. Anything else that moved main runs the whole gate, as before, and the record says why.
+- **The rerun places each target** (the owner, 24 November 2026; PL12b, run 0537b90cee415260): `merge_slice.py server-rerun` runs each target the server names from the Makefile that has its rule, Build's own first (as before), else Core's (`test-js` is Core's: the rerun had run `make -k test-js test` in OspreyFlow_Build, make had no rule for it, and the rerun was red though every test passed). A target neither Makefile has is not rerun (`NOT PLACED` in the log); a rerun with nothing placed is recorded `unplaced`, never red: it frees the slot, and the merge's whole gate settles it.
 - **The stack** (004, 3): a slice stacked on others counts only when main is exactly the tree the server ran it on; a refusal marks the ones above to go to the server again (`server-again.json`).
 - **The shadow** (004, 4): each merge records the server's result beside the Mac's whole gate for the same candidate: agree, differ or no comparison (`server-shadow-<run>.json`, `server-shadow.tsv`).
 - **The board and the server** (004, 5): each waiting slice's server result (running, green, red and the test, none; run again; a rerun's result), what each merge took from the server, and the shadow's tally.

@@ -1253,25 +1253,55 @@ def server_hold(slice_id: str) -> str | None:
     return server_gate.slot_hold(slice_id, tip)
 
 
+#: A rerun whose every named target has no rule in either Makefile: nothing could be rerun (not red, not green).
+UNPLACED = 4
+
+
+def has_rule(makefile: Path, target: str) -> bool:
+    try:
+        text = makefile.read_text()
+    except OSError:
+        return False
+    return re.search(rf"^{re.escape(target)}:(?!=)", text, re.M) is not None
+
+
+def rerun_steps(tree: Path, mk: Path, tests: list[str], targets: list[str]) -> tuple[list, list[str]]:
+    """The rerun's steps, each (words, command, folder), and the targets neither Makefile has a rule for. A target runs
+    from the Makefile that has its rule: Build's own first (OspreyFlow_Build, as before), else Core's (OspreyFlow_Core).
+    PL12b, 23 November 2026: the server named test-js (a Core target, which make test runs as make -C ../OspreyFlow_Core
+    test-js) and test; the rerun ran make -k test-js test in OspreyFlow_Build, make said "No rule to make target
+    `test-js'", and the rerun was red though every test in it passed: PL12b was held from the slot all night."""
+    steps = []
+    if tests:
+        mk.write_text("server-rerun:\n\t$(IN_CORE) $(PYTEST) $(RERUN_TESTS)\n")
+        steps.append(("the server's failing tests, rerun", ["make", "-f", "Makefile", "-f", str(mk), "server-rerun",
+                                                            "RERUN_TESTS=" + " ".join(tests)], tree / "OspreyFlow_Build"))
+    build = [t for t in targets if has_rule(tree / "OspreyFlow_Build/Makefile", t)]
+    core = [t for t in targets if t not in build and has_rule(tree / "OspreyFlow_Core/Makefile", t)]
+    if build:
+        steps.append(("the server's failing targets, rerun", ["make", "-k", *build], tree / "OspreyFlow_Build"))
+    if core:
+        steps.append(("the server's failing Core targets, rerun", ["make", "-k", *core], tree / "OspreyFlow_Core"))
+    return steps, [t for t in targets if t not in build and t not in core]
+
+
 def rerun_named(tree: Path, log: Path, tests: list[str], targets: list[str]) -> int:
     """The demo server's named failures, rerun on the Mac in the gate's own environment (ci_env): the tests by
     make test's own pytest command (the Makefile's IN_CORE and PYTEST, through a second makefile beside the log, the
-    Makefile itself unchanged), and a failing target with no test named by make -k. 0 when every one is green."""
+    Makefile itself unchanged), and each failing target with no test named by make -k, from the Makefile that has its
+    rule (rerun_steps). 0 when every one is green; UNPLACED when nothing named could be placed."""
+    steps, unplaced = rerun_steps(tree, log.with_suffix(".mk"), tests, targets)
+    if unplaced:
+        log.open("a").write(f"\nNOT PLACED: no Makefile of the tree has a rule for {', '.join(unplaced)}: not rerun; the "
+                            "merge's whole gate settles it.\n")
+    if not steps:
+        return UNPLACED
     try:
         env = ci_env(tree, log)
     except (NetworkError, GateEnvError) as e:
         log.open("a").write(f"\nREFUSED: the rerun's environment: {e}\n")
         return 3
-    codes = []
-    if tests:
-        mk = log.with_suffix(".mk")
-        mk.write_text("server-rerun:\n\t$(IN_CORE) $(PYTEST) $(RERUN_TESTS)\n")
-        codes.append(run_step("the server's failing tests, rerun", ["make", "-f", "Makefile", "-f", str(mk), "server-rerun",
-                                                                    "RERUN_TESTS=" + " ".join(tests)],
-                              tree / "OspreyFlow_Build", log, env, []))
-    if targets:
-        codes.append(run_step("the server's failing targets, rerun", ["make", "-k", *targets], tree / "OspreyFlow_Build",
-                              log, env, [], tests=False))
+    codes = [run_step(words, cmd, cwd, log, env, [], tests=words.endswith("tests, rerun")) for words, cmd, cwd in steps]
     return next((x for x in codes if x), 0)
 
 
@@ -1337,11 +1367,14 @@ def server_rerun(slice_id: str) -> str:
     finally:
         drop_tree(tree)
         shutil.rmtree(tree, ignore_errors=True)
-    result = "green" if code == 0 else "red"
+    result = "green" if code == 0 else "unplaced" if code == UNPLACED else "red"
     c.write_json(server_gate.rerun_record(slice_id, rid), {
         "slice": slice_id, "tip": tip, "main": base, "run_id": rid, "result": result, "tests": tests, "targets": bare,
         "seconds": seconds, "log": log.name, "at": c.now()})
     named = ", ".join(tests + bare)
+    if result == "unplaced":
+        return (f"{slice_id}: the server's red ({named}) names nothing a Makefile of the tree has a rule for: not rerun, "
+                "recorded; it queues for the merge, whose whole gate settles it.")
     if result == "green":
         return (f"{slice_id}: the server's red ({named}) is green on the Mac ({seconds} s): an environment difference, "
                 f"recorded; it queues for the merge as before.")

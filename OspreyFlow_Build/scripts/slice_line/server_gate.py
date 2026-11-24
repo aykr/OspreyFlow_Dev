@@ -197,7 +197,7 @@ def slot_hold(slice_id: str, tip: str) -> str | None:
     if not is_red(e):
         return None
     done = c.read_json(rerun_record(slice_id, rid)) or {}
-    if done.get("tip") == tip and done.get("result") == "green":
+    if done.get("tip") == tip and done.get("result") in ("green", "unplaced"):  # unplaced: the whole gate settles it
         return None
     tests, bare = failing_names(e)
     if not tests and not bare:  # nothing named to rerun: the whole gate at the merge settles it, as before

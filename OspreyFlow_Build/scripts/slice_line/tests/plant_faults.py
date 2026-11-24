@@ -475,7 +475,7 @@ M = [
  ("server_gate.py", '    return result if result.get("slice") == slice_id and result.get("tip") == tip else None', '    return result', "no_red_result_from_the_runner"),
  ("server_gate.py", 'data.get("state") and data.get("id") == rid:', 'data.get("state"):', "no_red_result_from_the_runner"),
  ("server_gate.py", '    return bool(e) and e.get("state") == "done" and e.get("verdict") == "fail"', '    return bool(e) and e.get("verdict") in ("fail", "pass")', "no_red_result_from_the_runner"),
- ("server_gate.py", '    if done.get("tip") == tip and done.get("result") == "green":', '    if done.get("tip") == tip:', "red_on_the_mac_too"),
+ ("server_gate.py", '    if done.get("tip") == tip and done.get("result") in ("green", "unplaced"):', '    if done.get("tip") == tip:', "red_on_the_mac_too"),
  ("merge_slice.py", "    refuse_to_builder(slice_id, tip, \"the demo server's red, rerun on the Mac", "    (lambda *a: None)(slice_id, tip, \"the demo server's red, rerun on the Mac", "red_on_the_mac_too"),
  ("server_gate.py", '    bare = [t for t in f.get("targets") or [] if isinstance(t, str) and t and not by_target.get(t)]', '    bare = []', "failing_target_with_no_test"),
  ("merge_slice.py", '["git", "merge", "--no-ff", "-q", "-m", f"rerun {slice_id}", tip]', '["git", "status"]', "shows_red_is_not_given_the_slot"),
@@ -663,6 +663,16 @@ M = [
  ("merge_slice.py", "    plan = server_gate.remainder(e, after, log.with_suffix(\".remainder.mk\"), records)", "    plan = server_gate.remainder(e, after, log.with_suffix(\".remainder.mk\"), [])", "green_stands_across_a_records_commit"),
  ("merge_slice.py", "    return {**out, \"records_moved\": records} if records else out", "    return out", "green_stands_across_a_records_commit"),
  ("merge_slice.py", "    records = server_gate.records_moved(e, base, tip, tree)[0] if e.get(\"main\") != base and not e.get(\"index\") else []", "    records = []", "green_stands_across_a_records_commit"),
+ # server-rerun (the owner, 24 November 2026, D225): each named target from the Makefile that has its rule
+ ("merge_slice.py", "    core = [t for t in targets if t not in build and has_rule(tree / \"OspreyFlow_Core/Makefile\", t)]", "    core = []", "pl12b_s_targets_test_js"),
+ ("merge_slice.py", "[\"make\", \"-k\", *core], tree / \"OspreyFlow_Core\"))", "[\"make\", \"-k\", *core], tree / \"OspreyFlow_Build\"))", "pl12b_s_targets_test_js"),
+ ("merge_slice.py", "    build = [t for t in targets if has_rule(tree / \"OspreyFlow_Build/Makefile\", t)]", "    build = [t for t in targets if not has_rule(tree / \"OspreyFlow_Core/Makefile\", t) and has_rule(tree / \"OspreyFlow_Build/Makefile\", t)]", "both_makefiles_have"),
+ ("merge_slice.py", "    return re.search(rf\"^{re.escape(target)}:(?!=)\", text, re.M) is not None", "    return True", "no_makefile_has"),
+ ("merge_slice.py", "    if not steps:\n        return UNPLACED", "    if not steps:\n        return 1", "no_makefile_has"),
+ ("merge_slice.py", "    if unplaced:\n        log.open(\"a\").write(f\"\\nNOT PLACED", "    if False:\n        log.open(\"a\").write(f\"\\nNOT PLACED", "no_makefile_has"),
+ ("merge_slice.py", "\"unplaced\" if code == UNPLACED else ", "", "unplaced_rerun_is_recorded"),
+ ("merge_slice.py", "    if result == \"unplaced\":\n        return (", "    if False:\n        return (", "unplaced_rerun_is_recorded"),
+ ("server_gate.py", "done.get(\"result\") in (\"green\", \"unplaced\")", "done.get(\"result\") == \"green\"", "unplaced_rerun_is_recorded"),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.
