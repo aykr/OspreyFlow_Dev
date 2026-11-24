@@ -156,6 +156,81 @@ describe("renewal", () => {
     expect(r.fake.refreshes.map((x) => x.status)).toEqual([200, 200]);
   });
 
+  // ADR-050 Amendment 4: "an expired access token is renewed with no redirect in the middle of a form post". The cases above stop
+  // at the margin, where the token is still good; these go past its end, where the Conduit would refuse it.
+  it("renews a token that has already ended, on a GET: the call goes through with the new token and no redirect", async () => {
+    const r = await rig();
+    const person = await signInAs(r);
+    const first = r.fake.issued[0]!;
+    r.advance(LIFE + 30); // thirty seconds past the token's end
+
+    const script = await callConduit(r, person);
+    expect(script.status).toBe(200);
+    expect(script.res.headers["location"]).toBeUndefined();
+    expect(clearsSessionCookie(script.res)).toBe(false);
+    expect(r.fake.refreshes).toEqual([{ refreshToken: first.refreshToken, status: 200 }]);
+    expect(r.upstream.calls.map((c) => [c.bearer, c.status])).toEqual([[r.fake.issued[1]!.accessToken, 200]]);
+
+    // A page the same way: renewed before it runs, not sent to sign in.
+    r.advance(LIFE + 30);
+    const page = await request(r.app).get("/").set("Cookie", person.cookie);
+    expect(page.status).toBe(200);
+    expect(page.headers["location"]).toBeUndefined();
+    expect(r.fake.refreshCalls).toBe(2);
+    expect((await authOf(r, person))["accessToken"]).toBe(r.fake.issued[2]!.accessToken);
+    expect(sessionKeys(r)).toEqual([`${SESSION_KEY_PREFIX}${person.id}`]);
+  });
+
+  it("renews a token that has already ended on a POST of a form: it goes through with the new token, no redirect, the body not lost", async () => {
+    const r = await rig();
+    const person = await signInAs(r);
+    const csrf = await csrfOf(r, person);
+    const first = r.fake.issued[0]!;
+    r.advance(LIFE + 30);
+
+    // A page's own form post.
+    const note = "a note typed before the token ended";
+    const page = await request(r.app).post("/_test/form").set("Cookie", person.cookie).type("form").send({ _csrf: csrf, note });
+    expect(page.status, "no redirect to sign in in the middle of a form post").toBe(200);
+    expect(page.headers["location"]).toBeUndefined();
+    expect(page.text).toBe(`received: ${note}`);
+    expect(clearsSessionCookie(page)).toBe(false);
+    expect(r.fake.refreshes).toEqual([{ refreshToken: first.refreshToken, status: 200 }]);
+    expect((await authOf(r, person))["accessToken"], "the session holds the renewed token").toBe(r.fake.issued[1]!.accessToken);
+    expect(sessionKeys(r)).toEqual([`${SESSION_KEY_PREFIX}${person.id}`]);
+
+    // A form post to the Conduit, through the forwarder: carried with the new token, and the Conduit receives the whole body.
+    r.advance(LIFE + 30);
+    const forwarded = await request(r.app)
+      .post("/v1/me")
+      .set("Cookie", person.cookie)
+      .type("form")
+      .send({ _csrf: csrf, note });
+    expect(forwarded.status).toBe(200);
+    expect(forwarded.headers["location"]).toBeUndefined();
+    expect(r.fake.refreshCalls).toBe(2);
+    const posted = r.upstream.calls.filter((c) => c.method === "POST");
+    expect(posted.map((c) => [c.bearer, c.status])).toEqual([[r.fake.issued[2]!.accessToken, 200]]);
+    expect(new URLSearchParams(posted[0]!.body).get("note"), "the body reached the Conduit whole").toBe(note);
+    expect(sessionKeys(r)).toEqual([`${SESSION_KEY_PREFIX}${person.id}`]);
+  });
+
+  it("two form posts at once after the token's end make one exchange, and both go through", async () => {
+    const r = await rig();
+    const person = await signInAs(r);
+    const csrf = await csrfOf(r, person);
+    r.advance(LIFE + 30);
+    const posts = await Promise.all(
+      ["one", "two"].map((note) => request(r.app).post("/_test/form").set("Cookie", person.cookie).type("form").send({ _csrf: csrf, note })),
+    );
+    expect(posts.map((x) => [x.status, x.text])).toEqual([
+      [200, "received: one"],
+      [200, "received: two"],
+    ]);
+    expect(r.fake.refreshCalls).toBe(1);
+    expect(r.fake.sessions.get(person.sid)?.ended).toBe(false);
+  });
+
   it("does not renew at sign-out: a person leaving is not made to wait for a token", async () => {
     const r = await rig();
     const person = await signInAs(r);

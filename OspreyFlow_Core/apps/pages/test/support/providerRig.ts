@@ -44,6 +44,8 @@ export interface Call {
   /** The bearer the call carried, or undefined. */
   bearer: string | undefined;
   status: number;
+  /** The request body as the Conduit received it (UTF-8), so that a test can see a form was carried whole. */
+  body: string;
 }
 
 export interface Upstream {
@@ -71,10 +73,13 @@ async function startUpstream(fake: FakeKeycloak): Promise<Upstream> {
     const exp = bearer === undefined ? undefined : expOf(bearer);
     const live = known && exp !== undefined && exp > fake.nowSeconds();
     const status = live ? 200 : 401;
-    calls.push({ method: req.method ?? "GET", path: req.url ?? "", bearer, status });
-    req.resume();
-    res.writeHead(status, { "Content-Type": "application/json" });
-    res.end(JSON.stringify(live ? { ok: true } : { detail: "Not authenticated" }));
+    const chunks: Buffer[] = [];
+    req.on("data", (chunk: Buffer) => chunks.push(chunk));
+    req.on("end", () => {
+      calls.push({ method: req.method ?? "GET", path: req.url ?? "", bearer, status, body: Buffer.concat(chunks).toString("utf8") });
+      res.writeHead(status, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(live ? { ok: true } : { detail: "Not authenticated" }));
+    });
   });
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   return {
@@ -159,6 +164,11 @@ export async function rig(options: RigOptions = {}): Promise<Rig> {
     extraRoutes: (router) => {
       router.all("/_test/echo", (_req, res) => {
         res.status(200).type("text/plain").send("accepted");
+      });
+      // A form's page: it answers with the field it was sent, so that a test sees the body was read whole and not lost.
+      router.post("/_test/form", (req, res) => {
+        const body = req.body as Record<string, unknown>;
+        res.status(200).type("text/plain").send(`received: ${typeof body["note"] === "string" ? body["note"] : "(nothing)"}`);
       });
     },
   });
