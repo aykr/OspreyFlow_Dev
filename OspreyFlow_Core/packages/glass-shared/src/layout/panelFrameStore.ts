@@ -278,6 +278,26 @@ function writeFolded(folded: readonly SidePanelId[]): void {
 
 const finite = (px: number): boolean => typeof px === "number" && Number.isFinite(px);
 
+/**
+ * The sizes as the page shows them: each held between its minimum and the window's limit as it is now. What is kept in
+ * this browser is read by `layoutSizes`, which does not know the window; a default larger than a small window allows is
+ * shown at the limit here and is not written (`apply`), so it is never mistaken for a size the analyst chose.
+ */
+export function shownSizes(
+  sizes: LayoutSizes,
+  limits: SizeUpperLimits,
+): Pick<PanelFrameState, "sideWidth" | "timelineHeight" | "panelHeights"> {
+  const panelHeights: LayoutSizes["panelHeights"] = {};
+  for (const [id, height] of Object.entries(sizes.panelHeights) as Array<[SidePanelId, number]>) {
+    panelHeights[id] = clamp(height, MIN_PANEL_HEIGHT, limits.panelHeight);
+  }
+  return {
+    sideWidth: clamp(sizes.sideWidth, MIN_SIDE_WIDTH, limits.sideWidth),
+    timelineHeight: clamp(sizes.timelineHeight, MIN_TIMELINE_HEIGHT, limits.timelineHeight),
+    panelHeights,
+  };
+}
+
 export function createPanelFrameStore(options: PanelFrameStoreOptions = {}): PanelFrameStore {
   const readViewport = options.viewport ?? windowViewport;
   let folded = readFolded();
@@ -314,14 +334,26 @@ export function createPanelFrameStore(options: PanelFrameStoreOptions = {}): Pan
     }
   };
 
-  /** One size, held between its minimum and its limit (`"default"`: the size a reset gives, held to the limit too). */
-  const apply = (target: SizeTarget, request: number | "default", limits: Limits, maxPx?: number): void => {
+  /**
+   * One size, held between its minimum and its limit (`"default"`: the size a reset gives, held to the limit too).
+   *
+   * A column or timeline still at its default, with no other size kept, is not a size the analyst chose: when only the
+   * window's limit brings it down it is shown lower (`shownSizes`) and nothing is written, so a reload in a roomy window
+   * opens at the default again. `fitting` is a size being brought down to the window (not one asked for): it writes only
+   * a size that is not the default. A size asked for writes unless it is just what is already shown.
+   */
+  const apply = (target: SizeTarget, request: number | "default", limits: Limits, maxPx?: number, fitting = false): void => {
+    const kept = getLayoutSizes();
     if (target.axis === "side-width") {
       const to = request === "default" ? DEFAULT_SIDE_WIDTH : request;
-      sizeStore.setSideWidth(clamp(to, MIN_SIDE_WIDTH, lowered(limits.sideWidth, MIN_SIDE_WIDTH, maxPx)));
+      const next = clamp(to, MIN_SIDE_WIDTH, lowered(limits.sideWidth, MIN_SIDE_WIDTH, maxPx));
+      if (kept.sideWidth === DEFAULT_SIDE_WIDTH && (fitting || next === shownSizes(kept, limits).sideWidth)) return;
+      sizeStore.setSideWidth(next);
     } else if (target.axis === "timeline-height") {
       const to = request === "default" ? DEFAULT_TIMELINE_HEIGHT : request;
-      sizeStore.setTimelineHeight(clamp(to, MIN_TIMELINE_HEIGHT, lowered(limits.timelineHeight, MIN_TIMELINE_HEIGHT, maxPx)));
+      const next = clamp(to, MIN_TIMELINE_HEIGHT, lowered(limits.timelineHeight, MIN_TIMELINE_HEIGHT, maxPx));
+      if (kept.timelineHeight === DEFAULT_TIMELINE_HEIGHT && (fitting || next === shownSizes(kept, limits).timelineHeight)) return;
+      sizeStore.setTimelineHeight(next);
     } else if (request === "default") {
       // A stacked panel's default is no height of its own: it shares the column again, so there is nothing to exceed.
       sizeStore.resetPanelHeight(target.id);
@@ -333,11 +365,11 @@ export function createPanelFrameStore(options: PanelFrameStoreOptions = {}): Pan
   /** Brings every kept size down to `limits` (a stored one, or one a smaller window now rules out). */
   const fitAll = (limits: Limits): void => {
     const sizes = getLayoutSizes();
-    apply({ axis: "side-width" }, sizes.sideWidth, limits);
-    apply({ axis: "timeline-height" }, sizes.timelineHeight, limits);
+    apply({ axis: "side-width" }, sizes.sideWidth, limits, undefined, true);
+    apply({ axis: "timeline-height" }, sizes.timelineHeight, limits, undefined, true);
     for (const id of SIDE_PANEL_IDS) {
       const own = sizes.panelHeights[id];
-      if (own !== undefined) apply({ axis: "panel-height", id }, own, limits);
+      if (own !== undefined) apply({ axis: "panel-height", id }, own, limits, undefined, true);
     }
   };
 
@@ -357,15 +389,14 @@ export function createPanelFrameStore(options: PanelFrameStoreOptions = {}): Pan
 
   const snapshot = (): PanelFrameState => {
     const sizes = getLayoutSizes();
+    const limits = limitsNow();
     return {
       sideMode: currentSidePanelMode("normal"),
       timelineOpen,
       order: [...getSidePanelOrder()],
       folded: [...folded],
-      sideWidth: sizes.sideWidth,
-      timelineHeight: sizes.timelineHeight,
-      panelHeights: { ...sizes.panelHeights },
-      limits: limitsNow(),
+      ...shownSizes(sizes, limits),
+      limits,
     };
   };
 

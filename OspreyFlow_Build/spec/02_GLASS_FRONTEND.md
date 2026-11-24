@@ -384,7 +384,8 @@ its normal state on reload) or **this browser** (localStorage, under the key nam
 part of the case). The server-rendered pages' panel frame (`packages/glass-shared/src/layout/panelFrameStore.ts`, no
 React, no inline style) does what this table says, and the code declares the *Kept* column in `PANEL_ACTION_STORAGE`;
 `tests/glass_trees/test_panel_frame_spec_table.py` fails if the two differ. **With no script nothing here runs, and nothing reads this browser's storage: every
-panel is open in its normal state (the default size, order and fold, never a kept one), and the markup carries no control for any of these actions** (the owner: "scripts
+panel is open, at its default size and in its default order as the *Scripts off* column says row by row (a panel that normally starts shut
+is open, since nothing could open it), and the markup carries no control for any of these actions** (the owner: "scripts
 off: every panel open in its normal state, no controls"). Where the React workspace's own behaviour differs from this
 table, this table wins (the owner: "spec/02 wins action by action").
 
@@ -407,7 +408,7 @@ in the table (the timeline seven tenths of the window; the column leaving the ca
 height) are computed by the store from the live window at each resize, never from the page's markup, which cannot
 follow a window that is resized after it is written; a bound a page passes can only lower them. Every write of a
 size goes through one function in the store that holds it to them, Home (which asks for the default, 340 or 130) and a
-pointer drag included. A kept size above today's limit is brought down when it is read and at the next key press.
+pointer drag included. A kept size above today's limit is brought down when it is read and at the next key press. A size still at its default (340px, 130px) that a small window cannot hold is shown at the window's limit and is not stored, so that a reload in a roomy window opens at the default again; only a size the analyst chose is stored.
 
 ### 2.0 The top bar (ADR-065; rebuilt by ADR-097 step 1)
 

@@ -1102,17 +1102,20 @@ describe("one writer: no entry point writes a size above the live limits, read s
   function expectWithin(v: Viewport, parts: ReturnType<typeof page>, label: string): void {
     const limit = limitsOf(v);
     const kept = getLayoutSizes();
-    const check = (what: string, value: number | undefined, min: number, max: number) => {
+    // A column at 340 or a timeline at 130 is the default, which stands for "nothing chosen": a small window shows it at
+    // its limit and does not write it (round 8), so memory and storage may hold it above the limit. What is drawn may not.
+    const check = (what: string, value: number | undefined, min: number, max: number, dflt?: number) => {
       if (value === undefined || Number.isNaN(value)) return;
+      if (value === dflt && !what.startsWith("drawn")) return;
       expect(value, `${label}: ${what} is ${value}, under its minimum ${min}`).toBeGreaterThanOrEqual(min);
       expect(value, `${label}: ${what} is ${value}, over the limit ${max}`).toBeLessThanOrEqual(max);
     };
-    check("memory side width", kept.sideWidth, 300, limit.side);
-    check("memory timeline height", kept.timelineHeight, 96, limit.timeline);
+    check("memory side width", kept.sideWidth, 300, limit.side, DEFAULT_SIDE_WIDTH);
+    check("memory timeline height", kept.timelineHeight, 96, limit.timeline, DEFAULT_TIMELINE_HEIGHT);
     for (const [id, height] of Object.entries(kept.panelHeights)) check(`memory ${id} height`, height, 48, limit.panel);
     const on = stored();
-    check("stored side width", on.sideWidth, 300, limit.side);
-    check("stored timeline height", on.timelineHeight, 96, limit.timeline);
+    check("stored side width", on.sideWidth, 300, limit.side, DEFAULT_SIDE_WIDTH);
+    check("stored timeline height", on.timelineHeight, 96, limit.timeline, DEFAULT_TIMELINE_HEIGHT);
     for (const [id, height] of Object.entries(on.panelHeights ?? {})) check(`stored ${id} height`, height, 48, limit.panel);
     const number = (value: string | null) => (value === null ? undefined : Number(value));
     check("drawn side sash", number(parts.controls.sideSash.getAttribute("aria-valuenow")), 300, limit.side);
@@ -1260,13 +1263,14 @@ describe("one writer: no entry point writes a size above the live limits, read s
     live.push(store);
     attachPanelFrame(parts.root as unknown as PanelFrameRoot, store);
     parts.controls.sideSash.dispatch("keydown", { key: "Home" });
-    expect(getLayoutSizes().sideWidth).toBe(300);
-    expect(stored().sideWidth ?? 300).toBe(300);
+    // The default is shown at the limit and not saved: the analyst chose nothing (round 8).
+    expect(localStorage.getItem(LAYOUT_SIZES_KEY)).toBeNull();
     expect(parts.controls.sideSash.getAttribute("aria-valuenow")).toBe("300");
     expect(parts.side.getAttribute("data-side-width")).toBe("300");
     // And from a wider column, where Home has a size to change: the default is held to the limit too.
     store.actions.setSideWidth(5000);
-    expect(getLayoutSizes().sideWidth).toBe(300);
+    expect(parts.controls.sideSash.getAttribute("aria-valuenow")).toBe("300");
+    expect(localStorage.getItem(LAYOUT_SIZES_KEY)).toBeNull();
     now = { windowHeight: 800, workWidth: 1000 };
     parts.controls.sideSash.dispatch("keydown", { key: "ArrowLeft", shiftKey: true });
     now = { windowHeight: 800, workWidth: 600 };
@@ -1284,8 +1288,7 @@ describe("one writer: no entry point writes a size above the live limits, read s
     attachPanelFrame(parts.root as unknown as PanelFrameRoot, store);
     // The default 130 is over the 105 limit, so a store made here already holds the column and the timeline to it.
     parts.controls.timelineSash.dispatch("keydown", { key: "Home" });
-    expect(getLayoutSizes().timelineHeight).toBe(105);
-    expect(stored().timelineHeight).toBe(105);
+    expect(localStorage.getItem(LAYOUT_SIZES_KEY), "the default was written").toBeNull();
     expect(parts.controls.timelineSash.getAttribute("aria-valuenow")).toBe("105");
     expect(parts.timeline.getAttribute("data-timeline-height")).toBe("105");
   });
@@ -1359,7 +1362,8 @@ describe("one writer: no entry point writes a size above the live limits, read s
     for (const [name, call] of Object.entries(NO_SIZE)) {
       const store = openUnder();
       // The window is really applied: every size starts at its limit (300 and 96), not at its default (340 and 130).
-      expect([getLayoutSizes().sideWidth, getLayoutSizes().timelineHeight], `${name}: the window is applied`).toEqual([300, 96]);
+      // (Shown, not stored: a default the window cannot hold is held in memory and drawn at the limit, never written.)
+      expect([store.getState().sideWidth, store.getState().timelineHeight], `${name}: the window is applied`).toEqual([300, 96]);
       const before = sizesKept();
       call(store);
       expect(sizesKept(), name).toEqual(before);
@@ -1582,8 +1586,11 @@ describe("a page's data-max on the sashes holds on every path: keys, Home, the p
         expect(drawnNow, `${label}: ${name} aria-valuenow ${drawnNow} is above its aria-valuemax ${drawnMax}`).toBeLessThanOrEqual(drawnMax);
         expect(drawnNow, `${label}: ${name} aria-valuenow is under its aria-valuemin`).toBeGreaterThanOrEqual(num(sash.getAttribute("aria-valuemin")));
       }
-      if (inMemory !== undefined) expect(inMemory, `${label}: ${name} in memory is over ${max}`).toBeLessThanOrEqual(max);
-      if (inStorage !== undefined) expect(inStorage, `${label}: ${name} in storage is over ${max}`).toBeLessThanOrEqual(max);
+      // A column at 340 or a timeline at 130 is the default and stands for "nothing chosen" (round 8): not written, so
+      // memory and storage may hold it above a small window's limit; what is drawn, above, may not.
+      const isDefault = (value: number) => (name === "column" && value === DEFAULT_SIDE_WIDTH) || (name === "timeline" && value === DEFAULT_TIMELINE_HEIGHT);
+      if (inMemory !== undefined && !isDefault(inMemory)) expect(inMemory, `${label}: ${name} in memory is over ${max}`).toBeLessThanOrEqual(max);
+      if (inStorage !== undefined && !isDefault(inStorage)) expect(inStorage, `${label}: ${name} in storage is over ${max}`).toBeLessThanOrEqual(max);
       const frameValue = frame?.getAttribute(name === "column" ? "data-side-width" : "data-timeline-height") ?? null;
       if (frameValue !== null) expect(num(frameValue), `${label}: ${name} frame attribute is over ${max}`).toBeLessThanOrEqual(max);
     }
