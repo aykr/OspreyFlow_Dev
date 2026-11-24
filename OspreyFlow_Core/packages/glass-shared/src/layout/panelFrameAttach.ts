@@ -24,11 +24,16 @@
 //                                  each key press (`Viewport` in `panelFrameStore.ts`), so a window resized after the
 //                                  page was written is still held. `data-max` can only lower a limit, never lift it.
 //
+// Each sash also carries `aria-valuemax`, the limit the writer applies now (the store's live limit, lowered by the
+// sash's `data-max`), and the attach redraws it when the window it can reach through `ownerDocument.defaultView`
+// resizes. Without a window it draws from the store's own limit and the page may call `fitToWindow` itself.
+//
 // It listens on the root it is given, once for clicks and once for keys, and acts on an element only when it is inside
 // that root and carries a name it knows. It does not look beyond the root, and an unknown name does nothing.
 import type { PanelFrameStore, PanelFrameState, ResizeAxis } from "./panelFrameStore";
 import { SIDE_PANEL_IDS, type SidePanelId } from "./panelOrder";
 import { MIN_PANEL_HEIGHT, MIN_SIDE_WIDTH, MIN_TIMELINE_HEIGHT } from "./layoutSizes";
+import { lowerLimit } from "./panelFrameStore";
 
 /** What the attach function reads of an element. A DOM element has all of it; a test's stand-in need only offer it. */
 export interface PanelFrameElement {
@@ -40,7 +45,14 @@ export interface PanelFrameElement {
   contains(other: PanelFrameElement | null): boolean;
   append(...nodes: PanelFrameElement[]): void;
   querySelectorAll(selector: string): ArrayLike<PanelFrameElement>;
-  readonly ownerDocument?: { activeElement?: { focus?: () => void } | null };
+  readonly ownerDocument?: {
+    activeElement?: { focus?: () => void } | null;
+    /** The window, where the page has one: the attach listens for a resize on it, so the limits are drawn afresh. */
+    defaultView?: {
+      addEventListener(type: "resize", listener: () => void): void;
+      removeEventListener(type: "resize", listener: () => void): void;
+    } | null;
+  };
 }
 
 export interface PanelFrameEvent {
@@ -128,17 +140,23 @@ function draw(root: PanelFrameRoot, state: PanelFrameState): void {
   }
   for (const sash of all(root, "[data-sash]")) {
     const axis = sash.getAttribute("data-sash");
+    // The maximum is the limit the writer applies: the store's live limit, lowered by this sash's `data-max` as the
+    // key path lowers it (`lowerLimit`), so what is drawn is never other than what a key press can reach.
+    const maxPx = numberAttribute(sash, "data-max");
     if (axis === "side-width") {
       sash.setAttribute("aria-valuenow", String(state.sideWidth));
       sash.setAttribute("aria-valuemin", String(MIN_SIDE_WIDTH));
+      sash.setAttribute("aria-valuemax", String(lowerLimit(state.limits.sideWidth, MIN_SIDE_WIDTH, maxPx)));
     } else if (axis === "timeline-height") {
       sash.setAttribute("aria-valuenow", String(state.timelineHeight));
       sash.setAttribute("aria-valuemin", String(MIN_TIMELINE_HEIGHT));
+      sash.setAttribute("aria-valuemax", String(lowerLimit(state.limits.timelineHeight, MIN_TIMELINE_HEIGHT, maxPx)));
     } else if (axis === "panel-height") {
       const own = state.panelHeights[sash.getAttribute("data-panel") as SidePanelId];
       const shown = own ?? numberAttribute(sash, "data-from");
       if (shown !== undefined) sash.setAttribute("aria-valuenow", String(Math.round(shown)));
       sash.setAttribute("aria-valuemin", String(MIN_PANEL_HEIGHT));
+      sash.setAttribute("aria-valuemax", String(lowerLimit(state.limits.panelHeight, MIN_PANEL_HEIGHT, maxPx)));
     }
   }
 }
@@ -186,8 +204,13 @@ export function attachPanelFrame(root: PanelFrameRoot, store: PanelFrameStore): 
   const render = (state: PanelFrameState): void => draw(root, state);
   render(store.getState());
   const unsubscribe = store.subscribe(render);
+  // The window may change after the page was written: the store works the limits out again and the sashes are redrawn.
+  const view = root.ownerDocument?.defaultView ?? null;
+  const onResize = (): void => store.actions.fitToWindow();
+  view?.addEventListener("resize", onResize);
   return () => {
     unsubscribe();
+    view?.removeEventListener("resize", onResize);
     root.removeEventListener("click", onClick);
     root.removeEventListener("keydown", onKeyDown);
   };

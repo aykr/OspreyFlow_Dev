@@ -122,7 +122,15 @@ export interface PanelFrameState {
   sideWidth: number;
   timelineHeight: number;
   panelHeights: LayoutSizes["panelHeights"];
+  /**
+   * The live upper limits the writer applies now (from `Viewport`), so a page can draw them (`aria-valuemax`). Not kept
+   * anywhere: they come from the window, and are worked out again with each state.
+   */
+  limits: SizeUpperLimits;
 }
+
+/** The upper limit of each size at one moment: what `upperLimits` gives. */
+export type SizeUpperLimits = ReturnType<typeof upperLimits>;
 
 /** How much room there is now: the window's height and the work area's width, in pixels. */
 export interface ViewportSize {
@@ -161,6 +169,14 @@ export function upperLimits(viewport: ViewportSize): { sideWidth: number; timeli
     timelineHeight: Math.max(MIN_TIMELINE_HEIGHT, Math.round(viewport.windowHeight * TIMELINE_HEIGHT_SHARE)),
     panelHeight: Math.max(MIN_PANEL_HEIGHT, Math.round(viewport.windowHeight)),
   };
+}
+
+/**
+ * A page's `maxPx` lowers a limit and never lifts it; a size never goes under its own minimum. The one place this is
+ * worked out: the writer applies it, and the attach draws it as `aria-valuemax`, so the two cannot differ.
+ */
+export function lowerLimit(limit: number, minimum: number, maxPx?: number): number {
+  return Math.max(minimum, maxPx !== undefined && Number.isFinite(maxPx) ? Math.min(limit, maxPx) : limit);
 }
 
 /** What a page knows and the store does not. */
@@ -276,9 +292,7 @@ export function createPanelFrameStore(options: PanelFrameStoreOptions = {}): Pan
     return upperLimits(size);
   };
 
-  /** A page's `maxPx` lowers a limit and never lifts it; a size never goes under its own minimum. */
-  const lowered = (limit: number, minimum: number, maxPx?: number): number =>
-    Math.max(minimum, maxPx !== undefined && finite(maxPx) ? Math.min(limit, maxPx) : limit);
+  const lowered = lowerLimit;
 
   // The one writer: nothing outside this region calls a `layoutSizes` setter or reset.
   // writer: begin
@@ -348,12 +362,20 @@ export function createPanelFrameStore(options: PanelFrameStoreOptions = {}): Pan
       sideWidth: sizes.sideWidth,
       timelineHeight: sizes.timelineHeight,
       panelHeights: { ...sizes.panelHeights },
+      limits: limitsNow(),
     };
   };
 
   const store = createStore<PanelFrameState>(() => snapshot());
   const sync = (): void => {
     store.setState(snapshot(), true);
+  };
+  /** Brings what is kept down to the window, and redraws if the window's limits moved though no size did. */
+  const fitAndRedraw = (): void => {
+    fit();
+    const held = store.getState().limits;
+    const now = limitsNow();
+    if (held.sideWidth !== now.sideWidth || held.timelineHeight !== now.timelineHeight || held.panelHeight !== now.panelHeight) sync();
   };
   // A size written by anything but the writer (a direct call to `layoutSizes` while this store is live) is held to the
   // window at once, before it is drawn: the store does not rely on every caller coming through `writeSize`.
@@ -410,7 +432,7 @@ export function createPanelFrameStore(options: PanelFrameStoreOptions = {}): Pan
     resizeByKey(axis, key, context = {}) {
       const step = key.shiftKey ? SASH_LARGE_STEP : SASH_STEP;
       // The window may have changed since the last key: bring what is kept down to it before stepping from it.
-      fit();
+      fitAndRedraw();
       const state = store.getState();
       const panel = isSidePanelId(context.panel) ? context.panel : null;
       // A vertical sash (the column's) grows leftwards, a stacked panel's grows downwards, the timeline's upwards
@@ -435,12 +457,12 @@ export function createPanelFrameStore(options: PanelFrameStoreOptions = {}): Pan
       return true;
     },
     toggleDetails: () => toggleSidePanel(),
-    fitToWindow: () => fit(),
+    fitToWindow: () => fitAndRedraw(),
   };
 
   return {
     getState() {
-      fit();
+      fitAndRedraw();
       return store.getState();
     },
     subscribe: (listener) => store.subscribe(listener),
