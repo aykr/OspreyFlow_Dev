@@ -304,6 +304,31 @@ export function shownSizes(
   };
 }
 
+/**
+ * The size of one sash as the page shows it: the state's value held between the axis's minimum and the limit the sash
+ * draws as its maximum (the live limit, lowered by the page's `maxPx`). **One place**: the attach draws `aria-valuenow`
+ * and the frame's size attribute from it, and `resizeByKey` steps from it, so a key moves the sash from where the page
+ * shows it, never from a size the page's bound has already lowered (round 10, J). A stacked panel with no height of its
+ * own has the measured `from` (round 10, K), held to the same range. It is only read: a bound met here writes nothing.
+ * Undefined for a stacked panel that has neither a height of its own nor a measured one.
+ */
+export function shownSize(
+  state: Pick<PanelFrameState, "sideWidth" | "timelineHeight" | "panelHeights" | "limits">,
+  axis: ResizeAxis,
+  context: { panel?: SidePanelId | string | null; from?: number; maxPx?: number } = {},
+): number | undefined {
+  if (axis === "side-width") {
+    return clamp(state.sideWidth, MIN_SIDE_WIDTH, lowerLimit(state.limits.sideWidth, MIN_SIDE_WIDTH, context.maxPx));
+  }
+  if (axis === "timeline-height") {
+    return clamp(state.timelineHeight, MIN_TIMELINE_HEIGHT, lowerLimit(state.limits.timelineHeight, MIN_TIMELINE_HEIGHT, context.maxPx));
+  }
+  const own = isSidePanelId(context.panel) ? state.panelHeights[context.panel] : undefined;
+  const value = own ?? context.from;
+  if (value === undefined || !finite(value)) return undefined;
+  return clamp(value, MIN_PANEL_HEIGHT, lowerLimit(state.limits.panelHeight, MIN_PANEL_HEIGHT, context.maxPx));
+}
+
 export function createPanelFrameStore(options: PanelFrameStoreOptions = {}): PanelFrameStore {
   const readViewport = options.viewport ?? windowViewport;
   let folded = readFolded();
@@ -489,12 +514,13 @@ export function createPanelFrameStore(options: PanelFrameStoreOptions = {}): Pan
       }
       if (key.key !== grows && key.key !== shrinks) return false;
       const delta = key.key === grows ? step : -step;
-      if (axis === "side-width") actions.setSideWidth(state.sideWidth + delta, { maxPx: context.maxPx });
-      else if (axis === "timeline-height") actions.setTimelineHeight(state.timelineHeight + delta, { maxPx: context.maxPx });
-      else if (panel !== null) {
-        const from = state.panelHeights[panel] ?? context.from;
-        if (from !== undefined && finite(from)) actions.setPanelHeight(panel, from + delta, { maxPx: context.maxPx });
-      }
+      // Step from the size as the sash shows it (`shownSize`, which the draw reads too), not from the state's value: a
+      // page's bound lowers what is shown and writes nothing, so the state may be higher than the sash says.
+      const from = shownSize(state, axis, { panel, from: context.from, maxPx: context.maxPx });
+      if (from === undefined) return true;
+      if (axis === "side-width") actions.setSideWidth(from + delta, { maxPx: context.maxPx });
+      else if (axis === "timeline-height") actions.setTimelineHeight(from + delta, { maxPx: context.maxPx });
+      else if (panel !== null) actions.setPanelHeight(panel, from + delta, { maxPx: context.maxPx });
       return true;
     },
     toggleDetails: () => toggleSidePanel(),

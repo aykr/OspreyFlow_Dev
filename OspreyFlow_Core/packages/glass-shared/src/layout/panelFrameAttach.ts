@@ -30,6 +30,10 @@
 // analyst never chose (the default) is only drawn at a bound, never written to storage: a draw, a fit and a resize save
 // nothing (Home and the arrow keys, an analyst's act, do).
 //
+// What a sash shows is `shownSize` in the store (round 10): the state's value held to the range drawn beside it, a stacked
+// panel with no height of its own included (its measured `data-from`). The arrow keys step from that same value, so the
+// first press after a bound has lowered what is shown moves the sash by the step; a bound met on a draw still writes nothing.
+//
 // Each sash also carries `aria-valuemax`, the limit the writer applies now (the store's live limit, lowered by the
 // sash's `data-max`), and the attach redraws it when the window it can reach through `ownerDocument.defaultView`
 // resizes. Without a window it draws from the store's own limit and the page may call `fitToWindow` itself.
@@ -39,7 +43,7 @@
 import type { PanelFrameStore, PanelFrameState, ResizeAxis } from "./panelFrameStore";
 import { SIDE_PANEL_IDS, type SidePanelId } from "./panelOrder";
 import { MIN_PANEL_HEIGHT, MIN_SIDE_WIDTH, MIN_TIMELINE_HEIGHT } from "./layoutSizes";
-import { lowerLimit } from "./panelFrameStore";
+import { lowerLimit, shownSize } from "./panelFrameStore";
 
 /** What the attach function reads of an element. A DOM element has all of it; a test's stand-in need only offer it. */
 export interface PanelFrameElement {
@@ -149,18 +153,18 @@ function draw(root: PanelFrameRoot, state: PanelFrameState): void {
     // The maximum is the limit the writer applies: the store's live limit, lowered by this sash's `data-max` as the
     // key path lowers it (`lowerLimit`), so what is drawn is never other than what a key press can reach.
     const maxPx = numberAttribute(sash, "data-max");
+    // `aria-valuenow` is the store's `shownSize`, the value a key steps from, held to the range drawn beside it.
+    const panel = sash.getAttribute("data-panel");
+    const from = numberAttribute(sash, "data-from");
+    const shown = axis === null || !AXES.includes(axis) ? undefined : shownSize(state, axis as ResizeAxis, { panel, from, maxPx });
+    if (shown !== undefined) sash.setAttribute("aria-valuenow", String(Math.round(shown)));
     if (axis === "side-width") {
-      sash.setAttribute("aria-valuenow", String(state.sideWidth));
       sash.setAttribute("aria-valuemin", String(MIN_SIDE_WIDTH));
       sash.setAttribute("aria-valuemax", String(lowerLimit(state.limits.sideWidth, MIN_SIDE_WIDTH, maxPx)));
     } else if (axis === "timeline-height") {
-      sash.setAttribute("aria-valuenow", String(state.timelineHeight));
       sash.setAttribute("aria-valuemin", String(MIN_TIMELINE_HEIGHT));
       sash.setAttribute("aria-valuemax", String(lowerLimit(state.limits.timelineHeight, MIN_TIMELINE_HEIGHT, maxPx)));
     } else if (axis === "panel-height") {
-      const own = state.panelHeights[sash.getAttribute("data-panel") as SidePanelId];
-      const shown = own ?? numberAttribute(sash, "data-from");
-      if (shown !== undefined) sash.setAttribute("aria-valuenow", String(Math.round(shown)));
       sash.setAttribute("aria-valuemin", String(MIN_PANEL_HEIGHT));
       sash.setAttribute("aria-valuemax", String(lowerLimit(state.limits.panelHeight, MIN_PANEL_HEIGHT, maxPx)));
     }
@@ -248,12 +252,11 @@ export function attachPanelFrame(root: PanelFrameRoot, store: PanelFrameStore): 
       const maxPx = numberAttribute(sash, "data-max");
       if (maxPx === undefined) continue;
       const axis = sash.getAttribute("data-sash");
-      if (axis === "side-width") sideWidth = Math.min(sideWidth, lowerLimit(state.limits.sideWidth, MIN_SIDE_WIDTH, maxPx));
-      else if (axis === "timeline-height") timelineHeight = Math.min(timelineHeight, lowerLimit(state.limits.timelineHeight, MIN_TIMELINE_HEIGHT, maxPx));
-      else if (axis === "panel-height") {
-        const id = sash.getAttribute("data-panel") as SidePanelId;
-        const own = panelHeights[id];
-        if (own !== undefined) panelHeights[id] = Math.min(own, lowerLimit(state.limits.panelHeight, MIN_PANEL_HEIGHT, maxPx));
+      const panel = sash.getAttribute("data-panel") as SidePanelId;
+      if (axis === "side-width") sideWidth = Math.min(sideWidth, shownSize(state, "side-width", { maxPx }) ?? sideWidth);
+      else if (axis === "timeline-height") timelineHeight = Math.min(timelineHeight, shownSize(state, "timeline-height", { maxPx }) ?? timelineHeight);
+      else if (axis === "panel-height" && panelHeights[panel] !== undefined) {
+        panelHeights[panel] = Math.min(panelHeights[panel] as number, shownSize(state, "panel-height", { panel, maxPx }) ?? (panelHeights[panel] as number));
       }
     }
     return { ...state, sideWidth, timelineHeight, panelHeights };
