@@ -1369,8 +1369,12 @@ export function People({ api, rights = null }: { api: AdminApi; rights?: Readonl
         setSignInRead("ready");
       })
       .catch(() => {
-        // As before (ADR-148 Amendment 8): a kind that cannot be read is Keycloak's People, with its invite form. It has
-        // answered, so the form no longer waits for it.
+        // This is the one read that does not hold the invite form when it fails, and ADR-148 Amendment 8 is why: a sign-in
+        // kind that cannot be read keeps Keycloak's People, with its invite form (`PeopleEntra.test.tsx`, "keeps Keycloak's
+        // People when the sign-in kind cannot be read"). No access-control harm follows: on an Entra deployment the Conduit
+        // still refuses the invite, in its own words, and the form's offer (roles, clearance, handling codes) is drawn from
+        // the other reads, all of which must have arrived. While the read is late the form still waits (it has not answered);
+        // once it has failed it has answered, so the form no longer waits for it.
         setEntra(false);
         setSignInRead("ready");
       });
