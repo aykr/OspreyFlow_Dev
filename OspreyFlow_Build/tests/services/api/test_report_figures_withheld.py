@@ -468,7 +468,7 @@ async def test_left_out_on_the_borrowed_layer_asks_with_the_scope_of_the_queue()
 # `spec/03_CONDUIT_MIDDLEWARE.md`, the sentence "The flag is a floor, not a ceiling": the KYC and
 # POLE figures are counted as the reader, the reader's rights can lower them, and the flag does not
 # see it, so a lowered total is recorded `withheld=False` today. These two cases state that gap
-# (rule 12). They assert today's answer, deliberately, under a name that says so. **When SE8c
+# (rule 12). They assert today's answer, deliberately, under a name that says so. **When SE8e
 # lands (the counts result gains a `withheld` boolean from the adapter, and the flag becomes one
 # `any` over every figure source) these are the tests that flip: change the last assertion to
 # `is True`.**
@@ -512,16 +512,16 @@ async def _pole_report(reader: Principal) -> tuple[Any, bool]:
     )  # fmt: skip
 
 
-async def test_a_pole_total_lowered_by_the_readers_rights_is_a_known_floor_until_SE8c() -> None:
+async def test_a_pole_total_lowered_by_the_readers_rights_is_a_known_floor_until_SE8e() -> None:
     """The real `ExploreService.counts` over a graph whose count the reader's clearance lowers (3
     people for the reader, 5 for a cleared one). The POLE total really is lower; the flag says
-    `False`: the known gap (spec 03, "a floor, not a ceiling"). Flips to `True` with SE8c."""
+    `False`: the known gap (spec 03, "a floor, not a ceiling"). Flips to `True` with SE8e."""
     cleared, cleared_flag = await _pole_report(_CLEARED)
     lowered, flag = await _pole_report(READER)
     person = lambda f: next(c for c in f.pole.classes if c.pole_class.value == "person").total  # noqa: E731
     assert (person(cleared), person(lowered)) == (5, 3), "the figure really was lowered"
     assert cleared_flag is False
-    assert flag is False  # SE8c: `is True`
+    assert flag is False  # SE8e: `is True`
 
 
 class _KycGraph:
@@ -578,13 +578,13 @@ async def _kyc_report(reader: Principal) -> tuple[Any, bool]:
     )  # fmt: skip
 
 
-async def test_a_kyc_total_lowered_by_the_readers_rights_is_a_known_floor_until_SE8c() -> None:
+async def test_a_kyc_total_lowered_by_the_readers_rights_is_a_known_floor_until_SE8e() -> None:
     """The real `_kyc_figures` (`_customers`, `assess`) over a graph whose answers the reader's
     clearance lowers: a cleared reader's book holds two customers, this reader's one. The KYC total
     really is lower; the flag says `False`: the known gap (spec 03, "a floor, not a ceiling").
-    Flips to `True` with SE8c."""
+    Flips to `True` with SE8e."""
     cleared, cleared_flag = await _kyc_report(_CLEARED)
     lowered, flag = await _kyc_report(READER)
     assert (cleared.kyc.customers, lowered.kyc.customers) == (2, 1), "the figure really was lowered"
     assert cleared_flag is False
-    assert flag is False  # SE8c: `is True`
+    assert flag is False  # SE8e: `is True`

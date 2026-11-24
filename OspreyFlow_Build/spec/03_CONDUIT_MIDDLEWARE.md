@@ -1686,10 +1686,11 @@ owned or team monitor or hotlist alert raised on a dataset the case does not rea
 23 November 2026, option A, which covers the alert part of the flag). **The flag is a floor, not a ceiling.** It does not yet see the
 KYC and POLE figures, which are counted as the reader, so the reader's rights can lower them: a lowered KYC or POLE total is
 recorded `withheld=False` today. This is a known gap, not a design decision (the conductor's finding, reported to the owner on
-24 November 2026). Only the graph adapter can say what its own count left out (rule 3: the Conduit may not compute an unfiltered count and
-compare), so the complete fix is a port change in a part of its own, SE8c: the counts result gains a `withheld` boolean from the
+24 November 2026), and **the floor is the owner's to accept or to replace by the port change; until then a lowered KYC or POLE
+total is recorded `withheld=False`.** Only the graph adapter can say what its own count left out (rule 3: the Conduit may not compute an unfiltered count and
+compare), so the complete fix is a port change in a part of its own, SE8e: the counts result gains a `withheld` boolean from the
 adapter, and the report's flag becomes one `any` over every figure source. `test_report_figures_withheld.py` pins today's answer
-(`..._is_a_known_floor_until_SE8c`); when SE8c lands those are the tests that flip. `GET /v1/exports`
+(`..._is_a_known_floor_until_SE8e`); when SE8e lands those are the tests that flip. `GET /v1/exports`
 reads them all by its one right, as it reads every case's, with one condition on a row that has no case:
 a dataset's release row is in the read only for a reader who may know the dataset, the condition being in the query's
 `WHERE`. At `GET /v1/exports` that reader is the administrator alone, who lists every dataset: the route takes the plain

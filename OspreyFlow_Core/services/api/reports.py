@@ -437,11 +437,11 @@ async def case_report_and_withheld(
     rights can lower them, and a lowered KYC or POLE total is recorded `withheld=False` today. That
     is a known gap, not a design decision: only the graph adapter can say what its own count left
     out (rule 3: the Conduit may not compute an unfiltered count and compare), so the complete fix
-    is a port change in a part of its own (SE8c: the counts result gains a `withheld` boolean from
+    is a port change in a part of its own (SE8e: the counts result gains a `withheld` boolean from
     the adapter, and this flag becomes one `any` over every figure source). The owner's ruling of
     23 November 2026 (option A) covers the alert part only; the KYC and POLE gap is the
     conductor's finding, reported to the owner on 24 November 2026. The known-floor cases are
-    pinned in `test_report_figures_withheld.py` (`..._is_a_known_floor_until_SE8c`): when SE8c
+    pinned in `test_report_figures_withheld.py` (`..._is_a_known_floor_until_SE8e`): when SE8e
     lands they are the tests that flip.
 
     An alert the queue's scope keeps from the reader for who it was given to (a team's alone, a
