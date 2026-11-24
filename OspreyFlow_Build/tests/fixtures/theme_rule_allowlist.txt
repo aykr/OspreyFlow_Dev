@@ -1,4 +1,4 @@
-count: 70
+count: 71
 # Theme rules outside their theme's folder, as they stood on 22 November 2026 (build id PL12, slice PL12b;
 # ADR-152 Amendment 4). One line per rule: path under OspreyFlow_Core, a key that survives a line moving
 # (the rule's selector with its @media condition, whitespace collapsed; a long one is cut and ends in a
@@ -23,6 +23,7 @@ count: 70
 # PL12d); the React workspace's five component stylesheets that name the brand (they stay until the React
 # look is retired, and nothing here moves them); and the sign-in theme's two rules in a Python string in
 # harness/keycloak_theme.py (harness/govuk_chrome.js holds no CSS rule, only markup and selectors in code).
+# The count was raised from 70 to 71 on the owner's word of 24 November 2026 for PL7c's identity-switch rule [data-brand="govuk"][data-govuk-typeface="on"], which moves to the GOV.UK theme folder in PL12d (the entry is then deleted and the count lowered, as above).
 apps/workspace/src/admin/admin.css	.admin-nav--govuk	rule
 apps/workspace/src/admin/admin.css	.admin-nav--govuk .admin-nav__item--current	rule
 apps/workspace/src/admin/admin.css	.admin-nav--govuk .admin-nav__item--current .admin-nav__link	rule
@@ -93,3 +94,4 @@ packages/design/tokens.css	[data-brand="govuk"] *:focus-visible	rule
 packages/design/tokens.css	[data-brand="govuk"] :is(.govuk-header, .govuk-footer, .govuk-phase-banner) a	rule
 packages/design/tokens.css	[data-brand="govuk"] :is(.welcome, .home, .admin-place)	rule
 packages/design/tokens.css	[data-brand="govuk"] :is(.welcome-header, .welcome-hero, .welcome-section, .welcome-footer, .home-... #386f2acc	rule
+packages/design/tokens.css	[data-brand="govuk"][data-govuk-typeface="on"]	rule
