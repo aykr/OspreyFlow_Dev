@@ -22,6 +22,10 @@ const CATALOGUE = {
   built_in: [
     { id: "analyst", label: "Analyst", rights: ["investigate", "triage_alerts"], gives: [] },
     { id: "data_engineer", label: "Data Engineer", rights: ["edit_pipelines", "review_promotions"], gives: [] },
+    // The route always sends every role the form offers (`_built_in_roles`); the form refuses a catalogue without one.
+    { id: "osprey-admin", label: "Admin", rights: ["administer_system", "manage_people"], gives: [] },
+    { id: "reports_viewer", label: "Reports Viewer", rights: ["read_reports"], gives: [] },
+    { id: "rule_author", label: "Rule author", rights: ["author_rules"], gives: [] },
     { id: "super_user", label: "Super user", rights: ["investigate"], gives: ["analyst", "data_engineer", "rule_author"] },
   ],
   custom: [{ id: "r1", name: "Intel desk", version: 2, rights: ["investigate"], changed_by: "a", changed_at: "", holders: 1,

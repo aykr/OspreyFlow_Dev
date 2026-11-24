@@ -16,6 +16,16 @@ afterEach(() => {
 });
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status });
+/** The built-in roles as `list_roles_route` always sends them (`_built_in_roles`): every role the invite form offers, each with
+ * its rights (a short synthetic subset), and the Super user preset. The route never sends an empty list; the form refuses one. */
+const BUILT_IN = [
+  { id: "analyst", label: "Analyst", rights: ["investigate", "triage_alerts"], gives: [] },
+  { id: "data_engineer", label: "Data Engineer", rights: ["edit_pipelines", "operate_schedules"], gives: [] },
+  { id: "osprey-admin", label: "Admin", rights: ["administer_system", "manage_people", "read_audit"], gives: [] },
+  { id: "reports_viewer", label: "Reports Viewer", rights: ["read_reports"], gives: [] },
+  { id: "rule_author", label: "Rule author", rights: ["author_rules"], gives: [] },
+  { id: "super_user", label: "Super user", rights: ["investigate", "author_rules"], gives: ["analyst", "data_engineer", "rule_author"] },
+];
 const OID = "50000000-0000-4000-8000-000000000002";
 const ANA = { id: OID, username: "ana@example.test", name: "Ana Analyst", enabled: true, roles: ["analyst"],
               clearance: "OFFICIAL", org_unit: "unit-1", receivable_handling_codes: ["P"] };  // prettier-ignore
@@ -35,7 +45,7 @@ function serve(administratorSets: string[], handler: (path: string, init?: Reque
       if (path === "sign-in") return json(200, { kind: "entra", administrator_sets: administratorSets });
       if (path === "people") return json(200, [ANA]);
       if (path === "people/rows") return json(200, { rows: [], without_author: [] });
-      if (path === "roles") return json(200, { built_in: [], custom: [] });
+      if (path === "roles") return json(200, { built_in: BUILT_IN, custom: [] });
       if (path === "organisation-arrivals") return json(200, []);
       return json(200, {});
     }),

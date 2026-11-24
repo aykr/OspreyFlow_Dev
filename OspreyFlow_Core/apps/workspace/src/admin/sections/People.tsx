@@ -59,6 +59,15 @@ export const ROLES: { id: string; label: string }[] = [
   { id: "rule_author", label: "Rule author" },
 ];
 const ROLE_IDS = new Set(ROLES.map((r) => r.id));
+/** Whether a catalogue's built-in list names every role the form offers, each with its rights (`list_roles_route` always
+ * does). Anything less is not read in full: a role missing from it would be offered as if it gave nothing. */
+function namesEveryRoleOffered(builtIn: unknown): builtIn is { id: string; rights: string[] }[] {
+  if (!Array.isArray(builtIn)) return false;
+  return ROLES.every((role) => {
+    const named = builtIn.find((b) => b && typeof b === "object" && (b as { id?: unknown }).id === role.id) as { rights?: unknown } | undefined;
+    return Array.isArray(named?.rights) && named.rights.length > 0 && named.rights.every((r) => typeof r === "string");
+  });
+}
 /** The Super user preset (ADR-145 Amendment 5 point 2): three roles given together, never one. */
 export const SUPER_USER = ["analyst", "data_engineer", "rule_author"];
 
@@ -153,8 +162,16 @@ interface Scheme {
 }
 
 /** What is known of the scheme. The invite form is drawn only once it is `ready` (AD2); the rows read the scheme as before
- * and see none of it until then. A later failure keeps the earlier answer. */
-type SchemeRead = { state: "waiting" } | { state: "unavailable" } | { state: "ready"; scheme: Scheme };
+ * and see none of it until then. A later failure keeps the earlier answer. A scheme that names no classification at all is
+ * not loaded (AD5): it is unavailable, `empty`, and said in its own words. */
+type SchemeRead =
+  | { state: "waiting" }
+  | { state: "unavailable"; empty?: boolean }
+  | { state: "ready"; scheme: Scheme };
+
+/** One more thing the invite form reads, with no answer of its own to keep: not yet, could not be, or in (AD5). A later
+ * failure keeps the earlier answer. */
+type Arrival = "waiting" | "unavailable" | "ready";
 
 const NO_SCHEME: Scheme = { levels: [], codes: [] };
 
@@ -162,17 +179,19 @@ function useSchemeRead(api: AdminApi): SchemeRead {
   const [read, setRead] = useState<SchemeRead>({ state: "waiting" });
   useEffect(() => {
     let current = true;
-    const failed = () => {
-      if (current) setRead((before) => (before.state === "ready" ? before : { state: "unavailable" }));
+    const failed = (empty = false) => {
+      if (current) setRead((before) => (before.state === "ready" ? before : { state: "unavailable", ...(empty ? { empty } : {}) }));
     };
     fetch(`${api.apiBaseUrl}/v1/handling-scheme`, { headers: { Authorization: `Bearer ${api.bearerToken}` } })
       .then((r) => (r.ok ? r.json() : null))
       .then((body: { classification?: unknown; handling_codes?: Record<string, unknown> } | null) => {
-        // An answer that names no classifications is not a scheme: nothing could be offered from it.
+        // An answer that names no classifications is not a scheme: nothing could be offered from it, and an empty list is the
+        // same (AD5): a form drawn from it would state what the inviter can give on the strength of nothing.
         if (!body || !Array.isArray(body.classification)) return failed();
+        if (body.classification.length === 0) return failed(true);
         if (current) setRead({ state: "ready", scheme: { levels: body.classification.map(String), codes: Object.keys(body.handling_codes ?? {}) } });
       })
-      .catch(failed);
+      .catch(() => failed());
     return () => {
       current = false;
     };
@@ -1010,37 +1029,55 @@ function AddByObjectIdForm({ api, onAdded }: { api: AdminApi; onAdded: (p: Perso
   );
 }
 
-/** The invite form is drawn only when everything it depends on has loaded (AD2): the inviter's own details and the handling
- * scheme. Until then it says it is reading; if either could not be had it says so in words; it never shows a choice, nor a
+/** The invite form is drawn only when everything it reads has loaded (AD2; one loader in AD5): the inviter's own details,
+ * the handling scheme, the roles' catalogue (which decides the role boxes offered), how people sign in (which decides
+ * whether this form is drawn at all, or Entra's instead; one that cannot be read is Keycloak's, as before) and the giver's own rights. Until then it says it is reading; for each read that could
+ * not be had it says so in its own words, never hiding one failure behind another; it never shows a choice, nor a
  * statement of what the inviter can give. A change in what it was drawn from (a new key) draws a fresh form, never a choice
  * quietly altered; the same answers read again (a new token) keep the form, and a later failure does not replace it. */
 function InviteGate({
   read,
   schemeRead,
+  roles,
+  signIn,
   ...rest
 }: {
   read: InviterRead;
   schemeRead: SchemeRead;
+  roles: Arrival;
+  signIn: Arrival;
   api: AdminApi;
   ctx: Context;
   onInvited: (d: SignInDelivery) => void;
 }) {
-  if (read.state === "ready" && schemeRead.state === "ready") {
+  const giverKnown = Boolean(rest.ctx.giver);
+  if (read.state === "ready" && schemeRead.state === "ready" && roles === "ready" && signIn === "ready" && giverKnown) {
     const { inviter } = read;
     const { scheme } = schemeRead;
     const key = [inviter.clearance, inviter.codes.join(","), scheme.levels.join(","), scheme.codes.join(",")].join("|");
     return <InviteForm key={key} inviter={inviter} scheme={scheme} {...rest} />;
   }
-  const unavailable = read.state === "unavailable" ? "Your own clearance and handling codes" : schemeRead.state === "unavailable" ? "This deployment's classifications and handling codes" : null;
+  const unavailable = [
+    read.state === "unavailable" ? "Your own clearance and handling codes could not be read" : null,
+    schemeRead.state === "unavailable"
+      ? schemeRead.empty
+        ? "This deployment's handling scheme has no classification levels"
+        : "This deployment's classifications and handling codes could not be read"
+      : null,
+    roles === "unavailable" ? "The roles this deployment offers could not be read" : null,
+  ].filter((words): words is string => words !== null);
   return (
     <section aria-label="Invite a person" style={{ display: "grid", gap: "var(--sp-8)", maxWidth: 520, border: "1px solid var(--border-subtle)", padding: "var(--sp-12)" }}>
       <h2 className="value" style={{ margin: 0 }}>Invite a person</h2>
-      {unavailable === null ? (
+      {unavailable.length === 0 ? (
         <p role="status" className="label" style={{ margin: 0 }}>Reading what you can give. The form appears when that is known.</p>
       ) : (
-        <p role="alert" className="label" style={{ margin: 0 }}>
-          {unavailable} could not be read, so nobody can be invited from here now. Reload the page to try again.
-        </p>
+        <div role="alert" className="label" style={{ display: "grid", gap: "var(--sp-4)" }}>
+          {unavailable.map((words) => (
+            <p key={words} style={{ margin: 0 }}>{`${words}, so nobody can be invited from here now.`}</p>
+          ))}
+          <p style={{ margin: 0 }}>Reload the page to try again.</p>
+        </div>
       )}
     </section>
   );
@@ -1296,17 +1333,28 @@ export function People({ api, rights = null }: { api: AdminApi; rights?: Readonl
   const schemeRead = useSchemeRead(api);
   const scheme = schemeRead.state === "ready" ? schemeRead.scheme : NO_SCHEME;
   const inviter = useInviter();
-  // The roles and the case levels are the row's context; either failing leaves the rest working.
+  // The invite form's other reads (AD5): the roles' catalogue and how people sign in. Neither holds an answer of its own here
+  // (the catalogue is in `ctx`, the sign-in kind in `entra`); each says only whether it has come, so the form waits for it.
+  const [rolesRead, setRolesRead] = useState<Arrival>("waiting");
+  const [signInRead, setSignInRead] = useState<Arrival>("waiting");
+  const unavailableUnlessRead = (before: Arrival): Arrival => (before === "ready" ? before : "unavailable");
+  // The roles and the case levels are the row's context; either failing leaves the rest working. The roles' catalogue is
+  // also read by the invite form, which waits for it.
   const readContext = () => {
     listRoles(api)
-      .then((c) =>
+      .then((c) => {
+        // An answer that is not a catalogue in full is not one: a form drawn from it would offer every role, Admin included,
+        // to a giver who does not hold its rights (`rightsOf` reads a role the catalogue lacks as giving nothing). The real
+        // route always names every built-in role with its rights (AD5).
+        if (!c || !Array.isArray(c.custom) || !namesEveryRoleOffered(c.built_in)) return setRolesRead(unavailableUnlessRead);
         setCtx((x) => ({
           ...x,
-          custom: c.custom ?? [],
-          builtIn: Object.fromEntries((c.built_in ?? []).map((b) => [b.id, b.rights as string[]])),
-        })),
-      )
-      .catch(() => undefined);
+          custom: c.custom,
+          builtIn: Object.fromEntries(c.built_in.map((b) => [b.id, b.rights as string[]])),
+        }));
+        setRolesRead("ready");
+      })
+      .catch(() => setRolesRead(unavailableUnlessRead));
     peopleRows(api)
       .then((rows) => setCtx((x) => ({ ...x, rows: rows && Array.isArray(rows.rows) ? rows : null })))
       .catch(() => undefined);
@@ -1318,8 +1366,18 @@ export function People({ api, rights = null }: { api: AdminApi; rights?: Readonl
       .then((k) => {
         setEntra(k?.kind === "entra");
         setAdministratorSets((k?.administrator_sets ?? []).filter((f): f is AccessField => EVERY_FIELD.includes(f as AccessField)));
+        setSignInRead("ready");
       })
-      .catch(() => setEntra(false));
+      .catch(() => {
+        // This is the one read that does not hold the invite form when it fails, and ADR-148 Amendment 8 is why: a sign-in
+        // kind that cannot be read keeps Keycloak's People, with its invite form (`PeopleEntra.test.tsx`, "keeps Keycloak's
+        // People when the sign-in kind cannot be read"). No access-control harm follows: on an Entra deployment the Conduit
+        // still refuses the invite, in its own words, and the form's offer (roles, clearance, handling codes) is drawn from
+        // the other reads, all of which must have arrived. While the read is late the form still waits (it has not answered);
+        // once it has failed it has answered, so the form no longer waits for it.
+        setEntra(false);
+        setSignInRead("ready");
+      });
     readContext();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [api.apiBaseUrl, api.bearerToken]);
@@ -1418,6 +1476,8 @@ export function People({ api, rights = null }: { api: AdminApi; rights?: Readonl
         <InviteGate
           api={api}
           schemeRead={schemeRead}
+          roles={rolesRead}
+          signIn={signInRead}
           read={inviter}
           ctx={ctx}
           onInvited={(delivery) => {

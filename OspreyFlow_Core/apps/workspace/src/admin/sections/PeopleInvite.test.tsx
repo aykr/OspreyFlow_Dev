@@ -18,6 +18,16 @@ afterEach(() => {
 });
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status });
+/** The built-in roles as `list_roles_route` always sends them (`_built_in_roles`): every role the invite form offers, each with
+ * its rights (a short synthetic subset), and the Super user preset. The route never sends an empty list; the form refuses one. */
+const BUILT_IN = [
+  { id: "analyst", label: "Analyst", rights: ["investigate", "triage_alerts"], gives: [] },
+  { id: "data_engineer", label: "Data Engineer", rights: ["edit_pipelines", "operate_schedules"], gives: [] },
+  { id: "osprey-admin", label: "Admin", rights: ["administer_system", "manage_people", "read_audit"], gives: [] },
+  { id: "reports_viewer", label: "Reports Viewer", rights: ["read_reports"], gives: [] },
+  { id: "rule_author", label: "Rule author", rights: ["author_rules"], gives: [] },
+  { id: "super_user", label: "Super user", rights: ["investigate", "author_rules"], gives: ["analyst", "data_engineer", "rule_author"] },
+];
 
 const ORDER = ["PUBLIC", "OFFICIAL", "OFFICIAL-SENSITIVE"];
 const SCHEME = { classification: ORDER, handling_codes: { P: {}, C: {}, R: {} } };
@@ -77,7 +87,7 @@ function serve(me: Me, gates: { meGate?: Promise<void>; schemeGate?: Promise<voi
       }
       if (admin === "people") return json(200, [ANA]);
       if (admin === "people/rows") return json(200, { rows: [], without_author: [] });
-      if (admin === "roles") return json(200, { built_in: [], custom: [] });
+      if (admin === "roles") return json(200, { built_in: BUILT_IN, custom: [] });
       if (admin === "organisation-arrivals") return json(200, []);
       if (admin === "sign-in") return json(200, { kind: "keycloak" });
       return json(200, {});
@@ -221,7 +231,7 @@ describe("the form is drawn only when everything it depends on has loaded", () =
         if (path === "people") return json(200, [ANA]);
         if (path === "/v1/handling-scheme") return json(200, SCHEME);
         if (path === "people/rows") return json(200, { rows: [], without_author: [] });
-        if (path === "roles") return json(200, { built_in: [], custom: [] });
+        if (path === "roles") return json(200, { built_in: BUILT_IN, custom: [] });
         if (path === "sign-in") return json(200, { kind: "keycloak" });
         return json(200, path === "organisation-arrivals" ? [] : {});
       }),
