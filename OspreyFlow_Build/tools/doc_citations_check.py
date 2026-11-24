@@ -50,6 +50,14 @@ named as an example of what *not* to do. Each entry needs a stated reason in a c
 Every non-gitignored absence found on 25 September 2026 was corrected in place rather than
 allowlisted; the first entries (15 October 2026) are files a record says were removed, and the
 launcher ADR-114 stage B2d took out.
+
+**The slice line's working papers are skipped, by folder (slice BL1c, the owner's ruling 1 of
+21 November 2026).** A brief, table or proposal of the conductor's that cites a file not yet
+written (or mistyped) turned `main` red and stopped whichever slice picked it up: four stops in two
+days, none a fault in the product. `LANE_PAPERS_ROOT` and `LANE_PAPERS_FOLDERS` name what is
+skipped, in code and not as allowlist entries; everything else is checked as before, including the
+slice line's own `README.md` and any other sub-folder of `process/lanes/v062/`. The last line of
+output says how many files were skipped, counted, so the skip is visible.
 """
 
 from __future__ import annotations
@@ -122,7 +130,14 @@ MOVED.update({f"scripts/{name}": f"tools/{name}" for name in _MOVED_TOOLS})
 
 #: Where citations live. Documents and the code comments that carry the "name the test" habit.
 SEARCH_ROOTS: tuple[str, ...] = (
-    "spec", "process", "tools", "apps", "services", "packages", "scripts", "harness",
+    "spec",
+    "process",
+    "tools",
+    "apps",
+    "services",
+    "packages",
+    "scripts",
+    "harness",
 )
 
 #: File types whose own text is scanned. Not `.json`/`.lock`/`.yaml` — a path in a config file is a
@@ -145,6 +160,14 @@ CITATION = re.compile(
 SKIP_DIRECTORIES = frozenset({"node_modules", ".venv", "graphify-out", "dist", "__pycache__"})
 SKIP_FILES = frozenset({"tools/doc_citations_check.py", "tests/test_doc_citations_check.py"})
 
+#: The slice line's working papers (slice BL1c): skipped by path. Relative to the repository's
+#: logical root (`OspreyFlow_Build/process/...` is `process/...`). Exactly these and nothing else:
+#: the files directly in `LANE_PAPERS_ROOT` (`RULINGS.md`, `CONDUCTOR_BRIEF.md`, the dated notes),
+#: and everything under each folder of `LANE_PAPERS_FOLDERS`. Not its other sub-folders, not
+#: the line's own `README.md`, not the line's scripts, not any other lane.
+LANE_PAPERS_ROOT = "process/lanes/v062"
+LANE_PAPERS_FOLDERS = ("slices", "backlog", "slice-line/proposals", "slice-line/diffs")
+
 
 def load_allowlist(path: Path = ALLOWLIST_PATH) -> set[str]:
     if not path.exists():
@@ -165,7 +188,24 @@ def load_gitignore_spec(root: Path = REPO_ROOT) -> pathspec.PathSpec:
     )
 
 
-def scanned_files(root: Path = REPO_ROOT) -> list[Path]:
+def is_lane_paper(relative: str) -> bool:
+    """Is this logical path one of the slice line's working papers (`LANE_PAPERS_*`)? Matched by
+    whole path parts, so `slices_extra/` is not `slices/`."""
+    parts = PurePath(relative).parts
+    root = PurePath(LANE_PAPERS_ROOT).parts
+    if parts[: len(root)] != root:
+        return False
+    below = parts[len(root) :]
+    if len(below) == 1:
+        return True
+    return any(
+        len(below) > len(folder) and below[: len(folder)] == folder
+        for folder in (PurePath(name).parts for name in LANE_PAPERS_FOLDERS)
+    )
+
+
+def _candidates(root: Path) -> list[Path]:
+    """Every file of a scanned type under a search root, before the working papers are skipped."""
     found = []
     for directory in SEARCH_ROOTS:
         base = root / directory
@@ -180,6 +220,16 @@ def scanned_files(root: Path = REPO_ROOT) -> list[Path]:
                 continue
             found.append(path)
     return sorted(found)
+
+
+def scanned_files(root: Path = REPO_ROOT) -> list[Path]:
+    return [path for path in _candidates(root) if not is_lane_paper(str(rel(path, root)))]
+
+
+def skipped_files(root: Path = REPO_ROOT) -> list[Path]:
+    """The files of a scanned type that `LANE_PAPERS_*` took out of the scan, counted for the last
+    line of output."""
+    return [path for path in _candidates(root) if is_lane_paper(str(rel(path, root)))]
 
 
 def citations_in(text: str) -> list[str]:
@@ -218,8 +268,15 @@ def find_broken(root: Path = REPO_ROOT) -> list[str]:
     return broken
 
 
-def main() -> int:
-    broken = find_broken()
+def _skipped_line(root: Path) -> str:
+    return (
+        f"citation-check: skipped {len(skipped_files(root))} files "
+        f"(the slice line's working papers under {LANE_PAPERS_ROOT}/)"
+    )
+
+
+def main(root: Path = REPO_ROOT) -> int:
+    broken = find_broken(root)
     if broken:
         print(
             f"doc-citations-check: {len(broken)} citation(s) name a file that does not exist. A "
@@ -233,8 +290,13 @@ def main() -> int:
             f"{rel(ALLOWLIST_PATH, REPO_ROOT)} with a stated reason.",
             file=sys.stderr,
         )
+        sys.stderr.flush()
+        print(_skipped_line(root))
         return 1
-    print(f"doc-citations-check: {len(scanned_files())} file(s) scanned, every cited path exists.")
+    print(
+        f"doc-citations-check: {len(scanned_files(root))} file(s) scanned, every cited path exists."
+    )
+    print(_skipped_line(root))
     return 0
 
 
