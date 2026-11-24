@@ -13,6 +13,9 @@ Which test fails if the invariant is broken (rule 12):
   `test_a_table_repeating_an_id_is_refused`);
 * a row has an empty cell, a "kept" value that is neither of the two, or a scripts-off cell that does not say "open":
   `test_every_row_is_complete` and `test_a_row_with_an_empty_cell_is_refused`;
+* a scripts-off cell names a size, order or fold "kept" in this browser (with no script nothing reads the browser's
+  storage, so the state is the default one): `test_no_scripts_off_cell_names_a_kept_value` and the planted cases
+  `test_a_scripts_off_cell_naming_a_kept_height_is_refused` and `test_a_scripts_off_cell_naming_a_kept_order_is_refused`;
 * the store keeps something the table says is for the tab only, or the other way: `test_the_store_keeps_what_the_table_says`
   and `test_a_store_that_disagrees_with_the_table_is_refused`;
 * the minimum width is anything but 300 in the spec or in `layoutSizes.ts`, or a 240 minimum is back in the sashes'
@@ -111,6 +114,19 @@ def check_rows_complete(text: str) -> list[str]:
     return faults
 
 
+# Words that promise a state only a script could read back from the browser's storage.
+KEPT_PROMISE = re.compile(r"\b(kept|keeps|keep|stored|saved|remembered|last used|chosen)\b", re.IGNORECASE)
+
+
+def check_scripts_off_names_no_kept_value(text: str) -> list[str]:
+    """With no script nothing reads localStorage: a scripts-off cell must give the default state, never a kept one."""
+    faults = []
+    for row in table_rows(text):
+        if len(row) == 4 and (found := KEPT_PROMISE.search(row[3])):
+            faults.append(f"{row_id(row)}: the scripts-off cell says '{found.group(0)}': {row[3]}")
+    return faults
+
+
 def kept_by_id(text: str) -> dict[str, str]:
     return {row_id(row): KEPT_WORDS.get(row[1].lower(), row[1]) for row in table_rows(text)}
 
@@ -156,6 +172,16 @@ def test_the_table_names_all_ten_ids() -> None:
 
 def test_every_row_is_complete() -> None:
     assert check_rows_complete(spec_text()) == []
+
+
+def test_no_scripts_off_cell_names_a_kept_value() -> None:
+    assert check_scripts_off_names_no_kept_value(spec_text()) == []
+
+
+def test_the_timeline_rows_say_130px_with_no_script() -> None:
+    rows = {row_id(row): row[3] for row in table_rows(spec_text())}
+    for action in ("hide-and-show-the-timeline-by-keyboard", "resize-the-timeline-by-keyboard"):
+        assert "130px" in rows[action], rows[action]
 
 
 def test_the_store_keeps_what_the_table_says() -> None:
@@ -215,6 +241,29 @@ def test_a_row_kept_in_a_way_the_spec_does_not_name_is_refused() -> None:
     cells[1] = " on the server "
     lines[index] = "|" + "|".join(cells) + "|"
     assert any("on the server" in fault for fault in check_rows_complete("\n".join(lines)))
+
+
+def plant_scripts_off(row_index: int, cell: str) -> str:
+    ids = registry_ids()
+    lines = spec_text().splitlines()
+    index = next(i for i, line in enumerate(lines) if line.startswith(f"| `{ids[row_index]}`"))
+    cells = lines[index].strip().strip("|").split("|")
+    cells[3] = f" {cell} "
+    lines[index] = "|" + "|".join(cells) + "|"
+    return "\n".join(lines)
+
+
+def test_a_scripts_off_cell_naming_a_kept_height_is_refused() -> None:
+    # The wording the table carried before round 5, in the cell it was in.
+    planted = plant_scripts_off(2, "Open, its plot shown at the height kept or 130px, with no control")
+    faults = check_scripts_off_names_no_kept_value(planted)
+    assert len(faults) == 1 and "hide-and-show-the-timeline-by-keyboard" in faults[0], faults
+
+
+def test_a_scripts_off_cell_naming_a_kept_order_is_refused() -> None:
+    planted = plant_scripts_off(3, "Open in the order stored in this browser, with no control")
+    faults = check_scripts_off_names_no_kept_value(planted)
+    assert len(faults) == 1 and "stored" in faults[0], faults
 
 
 def test_a_store_that_disagrees_with_the_table_is_refused() -> None:
