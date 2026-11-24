@@ -20,18 +20,18 @@ shared package: it passes with the real lines and fails, naming the missing path
 Nothing builds the image in CI yet, so this is the only thing that would notice a COPY line that was left out.
 
 **Item 6, the gates read `apps/pages`.** Each of `ui_words_check`, `design_check`, `colour_drift_check` and
-`no_branches_check` is given a planted violation under a copy of the pages roots, in each of the three roots, and flags
+`no_branches_check` is given a planted violation under a copy of the pages roots, in each of the four roots (the GOV.UK tree's, `tree-govuk`, joined them in slice GR2a), and flags
 it; the same copy without it is clean. `client_name_check` reads every tracked file and so reads the pages already: that
-is shown with a planted name in each root. The copy walker of `test_copy_says_no_client.py` reads the three roots. The walkers of
+is shown with a planted name in each root. The copy walker of `test_copy_says_no_client.py` reads the four roots. The walkers of
 `test_people_section_words.py` (the "Admin › People" name) and `test_guide_navigation_words.py` (the old view words)
-read the same three roots and `.njk` templates too, leaving a template's `{# #}` and HTML comments out; each has its own
+read the same roots and `.njk` templates too, leaving a template's `{# #}` and HTML comments out; each has its own
 plants in its own file (round 5). A `.njk` template is read by `ui_words_check`, `colour_drift_check` and `no_branches_check` as text (their suffix lists
 now name it); `design_check` runs `impeccable`, which reads HTML and not `.njk`, so the gate hands it each template as a
 copy named `.html` and puts the template's own path back on what it finds (`test_a_template_is_read_by_the_design_detector`
 plants an inline side stripe in a template and shows it flagged; without the reader it is not).
 
 **The folders this test walks** (the conductor's scan-map row): under `OspreyFlow_Core`, `apps/pages/dist` (the build it
-makes itself, in a temporary folder, never the real one), `apps/pages/tree-default`, `apps/pages/modules` and
+makes itself, in a temporary folder, never the real one), `apps/pages/tree-default`, `apps/pages/tree-govuk`, `apps/pages/modules` and
 `apps/pages/server/views` (copied into temporary folders, to plant in), `packages/design` and the files of the image's
 builder stage (copied); and `apps/pages/Dockerfile`, `.dockerignore`. It never writes into the repository.
 """
@@ -66,7 +66,12 @@ PAGES = CORE / "apps" / "pages"
 DESIGN = CORE / "packages" / "design"
 DOCKERFILE = (PAGES / "Dockerfile").read_text(encoding="utf-8")
 ASSETS_SCRIPT = PAGES / "scripts" / "assets.mjs"
-PAGES_ROOTS = ("apps/pages/tree-default", "apps/pages/modules", "apps/pages/server/views")
+PAGES_ROOTS = (
+    "apps/pages/tree-default",
+    "apps/pages/tree-govuk",
+    "apps/pages/modules",
+    "apps/pages/server/views",
+)
 NODE = shutil.which("node")
 
 
@@ -426,16 +431,19 @@ def test_the_pages_roots_are_the_ones_the_layout_names() -> None:
 PLANTS = {
     "ui_words": {
         "apps/pages/tree-default/x.njk": "{% block content %}\n<h1>Review the target model</h1>\n{% endblock %}\n",
+        "apps/pages/tree-govuk/x.njk": "{% block content %}\n<h1>Review the target model</h1>\n{% endblock %}\n",
         "apps/pages/modules/x.ts": 'export const label = "Target model";\n',
         "apps/pages/server/views/x.njk": "<p>Edit the\n   target model here.</p>\n",
     },
     "colour_drift": {
         "apps/pages/tree-default/x.njk": '<svg><path fill="#ff00aa" d="M0 0"/></svg>\n',
+        "apps/pages/tree-govuk/x.njk": '<svg><path fill="#ff00aa" d="M0 0"/></svg>\n',
         "apps/pages/modules/x.ts": 'export const stripe = "rgba(12, 34, 56, 0.5)";\n',
         "apps/pages/server/views/x.njk": '<rect fill="#12ab34"/>\n',
     },
     "no_branches": {
         "apps/pages/tree-default/x.njk": '<a href="/v1/investigations/{{ id }}/branch-by-filter">Branch</a>\n',
+        "apps/pages/tree-govuk/x.njk": '<a href="/v1/investigations/{{ id }}/branch-by-filter">Branch</a>\n',
         "apps/pages/modules/x.ts": "export const branchNodes = () => [];\n",
         "apps/pages/server/views/x.njk": "<li>Branch of {{ name }}</li>\n",
     },
@@ -490,7 +498,7 @@ def test_the_colour_drift_check_reads_the_pages_roots(
 
 
 def test_the_colour_drift_check_names_the_pages_roots_itself() -> None:
-    """The real gate's own list, not a patched one: the three roots are in it, each with nothing exempt."""
+    """The real gate's own list, not a patched one: the four roots are in it, each with nothing exempt."""
     listed = {
         root.relative_to(CORE).as_posix(): exempt for root, exempt in colour_drift_check.SCANNED
     }
@@ -519,7 +527,10 @@ SIDE_STRIPE = (
 )
 
 
-@pytest.mark.parametrize("path", ["apps/pages/tree-default/x.njk", "apps/pages/server/views/x.njk"])
+@pytest.mark.parametrize(
+    "path",
+    ["apps/pages/tree-default/x.njk", "apps/pages/tree-govuk/x.njk", "apps/pages/server/views/x.njk"],
+)
 def test_a_template_is_read_by_the_design_detector(
     path: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -559,6 +570,7 @@ def test_the_design_detector_reads_a_module_and_a_template_through_main(
 
 CLIENT_PLANTS = {
     "apps/pages/tree-default/x.njk": f"<p>Prepared for {SYNTHETIC_CLIENT}.</p>\n",
+    "apps/pages/tree-govuk/x.njk": f"<p>Prepared for {SYNTHETIC_CLIENT}.</p>\n",
     "apps/pages/modules/x.ts": f'export const label = "{SYNTHETIC_CLIENT}";\n',
     "apps/pages/server/views/x.njk": f"<p>{SYNTHETIC_CLIENT}</p>\n",
 }
@@ -588,6 +600,7 @@ def test_the_client_name_check_reads_the_pages_roots(
 
 COPY_PLANTS = {
     "apps/pages/tree-default/x.njk": "<p>The client's connection strength is to be confirmed.</p>\n",
+    "apps/pages/tree-govuk/x.njk": "<p>The client's connection strength is to be confirmed.</p>\n",
     "apps/pages/modules/x.ts": 'export const note = "TBC with the owner";\n',
     "apps/pages/server/views/x.njk": "<p>Not confirmed.</p>\n",
 }
