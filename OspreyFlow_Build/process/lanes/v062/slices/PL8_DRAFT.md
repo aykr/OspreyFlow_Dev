@@ -1,4 +1,4 @@
-# PL8: the panel frame for the pages, in plain TypeScript: DRAFT, NOT STARTED, NO ROW (the conductor, the night of 23 November 2026)
+# SUPERSEDED on 24 November 2026: the owner ruled the five points; the first slice is `slices/PL8a.md` (this paper is kept as the record of the questions). PL8: the panel frame for the pages, in plain TypeScript: was a DRAFT (the conductor, the night of 23 November 2026)
 
 **The owner asked for a part for every build whose needs are met. PL8's needs (PL3, PL4, PL9, PL10) are met on the plan's terms, but a read-only scout found two conflicts between the plan's text and the specification and a gap in PL9. They are the owner's, so no row is written and no builder can start.**
 

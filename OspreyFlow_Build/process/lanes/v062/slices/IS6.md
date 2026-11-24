@@ -1,4 +1,4 @@
-# Slice IS6 · IS6 · The dataset's run order, stored (first slice of the whole-dataset load) — DRAFT: NOT STARTED, NO ROW: it waits for the owner's seven rulings below
+# SUPERSEDED on 24 November 2026: the owner ruled all seven points; the first slice is `slices/IS6a.md` (this paper is kept as the record of the questions). Slice IS6 · IS6 · The dataset's run order, stored (first slice of the whole-dataset load) — was a DRAFT
 
 **Written by the conductor on the night of 23 November 2026 from a read-only scout of main. There is no row for it in `slices.tsv`, so no builder can start it.** The owner asked for a part for every build whose needs are met; this one's first slice needs rulings that the decision records leave open (CLAUDE.md rule 11: a genuine spec gap is fixed in the spec, by an ADR if it is a real decision; that is the owner's).
 

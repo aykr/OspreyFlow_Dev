@@ -1,4 +1,4 @@
-# AD3, RM1, GR2 and GR3: DRAFTS, NOT STARTED, NO ROWS (the conductor, the night of 23 November 2026)
+# SUPERSEDED on 24 November 2026: the owner ruled all seven points; the briefs are `slices/GR2a.md`, `GR3a.md`, `AD3a.md` and `RM1a.md` (this paper is kept as the record of the questions). AD3, RM1, GR2 and GR3: were DRAFTS (the conductor, the night of 23 November 2026)
 
 **The owner asked for a part for every build whose needs are met and that has nothing cut. These four are met on the plan's own needs (PL3, PL4, PL9, PL10) and none has a slice, but three read-only scouts found that none can start without the owner's rulings, and they share the first one. No row is written, so no builder can start any of them.** Same treatment as PL7f and IS6.
 

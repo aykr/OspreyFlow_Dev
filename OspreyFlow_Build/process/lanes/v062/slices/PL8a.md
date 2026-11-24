@@ -1,0 +1,40 @@
+# Slice PL8a · PL8 · The panel frame's logic and storage in plain TypeScript, no page (the first slice of the pages' panel actions)
+
+- **Build id:** PL8 (a panel frame for the pages, in plain TypeScript with no React: the ten panel actions of today's workspace). **Needs (merged):** PL3, PL4, PL10 and PL9a; **PL9's second half is not cut, so a slice that mounts this on a page waits for it (the owner's ruling).** ADR-152 decision 3 (one panel pattern, a vanilla store, no inline style attribute), decision 8 (no inline style, no `unsafe-inline`), invariants I1, I7, I9; ADR-070 Amendment 1 (the GOV.UK tree is light only, no theme button); `OspreyFlow_Build/spec/02_GLASS_FRONTEND.md` (about lines 315 to 339 on the panels' choices, 369 to 377 on the sashes; read the numbers in the file).
+- **Dial setting:** balanced. **Rounds limit:** the dial's (8).
+- **The owner's rulings of 24 November 2026 (in chat, "My rulings on the drafts"), which this brief carries out:**
+  1. "**spec/02 wins action by action; where today's workspace differs from it, the report names it for me.**" (Spec 02 says hiding and showing a panel is the tab's choice, not stored, and each panel opens in its normal state on reload; reorder and fold are kept in this browser.)
+  2. "**The minimum side width is 300, correct spec/02.**" (The spec says "at least 240 pixels"; `MIN_SIDE_WIDTH` in the code is 300.)
+  3. "**Scripts off: every panel open in its normal state, no controls.**"
+  4. "**`frame-scroll.spec.ts` is in scope**" (for the PL8 build; this first slice does not mount anything, so it does not touch it: say so and say which later slice does).
+  5. "**Start the first slice (logic and storage, no page) on PL9a; slices that mount it on a page wait for PL9's second half.**"
+- **Every finding that names a key, a credential or a security rule is the owner's.**
+
+## What exists on main (the scout's findings of 23 November; re-read each)
+
+The React originals, **to read and not to copy** (they use inline style throughout): `OspreyFlow_Core/apps/workspace/src/layout/PanelFrames.tsx`, `Sash.tsx`, `SidePanelStack.tsx`. The plain modules already in `OspreyFlow_Core/packages/glass-shared/src/layout`: `sidePanelState.ts`, `layoutSizes.ts` (the storage key `ospreyflow.layout-sizes`, `MIN_SIDE_WIDTH`), `panelOrder.ts`. The ten action ids: `OspreyFlow_Core/packages/glass-shared/src/keyboard/actionRegistry.ts` (`PANEL_FRAME_ACTIONS`, about lines 1300 to 1312). The workspace's own proof: `OspreyFlow_Core/apps/workspace/keyboard/panel-frames.spec.ts` (ten cases, `assertAllCovered`) and `shell.spec.ts` (the panel-frames harness): they stay green and are not touched. The function row: `OspreyFlow_Core/apps/pages/FUNCTIONS.yaml` `panel-frames` (about lines 345 to 352, slice PL8, "planned"). `apps/pages` holds no panel code today.
+
+## What (in this order; each red first, planted faults at the shape the code really sees: rule 15)
+
+1. **The specification first (rule 11).** Correct `spec/02` to the 300-pixel minimum, citing the ruling of 24 November 2026. **Write a short table into `spec/02` (or the page-service section of the spec the layout belongs to) naming for each of the ten actions: its id, whether it is stored (tab only, or kept in this browser), its normal state, and the scripts-off state** (every panel open in its normal state, no controls). Where today's workspace behaves differently from `spec/02`, **the report names each difference in a table (action, spec, workspace, which one the code of this slice follows: the spec)**; do not change the workspace.
+2. **The store (plain TypeScript, no React, no drawing library; ADR-152 decision 3):** a vanilla store holding the panel state, with the **ten actions** as plain functions (show and hide a side panel and the timeline, full width, fold, reorder, set a panel's width and height, raise and lower the timeline, Details from the keyboard), **reusing `sidePanelState`, `layoutSizes` and `panelOrder`** (move them into the store's use; do not copy). Put it in `packages/glass-shared/src/layout` and **import nothing from React or a drawing library** (the gate `no_react_check` and the shared package's own import check). **Storage follows the spec table:** what is kept in this browser is written to and read from the browser's storage under the existing key and survives a reload; hide and show is **not** stored (each panel opens in its normal state on reload). A corrupt or missing stored value is ignored in words in the report's note (a normal state is used); never throws.
+3. **The minimum width is 300** in the store and the spec; a set below it is raised to it (state which: refused or raised, as `layoutSizes` does today).
+4. **The attach point for a later page:** one small function that a page's script will call to wire `data-action` elements to the store (a delegated listener), **written and unit-tested against a DOM stand-in, not mounted on any page** (no template, no route, no `FUNCTIONS.yaml` route change). It sets **no inline style**: it changes classes and attributes only (decision 8). **The scripts-off rule is stated in the module's header: with no script, nothing here runs and every panel is in its normal state (the markup a later slice writes carries no controls without script).**
+5. **Rule 13 (keyboard):** this slice mounts nothing, so it adds no keyboard step; **it says in its report that the mounting slice owns the pages' `panel-frames` keyboard cases (one per action id, `assertAllCovered`), and lists the ten ids** so that slice can start from them.
+6. **Tests (vitest, red first):** each of the ten actions changes the state as the spec table says; each stored action survives a reload (a fresh store reading the storage), hide and show does not; the 300 minimum; a corrupt stored value; the attach function wires only elements it is given and sets no style attribute (a planted `element.style` assignment is red); **a planted import of React into the store's folder is red** (the gate). **The store never throws on a missing storage (private mode): it keeps state in memory.**
+
+## Acceptance test
+
+`OspreyFlow_Core/packages/glass-shared/src/layout/panelFrameStore.test.ts` (new, vitest, red first), run as `npm exec --workspace packages/glass-shared -- vitest run panelFrameStore`; and `OspreyFlow_Build/tests/glass_trees/test_panel_frame_spec_table.py` (new, pure, red first: the spec table names all ten ids from the registry, the 300 minimum is in `spec/02`, and no `240` minimum remains). **Say which folders the Python test walks** (a scan-map row is written from that; a builder cannot add it).
+
+## Checks (pure; store ports pinned to 9)
+
+The two new tests; the existing glass-shared and workspace layout tests (`layoutSizes`, `panelOrder`, `sidePanelState`, `PanelFrames.test.tsx`, `Sash.test.tsx`, `SidePanelStack.test.tsx`); `tests/glass_trees/test_functions_yaml.py`, `test_no_react_check.py`; `tests/test_doc_citations_check.py`; `npm run lint`, `npm run typecheck`, `node scripts/no_react_check.mjs`; `ruff check .`; **`make -C OspreyFlow_Build design-check`** (the gate that reads the shared layout and tokens: the owner's rule D225 of 24 November 2026). **No `tests/test_layout.py`.** Before your final report run by hand what the conductor runs again: ruff and eslint on every file changed and the scan-map check for each new test.
+
+## Never merge another part's unmerged tip (the owner, 23 November 2026)
+
+**Never merge another part's unmerged tip, or any branch but main, into your branch.** Take main in when the line tells you to, and nothing else. If your part needs another part's change that has not merged, stop and tell the conductor.
+
+## Out of scope
+
+Any page, route, template or `FUNCTIONS.yaml` route; the workspace's own panel code and tests (read, not changed); `frame-scroll.spec.ts` (a later slice); the GOV.UK tree. **A finding that names a key, a credential or a security rule is stopped and reported, never accepted narrower.**

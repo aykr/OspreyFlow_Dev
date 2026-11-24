@@ -1,0 +1,35 @@
+# Slice GR3a · GR3 · The alert monitoring figures as a GOV.UK page: a table and a plain SVG chart of the same figures
+
+- **Build id:** GR3 (dashboards viewed in the product; **the owner split the `reports` row on 24 November 2026: figures are GR3, dashboards come later, and Superset is left out of GOV.UK deployments**). ADR-152 decision 10 (reports and the board are one page with no new Conduit route; alert monitoring is a page on `GET /v1/investigations/{id}/reports`), decisions 8 and 12, invariants I1, I2, I7, I15 (`OspreyFlow_Build/spec/06_DECISIONS.md`, about lines 41118 to 41134 and 41223 to 41243; read the numbers in the file); `OspreyFlow_Build/spec/02_GLASS_FRONTEND.md` (the case's Figures, about lines 1651 to 1712) and `spec/03_CONDUIT_MIDDLEWARE.md` (the report route and its 409 past its bound).
+- **Dial setting:** balanced. **Rounds limit:** the dial's (8).
+- **After: GR2a merged** (it creates the GOV.UK tree, its switch, the gates' reach and the keyboard folder per tree). **Do not start before GR2a has merged.**
+- **The owner's rulings of 24 November 2026 (in chat, "My rulings on the drafts"), which this brief carries out:** "**charts are plain SVG with classes, no library, no inline style, each with a table of the same figures**"; "**a non-viewer at the report route gets 404, the same as a missing report**"; "**a missing scenario is the first item of the part's brief**"; "**split the reports row into figures (GR3) and dashboards (later)**" (GR2a does the split of the rows; this part builds the figures).
+- **Every finding that names an access rule, a key, a credential or a security rule is the owner's.**
+
+## What exists (the scout's findings of 23 November; re-read each)
+
+The React original: `OspreyFlow_Core/apps/workspace/src/reports/AlertMonitoringBoard.tsx` (about line 53, with its bars from `figureParts.tsx` about line 66: divs with inline styles: **read, do not copy**). The Conduit: `GET /v1/investigations/{id}/reports` (`OspreyFlow_Core/services/api/app.py` about lines 14840 to 14842, `READ_REPORTS`; held rows go to Editors only, about line 14836; alerts the reader cannot see are left out of every total, `services/api/reports.py` about lines 4 to 9; past its bound it answers 409). **Do not use `GET /v1/reports/dashboards`** (the Superset list, `app.py` about line 20287). Pure helpers: `OspreyFlow_Core/packages/glass-shared/src/reports/packText.ts` (`trendSentence`, `periodsOf`, `periodKey`, `formatNumber`, `formatDay`). **No chart helper exists** in glass-shared. The report route's viewer dependency: **the scout could not tell whether a non-viewer gets 404 or 403: read it first.**
+
+## What (in this order; each red first, planted faults at the shape the code really sees: rule 15)
+
+1. **The scenario first (decision 12).** Write the alert monitoring page's scenario into `spec/08` and put its id in the `FUNCTIONS.yaml` figures row GR2a made (slice GR3a); a short section in `spec/02` on the GOV.UK chart rule (plain SVG with classes, no library, no inline style, each chart followed by a table of the same figures) citing the owner's ruling of 24 November 2026.
+2. **The non-viewer rule.** Read the report route's viewer dependency. **The owner ruled 404, the same answer as a missing report.** If the route already answers a non-viewer exactly as it answers a missing report, **pin it with a test** (rule 4: every read path has an access-control test). **If it does not (403, or a different body), STOP and tell the conductor with the file and line: that is a Conduit change and the owner's.**
+3. **The page (GOV.UK tree).** Server-rendered, scripts off, for one case: the alert monitoring figures from the report route, **drawn only from what the route sends** (no count the reader may not have; a held-row count shown only if the route sends it; the 409 past the bound shown in words, never a truncated figure: CLAUDE.md rule 2). The figures **as a table** (caption, `th scope`, the period and the count) **and as a plain SVG bar chart** whose bars are `rect` elements with **classes only** (sized by a class chosen from a fixed scale, or by attributes `width` and `height` on the SVG element if the policy allows attributes: read decision 8 and the CSP; **a `style` attribute is a failure**), with a text alternative, **followed by the table of the same figures** (the chart is never the only carrier). Words in `server/views/`, British English. The route path follows decision 7.
+4. **Tests (vitest under `test/govuk/`, red first):** the table's structure; the chart's bars equal the table's figures (a planted mismatch is red); no `style` attribute and no script in the output; the empty case; the 409 case; a reader without `READ_REPORTS` and a missing case answer the same page; **ADR-152 invariant I15's test, `test_the_alert_monitoring_page_shows_only_the_readers_own_counts`, written as a pair of tests (Python scenario test and vitest) against a fixture Conduit that models the real route's refusals** (a count of alerts the reader may not see never appears). **Rule 13: the page adds no action beyond links; the keyboard walkthrough in the GOV.UK tree's folder gets one case (tab order through the page).**
+5. **Report:** the route path and why; how the chart is drawn without inline style; the viewer answer found at item 2; the fixture's refusals.
+
+## Acceptance test
+
+`OspreyFlow_Core/apps/pages/test/govuk/alert-monitoring.test.ts` (new, vitest, red first) and `OspreyFlow_Build/tests/glass_trees/test_govuk_alert_monitoring_scenario.py` (new, pure, red first). **Say which folders the Python test walks** (a scan-map row is written from that; a builder cannot add it).
+
+## Checks (pure; store ports pinned to 9)
+
+The two new tests; the existing `apps/pages` vitest files; `tests/glass_trees/test_functions_yaml.py`, `test_tree_parity.py`, `test_no_react_check.py`, `test_pages_foundation.py`, `test_design_gates_reach.py`; the words tests (`test_ui_words_check.py`, `test_copy_says_no_client.py`); `tests/test_doc_citations_check.py`; `npm run lint`, `npm run typecheck`, `node scripts/no_react_check.mjs`, `npm test --workspace apps/pages`; `ruff check .`; **`make -C OspreyFlow_Build design-check`** (the gate that reads the tree's templates and styles: the owner's rule D225 of 24 November 2026). **No `tests/test_layout.py`.** Before your final report run by hand what the conductor runs again: ruff and eslint on every file changed and the scan-map check for each new test.
+
+## Never merge another part's unmerged tip (the owner, 23 November 2026)
+
+**Never merge another part's unmerged tip, or any branch but main, into your branch.** Take main in when the line tells you to, and nothing else. If your part needs another part's change that has not merged, stop and tell the conductor.
+
+## Out of scope
+
+Dashboards (Superset; a later part); any Conduit change (stop and report instead); export and assessment pages (GR2's later slices); `apps/workspace`; the protected files. **A finding that names an access rule, a key, a credential or a security rule is stopped and reported, never accepted narrower.**
