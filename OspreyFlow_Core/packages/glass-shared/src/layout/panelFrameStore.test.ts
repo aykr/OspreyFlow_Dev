@@ -1416,7 +1416,7 @@ describe("one writer, in the source: every layoutSizes setter and reset is calle
   });
 
   // The shapes the real code would take if a path wrote a size outside the writer (rule 15): the real lines of
-  // `resizeByKey`'s Home branch and a setter's body, planted one at a time into the real source.
+  // `resizeByKey`'s Home case and a setter's body, planted one at a time into the real source.
   it.each([
     ["Home calling a reset", "        if (axis === \"side-width\") sizeStore.resetSideWidth();"],
     ["Home calling the timeline's reset", "        else if (axis === \"timeline-height\") sizeStore.resetTimelineHeight();"],
