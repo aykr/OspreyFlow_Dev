@@ -117,7 +117,7 @@ describe("renewal", () => {
 
     // The browser's cookie is the same one, and nothing of the exchange reached it.
     const ids = setCookies(res.res).filter((c) => c.startsWith("osprey_pages=") && !/^osprey_pages=;/.test(c));
-    for (const cookie of ids) expect(idFrom({ headers: { "set-cookie": [cookie] } })).toBe(person.id);
+    for (const cookie of ids) expect(idFrom({ headers: { "set-cookie": cookie } })).toBe(person.id);
     expectNoSecret(r, everythingIn(res.res), "the response");
 
     // The next call in the new window is not another exchange; the one after the next window uses the rotated token.
@@ -457,11 +457,18 @@ describe("each refusal ends the session cleanly", () => {
 
 describe("a provider that cannot be reached is not an ended session while the token is good", () => {
   it.each([
-    ["is not running", 0, (r: Rig) => r.fake.stop()],
-    ["answers 503", 3, (r: Rig) => void (r.fake.refreshStatus = 503)],
+    ["is not running", 0, (r: Rig): Promise<void> => r.fake.stop()],
+    ["answers 503", 3, (r: Rig): Promise<void> => Promise.resolve(void (r.fake.refreshStatus = 503))],
   ] as const)("when it %s, the token still held is used, and the exchange is tried again later", async (_name, attempts, cause) => {
     const sleeps: number[] = [];
-    const r = await rig({ renewal: { sleep: (ms) => (sleeps.push(ms), Promise.resolve()) } });
+    const r = await rig({
+      renewal: {
+        sleep: (ms: number): Promise<void> => {
+          sleeps.push(ms);
+          return Promise.resolve();
+        },
+      },
+    });
     const person = await signInAs(r);
     const held = r.fake.issued[0]!;
     await cause(r);

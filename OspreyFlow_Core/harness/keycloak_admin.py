@@ -102,14 +102,23 @@ def ensure_client(*, issuer: str, realm: str, token: str, client: dict[str, Any]
     redirects to, which are brought up to date: they are exact-match, so a client registered at an
     address that has since moved would fail at Keycloak's own error page. `use.refresh.tokens` is
     brought into line too, where the rendered client names it (the Glass's, ADR-050 Amendment 2):
-    a realm imported before it keeps Keycloak's default, which gives a refresh token."""
+    a realm imported before it keeps Keycloak's default, which gives a refresh token. So are the
+    page service's back-channel logout address and its session requirement, and front-channel
+    logout (slice PL9b): a client registered before they existed would otherwise leave its people
+    signed in at the provider after a sign-out."""
     status, found = _call(
         f"{issuer}/admin/realms/{realm}/clients?clientId={client['clientId']}", token=token
     )
     if status == 200 and found:
         existing = found[0]
         attributes = {**existing.get("attributes", {})}
-        for key in ("post.logout.redirect.uris", "use.refresh.tokens"):
+        for key in (
+            "post.logout.redirect.uris",
+            "use.refresh.tokens",
+            "backchannel.logout.url",
+            "backchannel.logout.session.required",
+            "backchannel.logout.revoke.offline.tokens",
+        ):
             if key in client.get("attributes", {}):
                 attributes[key] = client["attributes"][key]
         wanted = {
@@ -117,6 +126,8 @@ def ensure_client(*, issuer: str, realm: str, token: str, client: dict[str, Any]
             "webOrigins": client["webOrigins"],
             "attributes": attributes,
         }
+        if "frontchannelLogout" in client:
+            wanted["frontchannelLogout"] = client["frontchannelLogout"]
         if "secret" in client:
             # A confidential client's secret comes from the env file; keep Keycloak in step with it.
             wanted["secret"] = client["secret"]

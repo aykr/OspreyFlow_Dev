@@ -729,6 +729,8 @@ describe("test_the_stream_through_pages_carries_only_what_the_person_may_read", 
           expire: (key, ttl) => inner.expire(key, ttl),
           del: (key) => inner.del(key),
           take: (key) => inner.take(key),
+          listKeys: (prefix) => inner.listKeys(prefix),
+          claim: (key, value, ttl) => inner.claim(key, value, ttl),
         }),
       });
       const person = await pages.signIn("a");

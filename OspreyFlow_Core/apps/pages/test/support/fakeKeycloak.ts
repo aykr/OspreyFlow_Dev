@@ -138,6 +138,8 @@ export interface FakeKeycloakOptions {
   rotateRefreshTokens?: boolean;
   /** The addresses a sign-out may return to; Keycloak refuses any other, exactly. */
   postLogoutRedirectUris?: string[];
+  /** Seconds a refresh token really lives at the provider, when that is not what it says (see `FakeKeycloak.refreshEnforcedSeconds`). */
+  refreshEnforcedSeconds?: number;
 }
 
 export interface FakeKeycloak {
@@ -268,7 +270,7 @@ export async function startFakeKeycloak(options: FakeKeycloakOptions): Promise<F
     certsBody: undefined,
     certsCalls: 0,
     refreshExpiresIn: 1800,
-    refreshEnforcedSeconds: undefined,
+    refreshEnforcedSeconds: options.refreshEnforcedSeconds,
     refreshOmitRefreshToken: false,
     tokenCalls: 0,
     issued: [],

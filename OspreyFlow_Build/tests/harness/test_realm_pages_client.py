@@ -291,7 +291,9 @@ def test_a_client_registered_before_logout_was_built_is_brought_up_to_date(
     secret and every address it holds are left as they are."""
     secret = _secret()
     env = _env(tmp_path, f"{PAGES_CLIENT_SECRET_KEY}={secret}")
-    register_sign_in.register(issuer=ISSUER, realm="osprey", env_path=env, config=_config())
+    register_sign_in.register(
+        issuer=ISSUER, realm="osprey", env_path=env, config=_config()
+    )
     (client,) = _pages_clients(keycloak)
     for key in (
         "backchannel.logout.url",
@@ -302,7 +304,9 @@ def test_a_client_registered_before_logout_was_built_is_brought_up_to_date(
     client["frontchannelLogout"] = True
     before_secret = client["secret"]
 
-    lines = register_sign_in.register(issuer=ISSUER, realm="osprey", env_path=env, config=_config())
+    lines = register_sign_in.register(
+        issuer=ISSUER, realm="osprey", env_path=env, config=_config()
+    )
     (client,) = _pages_clients(keycloak)
     assert client["attributes"]["backchannel.logout.url"] == f"{ORIGIN}{BACKCHANNEL}"
     assert client["attributes"]["backchannel.logout.session.required"] == "true"
