@@ -10,8 +10,12 @@
 // The fetch double refuses what the real routes refuse (rule 15; `invite_person_route`, `app.py`): `_within_your_reach`
 // (an unknown classification or code is a 422; a clearance above the inviter's own, or a code they do not hold, a 403) and
 // `_may_give` (an unknown role is a 422; an administration right the giver does not hold, from `ROLE_RIGHTS` or a custom
-// role's current rights, is a 409 `beyond_your_rights`, with its words). It refuses a read the real route refuses too: the
-// roles catalogue and the people routes need `manage_people`. Synthetic names throughout (rule 9).
+// role's current rights, is a 409 `beyond_your_rights`, with its words). It refuses the reads the real routes refuse too: the
+// roles catalogue, how people sign in, the people routes and the invite itself each carry `require_right(MANAGE_PEOPLE)`, so a
+// giver the route's side does not hold that right for is answered 403 `right_required` on every one of them. And it sends the
+// catalogue as the real route does (`list_roles_route`: every built-in role, each with its rights), and can send what the route
+// never sends (an empty one, one lacking a role, one with a role's rights missing) to show the form refuses it. Synthetic names
+// throughout (rule 9).
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -34,25 +38,41 @@ const ANA = { id: "u1", username: "ana", name: "Ana Analyst", enabled: true, rol
 /** What the giver holds on the route's side (`rights_for(principal.roles)`): the right to manage people, and no more. */
 const HELD = new Set(["manage_people"]);
 const ADMINISTRATION = new Set(["administer_system", "manage_people", "read_audit"]);
-/** The catalogue `GET /v1/admin/roles` answers: Admin gives administration rights the giver does not hold. */
+/** The catalogue `GET /v1/admin/roles` answers (`_built_in_roles`: every built-in role the form offers, each with its rights;
+ * the rights here are a short synthetic subset): Admin gives administration rights the giver does not hold. */
 const CATALOGUE = {
   built_in: [
     { id: "analyst", label: "Analyst", rights: ["investigate"] },
+    { id: "data_engineer", label: "Data Engineer", rights: ["edit_pipelines", "operate_schedules"] },
     { id: "osprey-admin", label: "Admin", rights: ["administer_system", "manage_people", "read_audit"] },
+    { id: "reports_viewer", label: "Reports Viewer", rights: ["read_reports"] },
+    { id: "rule_author", label: "Rule author", rights: ["author_rules"] },
+    { id: "super_user", label: "Super user", rights: ["investigate", "author_rules"] },
   ],
   custom: [],
 };
+/** The roles the form offers a box for (`ROLES` in `People.tsx`), by id: the catalogue must name each, with its rights. */
+const OFFERED = ["analyst", "data_engineer", "osprey-admin", "reports_viewer", "rule_author"];
 
-type Mode = "ok" | "503" | "broken" | "bad" | "empty";
-type Spec = { mode: Mode; gate?: Promise<void> };
+// "403": the route's own refusal of a giver without the right (`require_right`: 403 `right_required`).
+// "none", "partial" (lacking the role `omit`) and "unrighted" (the role `omit` named with no rights) are answers the real
+// route never sends: a form drawn from one would offer a role its giver may not give, so each is refused.
+type Mode = "ok" | "503" | "broken" | "bad" | "empty" | "403" | "none" | "partial" | "unrighted";
+type Spec = { mode: Mode; gate?: Promise<void>; omit?: string };
 type Reads = { me: Spec; scheme: Spec; roles: Spec; signin: Spec & { entra?: boolean } };
 const KEYS = ["me", "scheme", "roles", "signin"] as const;
 type Key = (typeof KEYS)[number];
 
 const ok = (): Reads => ({ me: { mode: "ok" }, scheme: { mode: "ok" }, roles: { mode: "ok" }, signin: { mode: "ok" } });
 
+/** `require_right(Right.MANAGE_PEOPLE)`, which every people, roles and sign-in route carries, checked before anything else. */
+const needsManagePeople = (held: Set<string>): Response | null =>
+  held.has("manage_people") ? null : json(403, { detail: { error: "right_required", right: "manage_people" } });
+
 /** The invite route's refusals, in the route's own order and words. `held` is what the giver holds on the route's side. */
 function refuse(body: { clearance: string; receivable_handling_codes: string[]; roles: string[] }, held: Set<string>): Response | null {
+  const unheld = needsManagePeople(held);
+  if (unheld) return unheld;
   if (!ORDER.includes(body.clearance)) return json(422, { detail: `${body.clearance} is not a classification of this deployment` });
   const unknown = body.receivable_handling_codes.filter((c) => !(c in SCHEME.handling_codes));
   if (unknown.length) return json(422, { detail: `not a handling code of this deployment: ${unknown.join(", ")}` });
@@ -75,12 +95,23 @@ function refuse(body: { clearance: string; receivable_handling_codes: string[]; 
 function serve(reads: Reads, held: Set<string> = HELD) {
   const posted: unknown[] = [];
   const calls: Record<string, number> = {};
-  const answer = async (spec: Spec, good: () => Response, bad: Response | (() => never)): Promise<Response> => {
+  const answer = async (spec: Spec, good: () => Response, bad: Response | (() => Response)): Promise<Response> => {
     await spec.gate;
     if (spec.mode === "ok") return good();
     if (spec.mode === "503") return json(503, {});
+    if (spec.mode === "403") return needsManagePeople(new Set()) as Response;
     if (spec.mode === "broken") throw new TypeError("network down");
     return typeof bad === "function" ? bad() : bad;
+  };
+  // What the roles read answers in each mode the route itself never sends.
+  const unreal = (): Response => {
+    const { mode } = reads.roles;
+    const omit = reads.roles.omit ?? "rule_author";
+    if (mode === "none") return json(200, { built_in: [], custom: [] });
+    if (mode === "partial") return json(200, { ...CATALOGUE, built_in: CATALOGUE.built_in.filter((r) => r.id !== omit) });
+    if (mode === "unrighted")
+      return json(200, { ...CATALOGUE, built_in: CATALOGUE.built_in.map((r) => (r.id === omit ? { id: r.id, label: r.label } : r)) });
+    return json(200, { unexpected: true });
   };
   vi.stubGlobal(
     "fetch",
@@ -91,7 +122,10 @@ function serve(reads: Reads, held: Set<string> = HELD) {
       if (path === "/v1/handling-scheme")
         return answer(reads.scheme, () => json(200, SCHEME), json(200, reads.scheme.mode === "empty" ? { classification: [], handling_codes: {} } : {}));
       const admin = path.replace("/v1/admin/", "");
-      if (admin === "roles") return answer(reads.roles, () => json(200, CATALOGUE), json(200, { unexpected: true }));
+      // Every route below carries `require_right(MANAGE_PEOPLE)`: refused before anything else is read.
+      const unheld = admin.startsWith("people") || ["roles", "sign-in", "organisation-arrivals"].includes(admin) ? needsManagePeople(held) : null;
+      if (unheld) return unheld;
+      if (admin === "roles") return answer(reads.roles, () => json(200, CATALOGUE), unreal);
       if (admin === "sign-in")
         return answer(reads.signin, () => json(200, { kind: reads.signin.entra ? "entra" : "keycloak" }), json(200, {}));
       if (admin === "people" && init?.method === "POST") {
@@ -200,6 +234,84 @@ describe("the roles catalogue (GET /v1/admin/roles) decides which role boxes are
   });
 });
 
+describe("the roles catalogue counts as read only when it names every role the form offers, each with its rights", () => {
+  const BOXES = ["Analyst", "Data Engineer", "Admin", "Reports Viewer", "Rule author"];
+
+  it("an empty built-in list is not a catalogue: the words, no form, and so no Admin box offered to a giver without its rights", async () => {
+    const { posted } = serve({ ...ok(), roles: { mode: "none" } });
+    place();
+    const words = await screen.findByRole("alert");
+    expect(words.textContent).toContain(WORDS.roles);
+    await sectionLoaded();
+    await later();
+    mustNotBeUsable();
+    expect(screen.queryByLabelText("Invite as Admin")).toBeNull();
+    expect(posted).toEqual([]);
+  });
+
+  it.each(OFFERED)("a catalogue lacking %s is not read in full: the words, no form, and no box for any role", async (omit) => {
+    serve({ ...ok(), roles: { mode: "partial", omit } });
+    place();
+    expect((await screen.findByRole("alert")).textContent).toContain(WORDS.roles);
+    await sectionLoaded();
+    await later();
+    mustNotBeUsable();
+    for (const box of BOXES) expect(screen.queryByLabelText(`Invite as ${box}`)).toBeNull();
+  });
+
+  it.each(OFFERED)("a catalogue naming %s with no rights is not read in full either", async (omit) => {
+    serve({ ...ok(), roles: { mode: "unrighted", omit } });
+    place();
+    expect((await screen.findByRole("alert")).textContent).toContain(WORDS.roles);
+    await sectionLoaded();
+    await later();
+    mustNotBeUsable();
+  });
+
+  it("a catalogue that names every role is drawn, with a box for each role the form offers and Admin withheld from this giver", async () => {
+    serve(ok());
+    place();
+    const form = await screen.findByRole("form", { name: "Invite a person" });
+    drawnCorrectly(form);
+    for (const box of BOXES) expect(within(form).getByLabelText(`Invite as ${box}`)).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("a catalogue with a role the form does not offer (Super user, as the real route sends) is still read in full: no box for it", async () => {
+    serve(ok());
+    place();
+    const form = await screen.findByRole("form", { name: "Invite a person" });
+    expect(within(form).queryByLabelText("Invite as Super user")).toBeNull();
+  });
+});
+
+describe("a giver the route's side does not hold manage_people for is refused on every read, and the form offers nothing", () => {
+  it("is told in words (the route's own refusal), with no form, no box and no statement, and nothing is posted", async () => {
+    // The Glass believes the giver holds it (read at sign-in); the route's side holds none now (a role taken away since).
+    const { posted, calls } = serve(ok(), new Set());
+    place(new Set(["manage_people"]));
+    const words = await screen.findByRole("alert");
+    expect(words.textContent).toMatch(/Not done\./);
+    await waitFor(() => {
+      expect(calls["/v1/admin/roles"]).toBe(1);
+      expect(calls["/v1/admin/sign-in"]).toBe(1);
+      expect(calls["/v1/admin/people"]).toBe(1);
+    });
+    await later();
+    mustNotBeUsable();
+    expect(screen.queryByLabelText(/^Invite as /)).toBeNull();
+    expect(posted).toEqual([]);
+  });
+
+  it("the double itself refuses each of those reads, and the invite, with 403 right_required", async () => {
+    serve(ok(), new Set(["read_audit"]));
+    for (const [path, init] of [["roles"], ["sign-in"], ["people"], ["people/rows"], ["organisation-arrivals"], ["people", { method: "POST", body: JSON.stringify({ clearance: "PUBLIC", receivable_handling_codes: [], roles: [] }) }]] as [string, RequestInit?][]) {
+      const response = await fetch(`http://x/v1/admin/${path}`, init);
+      expect([path, response.status, await response.json()]).toEqual([path, 403, { detail: { error: "right_required", right: "manage_people" } }]);
+    }
+  });
+});
+
 describe("a handling scheme with no classification levels is not loaded", () => {
   it("says in words that the scheme has no levels, and offers no form and no statement of what can be given", async () => {
     const { posted } = serve({ ...ok(), scheme: { mode: "empty" } });
@@ -300,6 +412,10 @@ describe("each read, late and failed in turn", () => {
     ["roles", "roles", "503"],
     ["roles", "roles", "broken"],
     ["roles", "roles", "bad"],
+    ["roles", "roles", "403"],
+    ["roles", "roles", "none"],
+    ["roles", "roles", "partial"],
+    ["roles", "roles", "unrighted"],
   ];
 
   it.each(FAILURES)("%s: %s read %s, at once, says its own words and no form", async (words, key, mode) => {
