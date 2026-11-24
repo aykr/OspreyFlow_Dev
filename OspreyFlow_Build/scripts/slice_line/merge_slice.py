@@ -341,20 +341,42 @@ def live_step_setting() -> tuple[bool, int]:
     return on, wait
 
 
+def hosts_file(tree: Path) -> Path:
+    """The stack hosts: the owner's per-machine override (24 November 2026, the test server down), the lease folder's
+    stack_hosts.tsv, when it exists, as stack_lease.sh reads it; else the tracked scripts/lane_stack_hosts.tsv."""
+    own = Path(os.environ.get("OSPREY_LEASE_DIR") or Path.home() / ".ospreyflow") / "stack_hosts.tsv"
+    return own if own.is_file() else tree / "OspreyFlow_Build/scripts/lane_stack_hosts.tsv"
+
+
 def queue_hosts(tree: Path) -> list[str]:
-    """Every host a test stack runs on (scripts/lane_stack_hosts.tsv): the queue is checked on each."""
-    f = tree / "OspreyFlow_Build/scripts/lane_stack_hosts.tsv"
+    """Every host a test stack runs on (hosts_file): the queue is checked on each."""
+    f = hosts_file(tree)
     rows = [ln.split("\t") for ln in (f.read_text().splitlines() if f.exists() else []) if ln and not ln.startswith("#")]
     return sorted({r[1].strip() for r in rows if len(r) >= 2 and r[1].strip()})
 
 
+#: How long the queue check waits on a stack host (the owner, 24 November 2026: an unreachable host never hangs or
+#: refuses a merge): ssh's own connect limit, and the whole call's.
+QUEUE_CONNECT_SECONDS = 5
+QUEUE_CALL_SECONDS = 15
+#: The words a queue check on an unreachable host begins with: noted, not waited for.
+UNREACHABLE = "unreachable:"
+
+
 def queue_blocker(host: str) -> str | None:
     """Why the merger may not run on `host` now, or None: the queue (osprey-runs/QUEUE) is empty or has the merger
-    first, and no make runs there. A host that cannot be read is a blocker, never taken as clear."""
+    first, and no make runs there. A host ssh cannot reach in seconds (exit 255, or no answer within
+    QUEUE_CALL_SECONDS) is said as UNREACHABLE, which the wait notes and does not wait for; a host reached whose queue
+    cannot be read is a blocker, never taken as clear."""
     queue = f"{os.environ.get('OSPREY_REMOTE_ROOT', 'osprey-runs')}/QUEUE"
-    p = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=20", host,
-                        f"head -n 1 {queue} 2>/dev/null; echo '<<end>>'; pgrep -x make || true"],
-                       capture_output=True, text=True, check=False)
+    try:
+        p = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", f"ConnectTimeout={QUEUE_CONNECT_SECONDS}", host,
+                            f"head -n 1 {queue} 2>/dev/null; echo '<<end>>'; pgrep -x make || true"],
+                           capture_output=True, text=True, check=False, timeout=QUEUE_CALL_SECONDS)
+    except subprocess.TimeoutExpired:
+        return f"{UNREACHABLE} {host}: no answer in {QUEUE_CALL_SECONDS} s"
+    if p.returncode == 255:
+        return f"{UNREACHABLE} {host}: ssh could not reach it (exit 255)"
     if p.returncode != 0 or "<<end>>" not in p.stdout:
         return f"{host}: its run queue could not be read (ssh exit {p.returncode})"
     first, _, makes = p.stdout.partition("<<end>>")
@@ -369,8 +391,15 @@ def queue_blocker(host: str) -> str | None:
 def wait_for_queue(tree: Path, wait_minutes: int, log: Path) -> str | None:
     """Wait until every stack host's queue is clear; the last blocker if `wait_minutes` pass first."""
     deadline = time.monotonic() + wait_minutes * 60
+    gone: list[str] = []
     while True:
-        blockers = [b for h in queue_hosts(tree) if (b := queue_blocker(h))]
+        said = [(h, queue_blocker(h)) for h in queue_hosts(tree) if h not in gone]
+        for h, b in said:
+            if b and b.startswith(UNREACHABLE):
+                gone.append(h)
+                log.open("a").write(f"\nNOTE: the run queue on {b[len(UNREACHABLE):].strip()}: not waited for; the merge "
+                                    "carries on.\n")
+        blockers = [b for _, b in said if b and not b.startswith(UNREACHABLE)]
         if not blockers:
             return None
         log.open("a").write("\nWaiting for the server's run queue: " + "; ".join(blockers) + "\n")

@@ -629,6 +629,13 @@ M = [
  ("resume.py", '        c.log_standing_use(slice_id, CLS, "self-clear", "red", "c", what, {"red_stop": red})', '        c.log_self_clear(slice_id, "red", "c", what)', "clear_line_stops_cause_c_a_scan_map_red"),
  ("resume.py", '        c.log_standing_use(slice_id, CLS, "self-clear", stop, "a", what, {"red_stop": red})', '        c.log_self_clear(slice_id, stop, "a", what)', "clear_line_stops_each_use or clear_line_stops_at_its_budget"),
  ("common.py", '{**row, **(extra or {})})', 'row)', "clear_line_stops_each_use"),
+ # the owner, 24 November 2026 (the test server down): the per-machine stack hosts; an unreachable host noted, not waited for
+ ("merge_slice.py", "    return own if own.is_file() else tree / \"OspreyFlow_Build/scripts/lane_stack_hosts.tsv\"", "    return tree / \"OspreyFlow_Build/scripts/lane_stack_hosts.tsv\"", "per_machine_hosts_file"),
+ ("merge_slice.py", "    if p.returncode == 255:\n        return f\"{UNREACHABLE}", "    if False:\n        return f\"{UNREACHABLE}", "unreachable_stack_host_is_noted"),
+ ("merge_slice.py", "capture_output=True, text=True, check=False, timeout=QUEUE_CALL_SECONDS)", "capture_output=True, text=True, check=False)", "unreachable_stack_host_is_noted"),
+ ("merge_slice.py", "        blockers = [b for _, b in said if b and not b.startswith(UNREACHABLE)]", "        blockers = [b for _, b in said if b]", "unreachable_stack_host_is_noted"),
+ ("merge_slice.py", "\"carries on.\\n\")", "\"carries on.\\n\") if False else None", "unreachable_stack_host_is_noted"),
+ ("merge_slice.py", "for h in queue_hosts(tree) if h not in gone]", "for h in queue_hosts(tree)]", "noted_once_and_not_asked_again"),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.

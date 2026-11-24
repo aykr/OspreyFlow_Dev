@@ -50,8 +50,8 @@ launch's one-time token before the prompt is sent (the prompt goes over stream-j
 
 ## Gates and their proofs
 
-`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (684 cases) plants each violation in the shape its real call
-site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (569 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
+`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (689 cases) plants each violation in the shape its real call
+site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (575 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
 
 | Gate | Where | What refuses |
 | --- | --- | --- |
@@ -213,8 +213,13 @@ is refused while anything is owed or the records cannot be read (`owed.py check`
 `OspreyFlow_Build/tools/release_local.py` and `OspreyFlow_Build/scripts/publish_user_repo_update.sh`). With the step
 on, each merge's live run also runs every owed file and, green, records them paid (`live-paid.json`). On, the step first reads the server's run queue (`osprey-runs/QUEUE` and `pgrep -x make` on
 each host in `scripts/lane_stack_hosts.tsv`): it goes when the queue is empty or has `merger` first and no make runs,
-waits a minute at a time for `queue_wait_minutes`, then refuses the merge. A queue that cannot be read is never taken
-as clear. A missing or unclear setting refuses the merge.
+waits a minute at a time for `queue_wait_minutes`, then refuses the merge. A queue on a host that answers but cannot be
+read is never taken as clear. A host ssh cannot reach (exit 255, or no answer in 15 s; it connects within 5 s or not
+at all) is noted once in the merge log ("not waited for; the merge carries on") and not asked again: it never hangs or
+refuses a merge (the owner, 24 November 2026, the test server down). When the lease folder holds `stack_hosts.tsv`
+(`$OSPREY_LEASE_DIR`, by default `~/.ospreyflow`), the owner's per-machine override, it is read in place of
+`scripts/lane_stack_hosts.tsv`, by the merge as by `stack_lease.sh`; a file of comments alone puts every stack on this
+machine, where `stack_lease.sh up` starts at most three at once. A missing or unclear setting refuses the merge.
 
 ## The client names' hashed list
 
