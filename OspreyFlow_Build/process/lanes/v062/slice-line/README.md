@@ -50,8 +50,8 @@ launch's one-time token before the prompt is sent (the prompt goes over stream-j
 
 ## Gates and their proofs
 
-`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (756 cases) plants each violation in the shape its real call
-site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (643 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
+`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (762 cases) plants each violation in the shape its real call
+site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (651 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
 
 | Gate | Where | What refuses |
 | --- | --- | --- |
@@ -123,6 +123,8 @@ without a tool call; the line's own cap is 6 red stops.
 The gate's findings (`gate_findings`) leave out every run in the red-before tree (`slice-<ID>-before-*`): its red is the acceptance command's expected result, never a failed test of the slice (BL6's "2 tests" of 19 November 2026 were one real failure and the expected collection error). A log with only that red gives no finding.
 
 A step of the full gate (`make -k ci`, `make test`, and the environment's `uv sync` and `npm ci`) that fails only on a network step (a registry or a download that could not be reached, matched in that step's own output: OpenTofu's provider registry, Docker's pulls, npm's and uv's downloads; no failed test of ours, and no failed make target but `opentofu-check` and `chart-check`) runs once more, said in the log as `RETRY`; a retry that goes green is named in `merged.json` (`retried`). Two in a row are a refusal of kind `network` (`refusal-network-*.json`): not the slice's fault, no round, no finding to the builder; the conductor tells the owner and runs the merge again. A failed test is never retried.
+
+**A merge command that prints nothing for 20 minutes is ended** (the owner, 24 November 2026: GR2a's gate hung twice that day, at 11:28 and 17:30, when the network dropped, holding the merge lock for hours each time). Every command the merge runs (`merge_slice.run`: the acceptance, the checks, the scans, the full gate's targets, a server rerun) is watched through its log: one whose output has not grown for `GATE_STALL_SECONDS` (20 minutes) has its whole process group ended (TERM, then KILL), the log says `STALLED: <command> printed nothing for 1200 s`, and the merge is refused "stalled, not the part's fault", the command named: a `refusal-stalled-*.json` record, `stalled: <command>` in refusals.tsv, no round and no finding, the part's phase unchanged, the merge lock freed. The conductor runs the merge again. A slow command that keeps printing is never ended.
 
 Every pytest run of the merge has a temp base of its own (`PYTEST_DEBUG_TEMPROOT`): the slice's acceptance and checks under the merge's environments folder, the full gate beside its tree (`<tree>-pytest`), each removed with the merge's trees, so another pytest on the Mac (which keeps only its newest few `pytest-N` folders under the shared base) cannot remove the merge's (SE3 and GG1, 19 November 2026).
 

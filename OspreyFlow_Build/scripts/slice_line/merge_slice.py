@@ -39,6 +39,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -81,14 +82,78 @@ def note(text: str) -> None:
     NOTES.append(text)
 
 
+#: A command of the merge that prints nothing for this long is ended (the owner, 24 November 2026: GR2a's gate hung
+#: twice when the network dropped, at 11:28 and 17:30, holding the merge lock for hours each time). Its whole process
+#: group is ended, the log says so, and the merge is refused "stalled, not the part's fault": no round, no finding, the
+#: lock freed. A slow command that keeps printing is never ended. OSPREY_GATE_STALL_SECONDS is for the line's tests.
+GATE_STALL_SECONDS = 20 * 60
+
+
+class Stalled(Refused):
+    """A command of the merge printed nothing for the stall limit and was ended (see GATE_STALL_SECONDS)."""
+
+    def __init__(self, target: str, seconds: int, log: Path | None):
+        self.target, self.seconds = target, seconds
+        super().__init__(f"stalled, not the part's fault: {target} printed nothing for {seconds // 60} minutes "
+                         f"({seconds} s) and was ended; the merge lock is freed, no round and no finding. The conductor "
+                         f"runs the merge again. See {log}")
+
+
+def stall_seconds() -> int:
+    try:
+        return max(1, int(os.environ.get("OSPREY_GATE_STALL_SECONDS") or GATE_STALL_SECONDS))
+    except ValueError:
+        return GATE_STALL_SECONDS
+
+
+def end_group(p: subprocess.Popen) -> None:
+    """End the command and everything it started (its own process group): TERM, then KILL what is left."""
+    for sig, wait in ((signal.SIGTERM, 15), (signal.SIGKILL, 15)):
+        try:
+            os.killpg(p.pid, sig)
+        except (ProcessLookupError, PermissionError):
+            return
+        try:
+            p.wait(timeout=wait)
+            return
+        except subprocess.TimeoutExpired:
+            continue
+
+
 def run(cmd: list[str] | str, cwd: Path, log: Path | None = None, shell: bool = False, env: dict | None = None) -> int:
+    """The command's exit code, its output in the log. With a log, a command whose log has not grown for the stall
+    limit is ended and Stalled raised (its name in the log, "STALLED: ...")."""
     env = dict(os.environ if env is None else env)
     env.setdefault("ARCADEDB_HTTP_PORT", "9")
     env.setdefault("POSTGRES_PORT", "9")
+    said = cmd if isinstance(cmd, str) else " ".join(cmd)
     with (log.open("a") if log else open(os.devnull, "w")) as fh:
-        fh.write(f"\n$ {cmd if isinstance(cmd, str) else ' '.join(cmd)}   (in {cwd})\n")
+        fh.write(f"\n$ {said}   (in {cwd})\n")
         fh.flush()
-        return subprocess.run(cmd, cwd=str(cwd), shell=shell, stdout=fh, stderr=subprocess.STDOUT, env=env).returncode
+        p = subprocess.Popen(cmd, cwd=str(cwd), shell=shell, stdout=fh, stderr=subprocess.STDOUT, env=env,
+                             start_new_session=True)
+        limit = stall_seconds()
+        size, quiet_since = -1, time.monotonic()
+        try:
+            while True:
+                try:
+                    return p.wait(timeout=min(10.0, max(0.2, limit / 10)))
+                except subprocess.TimeoutExpired:
+                    pass
+                if log is None:
+                    continue
+                now_size = os.fstat(fh.fileno()).st_size
+                if now_size != size:
+                    size, quiet_since = now_size, time.monotonic()
+                elif time.monotonic() - quiet_since >= limit:
+                    end_group(p)
+                    fh.write(f"\nSTALLED: {said} printed nothing for {limit} s and was ended (not the part's fault)\n")
+                    fh.flush()
+                    raise Stalled(said, limit, log)
+        except BaseException:
+            if p.poll() is None:  # the merge itself was stopped: nothing it started is left running
+                end_group(p)
+            raise
 
 
 #: The full gate's offline targets, both run on the merge result whatever the first one says: `make -k ci` (the
@@ -1591,6 +1656,18 @@ def merge(slice_id: str) -> dict:
         c.write_json(rec / "merged.json", done)
         prog.finish("merged")
         return done
+    except Stalled as e:  # the owner, 24 November 2026: a silent command is not the part's fault
+        c.write_json(rec / f"refusal-stalled-{uuid.uuid4().hex[:8]}.json",
+                     {"kind": "stalled", "slice": slice_id, "tip": prog.rec.get("tip"), "target": e.target,
+                      "seconds": e.seconds, "merge_log": log.name, "note": "not a fault of the part: no round, no finding",
+                      "at": c.now()})
+        c.set_state(slice_id, last_merge_refusal=c.now(), last_refusal_cause=f"stalled: {e.target[:80]}")
+        prog.finish("refused", str(e))
+        try:
+            record_refusal(slice_id, prog.rec.get("tip") or "", f"stalled: {e.target[:80]}")
+        except Exception:  # noqa: BLE001 -- best effort: a refusal is never changed by its bookkeeping
+            pass
+        raise Refused(str(e)) from None
     except Refused as e:
         c.set_state(slice_id, last_merge_refusal=c.now())
         prog.finish("refused", str(e))
