@@ -1966,7 +1966,7 @@ describe("attach: the root's guard, with the root nested in an element that has 
   it("an arrow key on a plain element inside the root does not resize through the wrapper's sash", () => {
     const { wrapper, inner, store } = nested();
     wrapper.attributes.set("data-action", "resize");
-    wrapper.attributes.delete("data-panel-header"); // the header's own branch would answer first
+    wrapper.attributes.delete("data-panel-header"); // the header's own path would answer first
     const event = inner.dispatch("keydown", { key: "ArrowLeft" });
     expect(event.defaultPrevented).toBe(false);
     expect(getLayoutSizes().sideWidth).toBe(DEFAULT_SIDE_WIDTH);
