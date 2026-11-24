@@ -66,7 +66,8 @@ def test_the_register_is_one_file_in_the_specification() -> None:
 def test_every_kind_has_rows_and_every_row_has_every_column(
     reg: Any, rows: list[dict[str, Any]]
 ) -> None:
-    assert {r["kind"] for r in rows} == {"weight", "map-data", "font", "image"}
+    # `package` joined in slice GR2a (`govuk-frontend`, held to the manifest it names); the four before it are unchanged.
+    assert {r["kind"] for r in rows} == {"weight", "map-data", "font", "image", "package"}
     for row in rows:
         missing = [c for c in reg.COLUMNS if c not in row]
         assert not missing, f"{row.get('id')} lacks {missing}"
