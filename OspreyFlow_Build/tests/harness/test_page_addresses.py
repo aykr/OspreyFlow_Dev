@@ -400,7 +400,7 @@ ORIGIN_TOUCHES_ALLOWED: dict[tuple[str, str], str] = {
         "deployment's origin"
     ),
     ("site.py", "# Rendered from osprey.yaml's network.public_origin"): (
-        "a line of text written into the Caddyfile's header, naming the setting; it computes nothing"
+        "a line of text written into the Caddyfile's header, naming the setting; computes nothing"
     ),
 }
 
@@ -683,7 +683,8 @@ def test_the_scan_is_red_for_the_lines_the_realm_and_the_proxy_module_held() -> 
         {
             "realm.py": realm + "\n\ndef old(config):\n    origin = config.network.public_origin\n",
             "site.py": site
-            + '\n\ndef old(names):\n    return [(names.host, 1), (f"id.{names.host}", "keycloak:8080")]\n',
+            + "\n\ndef old(names):\n"
+            + '    return [(names.host, 1), (f"id.{names.host}", "keycloak:8080")]\n',
         }
     )
     assert any(line.startswith("realm.py:") and "public_origin" in line for line in found), found

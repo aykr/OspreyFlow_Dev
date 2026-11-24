@@ -569,6 +569,20 @@ compose file or the chart names a port, a host or an alias that `derive` did not
 service's own checks (`apps/pages/server/config.ts`) are not weakened: every value `derive` returns
 must pass them, and every Caddyfile it leads to must load in the proxy image's own Caddy.
 
+**One reading of the origin, for every address (PL7f round 2).** `network.public_origin` is read in
+one place, `page_addresses.parse_origin`, and `harness.site.sites` takes the deployment's addresses
+(the origin, the identity name `id.<host>`, the dashboards' name `bi.<host>`) from it, the
+scheme's default port never written and the host in lower case. So the issuer Keycloak publishes
+(`KC_HOSTNAME`), the proxy's identity site, the deployment's own address file, the organisation's
+redirect address and the page service's sign-in client (its redirect, web origin and post-logout
+address: `derive`'s public origin where the setting is on, the same reading where it is off) are
+the same strings by construction; the origin `https://host:443` is written without `:443` in every
+one, which is the form the service accepts and a browser sends. Nothing was measured against a
+real Keycloak for the `:443` form: it is never given one. The tests that would fail if it were
+broken are `test_keycloaks_issuer_the_realm_client_and_the_service_agree` (one case each),
+`test_no_other_module_computes_an_address` (every module under `harness/`) and the planted cases
+beside them.
+
 **What is derived, and what is refused.** The cases are the rows of
 `tests/fixtures/page_addresses_cases.json`, which the Python tests, the node test
 and the real-Caddy test all read.
