@@ -17,17 +17,31 @@ import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PANEL_FRAME_ACTIONS } from "../keyboard/actionRegistry";
-import { DEFAULT_SIDE_WIDTH, DEFAULT_TIMELINE_HEIGHT, LAYOUT_SIZES_KEY, MIN_SIDE_WIDTH, forgetLayoutSizesForTest, getLayoutSizes } from "./layoutSizes";
+import {
+  DEFAULT_SIDE_WIDTH,
+  DEFAULT_TIMELINE_HEIGHT,
+  LAYOUT_SIZES_KEY,
+  MIN_SIDE_WIDTH,
+  forgetLayoutSizesForTest,
+  getLayoutSizes,
+  resetSideWidth as rawResetSideWidth,
+  resetTimelineHeight as rawResetTimelineHeight,
+  setPanelHeight as rawSetPanelHeight,
+  setSideWidth as rawSetSideWidth,
+  setTimelineHeight as rawSetTimelineHeight,
+} from "./layoutSizes";
 import { SIDE_PANEL_IDS, SIDE_PANEL_ORDER_KEY, forgetSidePanelOrderForTest } from "./panelOrder";
 import { attachPanelFrame, type PanelFrameRoot } from "./panelFrameAttach";
 import {
   FOLDED_PANELS_KEY,
   PANEL_ACTION_STORAGE,
+  SIZE_WRITERS,
   SASH_LARGE_STEP,
   SASH_STEP,
   createPanelFrameStore,
   findInlineStyle,
   type PanelFrameStore,
+  type SizeWriter,
 } from "./panelFrameStore";
 import { forgetSidePanelForTest } from "./sidePanelState";
 
@@ -1042,6 +1056,379 @@ describe("the upper limits come from the live window, through the attach path, a
     store.actions.resizeByKey("timeline-height", { key: "ArrowUp" });
     expect(afterOne).toBeGreaterThan(before);
     expect(asked).toBeGreaterThan(afterOne);
+  });
+});
+
+// ---------------------------------------------------------------- one writer (round 4, D225 point 3)
+//
+// Rounds 1 to 3 each found a path that wrote a size without the live upper limits. This block makes that fault
+// impossible by construction and tests that it is, not one path at a time:
+//  1. the store has one function, `writeSize`, that applies the minimum and the live upper limit and then writes; every
+//     `layoutSizes` setter and reset is called inside it and nowhere else in the store or the attach (the source cases);
+//  2. a table walks every entry point (each size writer the store lists in `SIZE_WRITERS`, each key, the pointer's
+//     calls, a window resize, the read of a stored value at start, and a direct write to `layoutSizes` while the store
+//     is live) against three viewports, and asserts after each call, before any `getState()`, that the size in memory,
+//     the stored value and the drawn attributes are within the limits. The table is typed from `SIZE_WRITERS`, and a
+//     case fails when `store.actions` has a key that is neither a listed writer nor in the table of actions that write
+//     no size: adding a writer without a row is red.
+// The pointer's path: the page's drag handler measures the pointer and calls `setSideWidth`, `setTimelineHeight` or
+// `setPanelHeight` with the pixel it measured, so those calls, with extreme pixels, are the pointer's rows. (The workspace's
+// double-click resets as Home does; the attach has no pointer listener yet: the mounting slice adds the drag and its row.)
+// `End` and `PageUp`/`PageDown` are not sash keys in spec/02 or in the workspace: the table presses them so that a later
+// author who gives them a meaning is held by the same limits.
+
+type Viewport = { windowHeight: number; workWidth: number };
+const VIEWPORTS: Record<string, Viewport> = {
+  roomy: { windowHeight: 1200, workWidth: 1600 },
+  tight: { windowHeight: 800, workWidth: 600 },
+  "below every default": { windowHeight: 100, workWidth: 400 },
+};
+
+/** The limits the spec table states, worked out here from the spec and not from the store. */
+function limitsOf(v: Viewport) {
+  return {
+    side: Math.min(480, Math.max(300, v.workWidth - 320)),
+    timeline: Math.max(96, Math.round(v.windowHeight * 0.7)),
+    panel: Math.max(48, Math.round(v.windowHeight)),
+  };
+}
+
+describe("one writer: no entry point writes a size above the live limits, read straight after the call", () => {
+  let now: Viewport = VIEWPORTS.roomy as Viewport;
+  const viewport = () => now;
+  const stored = () => JSON.parse(localStorage.getItem(LAYOUT_SIZES_KEY) ?? "{}") as { sideWidth?: number; timelineHeight?: number; panelHeights?: Record<string, number> };
+
+  /** Memory, storage and the drawn attributes, none of them read through `getState()`, against viewport `v`. */
+  function expectWithin(v: Viewport, parts: ReturnType<typeof page>, label: string): void {
+    const limit = limitsOf(v);
+    const kept = getLayoutSizes();
+    const check = (what: string, value: number | undefined, min: number, max: number) => {
+      if (value === undefined || Number.isNaN(value)) return;
+      expect(value, `${label}: ${what} is ${value}, under its minimum ${min}`).toBeGreaterThanOrEqual(min);
+      expect(value, `${label}: ${what} is ${value}, over the limit ${max}`).toBeLessThanOrEqual(max);
+    };
+    check("memory side width", kept.sideWidth, 300, limit.side);
+    check("memory timeline height", kept.timelineHeight, 96, limit.timeline);
+    for (const [id, height] of Object.entries(kept.panelHeights)) check(`memory ${id} height`, height, 48, limit.panel);
+    const on = stored();
+    check("stored side width", on.sideWidth, 300, limit.side);
+    check("stored timeline height", on.timelineHeight, 96, limit.timeline);
+    for (const [id, height] of Object.entries(on.panelHeights ?? {})) check(`stored ${id} height`, height, 48, limit.panel);
+    const number = (value: string | null) => (value === null ? undefined : Number(value));
+    check("drawn side sash", number(parts.controls.sideSash.getAttribute("aria-valuenow")), 300, limit.side);
+    check("drawn data-side-width", number(parts.side.getAttribute("data-side-width")), 300, limit.side);
+    check("drawn timeline sash", number(parts.controls.timelineSash.getAttribute("aria-valuenow")), 96, limit.timeline);
+    check("drawn data-timeline-height", number(parts.timeline.getAttribute("data-timeline-height")), 96, limit.timeline);
+    if (kept.panelHeights.metrics !== undefined) check("drawn stacked sash", number(parts.controls.panelSash.getAttribute("aria-valuenow")), 48, limit.panel);
+  }
+
+  /** A page attached to a store whose window is `start`, with every size pushed to what that window allows. */
+  function pageUnder(start: Viewport) {
+    now = start;
+    const parts = page();
+    const store = createPanelFrameStore({ viewport });
+    live.push(store);
+    attachPanelFrame(parts.root as unknown as PanelFrameRoot, store);
+    store.actions.setSideWidth(5000);
+    store.actions.setTimelineHeight(5000);
+    store.actions.setPanelHeight("metrics", 5000);
+    return { ...parts, store };
+  }
+
+  type Setup = ReturnType<typeof pageUnder>;
+  const KEYS: KeyLikeRow[] = [
+    ...["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].flatMap((key) => [{ key }, { key, shiftKey: true }]),
+    { key: "PageUp" },
+    { key: "PageDown" },
+    { key: "Home" },
+    { key: "End" },
+  ];
+  type KeyLikeRow = { key: string; shiftKey?: boolean };
+
+  /** Every call each size writer takes, with its extreme arguments. Typed from `SIZE_WRITERS`: a writer needs a row. */
+  const CALLS: Record<SizeWriter, Array<[string, (s: Setup) => void]>> = {
+    // The pointer's calls: a drag measures a pixel and sets it.
+    setSideWidth: [0, 340, 481, 5000, Number.MAX_SAFE_INTEGER].flatMap((px) => [
+      [`pointer: setSideWidth(${px})`, (s: Setup) => s.store.actions.setSideWidth(px)] as [string, (s: Setup) => void],
+      [`pointer: setSideWidth(${px}, maxPx 9000)`, (s: Setup) => s.store.actions.setSideWidth(px, { maxPx: 9000 })],
+    ]),
+    setPanelHeight: [0, 120, 5000].flatMap((px) => [
+      [`pointer: setPanelHeight(${px})`, (s: Setup) => s.store.actions.setPanelHeight("metrics", px)] as [string, (s: Setup) => void],
+      [`pointer: setPanelHeight(${px}, maxPx 9000)`, (s: Setup) => s.store.actions.setPanelHeight("metrics", px, { maxPx: 9000 })],
+    ]),
+    setTimelineHeight: [0, 130, 5000].flatMap((px) => [
+      [`pointer: setTimelineHeight(${px})`, (s: Setup) => s.store.actions.setTimelineHeight(px)] as [string, (s: Setup) => void],
+      [`pointer: setTimelineHeight(${px}, maxPx 9000)`, (s: Setup) => s.store.actions.setTimelineHeight(px, { maxPx: 9000 })],
+    ]),
+    resizeByKey: (["side-width", "panel-height", "timeline-height"] as const).flatMap((axis) =>
+      KEYS.map((key) => [
+        `${axis}: ${key.shiftKey ? "Shift+" : ""}${key.key} by store`,
+        (s: Setup) => {
+          s.store.actions.resizeByKey(axis, key, { panel: "metrics", from: 200 });
+        },
+      ] as [string, (s: Setup) => void]),
+    ),
+    // A window resize: the store is told, and brings what it keeps down to the window it now has.
+    fitToWindow: [["window resize: fitToWindow()", (s: Setup) => s.store.actions.fitToWindow()]],
+  };
+
+  /** The same keys through the attach, on the sash element, as a page's keyboard user sends them. */
+  const SASH_KEYS: Array<[string, (s: Setup, key: KeyLikeRow) => FakeElement]> = [
+    ["side sash", (s) => s.controls.sideSash],
+    ["stacked sash", (s) => s.controls.panelSash],
+    ["timeline sash", (s) => s.controls.timelineSash],
+  ];
+
+  const CASES: Array<[string, Viewport, Viewport]> = [];
+  // Each viewport twice: the window was already that size, and the window was roomy and then shrank to it.
+  for (const [name, v] of Object.entries(VIEWPORTS)) {
+    CASES.push([`${name}, window already that size`, v, v]);
+    CASES.push([`${name}, window shrank to it`, VIEWPORTS.roomy as Viewport, v]);
+  }
+
+  describe.each(CASES)("%s", (_title, startedAs, nowIs) => {
+    for (const writer of SIZE_WRITERS) {
+      it(`${writer}: every call and key leaves memory, storage and the drawn attributes within the limits`, () => {
+        for (const [label, call] of CALLS[writer]) {
+          const setup = pageUnder(startedAs);
+          now = nowIs;
+          call(setup);
+          expectWithin(nowIs, setup, label);
+          // And again: the second call from wherever the first left it.
+          call(setup);
+          expectWithin(nowIs, setup, `${label}, twice`);
+          setup.store.destroy();
+          live = live.filter((other) => other !== setup.store);
+          forgetLayoutSizesForTest();
+          localStorage.clear?.();
+          installStorage(new MemoryStorage());
+        }
+      });
+    }
+
+    it("the keys through the attach, on each sash, held to the limits after every press", () => {
+      for (const [sashName, sashOf] of SASH_KEYS) {
+        for (const key of KEYS) {
+          const setup = pageUnder(startedAs);
+          now = nowIs;
+          sashOf(setup, key).dispatch("keydown", key);
+          expectWithin(nowIs, setup, `${sashName}: ${key.shiftKey ? "Shift+" : ""}${key.key} by attach`);
+          setup.store.destroy();
+          live = live.filter((other) => other !== setup.store);
+          forgetLayoutSizesForTest();
+          installStorage(new MemoryStorage());
+        }
+      }
+    });
+
+    it("a direct write to layoutSizes while the store is live is brought down at once, before any read", () => {
+      const setup = pageUnder(startedAs);
+      now = nowIs;
+      rawSetSideWidth(5000);
+      expectWithin(nowIs, setup, "layoutSizes.setSideWidth(5000)");
+      rawSetTimelineHeight(5000);
+      expectWithin(nowIs, setup, "layoutSizes.setTimelineHeight(5000)");
+      rawSetPanelHeight("metrics", 5000);
+      expectWithin(nowIs, setup, "layoutSizes.setPanelHeight(5000)");
+      rawResetSideWidth();
+      expectWithin(nowIs, setup, "layoutSizes.resetSideWidth()");
+      rawResetTimelineHeight();
+      expectWithin(nowIs, setup, "layoutSizes.resetTimelineHeight()");
+    });
+
+    it("the read of a stored value at start: a store made under this window holds what it read to it, in memory and in storage", () => {
+      now = nowIs;
+      localStorage.setItem(LAYOUT_SIZES_KEY, JSON.stringify({ sideWidth: 480, timelineHeight: 4000, panelHeights: { metrics: 9000, inspector: 300 } }));
+      forgetLayoutSizesForTest();
+      const parts = page();
+      const store = createPanelFrameStore({ viewport });
+      live.push(store);
+      // Before it is attached (which reads through getState): what the store itself did when it was made.
+      expectWithin(nowIs, parts, "start, before any read");
+      attachPanelFrame(parts.root as unknown as PanelFrameRoot, store);
+      expectWithin(nowIs, parts, "start, attached");
+    });
+  });
+
+  it("Home on the column in a work area of 600 stores 300, the limit, not the default 340 (the verifier's worked case)", () => {
+    now = { windowHeight: 800, workWidth: 600 };
+    const parts = page();
+    const store = createPanelFrameStore({ viewport });
+    live.push(store);
+    attachPanelFrame(parts.root as unknown as PanelFrameRoot, store);
+    parts.controls.sideSash.dispatch("keydown", { key: "Home" });
+    expect(getLayoutSizes().sideWidth).toBe(300);
+    expect(stored().sideWidth ?? 300).toBe(300);
+    expect(parts.controls.sideSash.getAttribute("aria-valuenow")).toBe("300");
+    expect(parts.side.getAttribute("data-side-width")).toBe("300");
+    // And from a wider column, where Home has a size to change: the default is held to the limit too.
+    store.actions.setSideWidth(5000);
+    expect(getLayoutSizes().sideWidth).toBe(300);
+    now = { windowHeight: 800, workWidth: 1000 };
+    parts.controls.sideSash.dispatch("keydown", { key: "ArrowLeft", shiftKey: true });
+    now = { windowHeight: 800, workWidth: 600 };
+    parts.controls.sideSash.dispatch("keydown", { key: "Home" });
+    expect(getLayoutSizes().sideWidth).toBe(300);
+    expect(stored().sideWidth).toBe(300);
+    expect(parts.controls.sideSash.getAttribute("aria-valuenow")).toBe("300");
+  });
+
+  it("Home on the timeline in a window 150 high stores 105, seven tenths of it, not the default 130 (the verifier's worked case)", () => {
+    now = { windowHeight: 150, workWidth: 1000 };
+    const parts = page();
+    const store = createPanelFrameStore({ viewport });
+    live.push(store);
+    attachPanelFrame(parts.root as unknown as PanelFrameRoot, store);
+    // The default 130 is over the 105 limit, so a store made here already holds the column and the timeline to it.
+    parts.controls.timelineSash.dispatch("keydown", { key: "Home" });
+    expect(getLayoutSizes().timelineHeight).toBe(105);
+    expect(stored().timelineHeight).toBe(105);
+    expect(parts.controls.timelineSash.getAttribute("aria-valuenow")).toBe("105");
+    expect(parts.timeline.getAttribute("data-timeline-height")).toBe("105");
+  });
+
+  it("Home in a roomy window still returns to the default: 340 and 130", () => {
+    now = VIEWPORTS.roomy as Viewport;
+    const parts = page();
+    const store = createPanelFrameStore({ viewport });
+    live.push(store);
+    attachPanelFrame(parts.root as unknown as PanelFrameRoot, store);
+    store.actions.setSideWidth(450);
+    store.actions.setTimelineHeight(500);
+    parts.controls.sideSash.dispatch("keydown", { key: "Home" });
+    parts.controls.timelineSash.dispatch("keydown", { key: "Home" });
+    expect([getLayoutSizes().sideWidth, getLayoutSizes().timelineHeight]).toEqual([DEFAULT_SIDE_WIDTH, DEFAULT_TIMELINE_HEIGHT]);
+    expect(stored().sideWidth).toBe(DEFAULT_SIDE_WIDTH);
+    expect(stored().timelineHeight).toBe(DEFAULT_TIMELINE_HEIGHT);
+  });
+
+  it("Home on a stacked panel lets it share the column again, and a window of any size has no height to hold it to", () => {
+    now = VIEWPORTS["below every default"] as Viewport;
+    const parts = page();
+    const store = createPanelFrameStore({ viewport });
+    live.push(store);
+    attachPanelFrame(parts.root as unknown as PanelFrameRoot, store);
+    store.actions.setPanelHeight("metrics", 90);
+    expect(getLayoutSizes().panelHeights.metrics).toBe(90);
+    parts.controls.panelSash.dispatch("keydown", { key: "Home" });
+    expect(getLayoutSizes().panelHeights.metrics).toBeUndefined();
+  });
+
+  // ------------------------------------------------------- a writer added later and not in the table is red
+
+  /** Actions that write no size. A new action must be here or in `SIZE_WRITERS`, or the case below is red. */
+  const NO_SIZE: Record<string, (s: PanelFrameStore) => void> = {
+    hideSidePanel: (s) => s.actions.hideSidePanel(),
+    showSidePanel: (s) => s.actions.showSidePanel(),
+    openSidePanelFullWidth: (s) => s.actions.openSidePanelFullWidth(),
+    returnSidePanelToNormalWidth: (s) => s.actions.returnSidePanelToNormalWidth(),
+    hideTimeline: (s) => s.actions.hideTimeline(),
+    showTimeline: (s) => s.actions.showTimeline(),
+    moveSidePanel: (s) => s.actions.moveSidePanel("metrics", "up"),
+    moveSidePanelByKey: (s) => void s.actions.moveSidePanelByKey("metrics", { key: "ArrowDown", altKey: true }),
+    dropSidePanelOn: (s) => s.actions.dropSidePanelOn("metrics", "connections"),
+    toggleFold: (s) => s.actions.toggleFold("metrics"),
+    toggleDetails: (s) => s.actions.toggleDetails(),
+  };
+
+  it("every key of store.actions is a listed size writer or a listed action that writes no size: a writer with no row is red", () => {
+    const store = open();
+    const listed = [...SIZE_WRITERS, ...Object.keys(NO_SIZE)].sort();
+    expect(Object.keys(store.actions).sort()).toEqual(listed);
+    expect(new Set(listed).size).toBe(listed.length);
+    // And the table has a row for each listed writer, and none for a name that is no writer.
+    expect(Object.keys(CALLS).sort()).toEqual([...SIZE_WRITERS].sort());
+  });
+
+  it("an action listed as writing no size writes none: the sizes in memory and in storage are the same after it, in a window below every default", () => {
+    now = VIEWPORTS["below every default"] as Viewport;
+    for (const [name, call] of Object.entries(NO_SIZE)) {
+      const store = open();
+      const before = [JSON.stringify(getLayoutSizes()), localStorage.getItem(LAYOUT_SIZES_KEY)];
+      call(store);
+      expect([JSON.stringify(getLayoutSizes()), localStorage.getItem(LAYOUT_SIZES_KEY)], name).toEqual(before);
+    }
+  });
+});
+
+describe("one writer, in the source: every layoutSizes setter and reset is called inside `writeSize` and nowhere else", () => {
+  const WRITER_NAMES = ["setSideWidth", "setTimelineHeight", "setPanelHeight", "resetSideWidth", "resetTimelineHeight", "resetPanelHeight"];
+  const BEGIN = "// writer: begin";
+  const END = "// writer: end";
+
+  /** The source with comments blanked (keeping line numbers). */
+  const code = (source: string) =>
+    source
+      .replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, " "))
+      .split("\n")
+      .map((line) => line.replace(/(^|\s)\/\/(?! writer: (begin|end)).*$/, ""))
+      .join("\n");
+
+  /** Lines that reach a layoutSizes writer outside the marked region, by a call, a named import or an alias. */
+  function writesOutsideTheWriter(source: string): string[] {
+    const lines = code(source).split("\n");
+    let inside = false;
+    let regions = 0;
+    const found: string[] = [];
+    const calls = new RegExp(`\\bsizeStore\\s*\\.\\s*(${WRITER_NAMES.join("|")})\\b`);
+    lines.forEach((line, index) => {
+      if (line.includes(BEGIN)) {
+        inside = true;
+        regions += 1;
+      } else if (line.includes(END)) inside = false;
+      else if (!inside && calls.test(line)) found.push(`${index + 1}: ${line.trim()}`);
+    });
+    // A named import of a writer from layoutSizes (even aliased) lets a bare call through, so it is a finding itself.
+    for (const match of source.matchAll(/import\s*(?:type\s*)?\{([^}]*)\}\s*from\s*["']\.\/layoutSizes["']/g)) {
+      for (const name of WRITER_NAMES) if (new RegExp(`\\b${name}\\b`).test(match[1] as string)) found.push(`import of ${name}`);
+    }
+    if (regions === 0) found.push("no writer region");
+    return found;
+  }
+
+  const read = (name: string) => readFileSync(join(HERE, name), "utf8");
+
+  it("the store calls the writers only inside the marked region, and has one", () => {
+    expect(writesOutsideTheWriter(read("panelFrameStore.ts"))).toEqual([]);
+    const source = read("panelFrameStore.ts");
+    expect(source.split("\n").filter((line) => line.includes(BEGIN))).toHaveLength(1);
+    const region = source.slice(source.indexOf(BEGIN), source.indexOf(END));
+    // Each of the six is reached from there: the region is the writer and not an empty marker.
+    for (const name of WRITER_NAMES) expect(region, name).toContain(`sizeStore.${name}`);
+  });
+
+  it("the attach names no writer: it imports only constants from layoutSizes, and calls nothing of it", () => {
+    const source = read("panelFrameAttach.ts");
+    for (const match of source.matchAll(/import\s*(?:type\s*)?\{([^}]*)\}\s*from\s*["']\.\/layoutSizes["']/g)) {
+      for (const name of (match[1] as string).split(",").map((part) => part.trim()).filter(Boolean)) expect(name, "attach imports").toMatch(/^[A-Z_]+$/);
+    }
+    expect(source).not.toMatch(/import\s*\*\s*as\s+\w+\s+from\s*["']\.\/layoutSizes["']/);
+  });
+
+  it("neither file re-exports a layoutSizes writer", () => {
+    for (const name of ["panelFrameStore.ts", "panelFrameAttach.ts"]) {
+      expect(read(name), name).not.toMatch(/export\s*(\*|\{[^}]*\})\s*from\s*["']\.\/layoutSizes["']/);
+    }
+  });
+
+  // The shapes the real code would take if a path wrote a size outside the writer (rule 15): the real lines of
+  // `resizeByKey`'s Home branch and a setter's body, planted one at a time into the real source.
+  it.each([
+    ["Home calling a reset", "        if (axis === \"side-width\") sizeStore.resetSideWidth();"],
+    ["Home calling the timeline's reset", "        else if (axis === \"timeline-height\") sizeStore.resetTimelineHeight();"],
+    ["a setter called from an action", "      if (finite(px)) sizeStore.setSideWidth(px);"],
+    ["a stacked panel's height", "      sizeStore.setPanelHeight(id, px);"],
+  ])("a planted write outside the writer is found: %s", (_name, line) => {
+    const real = read("panelFrameStore.ts");
+    const planted = real.replace("export function createPanelFrameStore", `function planted(axis: string, px: number, id: SidePanelId) {\n${line}\n}\nexport function createPanelFrameStore`);
+    expect(planted).not.toBe(real);
+    expect(writesOutsideTheWriter(planted).length).toBeGreaterThan(0);
+  });
+
+  it("a planted named import of a setter is found, aliased or not", () => {
+    const real = read("panelFrameStore.ts");
+    expect(writesOutsideTheWriter(`import { setSideWidth } from "./layoutSizes";\n${real}`)).toContain("import of setSideWidth");
+    expect(writesOutsideTheWriter(`import { resetTimelineHeight as raw } from "./layoutSizes";\n${real}`)).toContain("import of resetTimelineHeight");
   });
 });
 
