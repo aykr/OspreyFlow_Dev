@@ -570,7 +570,7 @@ service's own checks (`apps/pages/server/config.ts`) are not weakened: every val
 must pass them, and every Caddyfile it leads to must load in the proxy image's own Caddy.
 
 **What is derived, and what is refused.** The cases are the rows of
-`OspreyFlow_Build/tests/fixtures/page_addresses_cases.json`, which the Python tests, the node test
+`tests/fixtures/page_addresses_cases.json`, which the Python tests, the node test
 and the real-Caddy test all read.
 
 | Rule | In words |
@@ -584,7 +584,7 @@ and the real-Caddy test all read.
 | A port that is taken | An HTTPS origin on a port the front proxy publishes or serves as plain HTTP is refused: its plain-HTTP ports (80 and 8080, in every shape), the loopback doors it publishes (the graph store's, and the Conduit's when `network.expose_conduit` asks), and every other port it publishes except its own HTTPS port. The list comes from the one place that publishes them (`proxy_ports` in `OspreyFlow_Core/harness/site.py`), so a port added there is covered at once (the owner, 24 November). |
 | The shared key | With `network.access_key` the page service's routes sit inside the key's `route`; the identity alias and the issuer's discovery document, keys and token are on the key's open list. |
 
-**Where the real Caddy runs.** `OspreyFlow_Build/tests/harness/test_page_addresses_caddy.py` runs
+**Where the real Caddy runs.** `tests/harness/test_page_addresses_caddy.py` runs
 `caddy validate` from the proxy image (`caddy:2.11.4-alpine`, with no network and read-only mounts)
 on each case's rendered Caddyfile; it does not skip, and where neither the image nor a Caddy 2.11
 binary can be run it fails in words. The Mac's gate runs it on every merge. The test server has no

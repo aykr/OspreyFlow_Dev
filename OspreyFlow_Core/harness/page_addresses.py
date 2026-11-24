@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import ipaddress
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
@@ -458,7 +459,7 @@ def derive(config: OspreyConfig, *, with_sign_in: bool = True) -> PageAddresses 
         if pages_service.govuk_tree_is_complete(config):
             return Refusal("cutover", CUTOVER)
         return None
-    in_order = (
+    in_order: tuple[Callable[[OspreyConfig], Refusal | None], ...] = (
         _on_cloud_platform,
         _origin_problem,
         *((_needs_https,) if with_sign_in else ()),

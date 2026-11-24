@@ -46,10 +46,11 @@ fullest account, with what holds each constraint today and what is "coming".
 <!-- document-control:begin -->
 ## Document control
 
-**Version 2.41** · 2026-11-22 · For OspreyFlow v0.6.1 · Issued
+**Version 2.42** · 2026-11-24 · For OspreyFlow v0.6.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 2.42 | 2026-11-24 | Appendix A: `pages.enabled` says the setting exists and is off and is not for use yet (the page service's addresses are worked out in one place, slice PL7f); the description is the schema's own. |
 | 2.41 | 2026-11-22 | §8 and §10's reference: the `models.provider.kind` and `models.providers.kind` rows say the organisation's own gateway is offered on every profile and Bedrock on the cloud platform only (ADR-135 Amendment 14), and the `ospreyflow models` row names its four answers (yes, no, lost after a restore, unknown while the Conduit does not answer). Version set at merge (slice AD1a), after main's 2.29. |
 | 2.40 | 2026-11-22 | §8 and §10: adding a model engine from Admin › Models (ADR-135 Amendment 14: a provider chosen from a list, a typed model name, the key and each name proved by one call before *Add*); a model key is write-only, managed in Admin › Models, kept by the model gateway alone, and `ospreyflow models` says "unknown" while the deployment is stopped, never reading `deployment.env`; prefer the hidden prompt, since `export` lands in shell history (the owner's key review, 15 November 2026). Version set at merge (slice AD1a), after main's 2.29. |
 | 2.39 | 2026-11-22 | "How OspreyFlow is built": the lead-in to the tiers and ports no longer says everything between the tiers crosses one of four ports. It says what crosses the four ports, that three narrower ports sit beside them, and that the relational store, the working-set store and the search index are not behind a port (DC1c round 7). The passage *Why OspreyFlow is built this way* is unchanged. PDF made again. |
