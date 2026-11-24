@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PANEL_FRAME_ACTIONS } from "../keyboard/actionRegistry";
-import { DEFAULT_SIDE_WIDTH, DEFAULT_TIMELINE_HEIGHT, LAYOUT_SIZES_KEY, MIN_SIDE_WIDTH, forgetLayoutSizesForTest } from "./layoutSizes";
+import { DEFAULT_SIDE_WIDTH, DEFAULT_TIMELINE_HEIGHT, LAYOUT_SIZES_KEY, MIN_SIDE_WIDTH, forgetLayoutSizesForTest, getLayoutSizes } from "./layoutSizes";
 import { SIDE_PANEL_IDS, SIDE_PANEL_ORDER_KEY, forgetSidePanelOrderForTest } from "./panelOrder";
 import { attachPanelFrame, type PanelFrameRoot } from "./panelFrameAttach";
 import {
@@ -738,17 +738,31 @@ describe("attach: wiring data-action elements to the store, no style set", () =>
   });
 });
 
-// ------------------------------------------------------------- the upper limits, from the live window (round 2)
+// ------------------------------------------------------------- the upper limits, from the live window (rounds 2 and 3)
 
 // What the spec table says the frame holds: the timeline between 96px and seven tenths of the window; the column between
 // 300 and 480 and leaving the canvas 320; a stacked panel no taller than the window. The store reads the window itself
 // at each resize through one injectable function, so a call that omits `maxPx`, and a page whose markup cannot know the
 // window's height, are both held.
+//
+// Round 3: these cases read what a page would see, and never repair it first. `store.getState()` itself brings every size
+// down to today's limit (it calls the store's `enforce()`), writes it and redraws, so an assertion made through it
+// repairs the very fault it is meant to catch. A real page never calls it after a key press: the attach draws from the
+// subscribe path. So each case below reads, straight after the key press and before any `getState()`:
+//   - `held()`    the sizes in memory, from `layoutSizes.getLayoutSizes()`, which enforces nothing;
+//   - `stored()`  the value in `ospreyflow.layout-sizes`;
+//   - the sash's `aria-valuenow` and the frame's data attribute, which the attach drew from the subscribe path.
+// `getState()` is used only where a case is about `getState()` itself (named in its title).
+// Planted, each shown red on its own (the figures are in the commit message): the keyboard path's clamp removed with
+// `enforce()` left in `getState()`; `enforce()` taken out of `resizeByKey`; the three setters unclamped by the live
+// limit; the live limit alone removed with `data-max` left in.
 describe("the upper limits come from the live window, through the attach path, at each key press", () => {
   let windowHeight = 800;
   let workWidth = 1000;
   const viewport = () => ({ windowHeight, workWidth });
   const stored = () => JSON.parse(localStorage.getItem(LAYOUT_SIZES_KEY) ?? "{}") as { sideWidth?: number; timelineHeight?: number; panelHeights?: Record<string, number> };
+  /** The sizes in memory, read without enforcing anything (unlike `store.getState()`). */
+  const held = () => getLayoutSizes();
   const attached = () => {
     windowHeight = 800;
     workWidth = 1000;
@@ -760,81 +774,157 @@ describe("the upper limits come from the live window, through the attach path, a
   };
 
   it("repeated ArrowUp on the timeline sash stops at seven tenths of the window, and the stored value never exceeds it", () => {
-    const { controls, store } = attached();
+    const { controls, timeline } = attached();
     for (let press = 0; press < 80; press += 1) {
       controls.timelineSash.dispatch("keydown", { key: "ArrowUp", shiftKey: press % 2 === 0 });
-      expect(store.getState().timelineHeight).toBeLessThanOrEqual(560);
-      expect(stored().timelineHeight ?? 0).toBeLessThanOrEqual(560);
+      // Straight after the press: what is in memory, what is stored and what is drawn, none of it repaired by a read.
+      expect(held().timelineHeight, `memory after press ${press}`).toBeLessThanOrEqual(560);
+      expect(stored().timelineHeight ?? 0, `stored after press ${press}`).toBeLessThanOrEqual(560);
+      expect(Number(controls.timelineSash.getAttribute("aria-valuenow")), `aria-valuenow after press ${press}`).toBeLessThanOrEqual(560);
+      expect(Number(timeline.getAttribute("data-timeline-height")), `data-timeline-height after press ${press}`).toBeLessThanOrEqual(560);
     }
-    expect(store.getState().timelineHeight).toBe(560);
+    expect(held().timelineHeight).toBe(560);
     expect(stored().timelineHeight).toBe(560);
     expect(controls.timelineSash.getAttribute("aria-valuenow")).toBe("560");
+    expect(timeline.getAttribute("data-timeline-height")).toBe("560");
     // A reload under the same window keeps it; a store given no function reads the real window, which a test has none of.
     forgetLayoutSizesForTest();
     const again = createPanelFrameStore({ viewport });
     live.push(again);
-    expect(again.getState().timelineHeight).toBe(560);
+    expect(held().timelineHeight).toBe(560);
+  });
+
+  it("one press from just under the limit does not pass it: 559 and ArrowUp is 560, not 575, in memory, in storage and as drawn", () => {
+    const { controls, timeline, store } = attached();
+    store.actions.setTimelineHeight(559);
+    expect(held().timelineHeight).toBe(559);
+    controls.timelineSash.dispatch("keydown", { key: "ArrowUp", shiftKey: false });
+    expect(held().timelineHeight).toBe(560);
+    expect(stored().timelineHeight).toBe(560);
+    expect(controls.timelineSash.getAttribute("aria-valuenow")).toBe("560");
+    expect(timeline.getAttribute("data-timeline-height")).toBe("560");
   });
 
   it("a page's own data-max on the sash may lower the limit and never lift it", () => {
-    const { controls, store } = attached();
+    const { controls, timeline } = attached();
     controls.timelineSash.setAttribute("data-max", "300");
     for (let press = 0; press < 20; press += 1) controls.timelineSash.dispatch("keydown", { key: "ArrowUp", shiftKey: true });
-    expect(store.getState().timelineHeight).toBe(300);
+    expect(held().timelineHeight).toBe(300);
+    expect(stored().timelineHeight).toBe(300);
+    expect(controls.timelineSash.getAttribute("aria-valuenow")).toBe("300");
+    // A data-max above the window's limit lifts nothing: it goes to 560 and stops, in memory, in storage and as drawn.
     controls.timelineSash.setAttribute("data-max", "5000");
-    for (let press = 0; press < 20; press += 1) controls.timelineSash.dispatch("keydown", { key: "ArrowUp", shiftKey: true });
-    expect(store.getState().timelineHeight).toBe(560);
+    for (let press = 0; press < 20; press += 1) {
+      controls.timelineSash.dispatch("keydown", { key: "ArrowUp", shiftKey: true });
+      expect(held().timelineHeight, `memory after press ${press}`).toBeLessThanOrEqual(560);
+      expect(stored().timelineHeight ?? 0, `stored after press ${press}`).toBeLessThanOrEqual(560);
+    }
+    expect(held().timelineHeight).toBe(560);
+    expect(stored().timelineHeight).toBe(560);
+    expect(timeline.getAttribute("data-timeline-height")).toBe("560");
+  });
+
+  it("an explicit maxPx given to an action may only lower the limit: set above the window's, it is held at the window's", () => {
+    const { store } = attached();
     store.actions.setTimelineHeight(9000, { maxPx: 9000 });
-    expect(store.getState().timelineHeight).toBe(560);
+    expect(held().timelineHeight).toBe(560);
+    expect(stored().timelineHeight).toBe(560);
     store.actions.setSideWidth(9000, { maxPx: 9000 });
-    expect(store.getState().sideWidth).toBe(480);
+    expect(held().sideWidth).toBe(480);
+    expect(stored().sideWidth).toBe(480);
+    store.actions.setPanelHeight("metrics", 9000, { maxPx: 9000 });
+    expect(held().panelHeights.metrics).toBe(800);
+    expect(stored().panelHeights?.metrics).toBe(800);
+    // And lowered: a maxPx under the limit is the limit.
+    store.actions.setTimelineHeight(9000, { maxPx: 200 });
+    expect(held().timelineHeight).toBe(200);
   });
 
   it("repeated ArrowLeft on the column's sash stops at 480, or where the canvas keeps 320 of the work area", () => {
     const wide = attached();
-    for (let press = 0; press < 40; press += 1) wide.controls.sideSash.dispatch("keydown", { key: "ArrowLeft", shiftKey: true });
-    expect(wide.store.getState().sideWidth).toBe(480);
+    for (let press = 0; press < 40; press += 1) {
+      wide.controls.sideSash.dispatch("keydown", { key: "ArrowLeft", shiftKey: true });
+      expect(held().sideWidth, `memory after press ${press}`).toBeLessThanOrEqual(480);
+    }
+    expect(held().sideWidth).toBe(480);
     expect(stored().sideWidth).toBe(480);
     wide.store.actions.resizeByKey("side-width", { key: "Home" });
 
-    // A 700px work area: 700 - 320 = 380 for the column, under 480.
+    // A 700px work area: 700 - 320 = 380 for the column, under 480. The 480 above is not the limit that holds here.
     workWidth = 700;
     for (let press = 0; press < 40; press += 1) {
       wide.controls.sideSash.dispatch("keydown", { key: "ArrowLeft", shiftKey: press % 2 === 0 });
-      expect(700 - wide.store.getState().sideWidth).toBeGreaterThanOrEqual(320);
-      expect(700 - (stored().sideWidth ?? 0)).toBeGreaterThanOrEqual(320);
+      expect(700 - held().sideWidth, `canvas left in memory after press ${press}`).toBeGreaterThanOrEqual(320);
+      expect(700 - (stored().sideWidth ?? 0), `canvas left in storage after press ${press}`).toBeGreaterThanOrEqual(320);
+      expect(700 - Number(wide.controls.sideSash.getAttribute("aria-valuenow")), `canvas left as drawn after press ${press}`).toBeGreaterThanOrEqual(320);
+      expect(700 - Number(wide.side.getAttribute("data-side-width")), `data-side-width after press ${press}`).toBeGreaterThanOrEqual(320);
     }
-    expect(wide.store.getState().sideWidth).toBe(380);
+    expect(held().sideWidth).toBe(380);
+    expect(stored().sideWidth).toBe(380);
     expect(wide.controls.sideSash.getAttribute("aria-valuenow")).toBe("380");
 
     // So small a work area that 320 for the canvas cannot be kept: the column never goes under 300.
     workWidth = 500;
     for (let press = 0; press < 5; press += 1) wide.controls.sideSash.dispatch("keydown", { key: "ArrowLeft", shiftKey: true });
-    expect(wide.store.getState().sideWidth).toBe(300);
+    expect(held().sideWidth).toBe(300);
+    expect(stored().sideWidth).toBe(300);
+    expect(wide.controls.sideSash.getAttribute("aria-valuenow")).toBe("300");
   });
 
   it("repeated ArrowDown on a stacked panel's sash stops at the window's height", () => {
-    const { controls, store } = attached();
-    for (let press = 0; press < 40; press += 1) controls.panelSash.dispatch("keydown", { key: "ArrowDown", shiftKey: true });
-    expect(store.getState().panelHeights.metrics).toBe(800);
+    const { controls } = attached();
+    for (let press = 0; press < 40; press += 1) {
+      controls.panelSash.dispatch("keydown", { key: "ArrowDown", shiftKey: true });
+      expect(held().panelHeights.metrics ?? 0, `memory after press ${press}`).toBeLessThanOrEqual(800);
+      expect(stored().panelHeights?.metrics ?? 0, `stored after press ${press}`).toBeLessThanOrEqual(800);
+      expect(Number(controls.panelSash.getAttribute("aria-valuenow")), `aria-valuenow after press ${press}`).toBeLessThanOrEqual(800);
+    }
+    expect(held().panelHeights.metrics).toBe(800);
     expect(stored().panelHeights?.metrics).toBe(800);
   });
 
-  it("a shrinking window brings a stored size down on the next key press", () => {
-    const { controls, store } = attached();
+  it("a shrinking window brings a stored size down on the next key press, as stored and as drawn, before any read", () => {
+    const { controls, timeline, side } = attached();
     for (let press = 0; press < 20; press += 1) controls.timelineSash.dispatch("keydown", { key: "ArrowUp", shiftKey: true });
     for (let press = 0; press < 20; press += 1) controls.sideSash.dispatch("keydown", { key: "ArrowLeft", shiftKey: true });
-    expect([store.getState().timelineHeight, store.getState().sideWidth]).toEqual([560, 480]);
+    expect([held().timelineHeight, held().sideWidth]).toEqual([560, 480]);
+    expect([stored().timelineHeight, stored().sideWidth]).toEqual([560, 480]);
 
     windowHeight = 500;
     workWidth = 650;
     // ArrowUp would have grown 560 to 576 against the old window; against this one it is held at 350.
     controls.timelineSash.dispatch("keydown", { key: "ArrowUp", shiftKey: false });
-    expect(store.getState().timelineHeight).toBe(350);
+    expect(held().timelineHeight).toBe(350);
     expect(stored().timelineHeight).toBe(350);
+    expect(controls.timelineSash.getAttribute("aria-valuenow")).toBe("350");
+    expect(timeline.getAttribute("data-timeline-height")).toBe("350");
     controls.sideSash.dispatch("keydown", { key: "ArrowLeft", shiftKey: false });
-    expect(store.getState().sideWidth).toBe(330);
+    expect(held().sideWidth).toBe(330);
     expect(stored().sideWidth).toBe(330);
+    expect(controls.sideSash.getAttribute("aria-valuenow")).toBe("330");
+    expect(side.getAttribute("data-side-width")).toBe("330");
+  });
+
+  it("a shrinking window brings a stored size down on a key press that is not itself a resize (the press enforces, whatever it is)", () => {
+    // ArrowDown or ArrowUp would be brought down by the setter's own clamp; a key that moves nothing is where only the
+    // enforcing at the start of a key press can bring a size down.
+    const { controls, timeline, side } = attached();
+    for (let press = 0; press < 20; press += 1) controls.timelineSash.dispatch("keydown", { key: "ArrowUp", shiftKey: true });
+    for (let press = 0; press < 20; press += 1) controls.sideSash.dispatch("keydown", { key: "ArrowLeft", shiftKey: true });
+    expect([held().timelineHeight, held().sideWidth]).toEqual([560, 480]);
+
+    windowHeight = 500;
+    workWidth = 650;
+    controls.timelineSash.dispatch("keydown", { key: "PageUp" });
+    expect(held().timelineHeight).toBe(350);
+    expect(stored().timelineHeight).toBe(350);
+    expect(controls.timelineSash.getAttribute("aria-valuenow")).toBe("350");
+    expect(timeline.getAttribute("data-timeline-height")).toBe("350");
+    controls.sideSash.dispatch("keydown", { key: "PageUp" });
+    expect(held().sideWidth).toBe(330);
+    expect(stored().sideWidth).toBe(330);
+    expect(controls.sideSash.getAttribute("aria-valuenow")).toBe("330");
+    expect(side.getAttribute("data-side-width")).toBe("330");
   });
 
   it("a stored size above today's limit is read brought down, in memory and in storage; a corrupt one is ignored", () => {
@@ -845,11 +935,15 @@ describe("the upper limits come from the live window, through the attach path, a
     forgetLayoutSizesForTest();
     const store = createPanelFrameStore({ viewport });
     live.push(store);
+    // Made, not asked: the store brought the stored sizes down when it was made, so no read has to.
+    expect([held().timelineHeight, held().sideWidth]).toEqual([350, 330]);
+    expect(held().panelHeights).toEqual({ metrics: 500, inspector: 120 });
+    expect(stored().timelineHeight).toBe(350);
+    expect(stored().sideWidth).toBe(330);
+    expect(stored().panelHeights).toEqual({ metrics: 500, inspector: 120 });
     const state = store.getState();
     expect([state.timelineHeight, state.sideWidth]).toEqual([350, 330]);
     expect(state.panelHeights).toEqual({ metrics: 500, inspector: 120 });
-    expect(stored().timelineHeight).toBe(350);
-    expect(stored().sideWidth).toBe(330);
 
     // Corrupt values are ignored, as before, not "clamped" into something that looks chosen.
     localStorage.setItem(LAYOUT_SIZES_KEY, JSON.stringify({ sideWidth: "wide", timelineHeight: null, panelHeights: { metrics: "tall" } }));
@@ -857,28 +951,53 @@ describe("the upper limits come from the live window, through the attach path, a
     workWidth = 1000;
     const second = createPanelFrameStore({ viewport });
     live.push(second);
-    expect([second.getState().sideWidth, second.getState().timelineHeight, second.getState().panelHeights]).toEqual([DEFAULT_SIDE_WIDTH, DEFAULT_TIMELINE_HEIGHT, {}]);
+    expect([held().sideWidth, held().timelineHeight, held().panelHeights]).toEqual([DEFAULT_SIDE_WIDTH, DEFAULT_TIMELINE_HEIGHT, {}]);
   });
 
-  it("a window that has shrunk after the store was made is read on getState, not only on a key press", () => {
+  it("`getState()` itself reads the window too: one that shrank after the store was made is brought down on the read (this case is about the read)", () => {
     const { controls, store } = attached();
     for (let press = 0; press < 20; press += 1) controls.timelineSash.dispatch("keydown", { key: "ArrowUp", shiftKey: true });
     windowHeight = 400;
     expect(store.getState().timelineHeight).toBe(280);
+    expect(stored().timelineHeight).toBe(280);
   });
 
   it("with no injected function the store reads the window itself, at each call, as isWide() reads innerWidth", () => {
     vi.stubGlobal("window", { innerWidth: 1400, innerHeight: 600 });
     const store = open();
     store.actions.setTimelineHeight(5000);
-    expect(store.getState().timelineHeight).toBe(420);
+    expect(held().timelineHeight).toBe(420);
+    expect(stored().timelineHeight).toBe(420);
     store.actions.setSideWidth(5000);
-    expect(store.getState().sideWidth).toBe(480);
+    expect(held().sideWidth).toBe(480);
+    expect(stored().sideWidth).toBe(480);
+    store.actions.setPanelHeight("metrics", 5000);
+    expect(held().panelHeights.metrics).toBe(600);
+    expect(stored().panelHeights?.metrics).toBe(600);
     vi.stubGlobal("window", { innerWidth: 700, innerHeight: 300 });
     store.actions.resizeByKey("timeline-height", { key: "ArrowUp", shiftKey: true });
-    expect(store.getState().timelineHeight).toBe(210);
+    expect(held().timelineHeight).toBe(210);
+    expect(stored().timelineHeight).toBe(210);
     store.actions.resizeByKey("side-width", { key: "ArrowLeft", shiftKey: true });
-    expect(store.getState().sideWidth).toBe(380);
+    expect(held().sideWidth).toBe(380);
+    expect(stored().sideWidth).toBe(380);
+    store.actions.resizeByKey("panel-height", { key: "ArrowDown", shiftKey: true }, { panel: "metrics" });
+    expect(held().panelHeights.metrics).toBe(300);
+    expect(stored().panelHeights?.metrics).toBe(300);
+  });
+
+  it("with no injected function, repeated ArrowUp through the attach path never stores a size over seven tenths of the window it reads", () => {
+    vi.stubGlobal("window", { innerWidth: 1400, innerHeight: 600 });
+    const parts = page();
+    const store = open();
+    attachPanelFrame(parts.root as unknown as PanelFrameRoot, store);
+    for (let press = 0; press < 40; press += 1) {
+      parts.controls.timelineSash.dispatch("keydown", { key: "ArrowUp", shiftKey: true });
+      expect(held().timelineHeight, `memory after press ${press}`).toBeLessThanOrEqual(420);
+      expect(stored().timelineHeight ?? 0, `stored after press ${press}`).toBeLessThanOrEqual(420);
+      expect(Number(parts.controls.timelineSash.getAttribute("aria-valuenow")), `aria-valuenow after press ${press}`).toBeLessThanOrEqual(420);
+    }
+    expect(held().timelineHeight).toBe(420);
   });
 
   it("with no window at all (nothing to read) the limits are still finite: a call that omits maxPx is not unbounded", () => {
@@ -886,10 +1005,26 @@ describe("the upper limits come from the live window, through the attach path, a
     store.actions.setTimelineHeight(1_000_000);
     store.actions.setPanelHeight("metrics", 1_000_000);
     store.actions.setSideWidth(1_000_000);
-    const state = store.getState();
-    expect(state.timelineHeight).toBeLessThan(2000);
-    expect(state.panelHeights.metrics).toBeLessThan(4000);
-    expect(state.sideWidth).toBe(480);
+    expect(held().timelineHeight).toBeLessThan(2000);
+    expect(held().panelHeights.metrics).toBeLessThan(4000);
+    expect(held().sideWidth).toBe(480);
+    expect(stored().timelineHeight).toBeLessThan(2000);
+    expect(stored().panelHeights?.metrics).toBeLessThan(4000);
+    expect(stored().sideWidth).toBe(480);
+  });
+
+  it("with no window at all, repeated ArrowUp through the attach path stops at the fallback's seven tenths, in memory, stored and drawn", () => {
+    const parts = page();
+    const store = open();
+    attachPanelFrame(parts.root as unknown as PanelFrameRoot, store);
+    // The fallback window is 768 high: seven tenths is 538.
+    for (let press = 0; press < 60; press += 1) {
+      parts.controls.timelineSash.dispatch("keydown", { key: "ArrowUp", shiftKey: true });
+      expect(held().timelineHeight, `memory after press ${press}`).toBeLessThanOrEqual(538);
+      expect(stored().timelineHeight ?? 0, `stored after press ${press}`).toBeLessThanOrEqual(538);
+      expect(Number(parts.controls.timelineSash.getAttribute("aria-valuenow")), `aria-valuenow after press ${press}`).toBeLessThanOrEqual(538);
+    }
+    expect(held().timelineHeight).toBe(538);
   });
 
   it("the viewport function is asked at each key press, not once: that is what a resize needs", () => {
