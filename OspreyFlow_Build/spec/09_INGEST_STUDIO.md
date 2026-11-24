@@ -249,37 +249,57 @@ before ADR-120 is not flagged blind: it is stamped once with each pack's last ve
 record (NIEM 2, FIBO 1, STIX 1), so the NIEM bump to version 3 flags exactly the recipes naming
 NIEM or writing its types.
 
-### 1.2 The dataset map (slice IS3, 22 November 2026; ADR-140 Amendment 22 items 1 and 8; ADR-141 Amendment 2)
+### 1.2 The dataset map (slice IS3, 22 November 2026; slice IS6a, 24 November 2026; ADR-140 Amendment 22 items 1, 7 and 8; ADR-141 Amendment 2)
 
-The dataset map is the Studio page that shows one dataset and the pipelines that load it. It is a server-rendered page of the
-`pages` service (`/studio/dataset-map`, in the Studio's frame: its dataset switch, readiness strip and five places), built first
-for the Default tree. **There is no React dataset map to copy**, so its scenario (`08_ACCEPTANCE_SCENARIOS.md`, Scenario DM) is
-written from the ADR text, the prototype's Pipelines list and the owner's ruling of 21 November 2026, not from a screen.
+The dataset map is the Studio page that shows one dataset and the pipelines that load it, and where a person sets the order they run in. It
+is a server-rendered page of the `pages` service (`/studio/dataset-map`, in the Studio's frame: its dataset switch, readiness strip and
+five places), built first for the Default tree. **There is no React dataset map to copy**, so its scenario (`08_ACCEPTANCE_SCENARIOS.md`,
+Scenario DM) is written from the ADR text, the prototype's Pipelines list and the owner's rulings of 21 and 24 November 2026, not from a
+screen.
 
 - **What it shows.** A table with a caption ("Pipelines loading" and the dataset's name) and four columns: Pipeline, Status, Version
   and Stages, with one row for each pipeline that loads the dataset, the pipeline's name as the row's header. The status and the
   stage names are the Studio's own words (a published pipeline is "deployed", a flagged one "needs attention"; a stage is its kind
   in words: Domain model, Source, Map, Load and the rest). The stages are listed in the order the pipeline canvas would lay them
   out (by the longest path from a stage nothing feeds), so the table reads as the canvas does from left to right. Rows are sorted by
-  pipeline name, and the page says so. A previous version of a pipeline is not listed.
-- **It is read-only.** The page has no form of its own, no button and no link beyond the frame's. It is complete with scripts off,
-  and it needs no script at all. A dataset no pipeline loads says "No pipeline loads this dataset yet."
-- **What it never shows.** No "runs after" column, no hint of an order, no empty column and no line between pipelines: the
-  order pipelines run in is set on this map by a person and stored with the dataset (ADR-140 Amendment 22 item 8; ADR-141
-  Amendment 2 point 6), which is **IS6's**, and IS6 adds the column when it stores the order. The page shows a "runs after" column
-  only when the order is stored: until then there is nothing for it to show, and an empty column or a suggestion nothing backs is
-  worse than none (the owner's ruling of 21 November 2026). The Studio's Map step (row template and field bindings) is another
-  page (IS4m).
+  pipeline name, and the page says so. A previous version of a pipeline is not listed. A dataset no pipeline loads says "No pipeline
+  loads this dataset yet."
+- **The order pipelines run in** (IS6a; ADR-140 Amendment 22 item 8; ADR-141 Amendment 2 point 6; the owner's rulings of 24 November
+  2026). The order is stored with the dataset as "runs after" links: for each pipeline, the pipelines it runs after. A fifth column,
+  "Runs after", follows Stages **only when an order is stored** (one that says something about these pipelines). With no order stored the
+  table is the four columns above: no "runs after" column, no empty column, no hint of an order, no suggestion and no line between
+  pipelines (the owner's ruling of 21 November 2026). The column names, for each pipeline, the pipelines it runs after, by name in the
+  Studio's words, or "Nothing"; **a pipeline that is not deployed may be in the order** and is named "(not deployed)" wherever the order
+  names it. A line under the table says which version of the order is shown, who saved it and when. A stored order that could not be
+  read is said in an alert and is never drawn as none stored. A suggestion of an order, worked out from the types, is not part of this
+  page (rule 5: a model-derived suggestion stays inferred and is not stored as the order).
+- **It is edited here.** The order is edited on this page, by a plain form of tick boxes (a group for each pipeline: what it runs after)
+  that needs no script. It posts the order as ticked with **the number of the order it read** (0 when none is stored), the case, the
+  dataset and the anti-forgery token. A save is a new version of the order (a number per save, with who saved it and when), and **the
+  expected number is required on save**: a save made over an order that has moved on is refused, said, and the page shows the order as it
+  now is with what was ticked kept, never a silent overwrite. **A cycle is refused on save**, in the Conduit's words naming the
+  pipelines in it (a pipeline that must run after itself, directly or through others); an order that only closes a cycle through
+  pipelines the saver may not see is not refused for it, because refusing it would tell them such a path exists (rule 3). Saving the
+  order runs nothing: it is not the run (the whole-dataset load is a later slice), the scheduler's job file is decided with the
+  scheduler slice, and the cover for a scheduled load is the owner's with options before its own slice (ADR-141 Amendment 2 point 5).
+- **The release carries it.** A dataset's release export carries the order among the pipelines the release carries (a link to a pipeline it
+  does not carry, such as one not deployed or marked above the exporter's view, is left out and never named) with its number, and an
+  import writes it as a new version of the receiving dataset's order, its pipelines being the drafts the import makes, joined to the links
+  the dataset already holds (ADR-141 Amendment 2 point 6).
 - **Access.** The page reads the case's pipelines as the person, through the Conduit, which reads them through the case's datasets
-  and refuses a person without Edit pipelines. The table holds only the pipelines of the dataset it is open on: a pipeline of
-  another dataset, or one placed in none, is not a row, and no count of what is left out is drawn. A person without the right, a
-  case the Conduit no longer opens, a dataset none of their cases loads into and a dataset that does not exist all read the same
-  words, with no row, no count and no pipeline's name anywhere in the page (rules 3 and 7). A read that failed says so and is never
-  drawn as an empty table (rule 2).
+  and refuses a person without Edit pipelines. The right to read and to set the order is that same right, Edit pipelines, within the
+  dataset (the owner's ruling of 24 November 2026, item 1): there is no lesser right to read the map. The table holds only the pipelines
+  of the dataset it is open on: a pipeline of another dataset, or one placed in none, is not a row, and no count of what is left out is
+  drawn. A person without the right, a case the Conduit no longer opens, a dataset none of their cases loads into and a dataset that does
+  not exist all read the same words, with no row, no count and no pipeline's name anywhere in the page (rules 3 and 7); a save by any of
+  them is refused in the same words and writes nothing. The stored order is read through the dataset's own route, which names no
+  pipeline the person may not see and counts none. A read that failed says so and is never drawn as an empty table (rule 2).
 - **The model.** The page says that every pipeline that loads the dataset maps into its domain model, on 1 Model. The Model place is
   not yet a page of this service, so it is named and not linked; when it is, the name becomes a link.
-- **Keyboard (rule 13).** The page adds no action beyond links, and each link is a native tab stop; nothing needs a handler, no tab
-  stop is above 0, and every control (the frame's switch) has its label. Scenario DM's DM12 proves it.
+- **Keyboard (rule 13).** The page's one action beyond links is the order form: each tick box and the button are native controls, reached
+  by Tab, set by Space and sent by Enter; nothing needs a handler, no tab stop is above 0, and every control (the frame's switch, each
+  tick box, the button) has its label. Scenario DM's DM12 proves it for the controls, and `keyboard/studio-dataset-map.spec.ts` has a
+  case that sets a link and saves it from the keyboard, end to end.
 - **The GOV.UK tree's page** is its own later build. This section is the Default tree's.
 
 ### 1.3 The Model step (slice IS2a, 23 November 2026; ADR-140 Amendment 22 items 1, 3 and 4; ADR-152 decisions 6, 7, 12 and 13; X5 and X7)

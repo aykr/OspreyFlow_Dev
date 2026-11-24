@@ -18,7 +18,9 @@
 #             page is built (decision 12)
 #   route     EMPTY until the function has its GOV.UK page: a route enters `tree-govuk`'s route list only
 #             with its slice's scenario passing on that tree (I8). A row with a route has a scenario
-#   status    planned | owner to rule | parity exception
+#   status    planned | owner to rule | parity exception | built
+#             `built`: the Default tree's page for the function is built and its scenario passes (the owner's ruling of
+#             24 November 2026); its GOV.UK page is a later build, so its route stays empty.
 #
 # Checked by the developer repository's `tests/glass_trees/test_functions_yaml.py`.
 functions:
@@ -79,9 +81,9 @@ functions:
     name: "Studio: dataset map"
     where: "does not exist (no file; grep -ri \"dataset map\" apps/workspace/src/ finds only \"dataset maps\" in a ModelTab sentence)"
     slice: "IS3"
-    scenario: "DM1, DM2, DM3, DM4, DM5, DM6, DM7, DM8, DM9, DM10, DM11, DM12, DM13, DM14"
+    scenario: "DM1, DM2, DM3, DM4, DM5, DM6, DM7, DM8, DM9, DM10, DM11, DM12, DM13, DM14, DM15, DM16, DM17, DM18, DM19, DM20, DM21, DM22, DM23, DM24"
     route: ""
-    status: "planned"
+    status: "built"
   - id: studio-pipeline-canvas
     name: "Studio: pipeline editor canvas"
     where: "apps/workspace/src/ingest/dag/PipelineCanvas.tsx (read-only, :1–4), pipelineLayout.ts, pipelineGraphEdit.ts"
