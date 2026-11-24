@@ -1219,6 +1219,23 @@ def refusal_cause(words: str, log: Path) -> str:
     return "another refusal"
 
 
+def log_rerun(slice_id: str, tip: str) -> None:
+    """A merge of a tip the merge has refused before, run again by the conductor (the owner, 24 November 2026: a merge
+    rerun is the conductor's, logged and shown, and uses none of its daily budget): one row in owner-changes.tsv, never
+    starting "conductor (own" (the budget's rows), and one on the board beside the line's own clearances."""
+    try:
+        lines = (c.DATA / REFUSALS).read_text().splitlines()[1:]
+    except OSError:
+        return
+    before = [p for ln in lines if (p := ln.split("\t")) and len(p) >= 4 and p[1] == slice_id and p[2] == tip]
+    if not before:
+        return
+    what = (f"conductor: the merge of {tip[:10]} run again after {len(before)} refusal(s), the last {before[-1][3]} at "
+            f"{before[-1][0]}; not counted in the conductor's budget")
+    c.log_owner_change(slice_id, "merge-rerun", what)
+    c.log_self_clear(slice_id, "refused", "rerun", what)
+
+
 def record_refusal(slice_id: str, tip: str, cause: str) -> None:
     f = c.DATA / REFUSALS
     if not f.exists():
@@ -1415,6 +1432,7 @@ def merge(slice_id: str) -> dict:
         prog.rec["tip"] = tip
         if subprocess.run(["git", "merge-base", "--is-ancestor", tip, base], cwd=c.REPO).returncode == 0:
             raise Refused(f"{branch} is already on main.")
+        log_rerun(slice_id, tip)
         accepted = acceptance(slice_id, tip)
         verify = accepted["verifier"] if accepted else verifier_pass(slice_id, tip)
         touched = c.git(["diff", "--name-only", f"{base}...{tip}"], c.REPO).splitlines()
