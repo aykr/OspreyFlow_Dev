@@ -109,7 +109,7 @@ def check(directory: Path, repo_root: Path, *, github_api: str = GITHUB_API) -> 
             print(notice["notes"])
             print()
         print("Update with: ospreyflow update")
-    elif current.startswith("dev-"):
+    elif current.startswith("dev-") or current.endswith("-dev"):
         print(
             f"This deployment builds from its checkout ({current}); it moves with git pull and "
             f"ospreyflow start --build. The newest release is {latest}."
