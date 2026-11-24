@@ -2080,3 +2080,128 @@ describe("a default the window cannot hold is shown lower and never saved (the s
     expect(controls.sideSash.getAttribute("aria-valuenow")).toBe("300");
   });
 });
+
+// -------------------------------------------- round 9 (the verifier's finding on round 8): a draw never saves a page's bound
+//
+// A sash whose `data-max` is below the default (320 for the column, 100 for the timeline) had its bound written to this
+// browser's storage on the first draw, with nothing done by the analyst: the attach asked the writer to hold the default
+// to the bound, and the writer wrote it. Only a size the analyst chose is stored (spec/02), and the workspace reads the
+// same key, so its column opened at 320 from then on. A bound a page gives is shown (the default drawn at the bound) and
+// not written, by a draw, a fit or a window resize; Home and an arrow key, which are an analyst's act, still store it.
+// Every read is of storage and the drawn attributes straight after the call, before any `getState()`.
+
+describe("a page's data-max below the default is shown, and never saved by a draw (the spec table: 340px and 130px)", () => {
+  const stored = () => localStorage.getItem(LAYOUT_SIZES_KEY);
+  const BELOW = { side: 320, timeline: 100, panel: 60 };
+  let now: Viewport = VIEWPORTS.roomy as Viewport;
+
+  function bounds(start: Viewport, before?: () => void) {
+    now = start;
+    forgetLayoutSizesForTest();
+    before?.();
+    const parts = page();
+    parts.controls.sideSash.attributes.set("data-max", String(BELOW.side));
+    parts.controls.timelineSash.attributes.set("data-max", String(BELOW.timeline));
+    parts.controls.panelSash.attributes.set("data-max", String(BELOW.panel));
+    const store = createPanelFrameStore({ viewport: () => now });
+    live.push(store);
+    const win = { listeners: [] as Array<() => void> };
+    Object.defineProperty(parts.root, "ownerDocument", {
+      value: {
+        activeElement: null,
+        defaultView: {
+          addEventListener: (_type: string, listener: () => void) => void win.listeners.push(listener),
+          removeEventListener: () => undefined,
+        },
+      },
+    });
+    attachPanelFrame(parts.root as unknown as PanelFrameRoot, store);
+    return { ...parts, store, resize: () => win.listeners.forEach((listener) => listener()) };
+  }
+
+  /** The range each sash draws: the window's limit lowered by the page's bound, never under the minimum. */
+  const rangeOf = (v: Viewport) => {
+    const limit = limitsOf(v);
+    return {
+      side: Math.max(300, Math.min(limit.side, BELOW.side)),
+      timeline: Math.max(96, Math.min(limit.timeline, BELOW.timeline)),
+    };
+  };
+
+  describe.each(Object.entries(VIEWPORTS))("%s", (_name, v) => {
+    it("the first draw with nothing kept writes nothing, and draws the default at the bound", () => {
+      const parts = bounds(v);
+      expect(stored(), "a draw wrote the page's bound to this browser's storage").toBeNull();
+      const range = rangeOf(v);
+      expect(parts.controls.sideSash.getAttribute("aria-valuenow")).toBe(String(range.side));
+      expect(parts.controls.sideSash.getAttribute("aria-valuemax")).toBe(String(range.side));
+      expect(parts.side.getAttribute("data-side-width")).toBe(String(range.side));
+      expect(parts.controls.timelineSash.getAttribute("aria-valuenow")).toBe(String(range.timeline));
+      expect(parts.controls.timelineSash.getAttribute("aria-valuemax")).toBe(String(range.timeline));
+      expect(parts.timeline.getAttribute("data-timeline-height")).toBe(String(range.timeline));
+    });
+
+    it("a window resize to this one, from a roomy one, writes nothing either", () => {
+      const parts = bounds(VIEWPORTS.roomy as Viewport);
+      now = v;
+      parts.resize();
+      parts.store.actions.fitToWindow();
+      expect(stored(), "a resize wrote the page's bound").toBeNull();
+      expect(parts.controls.sideSash.getAttribute("aria-valuenow")).toBe(String(rangeOf(v).side));
+      expect(parts.controls.timelineSash.getAttribute("aria-valuenow")).toBe(String(rangeOf(v).timeline));
+    });
+  });
+
+  it("a page opened afterwards with no bound opens at the default (a reload after the bounded page)", () => {
+    const first = bounds(VIEWPORTS.roomy as Viewport);
+    first.store.destroy();
+    const again = page();
+    const store = createPanelFrameStore({ viewport: () => VIEWPORTS.roomy as Viewport });
+    live.push(store);
+    attachPanelFrame(again.root as unknown as PanelFrameRoot, store);
+    expect(again.controls.sideSash.getAttribute("aria-valuenow")).toBe(String(DEFAULT_SIDE_WIDTH));
+    expect(again.controls.timelineSash.getAttribute("aria-valuenow")).toBe(String(DEFAULT_TIMELINE_HEIGHT));
+    expect(stored()).toBeNull();
+  });
+
+  it("Home on each sash is the analyst's act and stores the bound", () => {
+    const parts = bounds(VIEWPORTS.roomy as Viewport);
+    parts.controls.sideSash.dispatch("keydown", { key: "Home" });
+    parts.controls.timelineSash.dispatch("keydown", { key: "Home" });
+    expect(JSON.parse(stored() ?? "{}")).toMatchObject({ sideWidth: BELOW.side, timelineHeight: BELOW.timeline });
+  });
+
+  it("an arrow key is the analyst's act and stores what it reaches, held to the bound", () => {
+    const parts = bounds(VIEWPORTS.roomy as Viewport);
+    parts.controls.sideSash.dispatch("keydown", { key: "ArrowLeft" });
+    parts.controls.timelineSash.dispatch("keydown", { key: "ArrowUp" });
+    expect(JSON.parse(stored() ?? "{}")).toMatchObject({ sideWidth: BELOW.side, timelineHeight: BELOW.timeline });
+  });
+
+  it("a size the analyst kept above the bound is still brought down to it in storage", () => {
+    const parts = bounds(VIEWPORTS.roomy as Viewport, () => {
+      localStorage.setItem(LAYOUT_SIZES_KEY, JSON.stringify({ sideWidth: 450, timelineHeight: 300, panelHeights: {} }));
+    });
+    expect(JSON.parse(stored() ?? "{}")).toMatchObject({ sideWidth: BELOW.side, timelineHeight: BELOW.timeline });
+    expect(parts.controls.sideSash.getAttribute("aria-valuenow")).toBe(String(BELOW.side));
+  });
+
+  it("a stored default (340, 130) is left as it is and drawn at the bound", () => {
+    const parts = bounds(VIEWPORTS.roomy as Viewport, () => {
+      localStorage.setItem(LAYOUT_SIZES_KEY, JSON.stringify({ sideWidth: 340, timelineHeight: 130, panelHeights: {} }));
+    });
+    expect(JSON.parse(stored() ?? "{}")).toMatchObject({ sideWidth: 340, timelineHeight: 130 });
+    expect(parts.controls.sideSash.getAttribute("aria-valuenow")).toBe(String(BELOW.side));
+    expect(parts.controls.timelineSash.getAttribute("aria-valuenow")).toBe(String(BELOW.timeline));
+  });
+
+  it("the store's own calls say what they are: a hold to a bound writes nothing at the default, a set does", () => {
+    const store = createPanelFrameStore({ viewport: () => VIEWPORTS.roomy as Viewport });
+    live.push(store);
+    store.actions.setSideWidth(DEFAULT_SIDE_WIDTH, { maxPx: BELOW.side, fitting: true });
+    store.actions.setTimelineHeight(DEFAULT_TIMELINE_HEIGHT, { maxPx: BELOW.timeline, fitting: true });
+    expect(stored()).toBeNull();
+    store.actions.setSideWidth(DEFAULT_SIDE_WIDTH, { maxPx: BELOW.side });
+    expect(JSON.parse(stored() ?? "{}").sideWidth).toBe(BELOW.side);
+  });
+});
