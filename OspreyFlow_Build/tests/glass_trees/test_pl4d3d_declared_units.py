@@ -90,10 +90,12 @@ import hashlib
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
 import threading
+import time
 from pathlib import Path
 from typing import NamedTuple
 
@@ -1010,27 +1012,151 @@ def race(builders: list) -> list[subprocess.CompletedProcess[str]]:
     return done
 
 
+# A node preload the test supplies (`NODE_OPTIONS=--require=...`), live only in `sync_govuk_assets.mjs` and only when the
+# test names a gate folder and a role. It wraps the two filesystem calls the script makes on the shared
+# `public/assets/govuk`, never changing what they do, and holds the process in a step the test chooses until the test
+# creates a file: role `a` after its last `cpSync` (the folder is full, `countFiles` is next), role `b` after its `rmSync`
+# (the folder is gone). The wait is for a file, never for a time; the long deadline only turns a lost test into a failure.
+PRELOAD = r"""
+const fs = require("node:fs");
+const path = require("node:path");
+const gate = process.env.PL4D3F_GATE;
+const role = process.env.PL4D3F_ROLE;
+const shared = (target) => /public[\\/]assets[\\/]govuk$/.test(String(target));
+if (gate && role && path.basename(process.argv[1] || "") === "sync_govuk_assets.mjs") {
+  const hold = (reached, until) => {
+    fs.writeFileSync(path.join(gate, reached), "");
+    const deadline = Date.now() + 120000;
+    while (!fs.existsSync(path.join(gate, until))) {
+      if (Date.now() > deadline) throw new Error("pl4d3f: no release for " + until);
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
+    }
+  };
+  const cpSync = fs.cpSync;
+  const rmSync = fs.rmSync;
+  let copies = 0;
+  fs.cpSync = function (from, to, ...rest) {
+    const result = cpSync.call(this, from, to, ...rest);
+    if (String(to).includes(path.join("assets", "govuk") + path.sep)) copies += 1;
+    if (role === "a" && copies === 2) hold("a.filled", "a.go");
+    return result;
+  };
+  fs.rmSync = function (target, ...rest) {
+    const result = rmSync.call(this, target, ...rest);
+    if (role === "b" && shared(target)) hold("b.emptied", "b.go");
+    return result;
+  };
+  require("node:module").syncBuiltinESMExports();
+}
+"""
+
+
+class Forced(NamedTuple):
+    """What the two builds of a forced collision said: the exit code and the output of each."""
+
+    a_code: int
+    a_text: str
+    b_code: int | None
+    b_text: str
+
+
+def wait_for(marker: Path, process: subprocess.Popen[bytes], log: Path, what: str) -> None:
+    """Wait until the build writes `marker`. A build that ends without writing it is a failure, never a wait."""
+    deadline = time.monotonic() + TIMEOUT
+    while not marker.exists():
+        assert process.poll() is None, f"the build ended before {what}: {log.read_text(errors='replace')[-1500:]}"
+        assert time.monotonic() < deadline, f"no build reached {what}"
+        time.sleep(0.02)
+
+
+def start_gated_build(app: Path, directory: Path, gate: Path, role: str, preload: Path) -> tuple[subprocess.Popen[bytes], Path]:
+    log = gate / f"{role}.log"
+    env = {
+        **os.environ,
+        "PL4D3F_GATE": str(gate),
+        "PL4D3F_ROLE": role,
+        "NODE_OPTIONS": f"{os.environ.get('NODE_OPTIONS', '')} --require={preload}".strip(),
+    }
+    with log.open("wb") as out:
+        process = subprocess.Popen(
+            ["npm", "run", "build", "--", "--outDir", str(directory), "--emptyOutDir"],
+            cwd=app, env=env, stdout=out, stderr=subprocess.STDOUT, start_new_session=True,
+        )
+    return process, log
+
+
+def forced_collision(shared: Path, out_a: Path, out_b: Path, finish_b: bool = True) -> Forced:
+    """Two `npm run build`s in one tree, the second run inside the first one's sync step: forced, never waited for.
+
+    Both are the real `npm run build` of a copy of the tree, running the real `sync_govuk_assets.mjs` on its shared
+    `public/assets/govuk`; the test supplies only a preload (`PRELOAD`) that holds a build in a step until a file appears.
+    The order, each step waiting on a file the test makes after seeing the one before:
+      1. build A removes and refills the folder, then is held (`a.filled`), the folder full, its `countFiles` next;
+      2. build B starts, removes the folder (`b.emptied`), and is held, the folder gone;
+      3. build A is released: its `countFiles` reads a folder build B has removed, and A fails (`ENOENT`, in the script);
+      4. build B is released and carries on (`finish_b`), or is stopped, since only A's failure is the proof.
+    A is always inside its sync step when B removes the folder, and B is always inside its own when A reads it: the
+    interleaving is the test's, whatever the machine's load. The only loops are the polls for the markers."""
+    gate = shared.parent / "gate"
+    gate.mkdir()
+    preload = gate / "preload.cjs"
+    preload.write_text(PRELOAD, encoding="utf-8")
+    first, first_log = start_gated_build(shared, out_a, gate, "a", preload)
+    second: subprocess.Popen[bytes] | None = None
+    try:
+        wait_for(gate / "a.filled", first, first_log, "A held after filling the folder")
+        second, second_log = start_gated_build(shared, out_b, gate, "b", preload)
+        wait_for(gate / "b.emptied", second, second_log, "B held after emptying the folder")
+        (gate / "a.go").write_text("")
+        first.wait(timeout=TIMEOUT)
+        (gate / "b.go").write_text("")
+        if finish_b:
+            second.wait(timeout=TIMEOUT)
+        b_code = second.returncode if finish_b else None
+        return Forced(first.returncode, first_log.read_text(errors="replace"), b_code, second_log.read_text(errors="replace"))
+    finally:
+        for process in (first, second):
+            if process is not None and process.poll() is None:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.wait()
+
+
+@pytest.mark.skipif(not build_is_possible(), reason="needs the workspace's node_modules")
+def test_forcing_the_second_build_into_the_first_ones_sync_step_collides_every_time(tmp_path: Path) -> None:
+    """Ten forced collisions, each in a fresh copy of the tree: all ten collide, none is left to chance."""
+    for attempt in range(10):
+        shared = scratch_tree(tmp_path / f"forced{attempt}")
+        forced = forced_collision(shared, tmp_path / f"f{attempt}a", tmp_path / f"f{attempt}b", finish_b=False)
+        assert forced.a_code != 0, f"forced collision {attempt} did not collide: the first build succeeded"
+        assert re.search(r"ENOTEMPTY|ENOENT|EEXIST|sync_govuk_assets", forced.a_text), forced.a_text[-1500:]
+        # `npm run build` echoes the script line (`node scripts/sync_govuk_assets.mjs && vite build`) on every run, so the
+        # search above matches whatever made A fail. This one is specific: the filesystem error the sync step's own
+        # `rmSync`/`cpSync`/`readdirSync` raised, naming the shared `public/assets/govuk`, and not the preload's own timeout.
+        assert "pl4d3f: no release" not in forced.a_text, (
+            f"forced collision {attempt}: A timed out, it did not collide: {forced.a_text[-1500:]}"
+        )
+        assert re.search(
+            r"\b(ENOENT|ENOTEMPTY|EEXIST)\b[^\n]*public[\\/]assets[\\/]govuk", forced.a_text
+        ), (
+            f"forced collision {attempt}: A failed, but not in the shared folder: {forced.a_text[-1500:]}"
+        )
+
+
 @pytest.mark.skipif(not build_is_possible(), reason="needs the workspace's node_modules")
 def test_two_builds_in_one_tree_collide_and_two_builds_of_build_to_do_not(tmp_path: Path) -> None:
     """The race planted in the shape the gate met (rule 15): two `npm run build`s at once in one tree.
 
-    Unlocked, in one copy of the tree (the real tree's shape, but a copy, so no other test's build is harmed):
-    one of the two fails in `sync_govuk_assets.mjs`'s `rmSync`/`cpSync` of the shared `public/assets/govuk`, as at the merge
-    (tried up to five times, since a race is not certain: it was six in six on an idle Mac). Then two `build_to`s at once,
-    each in its own copy: both succeed, every time. The two collide because they share a tree, and they do not once they
-    share none; no lock is needed, and none is taken."""
-    failures: list[str] = []
-    for attempt in range(5):
-        shared = scratch_tree(tmp_path / f"shared{attempt}")
-        results = race([
-            lambda out=tmp_path / f"s{attempt}a": run_build(shared, out),
-            lambda out=tmp_path / f"s{attempt}b": run_build(shared, out),
-        ])
-        failures = [r.stdout + r.stderr for r in results if r.returncode != 0]
-        if failures:
-            break
-    assert failures, "two builds in one tree never collided in five tries: the plant does not show the race"
-    assert re.search(r"ENOTEMPTY|ENOENT|EEXIST|sync_govuk_assets", failures[0]), failures[0][-1500:]
+    Unlocked, in one copy of the tree (the real tree's shape, but a copy, so no other test's build is harmed): the
+    second build is forced into the first one's sync step (`forced_collision`: a preload the test supplies holds each
+    build in a step until the test says go, so the interleaving is the test's and never the machine's), and the first
+    fails in `sync_govuk_assets.mjs` on the shared `public/assets/govuk`, as at the merge; the second, undisturbed, then
+    finishes. Nothing here waits for a race or tries again. Then two `build_to`s at once, each in its own copy: both
+    succeed, every time. The two collide because they share a tree, and they do not once they share none; no lock is
+    needed, and none is taken."""
+    forced = forced_collision(scratch_tree(tmp_path / "shared"), tmp_path / "sa", tmp_path / "sb")
+    assert forced.a_code != 0, "two builds in one tree did not collide although the second was forced into the first's sync"
+    assert re.search(r"ENOTEMPTY|ENOENT|EEXIST|sync_govuk_assets", forced.a_text), forced.a_text[-1500:]
+    assert forced.b_code == 0, forced.b_text[-1500:]
 
     outcomes: list[object] = []
 
