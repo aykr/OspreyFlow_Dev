@@ -1343,14 +1343,36 @@ describe("one writer: no entry point writes a size above the live limits, read s
     expect(Object.keys(CALLS).sort()).toEqual([...SIZE_WRITERS].sort());
   });
 
+  /** A store under the window `now` (the stand-in `viewport` is passed in: `open()` gives none, so it reads no window). */
+  function openUnder(): PanelFrameStore {
+    forgetLayoutSizesForTest();
+    forgetSidePanelOrderForTest();
+    forgetSidePanelForTest();
+    const store = createPanelFrameStore({ viewport });
+    live.push(store);
+    return store;
+  }
+  const sizesKept = () => [JSON.stringify(getLayoutSizes()), localStorage.getItem(LAYOUT_SIZES_KEY)];
+
   it("an action listed as writing no size writes none: the sizes in memory and in storage are the same after it, in a window below every default", () => {
     now = VIEWPORTS["below every default"] as Viewport;
     for (const [name, call] of Object.entries(NO_SIZE)) {
-      const store = open();
-      const before = [JSON.stringify(getLayoutSizes()), localStorage.getItem(LAYOUT_SIZES_KEY)];
+      const store = openUnder();
+      // The window is really applied: every size starts at its limit (300 and 96), not at its default (340 and 130).
+      expect([getLayoutSizes().sideWidth, getLayoutSizes().timelineHeight], `${name}: the window is applied`).toEqual([300, 96]);
+      const before = sizesKept();
       call(store);
-      expect([JSON.stringify(getLayoutSizes()), localStorage.getItem(LAYOUT_SIZES_KEY)], name).toEqual(before);
+      expect(sizesKept(), name).toEqual(before);
     }
+  });
+
+  it("the comparison can fail: a planted action that writes a size in storage is seen as a change", () => {
+    now = VIEWPORTS["below every default"] as Viewport;
+    const store = openUnder();
+    const before = sizesKept();
+    localStorage.setItem(LAYOUT_SIZES_KEY, JSON.stringify({ sideWidth: DEFAULT_SIDE_WIDTH, timelineHeight: DEFAULT_TIMELINE_HEIGHT }));
+    expect(store).toBeDefined();
+    expect(sizesKept()).not.toEqual(before);
   });
 });
 
@@ -1487,6 +1509,173 @@ describe("aria-valuemax: every sash says the limit the writer applies, under eac
     expect(win.listeners).toHaveLength(1);
     undo();
     expect(win.listeners).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------- round 6: a page's data-max holds on every path
+//
+// Round 5's verifier: Home on a sash ignored the sash's `data-max`, so it drew `aria-valuenow` above `aria-valuemax`; and a
+// stored value, or a set made without `maxPx` (the pointer's), above a sash's `data-max` was drawn out of range too.
+// The sash's `data-max` is a bound the writer applies on each of these: the key path passes it (Home as the arrows),
+// and the attach, before it draws a state, asks the one writer to hold any size above a sash's bound to that bound.
+// Every read below is of memory, storage and the drawn attributes straight after the call, never through `getState()`.
+
+describe("a page's data-max on the sashes holds on every path: keys, Home, the pointer's sets, a stored value, a window resize", () => {
+  let now: Viewport = VIEWPORTS.roomy as Viewport;
+  const viewport = () => now;
+  const BOUND = { side: 320, timeline: 100, panel: 60 };
+  const stored = () => JSON.parse(localStorage.getItem(LAYOUT_SIZES_KEY) ?? "{}") as { sideWidth?: number; timelineHeight?: number; panelHeights?: Record<string, number> };
+
+  /** What the writer applies for each sash: the window's limit lowered by the bound, never under the minimum. */
+  function boundedOf(v: Viewport) {
+    const limit = limitsOf(v);
+    return {
+      side: Math.max(300, Math.min(limit.side, BOUND.side)),
+      timeline: Math.max(96, Math.min(limit.timeline, BOUND.timeline)),
+      panel: Math.max(48, Math.min(limit.panel, BOUND.panel)),
+    };
+  }
+
+  function fakeWindow() {
+    const listeners: Array<() => void> = [];
+    return {
+      listeners,
+      addEventListener: (_type: string, listener: () => void) => void listeners.push(listener),
+      removeEventListener: (_type: string, listener: () => void) => void listeners.splice(listeners.indexOf(listener), 1),
+      resize: () => listeners.slice().forEach((listener) => listener()),
+    };
+  }
+
+  function bounded(start: Viewport, before?: () => void) {
+    now = start;
+    before?.();
+    const parts = page();
+    parts.controls.sideSash.attributes.set("data-max", String(BOUND.side));
+    parts.controls.timelineSash.attributes.set("data-max", String(BOUND.timeline));
+    parts.controls.panelSash.attributes.set("data-max", String(BOUND.panel));
+    const win = fakeWindow();
+    Object.defineProperty(parts.root, "ownerDocument", { value: { activeElement: null, defaultView: win } });
+    const store = createPanelFrameStore({ viewport });
+    live.push(store);
+    attachPanelFrame(parts.root as unknown as PanelFrameRoot, store);
+    return { ...parts, store, win };
+  }
+  type Bounded = ReturnType<typeof bounded>;
+
+  const num = (value: string | null) => (value === null ? NaN : Number(value));
+
+  /** Every sash's value is inside the range it draws, the range is the writer's, and memory and storage agree. */
+  function expectHeld(v: Viewport, parts: Bounded, label: string): void {
+    const bound = boundedOf(v);
+    const kept = getLayoutSizes();
+    const on = stored();
+    const sashes: Array<[string, FakeElement, FakeElement | null, number, number | undefined, number | undefined]> = [
+      ["column", parts.controls.sideSash, parts.side, bound.side, kept.sideWidth, on.sideWidth],
+      ["timeline", parts.controls.timelineSash, parts.timeline, bound.timeline, kept.timelineHeight, on.timelineHeight],
+      ["stacked", parts.controls.panelSash, null, bound.panel, kept.panelHeights.metrics, on.panelHeights?.metrics],
+    ];
+    for (const [name, sash, frame, max, inMemory, inStorage] of sashes) {
+      const drawnNow = num(sash.getAttribute("aria-valuenow"));
+      const drawnMax = num(sash.getAttribute("aria-valuemax"));
+      expect(drawnMax, `${label}: ${name} aria-valuemax is the limit the writer applies`).toBe(max);
+      if (name !== "stacked" || inMemory !== undefined) {
+        expect(drawnNow, `${label}: ${name} aria-valuenow ${drawnNow} is above its aria-valuemax ${drawnMax}`).toBeLessThanOrEqual(drawnMax);
+        expect(drawnNow, `${label}: ${name} aria-valuenow is under its aria-valuemin`).toBeGreaterThanOrEqual(num(sash.getAttribute("aria-valuemin")));
+      }
+      if (inMemory !== undefined) expect(inMemory, `${label}: ${name} in memory is over ${max}`).toBeLessThanOrEqual(max);
+      if (inStorage !== undefined) expect(inStorage, `${label}: ${name} in storage is over ${max}`).toBeLessThanOrEqual(max);
+      const frameValue = frame?.getAttribute(name === "column" ? "data-side-width" : "data-timeline-height") ?? null;
+      if (frameValue !== null) expect(num(frameValue), `${label}: ${name} frame attribute is over ${max}`).toBeLessThanOrEqual(max);
+    }
+  }
+
+  const KEYS_6 = [
+    ...["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].flatMap((key) => [{ key }, { key, shiftKey: true }]),
+    { key: "Home" },
+    { key: "End" },
+  ];
+
+  describe.each(Object.entries(VIEWPORTS))("%s", (_name, v) => {
+    it("every key on each sash, from the default and from a size pushed up first, leaves every sash inside its range", () => {
+      for (const key of KEYS_6) {
+        for (const pushed of [false, true]) {
+          forgetLayoutSizesForTest();
+          installStorage(new MemoryStorage());
+          const parts = bounded(v);
+          if (pushed) {
+            parts.store.actions.setSideWidth(5000, { maxPx: BOUND.side });
+            parts.store.actions.setTimelineHeight(5000, { maxPx: BOUND.timeline });
+            parts.store.actions.setPanelHeight("metrics", 5000, { maxPx: BOUND.panel });
+          }
+          for (const sash of [parts.controls.sideSash, parts.controls.timelineSash, parts.controls.panelSash]) {
+            sash.dispatch("keydown", key);
+            expectHeld(v, parts, `${key.shiftKey ? "Shift+" : ""}${key.key}, ${pushed ? "pushed" : "default"}`);
+            sash.dispatch("keydown", key);
+            expectHeld(v, parts, `${key.shiftKey ? "Shift+" : ""}${key.key} twice, ${pushed ? "pushed" : "default"}`);
+          }
+          parts.store.destroy();
+          live = live.filter((other) => other !== parts.store);
+        }
+      }
+    });
+
+    it("the pointer's sets, which carry no maxPx, are held to the sash's data-max before they are drawn", () => {
+      const parts = bounded(v);
+      for (const px of [0, 340, 481, 5000]) {
+        parts.store.actions.setSideWidth(px);
+        expectHeld(v, parts, `setSideWidth(${px})`);
+        parts.store.actions.setTimelineHeight(px);
+        expectHeld(v, parts, `setTimelineHeight(${px})`);
+        parts.store.actions.setPanelHeight("metrics", px);
+        expectHeld(v, parts, `setPanelHeight(${px})`);
+      }
+    });
+
+    it("a stored value above the bounds is held to them at the first draw, in memory, in storage and as drawn", () => {
+      const parts = bounded(v, () => {
+        localStorage.setItem(LAYOUT_SIZES_KEY, JSON.stringify({ sideWidth: 480, timelineHeight: 500, panelHeights: { metrics: 700 } }));
+        forgetLayoutSizesForTest();
+      });
+      expectHeld(v, parts, "stored value, first draw");
+    });
+
+    it("a window resize, from a roomy window to this one, leaves every sash inside its range", () => {
+      const parts = bounded(VIEWPORTS.roomy as Viewport);
+      parts.store.actions.setSideWidth(5000);
+      parts.store.actions.setTimelineHeight(5000);
+      parts.store.actions.setPanelHeight("metrics", 5000);
+      expectHeld(VIEWPORTS.roomy as Viewport, parts, "before the resize");
+      now = v;
+      parts.win.resize();
+      expectHeld(v, parts, "after the resize");
+    });
+  });
+
+  it("Home on a sash whose data-max is under the default stores the bound, not the default (the verifier's worked case: 100 and 320 in a roomy window)", () => {
+    const parts = bounded({ windowHeight: 1200, workWidth: 1600 });
+    parts.controls.timelineSash.dispatch("keydown", { key: "Home" });
+    expect(getLayoutSizes().timelineHeight).toBe(100);
+    expect(stored().timelineHeight).toBe(100);
+    expect(parts.controls.timelineSash.getAttribute("aria-valuenow")).toBe("100");
+    expect(parts.controls.timelineSash.getAttribute("aria-valuemax")).toBe("100");
+    parts.controls.sideSash.dispatch("keydown", { key: "Home" });
+    expect(getLayoutSizes().sideWidth).toBe(320);
+    expect(stored().sideWidth).toBe(320);
+    expect(parts.controls.sideSash.getAttribute("aria-valuenow")).toBe("320");
+    // The grow key from there does not shrink the panel.
+    parts.controls.timelineSash.dispatch("keydown", { key: "ArrowUp" });
+    expect(getLayoutSizes().timelineHeight).toBe(100);
+  });
+
+  it("a sash with no data-max is not bounded by another sash's: the default still comes back in a roomy window", () => {
+    now = VIEWPORTS.roomy as Viewport;
+    const parts = page();
+    const store = createPanelFrameStore({ viewport });
+    live.push(store);
+    attachPanelFrame(parts.root as unknown as PanelFrameRoot, store);
+    store.actions.setTimelineHeight(500);
+    parts.controls.timelineSash.dispatch("keydown", { key: "Home" });
+    expect(getLayoutSizes().timelineHeight).toBe(DEFAULT_TIMELINE_HEIGHT);
   });
 });
 
