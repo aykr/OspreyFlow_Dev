@@ -56,10 +56,9 @@ import server_gate  # noqa: E402
 import scan_select  # noqa: E402
 
 #: The owner's files in the records folder: no slice changes them and records mode never commits them.
-OWNER_FILES = (f"{c.V062_REL}/dial.yaml", f"{c.V062_REL}/accounts.yaml", f"{c.V062_REL}/live_step.yaml",
-               f"{c.V062_REL}/resume.tsv", f"{c.V062_REL}/standing.tsv")
+OWNER_FILES = server_gate.OWNER_FILES
 #: A slice's scan rows, waiting on main for its merge (1b): the conductor's records, never a slice's branch.
-SCAN_ROWS_REL = f"{c.V062_REL}/scan_rows"
+SCAN_ROWS_REL = server_gate.SCAN_ROWS_REL
 LINE_MAP_REL = "OspreyFlow_Build/scripts/slice_line/scan_map.tsv"
 PROTECTED_PREFIXES = (
     "OspreyFlow_Core/Makefile", ".github/", "OspreyFlow_Core/osprey.yaml", "OspreyFlow_Core/data/", ".claude/",
@@ -1293,10 +1292,13 @@ def counted_gate(slice_id: str, tip: str, base: str, after: Path, log: Path) -> 
         return {**out, "why": "the owner's switch (server_counts) is off"}
     if why:
         return {**out, "why": why}
-    plan = server_gate.remainder(e, after, log.with_suffix(".remainder.mk"))
-    log.open("a").write(f"\nthe demo server's run {rid} counts for {', '.join(plan['taken'])}; the Mac runs: "
-                        f"{'; '.join(plan['mac']) or 'nothing of the full gate'}\n")
-    return {**out, "counted": True, "taken": plan["taken"], "mac_ran": plan["mac"], "plan": plan}
+    records = server_gate.records_moved(e, base, tip, tree)[0] if e.get("main") != base and not e.get("index") else []
+    plan = server_gate.remainder(e, after, log.with_suffix(".remainder.mk"), records)
+    log.open("a").write(f"\nthe demo server's run {rid} counts for {', '.join(plan['taken'])}"
+                        + (f", across {len(records)} records commits' files" if records else "")
+                        + f"; the Mac runs: {'; '.join(plan['mac']) or 'nothing of the full gate'}\n")
+    out = {**out, "counted": True, "taken": plan["taken"], "mac_ran": plan["mac"], "plan": plan}
+    return {**out, "records_moved": records} if records else out
 
 
 #: The Mac's rerun of a server's red; the line's tests stand it in, as they stand in FULL_GATE.

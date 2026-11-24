@@ -60,7 +60,7 @@ M = [
  ("merge_slice.py", '        time.sleep(QUEUE_POLL_SECONDS)', '        return None', "waits_for_the_queue"),
  ("merge_slice.py", '    if not isinstance(on, bool) or not isinstance(wait, int) or isinstance(wait, bool) or wait < 0:', '    if False:', "unclear_live_step_setting"),
  ("merge_slice.py", 'except (OSError, yaml.YAMLError) as e:', 'except ZeroDivisionError as e:', "unclear_live_step_setting"),
- ("merge_slice.py", ', f"{c.V062_REL}/live_step.yaml",\n               f"{c.V062_REL}/resume.tsv"', ',\n               f"{c.V062_REL}/resume.tsv"', "protected_path"),
+ ("server_gate.py", ', f"{c.V062_REL}/live_step.yaml",\n               f"{c.V062_REL}/resume.tsv"', ',\n               f"{c.V062_REL}/resume.tsv"', "protected_path"),
  ("guard.py", ',\n              "OspreyFlow_Build/process/lanes/v062/live_step.yaml", ', ',\n              ', "owner_files"),
  ("owed.py", '        if owed:\n            print(f"Refused: {len(owed)}', '        if False:\n            print(f"Refused: {len(owed)}', "is_owed_and_a_release_check"),
  ("owed.py", '        if problems:\n            print("Refused: the slice', '        if False:\n            print("Refused: the slice', "unreadable_merge_record_refuses"),
@@ -224,7 +224,7 @@ M = [
  ("merge_slice.py", '                "backlog_rows": accepted.get("gaps_in_a_test", [])}', '                "backlog_rows": []}', "standing_accept_on_accepts"),
  ("board.py", '            if af.get("standing"):\n', '            if False:\n', "standing_accept_on_accepts"),
  ("guard.py", ',\n              "OspreyFlow_Build/process/lanes/v062/standing.tsv")', ')', "switch_is_the_owners_alone"),
- ("merge_slice.py", ', f"{c.V062_REL}/standing.tsv")', ')', "standing_accept_switch"),
+ ("server_gate.py", ', f"{c.V062_REL}/standing.tsv")', ')', "standing_accept_switch"),
  # 1e: the merge gate's pytest runs use a temp base of their own, removed with the merge's trees
  ("merge_slice.py", '    env["PYTEST_DEBUG_TEMPROOT"] = str(base)\n', '', "not_removed_by_other_pytest_runs"),
  ("merge_slice.py", '    env["PYTEST_DEBUG_TEMPROOT"] = str(base)\n', '', "full_gate_runs_make_under_a_base"),
@@ -646,6 +646,23 @@ M = [
  ("board.py", '        if m and re.search(r"\\bflake\\b", line, re.I):', '        if m:', "names_a_test_but_not_as_a_flake"),
  ("board.py", '    if not files or not all(files):', '    if not files:', "gate_record_naming_no_test_file"),
  ("board.py", "        row = next((r for p, r in flakes.items() if f == p or f.endswith(\"/\" + p)), None)", "        row = None", "known_flake_in_the_parts_own_files"),
+ # item 4 (the owner's approval, 23 November 2026): a server green stands across records commits
+ ("server_gate.py", "        if len(parents.split()) != 2 or \"Slice-Records: yes\" not in trailers:", "        if False:", "anything_else_moving_main"),
+ ("server_gate.py", "    if bad:\n        return [], f\"{words}, in a path", "    if False:\n        return [], f\"{words}, in a path", "anything_else_moving_main"),
+ ("server_gate.py", " or f.startswith(SCAN_ROWS_REL + \"/\") or f in OWNER_FILES", " or f in OWNER_FILES", "anything_else_moving_main"),
+ ("server_gate.py", " or f in OWNER_FILES\n           or f in own.split()]", "\n           or f in own.split()]", "anything_else_moving_main"),
+ ("server_gate.py", "           or f in own.split()]", "           ]", "anything_else_moving_main"),
+ ("server_gate.py", "    if not ok or made.split(\"\\n\", 1)[0] != stree:", "    if not ok:", "anything_else_moving_main"),
+ ("server_gate.py", " or not git_ok([\"merge-base\", \"--is-ancestor\", smain, base])[0]:", ":", "anything_else_moving_main"),
+ ("server_gate.py", "        return records_moved(e, base, tip, tree)[1]", "        return None", "anything_else_moving_main"),
+ ("server_gate.py", "        passed -= set(RECORDS_TARGETS)", "        pass", "green_stands_across_a_records_commit"),
+ ("server_gate.py", "            files = sorted(set(files) | {f\"../OspreyFlow_Build/{t}\" for t in records_tests(tree)})", "            pass", "green_stands_across_a_records_commit"),
+ ("server_gate.py", "            targets.append([\"make\", \"live-collect\"])", "            pass", "green_stands_across_a_records_commit"),
+ ("server_gate.py", "RECORDS_TESTS = (\"tests/test_live_select.py\",)", "RECORDS_TESTS = ()", "green_stands_across_a_records_commit"),
+ ("server_gate.py", "any(RECORDS_REL.startswith(p) or p.startswith(RECORDS_REL)", "any(False", "green_stands_across_a_records_commit"),
+ ("merge_slice.py", "    plan = server_gate.remainder(e, after, log.with_suffix(\".remainder.mk\"), records)", "    plan = server_gate.remainder(e, after, log.with_suffix(\".remainder.mk\"), [])", "green_stands_across_a_records_commit"),
+ ("merge_slice.py", "    return {**out, \"records_moved\": records} if records else out", "    return out", "green_stands_across_a_records_commit"),
+ ("merge_slice.py", "    records = server_gate.records_moved(e, base, tip, tree)[0] if e.get(\"main\") != base and not e.get(\"index\") else []", "    records = []", "green_stands_across_a_records_commit"),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.
