@@ -326,15 +326,17 @@ def test_a_derived_case_is_rendered_as_derived(row: dict[str, Any], brand: str) 
 
 def test_the_derived_identity_is_the_address_the_deployment_already_names() -> None:
     """`harness.site.sites` names the deployment's addresses for every app (ADR-114 decision 6);
-    the page service's identity address is the same string, or the two disagree."""
+    the page service's identity address is the same string, compared as it is: no port is stripped
+    from either side (PL7f round 2: the strip hid case 7, where Keycloak was given `:443` and the
+    service was not)."""
     from harness.site import sites
 
     for row in DERIVED:
         want = row["expect"]["derived"]
         names = sites(config_of(row))
-        assert names.identity.removesuffix(":443") == want["identity"].removesuffix(":443"), row[
-            "id"
-        ]
+        assert names.identity == want["identity"], row["id"]
+        assert names.glass == want["public_origin"], row["id"]
+        assert names.identity_host == want["identity_alias"], row["id"]
 
 
 @pytest.mark.parametrize("row", DERIVED, ids=[r["id"] for r in DERIVED])
@@ -356,6 +358,20 @@ ADDRESS_VARIABLES = (
     "NODE_EXTRA_CA_CERTS",
 )
 RULES_OF_ADDRESS = ("ipaddress", "urlsplit", "urlparse", 'f"id.', "id.{", "_INTERNAL_SUFFIXES")
+#: What any module under `harness/` touches when it works an address out of the deployment's origin
+#: (PL7f round 2: the realm's sign-in client read `network.public_origin` itself, and the proxy's
+#: module wrote `id.<host>` itself, and the scan looked at neither): the raw setting, and the names
+#: that the identity and dashboards sites are made of.
+TOUCHES_THE_ORIGIN = (
+    "network.public_origin",
+    '"public_origin"',
+    'f"id.',
+    "id.{",
+    'f"bi.',
+    "bi.{",
+    '"id."',
+    '"bi."',
+)
 HARNESS = ref.CORE / "harness"
 
 
@@ -367,18 +383,45 @@ def _read(path: Path) -> str:
 #: Dockerfile-side and apply-side modules that write secrets or list names (none today).
 ALLOWED_VARIABLE_READERS: dict[str, tuple[str, ...]] = {}
 
+#: Every other place under `harness/` that touches the origin or the identity name, each with the
+#: reason it computes no address. (module path under `harness/`, text on the line) -> reason. A hit
+#: not listed here fails; a listing that no longer matches a line fails (no entry outlives its hit).
+ORIGIN_TOUCHES_ALLOWED: dict[tuple[str, str], str] = {
+    ("webapp.py", '"public_origin": "https://preview.invalid"'): (
+        "a fixed placeholder value the set-up page's preview is given, not an address made from a "
+        "deployment's origin"
+    ),
+    ("cloud_platform/__init__.py", "config.network.public_origin.startswith("): (
+        "a check that the shape's origin is https (the cloud platform has no proxy, no identity "
+        "name and no page-service sign-in until PL7e); it makes no address"
+    ),
+    ("tls_check.py", 'f"id.osprey.example.internal. Ask the CA for'): (
+        "advice in words for a person (an example name in a message), not an address made from a "
+        "deployment's origin"
+    ),
+    ("site.py", "# Rendered from osprey.yaml's network.public_origin"): (
+        "a line of text written into the Caddyfile's header, naming the setting; it computes nothing"
+    ),
+}
+
 
 def test_no_other_module_computes_an_address() -> None:
-    """The page-service render module and the cloud-platform renderer read the derived object and
-    compute none of it. Read as text, so a rule added back anywhere fails here, naming the file and
-    the line (rule 12: the sentence 'derive is the only place' is exercised by this scan)."""
+    """No module under `harness/` but `page_addresses.py` makes any address of the page service or
+    of the deployment's origin: not the page-service render module, not the proxy's, not the
+    realm's sign-in clients, not the cloud-platform renderer. Read as text, every module under
+    `harness/` (the folder and the ones inside it), so a rule added back anywhere fails here,
+    naming the file and the line (rule 12: the sentence 'derive is the only place' is exercised by
+    this scan). Every module that touches the origin or the identity name is either reading
+    `page_addresses` or listed in `ORIGIN_TOUCHES_ALLOWED` with its reason."""
     problems = scan()
     assert problems == [], problems
 
 
 def _code_lines(text: str) -> dict[int, str]:
     """The lines of a module's code, by number: comments and docstrings (a module's, a class's, a
-    function's) are not code, and a rule written in prose is not a rule held there."""
+    function's) are not code, and a rule written in prose is not a rule held there. A comment at
+    the end of a code line is dropped from it (a `#` inside a string is kept: the line is cut at
+    the first `#` that has an even number of quotes before it)."""
     import ast
 
     tree = ast.parse(text)
@@ -390,32 +433,61 @@ def _code_lines(text: str) -> dict[int, str]:
                 if isinstance(body[0].value.value, str):
                     prose.update(range(body[0].lineno, (body[0].end_lineno or body[0].lineno) + 1))
     return {
-        number: line.split("#", 1)[0]
+        number: _without_comment(line)
         for number, line in enumerate(text.splitlines(), start=1)
         if number not in prose
     }
 
 
+def _without_comment(line: str) -> str:
+    for position, character in enumerate(line):
+        if character == "#" and line[:position].count('"') % 2 == 0 and (
+            line[:position].count("'") % 2 == 0
+        ):  # fmt: skip
+            return line[:position]
+    return line
+
+
+def _modules() -> list[Path]:
+    return sorted(HARNESS.rglob("*.py"))
+
+
 def scan(overrides: dict[str, str] | None = None) -> list[str]:
-    """The findings in the harness's own top-level modules and the cloud-platform renderer, with
-    `overrides` (file name -> text) standing for a file's content, for the planted case below."""
+    """The findings in every module under `harness/` but `page_addresses.py`, with `overrides`
+    (path under `harness/` -> text) standing for a module's content, for the planted cases below."""
     problems: list[str] = []
-    files = sorted(HARNESS.glob("*.py")) + [HARNESS / "cloud_platform" / "__init__.py"]
-    for path in files:
-        if path.name == "page_addresses.py":
+    matched: set[tuple[str, str]] = set()
+    for path in _modules():
+        relative = path.relative_to(HARNESS).as_posix()
+        if relative == "page_addresses.py":
             continue
-        name = f"{path.parent.name}/{path.name}"
-        text = (overrides or {}).get(path.name) or _read(path)
+        text = (overrides or {}).get(relative) or _read(path)
         for number, code in _code_lines(text).items():
             for variable in ADDRESS_VARIABLES:
                 if variable in code and path.name not in ALLOWED_VARIABLE_READERS.get(variable, ()):
-                    problems.append(f"{name}:{number} names {variable}: {code.strip()}")
+                    problems.append(f"{relative}:{number} names {variable}: {code.strip()}")
             if path.name == "pages_service.py":
                 for rule in RULES_OF_ADDRESS:
                     if rule in code:
                         problems.append(
-                            f"{name}:{number} holds a rule of address ({rule}): {code.strip()}"
+                            f"{relative}:{number} holds a rule of address ({rule}): {code.strip()}"
                         )
+            if any(touch in code for touch in TOUCHES_THE_ORIGIN):
+                listed = [
+                    key for key in ORIGIN_TOUCHES_ALLOWED if key[0] == relative and key[1] in code
+                ]
+                matched.update(listed)
+                if not listed:
+                    problems.append(
+                        f"{relative}:{number} touches the origin or the identity name and neither "
+                        f"reads page_addresses nor is listed with a reason: {code.strip()}"
+                    )
+    if overrides is None:
+        problems += [
+            f"ORIGIN_TOUCHES_ALLOWED lists {key} but no line matches it"
+            for key in ORIGIN_TOUCHES_ALLOWED
+            if key not in matched
+        ]
     return problems
 
 
@@ -520,8 +592,9 @@ def test_a_refusal_that_returns_a_value_instead_is_red(row_id: str, says: str) -
                 return got
             names = sites(config)
             issuer = f"{names.identity}/realms/osprey"
+            # The fault planted: the origin as the deployment wrote it, its default port kept.
             return page_addresses.PageAddresses(
-                public_origin=names.glass,
+                public_origin=config.network.public_origin.rstrip("/"),
                 identity=names.identity,
                 issuer=issuer,
                 identity_alias=f"id.{names.host}",
@@ -596,3 +669,189 @@ def test_the_key_check_is_red_when_the_issuers_fetch_is_not_on_the_open_list(tai
         found = findings(row, config, render_of(config))
     assert any(f"{tail}" in line and "is not on the key's open list" in line for line in found), found
     assert findings(row, config, render_of(config)) == []
+
+
+def test_the_scan_is_red_for_the_lines_the_realm_and_the_proxy_module_held() -> None:
+    """Rule 15, PL7f round 2: the two places the first scan did not look at. The lines put back are
+    the real ones the verifier found: the realm's sign-in client reading the raw setting
+    (`origin = config.network.public_origin`), and the proxy's module writing the identity name
+    itself (`f"id.{names.host}"`). Each is found, naming its file; the real modules are clean."""
+    realm = _read(HARNESS / "realm.py")
+    site = _read(HARNESS / "site.py")
+    assert scan() == []
+    found = scan(
+        {
+            "realm.py": realm + "\n\ndef old(config):\n    origin = config.network.public_origin\n",
+            "site.py": site
+            + '\n\ndef old(names):\n    return [(names.host, 1), (f"id.{names.host}", "keycloak:8080")]\n',
+        }
+    )
+    assert any(line.startswith("realm.py:") and "public_origin" in line for line in found), found
+    assert any(line.startswith("site.py:") and "id." in line for line in found), found
+    assert scan() == []
+
+
+# ---- 6. Keycloak's issuer, the realm client's redirect and the service's settings are one string
+
+
+def _compose_value(artefacts: dict[str, str], service: str, name: str) -> str | None:
+    services = yaml.safe_load(artefacts["compose.yaml"])["services"]
+    found = (services.get(service) or {}).get("environment", {}).get(name)
+    return None if found is None else str(found)
+
+
+def _env_file_value(artefacts: dict[str, str], name: str) -> str | None:
+    for line in artefacts["deployment.env"].splitlines():
+        if line.startswith(f"{name}="):
+            return line.split("=", 1)[1]
+    return None
+
+
+def agreement_findings(
+    row: dict[str, Any], config: Any, artefacts: dict[str, str], client: dict[str, Any]
+) -> list[str]:
+    """Where one deployment writes the same address in different places, the strings are equal:
+    what the page service is given (origin and issuer), what Keycloak publishes (`KC_HOSTNAME` and
+    the realm: the issuer; compose shapes, which run Keycloak), what the deployment's own address
+    file says (`OSPREY_GLASS_ORIGIN`, `OSPREY_IDENTITY_ORIGIN`) and what the realm client registers
+    (redirect, web origin and post-logout address). No comparison strips or changes a string."""
+    env = pages_environment(row, artefacts)
+    if env is None:
+        return ["no page service in the render"]
+    origin = env["OSPREY_PAGES_PUBLIC_ORIGIN"]
+    issuer = env["OSPREY_PAGES_OIDC_ISSUER"]
+    found: list[str] = []
+    if client.get("redirectUris") != [f"{origin}/session/callback"]:
+        found.append(
+            f"the realm client's redirect is {client.get('redirectUris')}, the service sends "
+            f"{origin}/session/callback"
+        )
+    if client.get("webOrigins") != [origin]:
+        found.append(f"the realm client's web origin is {client.get('webOrigins')}, not {origin}")
+    if client.get("attributes", {}).get("post.logout.redirect.uris") != f"{origin}/":
+        found.append(f"the realm client's post-logout address is not {origin}/")
+    if row["config"]["shape"] in ("local-lite", "small"):
+        hostname = _compose_value(artefacts, "keycloak", "KC_HOSTNAME")
+        if f"{hostname}/realms/osprey" != issuer:
+            found.append(
+                f"Keycloak publishes {hostname}/realms/osprey, the service is given {issuer}"
+            )
+        if _env_file_value(artefacts, "OSPREY_IDENTITY_ORIGIN") != hostname:
+            found.append("OSPREY_IDENTITY_ORIGIN is not the identity address Keycloak is given")
+        if _env_file_value(artefacts, "OSPREY_GLASS_ORIGIN") != origin:
+            found.append(
+                f"OSPREY_GLASS_ORIGIN is {_env_file_value(artefacts, 'OSPREY_GLASS_ORIGIN')}, "
+                f"the service is given {origin}"
+            )
+    return found
+
+
+def _client_of(config: Any) -> dict[str, Any]:
+    from harness.realm import pages_client
+
+    return pages_client(config)
+
+
+@pytest.mark.parametrize("row", DERIVED, ids=[r["id"] for r in DERIVED])
+def test_keycloaks_issuer_the_realm_client_and_the_service_agree(row: dict[str, Any]) -> None:
+    """For every derived case: the issuer Keycloak will publish, the realm client's redirect, web
+    origin and post-logout address, and the page service's origin and issuer are the same strings,
+    compared as they are (rule 12: the sentence 'one place derives every address' was held by
+    nothing that compared the realm's registration with the service's callback)."""
+    config = config_of(row)
+    assert agreement_findings(row, config, render_of(config), _client_of(config)) == []
+
+
+def _row(row_id: str) -> dict[str, Any]:
+    [row] = [r for r in ROWS if r["id"] == row_id]
+    return row
+
+
+def _the_client_as_it_was(config: Any) -> dict[str, Any]:
+    """The client as the realm module made it before round 2: the origin as the deployment wrote it
+    (`config.network.public_origin`, the real old line), in all three fields."""
+    origin = config.network.public_origin
+    client = dict(_client_of(config))
+    client["redirectUris"] = [f"{origin}/session/callback"]
+    client["webOrigins"] = [origin]
+    client["attributes"] = {**client["attributes"], "post.logout.redirect.uris": f"{origin}/"}
+    return client
+
+
+@pytest.mark.parametrize(
+    ("row_id", "says"),
+    [
+        ("7-acme-explicit-443", "the realm client's redirect is"),
+        ("7-own-certificate-explicit-443", "the realm client's redirect is"),
+        ("14-upper-case-host", "the realm client's web origin is"),
+    ],
+)
+def test_the_verifiers_cases_7_and_14_are_red_for_the_client_as_it_was(
+    row_id: str, says: str
+) -> None:
+    """Rule 15: the verifier's two worked cases, at the shape the old code produced: case 7 has the
+    realm register `:443` the service never sends, case 14 an upper-case origin. Clean first, red
+    naming the mismatch, clean again."""
+    row = _row(row_id)
+    config = config_of(row)
+    artefacts = render_of(config)
+    assert agreement_findings(row, config, artefacts, _client_of(config)) == []
+    found = agreement_findings(row, config, artefacts, _the_client_as_it_was(config))
+    assert any(says in line for line in found), found
+    assert agreement_findings(row, config, artefacts, _client_of(config)) == []
+
+
+def test_keycloak_given_the_port_the_service_is_not_is_red() -> None:
+    """The other half of the strip the first version of this test hid: Keycloak's `KC_HOSTNAME` as
+    the old `sites()` wrote it for case 7 (the address with `:443`, the real old shape) against the
+    issuer the service is given."""
+    row = _row("7-acme-explicit-443")
+    config = config_of(row)
+    artefacts = render_of(config)
+    assert "KC_HOSTNAME: https://id.osprey.example.org\n" in artefacts["compose.yaml"]
+    planted = dict(artefacts)
+    planted["compose.yaml"] = artefacts["compose.yaml"].replace(
+        "KC_HOSTNAME: https://id.osprey.example.org\n",
+        "KC_HOSTNAME: https://id.osprey.example.org:443\n",
+    )
+    found = agreement_findings(row, config, planted, _client_of(config))
+    assert any(line.startswith("Keycloak publishes") for line in found), found
+    assert agreement_findings(row, config, artefacts, _client_of(config)) == []
+
+
+@pytest.mark.parametrize(
+    ("row_id", "change"),
+    [
+        ("3-acme-default-port", lambda got: got.public_origin.upper()),
+        ("7-acme-explicit-443", lambda got: got.public_origin + ":443"),
+        ("14-upper-case-host", lambda got: got.public_origin + ":8443"),
+    ],
+    ids=["upper case", "a default port", "another port"],
+)
+def test_a_planted_change_to_derives_public_origin_turns_a_case_red(
+    row_id: str, change: Callable[[Any], str]
+) -> None:
+    """A change to what `derive` returns as the public origin reaches the service's settings and
+    the realm client (both read it) and not the deployment's own address file or Keycloak: the case
+    goes red, so a place that stopped reading `derive` would be found by the other places that
+    still do. Made in the object `derive` returns, the shape every reader sees."""
+    row = _row(row_id)
+    config = config_of(row)
+    assert agreement_findings(row, config, render_of(config), _client_of(config)) == []
+    with _with_planted_derive(_alter(public_origin=change)):
+        planted_client = _client_of(config)
+        found = agreement_findings(row, config, render_of(config), planted_client)
+    assert any("OSPREY_GLASS_ORIGIN" in line for line in found), found
+    assert agreement_findings(row, config, render_of(config), _client_of(config)) == []
+
+
+def test_the_realm_client_reads_derive_where_the_service_is_on() -> None:
+    """The realm client's origin is `derive`'s where the setting is on: a changed `derive` changes
+    the client (a client that worked the origin out for itself would not move)."""
+    row = _row("3-acme-default-port")
+    config = config_of(row)
+    with _with_planted_derive(_alter(public_origin="https://planted.example.org")):
+        client = _client_of(config)
+    assert client["redirectUris"] == ["https://planted.example.org/session/callback"]
+    assert client["webOrigins"] == ["https://planted.example.org"]
+    assert client["attributes"]["post.logout.redirect.uris"] == "https://planted.example.org/"
