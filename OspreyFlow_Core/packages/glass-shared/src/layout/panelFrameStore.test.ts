@@ -1122,7 +1122,8 @@ describe("one writer: no entry point writes a size above the live limits, read s
     check("drawn data-side-width", number(parts.side.getAttribute("data-side-width")), 300, limit.side);
     check("drawn timeline sash", number(parts.controls.timelineSash.getAttribute("aria-valuenow")), 96, limit.timeline);
     check("drawn data-timeline-height", number(parts.timeline.getAttribute("data-timeline-height")), 96, limit.timeline);
-    if (kept.panelHeights.metrics !== undefined) check("drawn stacked sash", number(parts.controls.panelSash.getAttribute("aria-valuenow")), 48, limit.panel);
+    // The stacked sash is checked whether or not it has a height of its own: with none it draws `data-from`, bounded (round 10, K).
+    check("drawn stacked sash", number(parts.controls.panelSash.getAttribute("aria-valuenow")), 48, limit.panel);
   }
 
   /** A page attached to a store whose window is `start`, with every size pushed to what that window allows. */
@@ -1582,10 +1583,9 @@ describe("a page's data-max on the sashes holds on every path: keys, Home, the p
       const drawnNow = num(sash.getAttribute("aria-valuenow"));
       const drawnMax = num(sash.getAttribute("aria-valuemax"));
       expect(drawnMax, `${label}: ${name} aria-valuemax is the limit the writer applies`).toBe(max);
-      if (name !== "stacked" || inMemory !== undefined) {
-        expect(drawnNow, `${label}: ${name} aria-valuenow ${drawnNow} is above its aria-valuemax ${drawnMax}`).toBeLessThanOrEqual(drawnMax);
-        expect(drawnNow, `${label}: ${name} aria-valuenow is under its aria-valuemin`).toBeGreaterThanOrEqual(num(sash.getAttribute("aria-valuemin")));
-      }
+      // Every sash the attach draws, the stacked panel's with no height of its own included (round 10, K).
+      expect(drawnNow, `${label}: ${name} aria-valuenow ${drawnNow} is above its aria-valuemax ${drawnMax}`).toBeLessThanOrEqual(drawnMax);
+      expect(drawnNow, `${label}: ${name} aria-valuenow is under its aria-valuemin`).toBeGreaterThanOrEqual(num(sash.getAttribute("aria-valuemin")));
       // A column at 340 or a timeline at 130 is the default and stands for "nothing chosen" (round 8): not written, so
       // memory and storage may hold it above a small window's limit; what is drawn, above, may not.
       const isDefault = (value: number) => (name === "column" && value === DEFAULT_SIDE_WIDTH) || (name === "timeline" && value === DEFAULT_TIMELINE_HEIGHT);
@@ -2193,6 +2193,111 @@ describe("a page's data-max below the default is shown, and never saved by a dra
     expect(JSON.parse(stored() ?? "{}")).toMatchObject({ sideWidth: 340, timelineHeight: 130 });
     expect(parts.controls.sideSash.getAttribute("aria-valuenow")).toBe(String(BELOW.side));
     expect(parts.controls.timelineSash.getAttribute("aria-valuenow")).toBe(String(BELOW.timeline));
+  });
+
+  // Round 10, J: the arrow keys step from the size as the sash shows it (one `shownSize`), never from the store's
+  // unbounded state, so the first shrink key press is not lost when a page's bound is below the default.
+  it("J: the column at data-max 320 with nothing stored draws 320; ArrowRight moves it to 304 and stores 304; the grow key stays at 320", () => {
+    const parts = bounds(VIEWPORTS.roomy as Viewport);
+    expect(stored()).toBeNull();
+    expect(parts.controls.sideSash.getAttribute("aria-valuenow")).toBe("320");
+    parts.controls.sideSash.dispatch("keydown", { key: "ArrowRight" });
+    expect(parts.controls.sideSash.getAttribute("aria-valuenow")).toBe("304");
+    expect(parts.side.getAttribute("data-side-width")).toBe("304");
+    expect(JSON.parse(stored() ?? "{}").sideWidth).toBe(304);
+    parts.controls.sideSash.dispatch("keydown", { key: "ArrowLeft" });
+    parts.controls.sideSash.dispatch("keydown", { key: "ArrowLeft" });
+    expect(parts.controls.sideSash.getAttribute("aria-valuenow")).toBe("320");
+    expect(JSON.parse(stored() ?? "{}").sideWidth).toBe(320);
+  });
+
+  it("J: the timeline at data-max 100 with nothing stored draws 100; ArrowDown moves it to 96, the minimum (100 less 16 is 84, raised to 96), and stores 96", () => {
+    const parts = bounds(VIEWPORTS.roomy as Viewport);
+    expect(stored()).toBeNull();
+    expect(parts.controls.timelineSash.getAttribute("aria-valuenow")).toBe("100");
+    parts.controls.timelineSash.dispatch("keydown", { key: "ArrowDown" });
+    expect(parts.controls.timelineSash.getAttribute("aria-valuenow")).toBe("96");
+    expect(parts.timeline.getAttribute("data-timeline-height")).toBe("96");
+    expect(JSON.parse(stored() ?? "{}").timelineHeight).toBe(96);
+  });
+
+  it("J: a grow key from the bound stays at the bound and stores nothing above it", () => {
+    const parts = bounds(VIEWPORTS.roomy as Viewport);
+    parts.controls.sideSash.dispatch("keydown", { key: "ArrowLeft" });
+    parts.controls.timelineSash.dispatch("keydown", { key: "ArrowUp" });
+    expect(parts.controls.sideSash.getAttribute("aria-valuenow")).toBe("320");
+    expect(parts.controls.timelineSash.getAttribute("aria-valuenow")).toBe("100");
+    expect(JSON.parse(stored() ?? "{}")).toMatchObject({ sideWidth: 320, timelineHeight: 100 });
+  });
+
+  it("J: through the store alone, a shrink key with the page's bound steps from the bound (no attach)", () => {
+    const store = createPanelFrameStore({ viewport: () => VIEWPORTS.roomy as Viewport });
+    live.push(store);
+    store.actions.resizeByKey("side-width", { key: "ArrowRight" }, { maxPx: 320 });
+    expect(JSON.parse(stored() ?? "{}").sideWidth).toBe(304);
+    forgetLayoutSizesForTest();
+    installStorage(new MemoryStorage());
+    store.actions.resizeByKey("timeline-height", { key: "ArrowDown" }, { maxPx: 100 });
+    expect(JSON.parse(stored() ?? "{}").timelineHeight).toBe(96);
+  });
+
+  // The round-4 table's rows, with a bound below the default: every key on each sash, in each viewport, moves the sash by
+  // the spec's step from where it is drawn, or leaves it at an end of its range; the first press is never lost.
+  const clampTo = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+  const ROWS = [
+    ...["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].flatMap((key) => [{ key }, { key, shiftKey: true }]),
+    { key: "Home" },
+    { key: "End" },
+  ];
+  describe.each(Object.entries(VIEWPORTS))("the keys on a sash bounded under its default, %s", (_name, v) => {
+    const SASHES = [
+      { name: "column", of: (p: ReturnType<typeof bounds>) => p.controls.sideSash, grows: "ArrowLeft", shrinks: "ArrowRight", min: 300, dflt: 340 as number | undefined },
+      { name: "timeline", of: (p: ReturnType<typeof bounds>) => p.controls.timelineSash, grows: "ArrowUp", shrinks: "ArrowDown", min: 96, dflt: 130 as number | undefined },
+      { name: "stacked", of: (p: ReturnType<typeof bounds>) => p.controls.panelSash, grows: "ArrowDown", shrinks: "ArrowUp", min: 48, dflt: undefined },
+    ];
+    for (const sash of SASHES) {
+      for (const row of ROWS) {
+        it(`${sash.name}: ${row.shiftKey ? "Shift+" : ""}${row.key} from where it is drawn, nothing stored`, () => {
+          const parts = bounds(v);
+          const element = sash.of(parts);
+          const before = Number(element.getAttribute("aria-valuenow"));
+          const max = Number(element.getAttribute("aria-valuemax"));
+          expect(before, "drawn at or under its own maximum before any key").toBeLessThanOrEqual(max);
+          const step = row.shiftKey ? 64 : 16;
+          let expected = before;
+          if (row.key === sash.grows) expected = clampTo(before + step, sash.min, max);
+          else if (row.key === sash.shrinks) expected = clampTo(before - step, sash.min, max);
+          else if (row.key === "Home" && sash.dflt !== undefined) expected = clampTo(sash.dflt, sash.min, max);
+          element.dispatch("keydown", row);
+          // Read straight after the key: the drawn value, never through getState().
+          expect(Number(element.getAttribute("aria-valuenow")), `${sash.name} ${row.key}`).toBe(expected);
+          expect(Number(element.getAttribute("aria-valuenow"))).toBeLessThanOrEqual(Number(element.getAttribute("aria-valuemax")));
+        });
+      }
+    }
+  });
+
+  // Round 10, K: a stacked panel's sash with no height of its own draws `data-from` bounded like its maximum.
+  describe.each(Object.entries(VIEWPORTS))("K: the stacked sash with no height of its own, %s", (_name, v) => {
+    it("draws aria-valuenow no higher than the aria-valuemax beside it, with a page's bound and without one", () => {
+      for (const withBound of [true, false]) {
+        const parts = bounds(v);
+        if (!withBound) parts.controls.panelSash.attributes.delete("data-max");
+        parts.store.actions.fitToWindow();
+        const sash = parts.controls.panelSash;
+        expect(sash.getAttribute("aria-valuenow")).not.toBeNull();
+        expect(Number(sash.getAttribute("aria-valuenow"))).toBeLessThanOrEqual(Number(sash.getAttribute("aria-valuemax")));
+      }
+    });
+  });
+
+  it("K: the verifier's case (data-from 200, data-max 60): drawn 60 beside a maximum of 60, and the grow key does not shrink it", () => {
+    const parts = bounds(VIEWPORTS.roomy as Viewport);
+    const sash = parts.controls.panelSash;
+    expect(sash.getAttribute("aria-valuenow")).toBe("60");
+    expect(sash.getAttribute("aria-valuemax")).toBe("60");
+    sash.dispatch("keydown", { key: "ArrowDown" });
+    expect(sash.getAttribute("aria-valuenow")).toBe("60");
   });
 
   it("the store's own calls say what they are: a hold to a bound writes nothing at the default, a set does", () => {
