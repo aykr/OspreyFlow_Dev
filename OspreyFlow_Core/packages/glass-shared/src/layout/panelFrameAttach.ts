@@ -26,7 +26,9 @@
 //
 // A sash's `data-max` is held on every path: the key path (Home as the arrows) passes it to the writer, and before it
 // draws a state the attach asks the one writer to hold any size above a sash's bound to that bound (a stored value, the
-// pointer's set, a window resize), so `aria-valuenow` is never above the `aria-valuemax` drawn beside it.
+// pointer's set, a window resize), so `aria-valuenow` is never above the `aria-valuemax` drawn beside it. A size the
+// analyst never chose (the default) is only drawn at a bound, never written to storage: a draw, a fit and a resize save
+// nothing (Home and the arrow keys, an analyst's act, do).
 //
 // Each sash also carries `aria-valuemax`, the limit the writer applies now (the store's live limit, lowered by the
 // sash's `data-max`), and the attach redraws it when the window it can reach through `ownerDocument.defaultView`
@@ -210,35 +212,58 @@ export function attachPanelFrame(root: PanelFrameRoot, store: PanelFrameStore): 
    * it (a stored value, the pointer's set, a window resize) is above it only until here, where the one writer is asked to
    * hold it to the bound before anything is drawn. Each write makes a state of its own, which the subscription renders.
    */
+  /** How many states have been rendered, so a write that made none (it changed nothing) is told from one that did. */
+  let renders = 0;
   const holdToBounds = (state: PanelFrameState): void => {
     for (const sash of all(root, "[data-sash]")) {
       const maxPx = numberAttribute(sash, "data-max");
       if (maxPx === undefined) continue;
       const axis = sash.getAttribute("data-sash");
+      const before = renders;
+      // `fitting`: this is a size brought down to a bound, not one the analyst asked for, so a default is not written.
       if (axis === "side-width" && state.sideWidth > lowerLimit(state.limits.sideWidth, MIN_SIDE_WIDTH, maxPx)) {
-        store.actions.setSideWidth(state.sideWidth, { maxPx });
-        return;
+        store.actions.setSideWidth(state.sideWidth, { maxPx, fitting: true });
+      } else if (axis === "timeline-height" && state.timelineHeight > lowerLimit(state.limits.timelineHeight, MIN_TIMELINE_HEIGHT, maxPx)) {
+        store.actions.setTimelineHeight(state.timelineHeight, { maxPx, fitting: true });
+      } else if (axis === "panel-height") {
+        const id = sash.getAttribute("data-panel") as SidePanelId;
+        const own = state.panelHeights[id];
+        if (own !== undefined && own > lowerLimit(state.limits.panelHeight, MIN_PANEL_HEIGHT, maxPx)) {
+          store.actions.setPanelHeight(id, own, { maxPx, fitting: true });
+        }
       }
-      if (axis === "timeline-height" && state.timelineHeight > lowerLimit(state.limits.timelineHeight, MIN_TIMELINE_HEIGHT, maxPx)) {
-        store.actions.setTimelineHeight(state.timelineHeight, { maxPx });
-        return;
-      }
-      const id = sash.getAttribute("data-panel") as SidePanelId;
-      const own = axis === "panel-height" ? state.panelHeights[id] : undefined;
-      if (own !== undefined && own > lowerLimit(state.limits.panelHeight, MIN_PANEL_HEIGHT, maxPx)) {
-        store.actions.setPanelHeight(id, own, { maxPx });
-        return;
-      }
+      // A write made a state of its own, rendered (and holding the rest) inside the call: this state is stale.
+      if (renders !== before) return;
     }
   };
-  /** How many states have been rendered, so a write that made none (it changed nothing) is told from one that did. */
-  let renders = 0;
-  const render = (state: PanelFrameState): void => {
+  /**
+   * The state as a page's sashes bound it. A size above a sash's `data-max` that the writer did not write (a default,
+   * which is never saved for a bound: `fitting`) is drawn at the bound, so `aria-valuenow` and the frame's size attribute
+   * are never above the `aria-valuemax` beside them. Drawn only; nothing is written here.
+   */
+  const withinBounds = (state: PanelFrameState): PanelFrameState => {
+    let { sideWidth, timelineHeight } = state;
+    const panelHeights = { ...state.panelHeights };
+    for (const sash of all(root, "[data-sash]")) {
+      const maxPx = numberAttribute(sash, "data-max");
+      if (maxPx === undefined) continue;
+      const axis = sash.getAttribute("data-sash");
+      if (axis === "side-width") sideWidth = Math.min(sideWidth, lowerLimit(state.limits.sideWidth, MIN_SIDE_WIDTH, maxPx));
+      else if (axis === "timeline-height") timelineHeight = Math.min(timelineHeight, lowerLimit(state.limits.timelineHeight, MIN_TIMELINE_HEIGHT, maxPx));
+      else if (axis === "panel-height") {
+        const id = sash.getAttribute("data-panel") as SidePanelId;
+        const own = panelHeights[id];
+        if (own !== undefined) panelHeights[id] = Math.min(own, lowerLimit(state.limits.panelHeight, MIN_PANEL_HEIGHT, maxPx));
+      }
+    }
+    return { ...state, sideWidth, timelineHeight, panelHeights };
+  };
+  const render =(state: PanelFrameState): void => {
     const mine = ++renders;
     holdToBounds(state);
     // A write that changed something rendered its own state, inside the call above, and that one is drawn. One that
     // changed nothing rendered none: this state is drawn as it is, so the frame is never left undrawn and the loop ends.
-    if (renders === mine) draw(root, state);
+    if (renders === mine) draw(root, withinBounds(state));
   };
   // Subscribed before the first draw: a write made to hold a size to its bound is drawn by the subscription.
   const unsubscribe = store.subscribe(render);

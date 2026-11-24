@@ -189,6 +189,12 @@ export interface SizeLimits {
    * never goes below its minimum whatever this says.
    */
   maxPx?: number;
+  /**
+   * The size is being brought down to a bound (a page drawing a state, a window resize), not asked for by the analyst: a
+   * column or timeline still at its default is then shown at the bound and nothing is written, as `fitToWindow` does for
+   * the window's limit. Only a key, a drag or a set that is the analyst's act leaves this off.
+   */
+  fitting?: boolean;
 }
 
 export interface ResizeContext extends SizeLimits {
@@ -339,7 +345,7 @@ export function createPanelFrameStore(options: PanelFrameStoreOptions = {}): Pan
    *
    * A column or timeline still at its default, with no other size kept, is not a size the analyst chose: when only the
    * window's limit brings it down it is shown lower (`shownSizes`) and nothing is written, so a reload in a roomy window
-   * opens at the default again. `fitting` is a size being brought down to the window (not one asked for): it writes only
+   * opens at the default again. `fitting` is a size being brought down to the window or to a page's bound (not one asked for): it writes only
    * a size that is not the default. A size asked for writes unless it is just what is already shown.
    */
   const apply = (target: SizeTarget, request: number | "default", limits: Limits, maxPx?: number, fitting = false): void => {
@@ -374,11 +380,11 @@ export function createPanelFrameStore(options: PanelFrameStoreOptions = {}): Pan
   };
 
   /** Every write of a size is this: fit what is kept to the window now, then write the one asked for, held to it. */
-  const writeSize = (target: SizeTarget, request: number | "default", maxPx?: number): void =>
+  const writeSize = (target: SizeTarget, request: number | "default", maxPx?: number, fitting = false): void =>
     guarded(() => {
       const limits = limitsNow();
       fitAll(limits);
-      apply(target, request, limits, maxPx);
+      apply(target, request, limits, maxPx, fitting);
     });
 
   const fit = (): void => guarded(() => fitAll(limitsNow()));
@@ -455,13 +461,13 @@ export function createPanelFrameStore(options: PanelFrameStoreOptions = {}): Pan
       sync();
     },
     setSideWidth(px, limits) {
-      if (finite(px)) writeSize({ axis: "side-width" }, px, limits?.maxPx);
+      if (finite(px)) writeSize({ axis: "side-width" }, px, limits?.maxPx, limits?.fitting === true);
     },
     setPanelHeight(id, px, limits) {
-      if (isSidePanelId(id) && finite(px)) writeSize({ axis: "panel-height", id }, px, limits?.maxPx);
+      if (isSidePanelId(id) && finite(px)) writeSize({ axis: "panel-height", id }, px, limits?.maxPx, limits?.fitting === true);
     },
     setTimelineHeight(px, limits) {
-      if (finite(px)) writeSize({ axis: "timeline-height" }, px, limits?.maxPx);
+      if (finite(px)) writeSize({ axis: "timeline-height" }, px, limits?.maxPx, limits?.fitting === true);
     },
     resizeByKey(axis, key, context = {}) {
       const step = key.shiftKey ? SASH_LARGE_STEP : SASH_STEP;
@@ -483,11 +489,11 @@ export function createPanelFrameStore(options: PanelFrameStoreOptions = {}): Pan
       }
       if (key.key !== grows && key.key !== shrinks) return false;
       const delta = key.key === grows ? step : -step;
-      if (axis === "side-width") actions.setSideWidth(state.sideWidth + delta, context);
-      else if (axis === "timeline-height") actions.setTimelineHeight(state.timelineHeight + delta, context);
+      if (axis === "side-width") actions.setSideWidth(state.sideWidth + delta, { maxPx: context.maxPx });
+      else if (axis === "timeline-height") actions.setTimelineHeight(state.timelineHeight + delta, { maxPx: context.maxPx });
       else if (panel !== null) {
         const from = state.panelHeights[panel] ?? context.from;
-        if (from !== undefined && finite(from)) actions.setPanelHeight(panel, from + delta, context);
+        if (from !== undefined && finite(from)) actions.setPanelHeight(panel, from + delta, { maxPx: context.maxPx });
       }
       return true;
     },
