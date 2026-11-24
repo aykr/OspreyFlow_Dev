@@ -1,5 +1,7 @@
 """Scenario DM: the Studio's dataset map as a server-rendered page, Default tree (slice IS3; ADR-152
-decision 12, "each rebuilt screen's acceptance scenario is written first").
+decision 12, "each rebuilt screen's acceptance scenario is written first"), and the order pipelines run in
+(slice IS6a, 24 November 2026: the owner's rulings on the IS6 draft; `spec/08` DM2 and DM11 to DM14 are changed with the
+spec, DM15 to DM24 are new).
 
 **There is no React dataset map to read the behaviour from** (`FUNCTIONS.yaml`'s `studio-dataset-map` row says so),
 so the scenario is written against the ADR text, the prototype's Pipelines list, the words the Studio already uses and
@@ -14,10 +16,12 @@ order is stored. This file holds the document, the two sections, the page test, 
 
 * a scenario with no page test, or a page test with no scenario -> `test_every_scenario_has_a_page_test_and_back`
 * a row whose cited words are not in the file it cites -> `test_every_row_cites_words_that_are_in_the_source`
-* the section of spec/09 that does not say read-only, IS6's order and the four columns
+* the section of spec/09 that does not say the four columns, that "Runs after" is drawn only when an order is stored, that the
+  order is edited here with an expected number, that a cycle is refused and that a release carries it
   -> `test_spec_09_says_what_the_table_shows`
 * the FUNCTIONS row left without its scenarios, or given a GOV.UK route -> `test_the_function_row_names_the_scenarios`
-* a "runs after" or a suggestion in the page's words or template -> `test_the_page_s_words_say_nothing_of_the_order_of_runs`
+* a suggestion of an order in the page's words or template, or the "Runs after" cell drawn with no check that an order is stored
+  -> `test_the_page_s_words_make_no_suggestion_and_draw_the_order_only_when_stored`
 * the words gates (`ui_words_check`, `colour_drift_check`, `no_branches_check`, `design_check`) not reading the page's own
   files -> `test_each_gate_reads_the_page_s_own_files`
 
@@ -27,7 +31,8 @@ repository. The files, from the repository's root: `OspreyFlow_Build/spec/08_ACC
 `OspreyFlow_Build/spec/09_INGEST_STUDIO.md`, `OspreyFlow_Build/spec/06_DECISIONS.md`,
 `OspreyFlow_Build/spec/ingest_studio_redesign/ingest_studio_prototype.html`,
 `OspreyFlow_Build/process/CLAUDE.md`, `OspreyFlow_Build/process/lanes/v062/slices/IS3.md`,
-`OspreyFlow_Build/tests/glass_trees/test_functions_yaml.py`, and under `OspreyFlow_Core`: `apps/pages/FUNCTIONS.yaml`,
+`OspreyFlow_Build/tests/glass_trees/test_functions_yaml.py`, `OspreyFlow_Build/tests/services/api/test_dataset_run_order.py`, and under
+`OspreyFlow_Core`: `apps/pages/server/csrf.ts`, `apps/pages/FUNCTIONS.yaml`,
 `apps/pages/test/default/dataset-map.test.ts`, `apps/pages/server/datasetMap.ts`, `apps/pages/server/pageList.ts`,
 `apps/pages/server/views/datasetMapWords.ts`, `apps/pages/tree-default/studio/dataset-map.njk`,
 `apps/pages/server/views/studioWords.ts`, `apps/pages/server/conduit.ts`,
@@ -70,7 +75,7 @@ PAGE_TEST_NAME = "dataset-map.test.ts"
 #: What each behaviour of the table is, by id: a behaviour with no scenario is one nobody will build or test.
 BRIEF: dict[str, tuple[str, ...]] = {
     "a table: caption, column headers, one row header per pipeline, no script": ("DM1",),
-    "no runs-after column, no empty column, no suggestion, no line (the owner's ruling)": ("DM2",),
+    "with no order stored: four columns, no runs-after column, no empty one, no suggestion, no line (the owner's ruling)": ("DM2",),
     "the stages, as the Studio's own words, in the canvas's layout order": ("DM3",),
     "the status and the version, as the Studio's own words": ("DM4",),
     "rows sorted by pipeline name, and said": ("DM5",),
@@ -80,18 +85,29 @@ BRIEF: dict[str, tuple[str, ...]] = {
     "a read that failed is said, never an empty table": ("DM9",),
     "the model place, in plain words": ("DM10",),
     "asked of the Conduit as the person, and nothing else": ("DM11",),
-    "no script needed, no action beyond links, every control labelled": ("DM12",),
-    "the service's own page under /studio, a GET only": ("DM13",),
+    "no script needed, every control native and labelled": ("DM12",),
+    "the service's own page under /studio, a GET and the form's POST only": ("DM13",),
     "every check is red against a planted fault": ("DM14",),
+    "with an order stored: the Runs after column, not deployed said, the version, who and when": ("DM15",),
+    "an order with nothing to say about these pipelines draws no column": ("DM16",),
+    "the order form: tick boxes, labels, the number read, the token, scripts off": ("DM17",),
+    "a save sends the order as ticked with the number read, and says the new version": ("DM18",),
+    "a cycle is refused in words naming its pipelines, ticks kept": ("DM19",),
+    "an order that moved on is refused and shown as it is, ticks kept": ("DM20",),
+    "no right, not the person's dataset, ended session: the refusal's words, nothing saved": ("DM21",),
+    "a form that is not the page's own is refused before the Conduit is asked": ("DM22",),
+    "an order that could not be read, or saved, is said and never drawn as none": ("DM23",),
+    "nothing of a pipeline the reader may not see is named, counted or implied": ("DM24",),
 }
 
 #: A row that is a duty of the page with no counterpart in a source says so, with a reason; no other row may.
 PAGE_ONLY = {"DM5", "DM6", "DM14"}
 NONE_PREFIX = "none:"
-#: The words the page must never say: the order of runs is IS6's, shown only when it is stored.
-ORDER_WORDS = re.compile(
-    r"runs?\s+after|suggest|run\s+order|order\s+of\s+runs|depends\s+on", re.IGNORECASE
-)
+#: The words the page must never say: no suggestion of an order is made or drawn (rule 5: a model-derived suggestion stays
+#: inferred and is not stored as the order); "runs after" itself is the stored order's column and is allowed, but only when stored.
+SUGGESTION_WORDS = re.compile(r"suggest|recommend|proposed\s+order|inferred\s+order", re.IGNORECASE)
+#: The template's cell for what a pipeline runs after: it is inside the check that an order is stored, or it is a fault.
+GUARDED_CELL = re.compile(r"\{%\s*if\s+dm\.drawsOrder\s*%\}\s*<td>\{\{\s*row\.runsAfter\s*\}\}</td>\s*\{%\s*endif\s*%\}")
 
 
 def norm(text: str) -> str:
@@ -208,14 +224,20 @@ def problems(
         found.append("spec/09 has no section 1.2 on the dataset map")
     else:
         for need, why in (
-            ("read-only", "that the page is read-only"),
-            ("IS6", "that the order of runs is IS6's"),
+            ("IS6a", "that the order is IS6a's"),
             (
-                "only when the order is stored",
-                'that "runs after" is shown only when the order is stored',
+                "only when an order is stored",
+                'that "runs after" is shown only when an order is stored',
             ),
             ("Pipeline, Status, Version and Stages", "the four columns"),
             ("no empty column", "that no empty column is drawn"),
+            ("Edit pipelines", "the right that reads and sets the order"),
+            ("the number of the order it read", "the number the form carries"),
+            ("expected number is required on save", "that the expected number is required"),
+            ("A cycle is refused on save", "that a cycle is refused on save"),
+            ("not deployed", "that an undeployed pipeline may be in the order"),
+            ("release export carries the order", "that a release carries the order"),
+            ("24 November 2026", "the owner's rulings of 24 November 2026"),
             ("Scenario DM", "the scenario that tests it"),
         ):
             if need not in text:
@@ -236,13 +258,23 @@ def problems(
             found.append(
                 "FUNCTIONS row studio-dataset-map has a GOV.UK route: this slice builds the Default tree only"
             )
-
-    # the page's own words
-    for name, body in words.items():
-        for hit in ORDER_WORDS.finditer(body):
+        if row["status"] != "built":
             found.append(
-                f"{name} says {hit.group(0)!r}: the order of runs is IS6's, and shown only once stored"
+                f"FUNCTIONS row studio-dataset-map is {row['status']!r}, not built (the owner's ruling of 24 November 2026)"
             )
+
+    # the page's own words: no suggestion, and the order's cell only behind the check that an order is stored
+    for name, body in words.items():
+        for hit in SUGGESTION_WORDS.finditer(body):
+            found.append(
+                f"{name} says {hit.group(0)!r}: no suggestion of an order is made (rule 5)"
+            )
+    template = words.get(TEMPLATE.name, "")
+    if template and "row.runsAfter" in template and not GUARDED_CELL.search(template):
+        found.append(
+            f"{TEMPLATE.name} draws the runs-after cell with no check that an order is stored: "
+            "an empty column when none is"
+        )
     return found
 
 
@@ -328,14 +360,18 @@ def test_the_page_is_the_function_rows_and_is_registered() -> None:
     route = read(ROUTE)
     assert 'id: "studio-dataset-map"' in route
     assert 'path: "/studio/dataset-map"' in route
-    assert 'methods: ["GET"]' in route
+    assert 'methods: ["GET", "POST"]' in route
     assert "studioDatasetMap" in read(PAGE_LIST)
 
 
-def test_the_page_s_words_say_nothing_of_the_order_of_runs() -> None:
+def test_the_page_s_words_make_no_suggestion_and_draw_the_order_only_when_stored() -> None:
     words = real()[5]
     assert set(words) == {WORDS.name, TEMPLATE.name}, "the page's words or template is missing"
-    assert not [name for name, body in words.items() if ORDER_WORDS.search(body)]
+    assert not [name for name, body in words.items() if SUGGESTION_WORDS.search(body)]
+    assert GUARDED_CELL.search(words[TEMPLATE.name]), "the runs-after cell is not behind the stored-order check"
+    # The four columns are the page's own words; the fifth is a separate list, so a table with no order cannot take it.
+    assert '"Pipeline", "Status", "Version", "Stages"] as const' in words[WORDS.name]
+    assert '"Stages", "Runs after"] as const' in words[WORDS.name]
 
 
 def test_the_page_reads_its_words_from_the_studio_s_own() -> None:
@@ -425,10 +461,10 @@ def test_a_row_on_another_tree_is_caught() -> None:
 
 def test_spec_09_without_the_stored_order_sentence_is_caught() -> None:
     spec_08, spec_09, page_test, sources, functions, words = planted()
-    changed = spec_09.replace("only when the order is stored", "whenever it is wanted")
+    changed = spec_09.replace("only when an order is stored", "whenever it is wanted")
     assert changed != spec_09
     found = problems(spec_08, changed, page_test, sources, functions, words)
-    assert any("shown only when the order is stored" in p for p in found)
+    assert any("shown only when an order is stored" in p for p in found)
     removed = spec_09.replace("### 1.2 The dataset map", "### 1.2 Something else")
     assert any(
         "no section 1.2" in p
@@ -454,16 +490,39 @@ def test_a_function_row_with_a_govuk_route_or_no_scenario_is_caught() -> None:
 
 
 @pytest.mark.parametrize(
-    "phrase",
-    ["Runs after", "runs after", "A suggested order", "Suggestion", "The run order", "Depends on"],
+    "phrase", ["A suggested order", "Suggestion", "We recommend this order", "Suggest"]
 )
-def test_a_word_about_the_order_of_runs_in_the_page_is_caught(phrase: str) -> None:
+def test_a_suggestion_of_an_order_in_the_page_is_caught(phrase: str) -> None:
     spec_08, spec_09, page_test, sources, functions, words = planted()
     for name in (WORDS.name, TEMPLATE.name):
         changed = dict(words)
         changed[name] = words[name] + f'\n<th scope="col">{phrase}</th>\n'
         found = problems(spec_08, spec_09, page_test, sources, functions, changed)
-        assert any(name in p and "IS6" in p for p in found), (name, phrase, found)
+        assert any(name in p and "no suggestion of an order" in p for p in found), (name, phrase, found)
+    # Control: the stored order's own words are not a suggestion.
+    assert not any("suggestion" in p for p in problems(spec_08, spec_09, page_test, sources, functions, words))
+
+
+def test_the_runs_after_cell_drawn_with_no_check_that_an_order_is_stored_is_caught() -> None:
+    """The planted template is the real one with the guard taken off the cell: a table with no order would draw a fifth
+    cell under four headers (and, with the column's header, an empty column)."""
+    spec_08, spec_09, page_test, sources, functions, words = planted()
+    real_template = words[TEMPLATE.name]
+    assert GUARDED_CELL.search(real_template)
+    changed = dict(words)
+    changed[TEMPLATE.name] = GUARDED_CELL.sub("<td>{{ row.runsAfter }}</td>", real_template)
+    assert changed[TEMPLATE.name] != real_template
+    found = problems(spec_08, spec_09, page_test, sources, functions, changed)
+    assert any("draws the runs-after cell with no check that an order is stored" in p for p in found)
+
+
+def test_a_function_row_that_is_not_built_is_caught() -> None:
+    spec_08, spec_09, page_test, sources, functions, words = planted()
+    for row in functions:
+        if row["id"] == "studio-dataset-map":
+            row["status"] = "planned"
+    found = problems(spec_08, spec_09, page_test, sources, functions, words)
+    assert any("studio-dataset-map is 'planned', not built" in p for p in found)
 
 
 # ---------------------------------------------------------------------------- the gates read this page's files

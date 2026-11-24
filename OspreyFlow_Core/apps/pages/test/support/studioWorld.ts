@@ -64,6 +64,11 @@ export interface World extends Built {
   logs: string[];
   /** A GET as the signed-in person. */
   get(url: string): ReturnType<ReturnType<typeof request>["get"]>;
+  /**
+   * A url-encoded POST of fields that may repeat (a group of tick boxes sends one `link` for each), as the signed-in person, with the
+   * anti-forgery token unless `csrf` is `false` or text. The pairs are sent as they are, in order.
+   */
+  postPairs(url: string, pairs: [string, string][], csrf?: string | false): ReturnType<ReturnType<typeof request>["post"]>;
   /** A url-encoded POST as the signed-in person, with the anti-forgery token unless `csrf` is `false` or text. */
   post(url: string, fields: Record<string, string>, csrf?: string | false): ReturnType<ReturnType<typeof request>["post"]>;
   stop(): Promise<void>;
@@ -127,6 +132,11 @@ export async function world(me: Person = person(), others: Person[] = [], option
     signed,
     logs,
     get: (url) => api.get(url).set("Cookie", signed.cookie),
+    postPairs: (url, pairs, csrf) => {
+      const token = csrf === false ? undefined : (csrf ?? signed.csrf);
+      const all: [string, string][] = token === undefined ? pairs : [["_csrf", token], ...pairs];
+      return api.post(url).set("Cookie", signed.cookie).type("form").send(new URLSearchParams(all).toString());
+    },
     post: (url, fields, csrf) => {
       const token = csrf === false ? undefined : (csrf ?? signed.csrf);
       const body = token === undefined ? fields : { _csrf: token, ...fields };
