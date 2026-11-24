@@ -569,7 +569,7 @@ compose file or the chart names a port, a host or an alias that `derive` did not
 service's own checks (`apps/pages/server/config.ts`) are not weakened: every value `derive` returns
 must pass them, and every Caddyfile it leads to must load in the proxy image's own Caddy.
 
-**One reading of the origin, for every address (PL7f round 2).** `network.public_origin` is read in
+**One reading of the origin, for every address.** `network.public_origin` is read in
 one place, `page_addresses.parse_origin`, and `harness.site.sites` takes the deployment's addresses
 (the origin, the identity name `id.<host>`, the dashboards' name `bi.<host>`) from it, the
 scheme's default port never written and the host in lower case. So the issuer Keycloak publishes

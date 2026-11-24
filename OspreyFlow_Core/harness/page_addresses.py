@@ -426,9 +426,7 @@ def _port_taken(config: OspreyConfig) -> Refusal | None:
         if entry is not None and entry.plain_http and entry.container == names.port
         else NEEDS_ANOTHER_PORT_ELSEWHERE
     )
-    return Refusal(
-        "port_taken", template.format(identity=names.identity, port=names.port, use=use)
-    )
+    return Refusal("port_taken", template.format(identity=names.identity, port=names.port, use=use))
 
 
 def _caddy_signs_itself(host: str) -> bool:
