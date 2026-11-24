@@ -297,8 +297,14 @@ describe("the Default tree's layout", () => {
   });
 
   it("holds no inline script with code, no style and no handler attribute, in any template or any page it sends", async () => {
-    const templates = [...templatesIn(join(PAGES, "tree-default")), ...templatesIn(FIXTURES)];
-    expect(templates.length).toBeGreaterThanOrEqual(4);
+    // Both trees' templates are read (ADR-152 decision 8): the GOV.UK tree's too, so a plain `style=`, a `<style>` or an
+    // `onclick=` written into one of its templates is flagged by this scan and not by luck in another gate.
+    const govuk = templatesIn(join(PAGES, "tree-govuk"));
+    expect(govuk.map((p) => p.slice(PAGES.length + 1))).toEqual(
+      expect.arrayContaining(["tree-govuk/layout.njk", "tree-govuk/home.njk", "tree-govuk/error.njk", "tree-govuk/help.njk"]),
+    );
+    const templates = [...templatesIn(join(PAGES, "tree-default")), ...govuk, ...templatesIn(FIXTURES)];
+    expect(templates.length).toBeGreaterThanOrEqual(14);
     for (const path of templates) expect(inlineCode(readFileSync(path, "utf8")), path).toEqual([]);
     const { app } = served({ pages: [fixturePage()] });
     const { cookie } = await signIn(app);
