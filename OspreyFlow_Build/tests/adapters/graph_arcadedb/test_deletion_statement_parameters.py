@@ -12,7 +12,8 @@ The fakes accepted whatever the adapter sent, so none of them could show it (rul
 September worked example: a fixture models the dependency's refusals, not only its grants). Here the
 refusals are named: `REFUSED_PARAMETER_NAMES` is what the live database turned away, and this test
 fails when any statement the three code paths send names one of them, in its SQL text or as a key of
-its parameters. No database is needed; the live twin is `test_deletion_statements_live.py`.
+its parameters. No database is needed; the live twin is the SE9c cases at the end of
+`test_sources_withheld_live.py`.
 
 The three code paths, as SE9 wrote them: `revert_elements` (the deleting write, which also sets
 `withdrawn_by_load = null`), `withdraw_elements` (the revert by load, `:load`) and `withdraw_layer`
