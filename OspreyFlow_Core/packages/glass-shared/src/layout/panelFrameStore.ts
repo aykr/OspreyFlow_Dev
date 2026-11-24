@@ -27,12 +27,26 @@
 // `sidePanelState.isWide()` reads `innerWidth`; a test or a page gives its own). A `maxPx` a caller passes can only
 // lower a limit, never lift it. A stored size above today's limit is brought down when it is read and at each key press.
 //
+// One writer (round 4): every write of a panel size, whichever way it arrives (an arrow, Shift, Home, a pointer drag's
+// `setSideWidth`, a programmatic set, the stored value read at start, a window resize, and even a direct call to
+// `layoutSizes` while a store is live), ends in `writeSize` below. It first brings every kept size down to the window as
+// it is now, then holds the new one between its minimum and its upper limit (the live window's, lowered by a page's
+// `maxPx` and never lifted), then writes. The `layoutSizes` setters are not called from anywhere else (a test reads this
+// file and fails on any other call), and `SIZE_WRITERS` below lists the entry points that reach the writer: a test
+// walks each against three viewports and fails if `actions` has a key that is neither listed there nor known to write
+// no size. Home asks the writer for the default, so it is held to the limit like any other size.
+//
 // With no script, nothing in this folder runs: every panel is in its normal state with no controls (the markup a page
 // writes carries none).
 import { createStore } from "zustand/vanilla";
 
 import type { PANEL_FRAME_ACTIONS } from "../keyboard/actionRegistry";
+// The size setters and resets of `layoutSizes` are reached only as `sizeStore.<name>`, and only inside the one writer
+// marked below; `tests` fail on a call anywhere else in this file, on a named import of one, and on a re-export.
+import * as sizeStore from "./layoutSizes";
 import {
+  DEFAULT_SIDE_WIDTH,
+  DEFAULT_TIMELINE_HEIGHT,
   MAX_SIDE_WIDTH,
   MIN_CANVAS_WIDTH,
   MIN_PANEL_HEIGHT,
@@ -41,12 +55,6 @@ import {
   clamp,
   getLayoutSizes,
   onLayoutSizesChange,
-  resetPanelHeight,
-  resetSideWidth,
-  resetTimelineHeight,
-  setPanelHeight,
-  setSideWidth,
-  setTimelineHeight,
   type LayoutSizes,
 } from "./layoutSizes";
 import {
@@ -90,6 +98,14 @@ export const PANEL_ACTION_STORAGE = {
 
 /** The folded panels in a new browser: every panel but the Inspector (ADR-145 decision 4, Amendment 2). */
 export const DEFAULT_FOLDED_PANELS: readonly SidePanelId[] = SIDE_PANEL_IDS.filter((id) => id !== "inspector");
+
+/**
+ * The actions that can write a panel size, each through `writeSize`. A new action that writes a size is named here, so
+ * that the table in the tests has to give it a row; one that is on neither this list nor the tests' list of actions
+ * that write no size fails a test.
+ */
+export const SIZE_WRITERS = ["setSideWidth", "setPanelHeight", "setTimelineHeight", "resizeByKey", "fitToWindow"] as const;
+export type SizeWriter = (typeof SIZE_WRITERS)[number];
 
 export type ResizeAxis = "side-width" | "panel-height" | "timeline-height";
 
@@ -189,6 +205,8 @@ export interface PanelFrameActions {
   resizeByKey(axis: ResizeAxis, key: KeyLike, context?: ResizeContext): boolean;
   /** The canvas toolbar's *Details*. */
   toggleDetails(): void;
+  /** A window resize: brings every kept size down to the window as it is now. A page calls it from its resize listener. */
+  fitToWindow(): void;
 }
 
 export interface PanelFrameStore {
@@ -262,18 +280,63 @@ export function createPanelFrameStore(options: PanelFrameStoreOptions = {}): Pan
   const lowered = (limit: number, minimum: number, maxPx?: number): number =>
     Math.max(minimum, maxPx !== undefined && finite(maxPx) ? Math.min(limit, maxPx) : limit);
 
-  /** Brings every kept size down to today's limit (a stored one, or one a smaller window now rules out). */
-  const enforce = (): void => {
-    const sizes = getLayoutSizes();
-    const limits = limitsNow();
-    if (sizes.sideWidth > limits.sideWidth) setSideWidth(limits.sideWidth);
-    if (sizes.timelineHeight > limits.timelineHeight) setTimelineHeight(limits.timelineHeight);
-    for (const id of SIDE_PANEL_IDS) {
-      const own = sizes.panelHeights[id];
-      if (own !== undefined && own > limits.panelHeight) setPanelHeight(id, limits.panelHeight);
+  // The one writer: nothing outside this region calls a `layoutSizes` setter or reset.
+  // writer: begin
+  type SizeTarget = { axis: "side-width" } | { axis: "timeline-height" } | { axis: "panel-height"; id: SidePanelId };
+  type Limits = ReturnType<typeof upperLimits>;
+
+  /** Set while a write of ours is in progress, so that the listener below treats only a write that is not ours as new. */
+  let writing = false;
+  const guarded = (work: () => void): void => {
+    const was = writing;
+    writing = true;
+    try {
+      work();
+    } finally {
+      writing = was;
     }
   };
-  enforce();
+
+  /** One size, held between its minimum and its limit (`"default"`: the size a reset gives, held to the limit too). */
+  const apply = (target: SizeTarget, request: number | "default", limits: Limits, maxPx?: number): void => {
+    if (target.axis === "side-width") {
+      const to = request === "default" ? DEFAULT_SIDE_WIDTH : request;
+      sizeStore.setSideWidth(clamp(to, MIN_SIDE_WIDTH, lowered(limits.sideWidth, MIN_SIDE_WIDTH, maxPx)));
+    } else if (target.axis === "timeline-height") {
+      const to = request === "default" ? DEFAULT_TIMELINE_HEIGHT : request;
+      sizeStore.setTimelineHeight(clamp(to, MIN_TIMELINE_HEIGHT, lowered(limits.timelineHeight, MIN_TIMELINE_HEIGHT, maxPx)));
+    } else if (request === "default") {
+      // A stacked panel's default is no height of its own: it shares the column again, so there is nothing to exceed.
+      sizeStore.resetPanelHeight(target.id);
+    } else {
+      sizeStore.setPanelHeight(target.id, clamp(request, MIN_PANEL_HEIGHT, lowered(limits.panelHeight, MIN_PANEL_HEIGHT, maxPx)));
+    }
+  };
+
+  /** Brings every kept size down to `limits` (a stored one, or one a smaller window now rules out). */
+  const fitAll = (limits: Limits): void => {
+    const sizes = getLayoutSizes();
+    apply({ axis: "side-width" }, sizes.sideWidth, limits);
+    apply({ axis: "timeline-height" }, sizes.timelineHeight, limits);
+    for (const id of SIDE_PANEL_IDS) {
+      const own = sizes.panelHeights[id];
+      if (own !== undefined) apply({ axis: "panel-height", id }, own, limits);
+    }
+  };
+
+  /** Every write of a size is this: fit what is kept to the window now, then write the one asked for, held to it. */
+  const writeSize = (target: SizeTarget, request: number | "default", maxPx?: number): void =>
+    guarded(() => {
+      const limits = limitsNow();
+      fitAll(limits);
+      apply(target, request, limits, maxPx);
+    });
+
+  const fit = (): void => guarded(() => fitAll(limitsNow()));
+  // writer: end
+
+  // What was stored is held to today's window as soon as the store is made.
+  fit();
 
   const snapshot = (): PanelFrameState => {
     const sizes = getLayoutSizes();
@@ -292,11 +355,16 @@ export function createPanelFrameStore(options: PanelFrameStoreOptions = {}): Pan
   const sync = (): void => {
     store.setState(snapshot(), true);
   };
-  const stops = [onLayoutSizesChange(sync), onSidePanelOrderChange(sync)];
+  // A size written by anything but the writer (a direct call to `layoutSizes` while this store is live) is held to the
+  // window at once, before it is drawn: the store does not rely on every caller coming through `writeSize`.
+  const stops = [
+    onLayoutSizesChange(() => {
+      if (!writing) fit();
+      sync();
+    }),
+    onSidePanelOrderChange(sync),
+  ];
   sidePanelListeners.add(sync);
-
-  const sideWidthWithin = (px: number, limits?: SizeLimits): number =>
-    clamp(px, MIN_SIDE_WIDTH, lowered(limitsNow().sideWidth, MIN_SIDE_WIDTH, limits?.maxPx));
 
   const actions: PanelFrameActions = {
     hideSidePanel: () => setSidePanelMode("collapsed"),
@@ -331,20 +399,18 @@ export function createPanelFrameStore(options: PanelFrameStoreOptions = {}): Pan
       sync();
     },
     setSideWidth(px, limits) {
-      if (finite(px)) setSideWidth(sideWidthWithin(px, limits));
+      if (finite(px)) writeSize({ axis: "side-width" }, px, limits?.maxPx);
     },
     setPanelHeight(id, px, limits) {
-      if (!isSidePanelId(id) || !finite(px)) return;
-      setPanelHeight(id, clamp(px, MIN_PANEL_HEIGHT, lowered(limitsNow().panelHeight, MIN_PANEL_HEIGHT, limits?.maxPx)));
+      if (isSidePanelId(id) && finite(px)) writeSize({ axis: "panel-height", id }, px, limits?.maxPx);
     },
     setTimelineHeight(px, limits) {
-      if (!finite(px)) return;
-      setTimelineHeight(clamp(px, MIN_TIMELINE_HEIGHT, lowered(limitsNow().timelineHeight, MIN_TIMELINE_HEIGHT, limits?.maxPx)));
+      if (finite(px)) writeSize({ axis: "timeline-height" }, px, limits?.maxPx);
     },
     resizeByKey(axis, key, context = {}) {
       const step = key.shiftKey ? SASH_LARGE_STEP : SASH_STEP;
       // The window may have changed since the last key: bring what is kept down to it before stepping from it.
-      enforce();
+      fit();
       const state = store.getState();
       const panel = isSidePanelId(context.panel) ? context.panel : null;
       // A vertical sash (the column's) grows leftwards, a stacked panel's grows downwards, the timeline's upwards
@@ -352,9 +418,10 @@ export function createPanelFrameStore(options: PanelFrameStoreOptions = {}): Pan
       const grows = axis === "side-width" ? "ArrowLeft" : axis === "panel-height" ? "ArrowDown" : "ArrowUp";
       const shrinks = axis === "side-width" ? "ArrowRight" : axis === "panel-height" ? "ArrowUp" : "ArrowDown";
       if (key.key === "Home") {
-        if (axis === "side-width") resetSideWidth();
-        else if (axis === "timeline-height") resetTimelineHeight();
-        else if (panel !== null) resetPanelHeight(panel);
+        // Home asks the one writer for the default, which holds it to the limit like any other size.
+        if (axis === "side-width") writeSize({ axis: "side-width" }, "default");
+        else if (axis === "timeline-height") writeSize({ axis: "timeline-height" }, "default");
+        else if (panel !== null) writeSize({ axis: "panel-height", id: panel }, "default");
         return true;
       }
       if (key.key !== grows && key.key !== shrinks) return false;
@@ -368,11 +435,12 @@ export function createPanelFrameStore(options: PanelFrameStoreOptions = {}): Pan
       return true;
     },
     toggleDetails: () => toggleSidePanel(),
+    fitToWindow: () => fit(),
   };
 
   return {
     getState() {
-      enforce();
+      fit();
       return store.getState();
     },
     subscribe: (listener) => store.subscribe(listener),

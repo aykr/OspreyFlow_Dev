@@ -1224,12 +1224,15 @@ describe("one writer: no entry point writes a size above the live limits, read s
     it("a direct write to layoutSizes while the store is live is brought down at once, before any read", () => {
       const setup = pageUnder(startedAs);
       now = nowIs;
-      rawSetSideWidth(5000);
-      expectWithin(nowIs, setup, "layoutSizes.setSideWidth(5000)");
-      rawSetTimelineHeight(5000);
-      expectWithin(nowIs, setup, "layoutSizes.setTimelineHeight(5000)");
-      rawSetPanelHeight("metrics", 5000);
-      expectWithin(nowIs, setup, "layoutSizes.setPanelHeight(5000)");
+      // Values that differ from what is held, so that each is a real write and fires the listeners (a set to the size
+      // already held is a no-op in `layoutSizes`, and a size a window has since made stale is brought down by the next
+      // write, key press or read, or by `fitToWindow`, as the spec says).
+      rawSetSideWidth(400);
+      expectWithin(nowIs, setup, "layoutSizes.setSideWidth(400)");
+      rawSetTimelineHeight(700);
+      expectWithin(nowIs, setup, "layoutSizes.setTimelineHeight(700)");
+      rawSetPanelHeight("metrics", 700);
+      expectWithin(nowIs, setup, "layoutSizes.setPanelHeight(700)");
       rawResetSideWidth();
       expectWithin(nowIs, setup, "layoutSizes.resetSideWidth()");
       rawResetTimelineHeight();
@@ -1393,8 +1396,9 @@ describe("one writer, in the source: every layoutSizes setter and reset is calle
     const source = read("panelFrameStore.ts");
     expect(source.split("\n").filter((line) => line.includes(BEGIN))).toHaveLength(1);
     const region = source.slice(source.indexOf(BEGIN), source.indexOf(END));
-    // Each of the six is reached from there: the region is the writer and not an empty marker.
-    for (const name of WRITER_NAMES) expect(region, name).toContain(`sizeStore.${name}`);
+    // The setters and the stacked panel's reset are reached from there: the region is the writer and not an empty marker.
+    // (Home on the column and the timeline asks for the default, which is a set held to the limit; their resets are not used.)
+    for (const name of ["setSideWidth", "setTimelineHeight", "setPanelHeight", "resetPanelHeight"]) expect(region, name).toContain(`sizeStore.${name}`);
   });
 
   it("the attach names no writer: it imports only constants from layoutSizes, and calls nothing of it", () => {
