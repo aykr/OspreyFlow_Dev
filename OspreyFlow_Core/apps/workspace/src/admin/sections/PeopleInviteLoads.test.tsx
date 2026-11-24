@@ -7,17 +7,25 @@
 // how people sign in (`GET /v1/admin/sign-in`, which decides whether this form is drawn at all, or Entra's instead; the one read exempt from "failed means no form": ADR-148 Amendment 8, as `PeopleEntra.test.tsx` holds, keeps Keycloak's People when it cannot be read, and the Conduit still refuses an invite on Entra), and
 // the giver's rights (the `rights` prop, `GET /v1/me/rights` read by the App). Each is late and failed here, in every order.
 //
-// The fetch double refuses what the real routes refuse (rule 15; `invite_person_route`, `app.py`): `_within_your_reach`
-// (an unknown classification or code is a 422; a clearance above the inviter's own, or a code they do not hold, a 403) and
-// `_may_give` (an unknown role is a 422, a custom role that does not exist a 422; any of the nine administration rights the
-// giver does not hold, conferred by a built-in role, a single `right:` grant or a custom role's current rights at the time of
-// the post, is a 409 `beyond_your_rights`, with its words; the same list as `ADMINISTRATION_RIGHTS` in `People.tsx`, which
-// `test_admin_giver_rights.py` holds to the schema). Older (legacy) role names are not modelled: the form never offers one. It refuses the reads the real routes refuse too: the
-// roles catalogue, how people sign in, the people routes and the invite itself each carry `require_right(MANAGE_PEOPLE)`, so a
-// giver the route's side does not hold that right for is answered 403 `right_required` on every one of them. And it sends the
-// catalogue as the real route does (`list_roles_route`: every built-in role, each with its rights), and can send what the route
-// never sends (an empty one, one lacking a role, one with a role's rights missing) to show the form refuses it. Synthetic names
-// throughout (rule 9).
+// The fetch double answers what the real routes answer, the refusals as well as the grants (rule 15; round 4 read the whole
+// of `invite_person_route`, `_within_your_reach`, `_may_give`, `allowed_role`, `giver_may_give`, `identity_admin.invite`,
+// `get_principal`, `require_right` and the app's exception handlers, and `serve` answers each, with its status, error code and
+// words: the numbered cases of "the double answers each refusal of the invite route" list them). In the route's order: the
+// session (401 and 503), `require_right(MANAGE_PEOPLE)` (403 `right_required`, on the roles, sign-in and people reads and the
+// invite alike), the schema (422, FastAPI's list), `_within_your_reach` (an unknown classification or code 422 `not_allowed`; a
+// clearance above the inviter's own, or a code they do not hold, 403), `_may_give` (a name that is no role, older role, custom
+// role or known single right 422 `not_allowed`: `super_user` is in the catalogue and is not one; a custom role that does not
+// exist 422; any of the nine administration rights the giver does not hold, conferred by a built-in or older role, a single
+// `right:` grant or a custom role's current rights at the time of the post, 409 `beyond_your_rights`, worded through
+// `rights_listed` as the screens word them; the nine are the same list as `ADMINISTRATION_RIGHTS` in `People.tsx`, which
+// `test_admin_giver_rights.py` holds to the schema), and the identity provider's and audit's answers (409 `person_exists`, 422,
+// 502, 503). A refusal the form cannot reach by itself is held all the same and shown by a post straight at the double (the form
+// posts only ids from `ROLES`). It sends the catalogue as the real route does (`list_roles_route`: every built-in role, each
+// with its rights, and the Super user preset), and can send what the route never sends (an empty one, one lacking a role, one
+// with a role's rights missing) to show the form refuses it. Synthetic names throughout (rule 9).
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -41,8 +49,11 @@ const ANA = { id: "u1", username: "ana", name: "Ana Analyst", enabled: true, rol
 const HELD = new Set(["manage_people"]);
 /** All nine administration rights (`schemas.rights.ADMINISTRATION_RIGHTS`): only a holder may give one (`giver_may_give`). */
 const ADMINISTRATION = new Set<string>(ADMINISTRATION_RIGHTS);
-/** The rights a role may hold, for `right:<name>` (the route's `allowed_role` accepts a single grant of any known right). */
-const KNOWN_RIGHTS = new Set<string>([...ADMINISTRATION_RIGHTS, "investigate", "edit_pipelines", "author_rules", "read_reports"]);
+/** Every right this deployment knows (`class Right` in `packages/schemas/rights.py`, read from the file so the list is the route's
+ * own: `allowed_role` accepts `right:<name>` for each), for the route's refusal of a single grant it does not know. */
+const KNOWN_RIGHTS = new Set<string>(
+  [...(readFileSync(join(__dirname, "../../../../../packages/schemas/rights.py"), "utf-8").split("class Right(StrEnum)")[1] ?? "").split("\nR = Right")[0]!.matchAll(/^\s+[A-Z_0-9]+ = "([a-z_]+)"/gm)].map((m) => m[1]!),
+);
 /** The custom roles this deployment holds now, by id, with their current rights (`CustomRolesDep`; a test may change them). */
 type CustomRoles = Record<string, string[]>;
 /** The catalogue `GET /v1/admin/roles` answers (`_built_in_roles`: every built-in role the form offers, each with its rights;
@@ -90,36 +101,140 @@ const ok = (): Reads => ({ me: { mode: "ok" }, scheme: { mode: "ok" }, roles: { 
 const needsManagePeople = (held: Set<string>): Response | null =>
   held.has("manage_people") ? null : json(403, { detail: { error: "right_required", right: "manage_people" } });
 
-/** The invite route's refusals, in the route's own order and words. `held` is what the giver holds on the route's side. */
-function refuse(body: { clearance: string; receivable_handling_codes: string[]; roles: string[] }, held: Set<string>, custom: CustomRoles): Response | null {
-  const unheld = needsManagePeople(held);
-  if (unheld) return unheld;
-  if (!ORDER.includes(body.clearance)) return json(422, { detail: `${body.clearance} is not a classification of this deployment` });
-  const unknown = body.receivable_handling_codes.filter((c) => !(c in SCHEME.handling_codes));
-  if (unknown.length) return json(422, { detail: `not a handling code of this deployment: ${unknown.join(", ")}` });
-  if (ORDER.indexOf(body.clearance) > ORDER.indexOf(INVITER.clearance))
+/** The words a right has on screen and in the route's refusal (`right_name`, `rights_listed`): "Administer system and Read audit". */
+const rightName = (right: string): string => {
+  if (right === "edit_target_model") return "Edit domain model";
+  const words = right.replace(/_/g, " ");
+  return words.slice(0, 1).toUpperCase() + words.slice(1);
+};
+const rightsListed = (rights: string[]): string =>
+  rights.length === 1 ? rightName(rights[0] as string) : `${rights.slice(0, -1).map(rightName).join(", ")} and ${rightName(rights.at(-1) as string)}`;
+
+/** The roles the route grants by name (`ROLE_RIGHTS`: not super_user, which is the catalogue's own preset, never a role to give)
+ * and the older ones it keeps for the transition (`LEGACY_ROLE_RIGHTS`); each older one with the rights it confers. */
+const ROLE_NAMES = new Set(OFFERED);
+const LEGACY: Record<string, string[]> = {
+  source_author: ["edit_pipelines", "verify_pipelines", "add_ingest_files"],
+  source_approver: ["publish_pipelines", "schedule_pipelines"],
+  loader: ["run_pipelines"],
+  compliance: ["read_export_ledger"],
+};
+/** A custom role's id (`_CUSTOM_ROLE`): `role:` and up to 32 lower-case letters or digits. Whether it exists is checked after. */
+const CUSTOM_ROLE = /^role:[a-z0-9]{1,32}$/;
+
+/** What `GET /v1/admin/roles` answers for one role, and what the double reads a built-in role's rights from. */
+const builtInRights = (id: string): string[] => CATALOGUE.built_in.find((b) => b.id === id)?.rights ?? [];
+
+/** What the form posts (`InviteInput`). */
+type Body = typeof VALID;
+const USERNAME = /^[a-z0-9][a-z0-9._-]{1,62}$/;
+const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+const chars = (s: string) => [...s].length;
+
+/** The schema's own refusal (`InviteInput`, `AccessInput`: FastAPI's 422 list, one entry for each field wrong, in the schema's
+ * order: clearance, org_unit, handling codes, then username, names, email, roles), checked after the right and before anything
+ * else the route does. */
+function invalid(body: Body): Response | null {
+  const found: unknown[] = [];
+  const add = (type: string, field: string, msg: string, input: unknown, ctx?: Record<string, unknown>) =>
+    found.push({ type, loc: ["body", field], msg, input, ...(ctx ? { ctx } : {}) });
+  const bounded = (field: string, value: string, min: number, max: number) => {
+    if (chars(value) < min) add("string_too_short", field, `String should have at least ${min} character${min === 1 ? "" : "s"}`, value, { min_length: min });
+    if (chars(value) > max) add("string_too_long", field, `String should have at most ${max} characters`, value, { max_length: max });
+  };
+  bounded("clearance", body.clearance, 1, 40);
+  bounded("org_unit", body.org_unit, 1, 60);
+  if (body.receivable_handling_codes.length > 16)
+    add("value_error", "receivable_handling_codes", "Value error, at most 16 handling codes", body.receivable_handling_codes, { error: {} });
+  if (!USERNAME.test(body.username))
+    add("string_pattern_mismatch", "username", `String should match pattern '${USERNAME.source}'`, body.username, { pattern: USERNAME.source });
+  bounded("first_name", body.first_name, 0, 60);
+  bounded("last_name", body.last_name, 0, 60);
+  if (body.email !== null && !EMAIL.test(body.email))
+    add("string_pattern_mismatch", "email", `String should match pattern '${EMAIL.source}'`, body.email, { pattern: EMAIL.source });
+  if (body.roles.length > 64)
+    add("too_long", "roles", `List should have at most 64 items after validation, not ${body.roles.length}`, body.roles, {
+      field_type: "List",
+      max_length: 64,
+      actual_length: body.roles.length,
+    });
+  return found.length ? json(422, { detail: found }) : null;
+}
+
+/** An `UnknownRoleError`'s answer (the app's handler): 422, the error code `not_allowed`, the words. */
+const notAllowed = (words: string) => json(422, { error: "not_allowed", detail: words });
+
+/** What `get_principal` answers for a request, before the route's own rules (every route, the form's reads too): no
+ * credentials, a token the resolver rejects, the identity provider's keys or the person's roles unreadable, a sign-in refused
+ * with its tag, or an identity admitted to named routes alone. Reached by the form only when a session ends or changes after
+ * the form is drawn; "guest" and "not_admitted" are an Entra deployment's and a dashboard's identity, which this form never
+ * is, so they are held here and shown by a post straight at the double. */
+function refuseSession(world: World, request: { method: string; path: string; headers: Headers }): Response | null {
+  if (!request.headers.get("authorization")) return json(401, { detail: "Not authenticated" });
+  if (world.session === "expired") return json(401, { detail: "token rejected: Signature has expired" });
+  if (world.session === "keys_down")
+    return json(503, {
+      detail: { error: "identity_provider_unavailable", message: "sign-in is unavailable: the identity provider could not be reached. Try again shortly." },
+    });
+  if (world.session === "store_down")
+    return json(503, {
+      detail: { error: "people_store_unavailable", message: "sign-in is unavailable: this deployment could not read your roles. Try again shortly." },
+    });
+  if (world.session === "guest") return json(401, { detail: "guest sign-in is not admitted here", error: "guest_not_admitted" });
+  if (world.session === "not_admitted") {
+    const admitted = ["GET /v1/handling-scheme", "GET /v1/me"];
+    if (!admitted.includes(`${request.method} ${request.path}`))
+      return json(403, { detail: { error: "route_not_admitted", message: `this identity is admitted only to ${admitted.join(", ")}` } });
+  }
+  return null;
+}
+
+/** The invite route's refusals after `require_right`, each in the route's own order, status, error code and words
+ * (`invite_person_route`: the schema, `_within_your_reach`, `_may_give`, then `identity_admin.invite`, then the audit record). */
+function refuse(body: Body, world: World): Response | null {
+  const shape = invalid(body);
+  if (shape) return shape;
+  // `_within_your_reach`, against what the route's side holds for the giver and for the scheme now.
+  const order = world.scheme.classification;
+  if (!order.includes(body.clearance)) return notAllowed(`${body.clearance} is not a classification of this deployment`);
+  const unknown = body.receivable_handling_codes.filter((c) => !(c in world.scheme.handling_codes));
+  if (unknown.length) return notAllowed(`not a handling code of this deployment: ${unknown.join(", ")}`);
+  if (!order.includes(world.inviter.clearance) || order.indexOf(body.clearance) > order.indexOf(world.inviter.clearance))
     return json(403, { detail: { error: "above_your_clearance", clearance: body.clearance } });
-  const beyond = body.receivable_handling_codes.filter((c) => !INVITER.receivable_handling_codes.includes(c)).sort();
-  if (beyond.length) return json(403, { detail: { error: "handling_code_you_do_not_hold", codes: beyond } });
-  // `allowed_role`: a built-in role, a single grant of a known right, or a custom role's name; else a 422.
-  const names = CATALOGUE.built_in.map((r) => r.id);
-  const known = (r: string) => names.includes(r) || (r.startsWith("right:") && KNOWN_RIGHTS.has(r.slice(6))) || r.startsWith("role:");
-  const refused = body.roles.filter((r) => !known(r));
-  if (refused.length) return json(422, { detail: `not a role or right this deployment grants: ${refused.join(", ")}` });
-  const missing = body.roles.filter((r) => r.startsWith("role:") && !(r.slice(5) in custom));
-  if (missing.length) return json(422, { detail: `no such custom role: ${missing.map((r) => r.slice(5)).join(", ")}` });
-  // `rights_for(roles, current)`: each built-in role's rights, each single grant, each custom role's rights as they stand now.
+  const beyondCodes = [...new Set(body.receivable_handling_codes)].filter((c) => !world.inviter.codes.includes(c)).sort();
+  if (beyondCodes.length) return json(403, { detail: { error: "handling_code_you_do_not_hold", codes: beyondCodes } });
+  // `_may_give`: the roles' own names first (`allowed_role`), then a custom role that exists, then the rights.
+  const allowed = (r: string) => ROLE_NAMES.has(r) || r in LEGACY || CUSTOM_ROLE.test(r) || (r.startsWith("right:") && KNOWN_RIGHTS.has(r.slice(6)));
+  const refused = body.roles.filter((r) => !allowed(r));
+  if (refused.length) return notAllowed(`not a role or right this deployment grants: ${refused.join(", ")}`);
+  const missing = body.roles.filter((r) => r.startsWith("role:") && !(r.slice(5) in world.custom)).map((r) => r.slice(5));
+  if (missing.length) return json(422, { detail: `no such custom role: ${missing.join(", ")}` });
+  // `rights_for(roles, current)`: each built-in and older role's rights, each single grant, each custom role's rights as they stand now.
   const rightsOf = (r: string): string[] =>
-    r.startsWith("role:") ? (custom[r.slice(5)] ?? []) : r.startsWith("right:") ? [r.slice(6)] : (CATALOGUE.built_in.find((b) => b.id === r)?.rights ?? []);
+    r.startsWith("role:") ? (world.custom[r.slice(5)] ?? []) : r.startsWith("right:") ? [r.slice(6)] : (LEGACY[r] ?? builtInRights(r));
   const given = new Set(body.roles.flatMap(rightsOf));
-  const rights = [...given].filter((r) => ADMINISTRATION.has(r) && !held.has(r)).sort();
+  const rights = [...given].filter((r) => ADMINISTRATION.has(r) && !world.held.has(r)).sort();
   if (rights.length)
-    return json(409, { detail: { error: "beyond_your_rights", message: `you cannot give a right you do not hold: ${rights.join(", ")}`, rights } });
+    return json(409, { detail: { error: "beyond_your_rights", message: `you cannot give a right you do not hold: ${rightsListed(rights)}`, rights } });
+  // `identity_admin.invite`: the identity provider's own answers, the account is made unless it is refused.
+  if (world.taken.has(body.username) || (body.email !== null && world.taken.has(body.email)))
+    return json(409, { error: "person_exists", detail: "that sign-in name or email address is already held" });
+  if (world.provider === "refuses")
+    return notAllowed('the identity provider refused the person: {"errorMessage":"Password policy not met"}');
+  if (world.provider === "down")
+    return json(502, { error: "identity_provider_refused", detail: "the identity provider did not create the person (500)" });
+  if (world.provider === "mail_down" && body.email !== null)
+    // The account made first is deleted again: no half-made account, so the name stays free.
+    return json(502, { error: "identity_provider_refused", detail: "the sign-in email could not be sent: Failed to send email" });
+  world.taken.add(body.username);
+  // The audit record is written after the account is made: refused here, the account stays (the platform fails closed).
+  if (world.audit === "down") return json(503, { error: "audit_unavailable", detail: "the audit stream could not be written" });
   return null;
 }
 
 /** Serves the four routes the form reads, each as `reads` says (answered at once, or held until its gate resolves and then
- * answering as its mode says), and the section's own. Returns what was posted and how often each path was read. */
+ * answering as its mode says), and the section's own. Returns what was posted, how often each path was read, and the route's
+ * side (`world`), which a test changes after the form is drawn. */
 function serve(reads: Reads, held: Set<string> = HELD, custom: CustomRoles = {}, over: Partial<World> = {}) {
   const world: World = {
     held,
@@ -157,22 +272,24 @@ function serve(reads: Reads, held: Set<string> = HELD, custom: CustomRoles = {},
     vi.fn(async (url: string, init?: RequestInit) => {
       const path = new URL(url).pathname;
       calls[path] = (calls[path] ?? 0) + 1;
+      const signedIn = refuseSession(world, { method: init?.method ?? "GET", path, headers: new Headers(init?.headers) });
+      if (signedIn) return signedIn;
       if (path === "/v1/me") return answer(reads.me, () => json(200, INVITER), json(200, { unexpected: true }));
       if (path === "/v1/handling-scheme")
         return answer(reads.scheme, () => json(200, SCHEME), json(200, reads.scheme.mode === "empty" ? { classification: [], handling_codes: {} } : {}));
       const admin = path.replace("/v1/admin/", "");
       // Every route below carries `require_right(MANAGE_PEOPLE)`: refused before anything else is read.
-      const unheld = admin.startsWith("people") || ["roles", "sign-in", "organisation-arrivals"].includes(admin) ? needsManagePeople(held) : null;
+      const unheld = admin.startsWith("people") || ["roles", "sign-in", "organisation-arrivals"].includes(admin) ? needsManagePeople(world.held) : null;
       if (unheld) return unheld;
       if (admin === "roles") return answer(reads.roles, () => json(200, CATALOGUE), unreal);
       if (admin === "sign-in")
         return answer(reads.signin, () => json(200, { kind: reads.signin.entra ? "entra" : "keycloak" }), json(200, {}));
       if (admin === "people" && init?.method === "POST") {
-        const body = JSON.parse(String(init.body)) as { clearance: string; receivable_handling_codes: string[]; roles: string[] };
+        const body = JSON.parse(String(init.body)) as Body;
         posted.push(body);
         return (
-          refuse(body, held, custom) ??
-          json(201, { person: { ...ANA, id: "u2", username: "new.person" }, delivery: "one_time_code", one_time_code: "ABCD-EFGH-JKLM-NPQR" })
+          refuse(body, world) ??
+          json(201, { person: { ...ANA, id: "u2", username: body.username }, delivery: "one_time_code", one_time_code: "ABCD-EFGH-JKLM-NPQR" })
         );
       }
       if (admin === "people") return json(200, [ANA]);
@@ -345,7 +462,7 @@ describe("a giver the route's side does not hold manage_people for is refused on
   it("the double itself refuses each of those reads, and the invite, with 403 right_required", async () => {
     serve(ok(), new Set(["read_audit"]));
     for (const [path, init] of [["roles"], ["sign-in"], ["people"], ["people/rows"], ["organisation-arrivals"], ["people", { method: "POST", body: JSON.stringify({ clearance: "PUBLIC", receivable_handling_codes: [], roles: [] }) }]] as [string, RequestInit?][]) {
-      const response = await fetch(`http://x/v1/admin/${path}`, init);
+      const response = await fetch(`http://x/v1/admin/${path}`, { ...init, headers: AUTH });
       expect([path, response.status, await response.json()]).toEqual([path, 403, { detail: { error: "right_required", right: "manage_people" } }]);
     }
   });
@@ -840,8 +957,9 @@ describe("every refusal the form can reach is shown in the route's own words, an
   ] as [string, (w: World) => void, Fill, RegExp][])("%s", async (_name, change, fill, expected) => {
     const { words, posted } = await inviteAfter(change, fill);
     expect(words).toMatch(expected);
-    // The route reads the body only for a giver who holds the right (`require_right` is first): nothing reaches it otherwise.
-    expect(posted).toHaveLength(/Not done\./.test(words) ? 0 : 1);
+    // The route reads the body only for a session it accepts and a giver who holds the right (`get_principal`, then
+    // `require_right`): nothing reaches it otherwise.
+    expect(posted).toHaveLength(/Not done\.|that \(401\)|sign-in is unavailable/.test(words) ? 0 : 1);
   });
 
   it("offers Data Engineer to a giver the Glass believes holds operate_schedules, and the route refuses it in the screens' words; withholds it from one who does not", async () => {
