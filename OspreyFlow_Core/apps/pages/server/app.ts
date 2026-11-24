@@ -6,6 +6,7 @@
 import express from "express";
 import type { ErrorRequestHandler, Express, Request, Response, Router } from "express";
 import session from "express-session";
+import type { SessionData } from "express-session";
 import nunjucks from "nunjucks";
 import { fileURLToPath } from "node:url";
 
@@ -95,6 +96,19 @@ export interface AppDeps {
    * `codeFlow`: with none there is no provider to exchange with, and no renewal.
    */
   renewal?: RenewalOptions;
+}
+
+/**
+ * What the live-update proxy asks of the app for a session it has read: the access token that session's call carries, renewed
+ * first (the same renewal, single flight with every page request) when it is near its end. It throws `SessionEnded` when the
+ * provider will not renew; the session is then already destroyed.
+ */
+export type StreamTokenFor = (sid: string, session: SessionData) => Promise<string>;
+
+/** The app's answer for the proxy, which is attached to the server and not to Express and so never meets the renewal middleware. */
+export function streamTokenFor(app: Express): StreamTokenFor | undefined {
+  const found: unknown = app.locals["streamTokenFor"];
+  return typeof found === "function" ? (found as StreamTokenFor) : undefined;
 }
 
 /** How long a sign-out's last hop is held for the browser's next request. */
@@ -289,11 +303,12 @@ export function createApp(deps: AppDeps): Express {
     );
   }
 
+  const sessionStore = new PagesSessionStore(deps.store, clock);
   app.use(
     session({
       name: COOKIE_NAME,
       secret: deps.sessionSecret,
-      store: new PagesSessionStore(deps.store, clock),
+      store: sessionStore,
       genid: randomToken,
       resave: false,
       saveUninitialized: false,
@@ -345,6 +360,37 @@ export function createApp(deps: AppDeps): Express {
     }
     next();
   });
+  // The live-update proxy (`stream.ts`) is attached to the server and handles an upgrade outside Express, so the middleware above
+  // never runs for it. It is given this instead: the same renewal (so one exchange for a session however many requests and
+  // reconnects meet its token's end), the same persisting of a renewal, and the same ending of a session the provider refuses.
+  if (renewal !== undefined) {
+    const forStream: StreamTokenFor = async (sid, record) => {
+      const auth = record.auth;
+      if (auth === undefined) throw new SessionEnded("unexpected", false);
+      let ended = false;
+      renewal.bind(auth, {
+        persist: () =>
+          callback((done) => {
+            sessionStore.set(sid, record, done);
+          }),
+        end: async (reason) => {
+          if (ended) return;
+          ended = true;
+          log(`pages: session ended: ${reason}`);
+          try {
+            await endStaged(stagedStore, record.staged);
+            await callback((done) => {
+              sessionStore.destroy(sid, done);
+            });
+          } catch {
+            log("pages: session ended: the store could not be told");
+          }
+        },
+      });
+      return accessTokenFor(auth);
+    };
+    app.locals["streamTokenFor"] = forStream;
+  }
   // A /v1 body is the forwarder's to read, whole or streamed: this parser would take it, and refuse past 16 kB.
   const forms = express.urlencoded({ extended: false, limit: "16kb" });
   app.use((req, res, next) => {

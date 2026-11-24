@@ -43,7 +43,9 @@ import { WebSocket, WebSocketServer } from "ws";
 import type { RawData } from "ws";
 
 import type { IdentityProvider } from "../../server/identity.js";
-import { loadConfig } from "../../server/config.js";
+import { Secret, loadConfig } from "../../server/config.js";
+import { createOidcFlow } from "../../server/oidc.js";
+import { SIGNED_OUT_WORDS } from "../../server/v1.js";
 import { COOKIE_NAME } from "../../server/sessionPolicy.js";
 import { MemorySessionStore } from "../../server/sessionStore.js";
 import type { SessionStore } from "../../server/sessionStore.js";
@@ -54,6 +56,9 @@ import { testClock } from "../support/clock.js";
 import type { TestClock } from "../support/clock.js";
 import { cookieFrom, csrfFromPage, request, signedCookie, TEST_SESSION_SECRET } from "../support/http.js";
 import { noSessionEvents } from "../support/noSessionEvents.js";
+import { startFakeKeycloak } from "../support/fakeKeycloak.js";
+import type { FakeKeycloak } from "../support/fakeKeycloak.js";
+import { CLIENT_ID, ORIGIN as RIG_ORIGIN, REDIRECT_URI, expectNoSecret, signInAs } from "../support/providerRig.js";
 import { generateSecret } from "../support/secret.js";
 
 const SECRET_NAME = "OSPREY_PAGES_SESSION_SECRET";
@@ -121,6 +126,8 @@ class FakeConduit {
   readonly tickets = new Set<string>();
   /** The principal store is down: the real Conduit closes 1013 before accept, which is HTTP 403 on the wire. */
   storeDown = false;
+  /** When set, it alone says whether a bearer is served (`tokens` is not read): the real Conduit verifies the signature and `exp`, and refuses a token that has ended. */
+  tokenLive: ((token: string) => boolean) | undefined;
   private readonly http: Server;
   private readonly wss: WebSocketServer;
   port = 0;
@@ -160,7 +167,9 @@ class FakeConduit {
     if (this.storeDown) return "the principal store is unavailable";
     const header = req.headers["authorization"] ?? "";
     if (header.toLowerCase().startsWith("bearer ")) {
-      return this.tokens.has(header.slice("bearer ".length)) ? null : "invalid bearer token";
+      const bearer = header.slice("bearer ".length);
+      if (this.tokenLive !== undefined) return this.tokenLive(bearer) ? null : "invalid or expired bearer token";
+      return this.tokens.has(bearer) ? null : "invalid bearer token";
     }
     // Only `ticket` is read from the URL; a `token` or an `access_token` there is ignored.
     const ticket = new URL(req.url ?? "/", "http://fake").searchParams.get("ticket") ?? "";
@@ -1079,5 +1088,198 @@ describe("the access token is in no log, stdout or stderr of the service", () =>
     }
     expect(leaked).toEqual([]);
     expect(text).not.toContain(TEST_SESSION_SECRET);
+  });
+});
+
+// ==================================================================================================================
+// Renewal reaches the stream (slice PL9b, round 2). The browser's upgrade is handled outside Express, so the app's renewal
+// middleware does not run for it: a person whose access token has ended, and whose only request is a reconnect of the stream,
+// must still be served with a renewed token, and a refusal by the provider must end the session and not send the old token.
+
+describe("the stream carries a renewed access token, not the one the session was signed in with", () => {
+  const LIFE = 300;
+  const MARGIN = 60;
+  const secrets: Array<{ fake: FakeKeycloak; clientSecret: string }> = [];
+
+  afterEach(async () => {
+    while (secrets.length) await secrets.pop()?.fake.stop();
+  });
+
+  /** A browser's upgrade from the origin the sign-in's own redirect address is on (the fake provider's client is registered with it). */
+  const reconnect = (port: number, options: UpgradeOptions): Promise<Outcome> => upgrade(port, { origin: RIG_ORIGIN, ...options });
+
+  function expOf(token: string): number {
+    const payload = JSON.parse(Buffer.from(token.split(".")[1] as string, "base64url").toString("utf8")) as { exp: number };
+    return payload.exp;
+  }
+
+  /** The real `main` with the real sign-in flow against a fake Keycloak that refuses what Keycloak refuses, and a Conduit that refuses an ended token. */
+  async function world() {
+    const clientSecret = generateSecret();
+    const keycloak = await startFakeKeycloak({ clientId: CLIENT_ID, clientSecret, redirectUri: REDIRECT_URI });
+    const held = { fake: keycloak, clientSecret };
+    secrets.push(held);
+    const upstream = await conduit();
+    // The Conduit accepts what the provider issued and has not ended by the provider's clock.
+    upstream.tokenLive = (token) => keycloak.issued.some((i) => i.accessToken === token) && expOf(token) > keycloak.nowSeconds();
+    const clock = testClock(Date.now());
+    const store = new MemorySessionStore({ clock });
+    const io = { logs: [] as string[], errors: [] as string[], exits: [] as number[] };
+    const running = await main(
+      {
+        OSPREY_PAGES_PORT: "0",
+        [SECRET_NAME]: TEST_SESSION_SECRET,
+        OSPREY_PAGES_CONDUIT_URL: upstream.httpUrl,
+        OSPREY_PAGES_PUBLIC_ORIGIN: RIG_ORIGIN,
+      },
+      { log: (m) => void io.logs.push(m), error: (m) => void io.errors.push(m), exit: (c) => void io.exits.push(c) },
+      {
+        store,
+        host: "127.0.0.1",
+        clock,
+        streamCheckMs: CHECK_MS,
+        sessionEvents: noSessionEvents,
+        codeFlow: createOidcFlow(
+          { issuer: keycloak.issuer, clientId: CLIENT_ID, clientSecret: new Secret(clientSecret), publicOrigin: RIG_ORIGIN },
+          { now: clock },
+        ),
+      },
+    );
+    if (!running) throw new Error(`the service did not start: ${io.errors.join(" / ")}`);
+    everyone.push(running);
+    const base = `http://127.0.0.1:${running.port}`;
+    return {
+      keycloak,
+      upstream,
+      store,
+      io,
+      port: running.port,
+      base,
+      held,
+      advance(seconds: number): void {
+        clock.advance(seconds);
+        keycloak.advance(seconds);
+      },
+      signIn: () => signInAs({ app: base, fake: keycloak }),
+    };
+  }
+
+  it("a stream opened after the token's end, with no page request before it, connects with the new token", async () => {
+    const w = await world();
+    const person = await w.signIn();
+    const first = w.keycloak.issued[0]!;
+    w.advance(LIFE + 30); // the access token has ended, and the browser has asked the service for nothing since
+
+    const browser = opened(await reconnect(w.port, { cookie: person.cookie }));
+    sockets.push(browser);
+    await connected(w.upstream, 1);
+    await settle();
+    expect(w.keycloak.refreshes, "one exchange, with the refresh token held").toEqual([{ refreshToken: first.refreshToken, status: 200 }]);
+    const renewed = w.keycloak.issued[1]!;
+    expect(w.upstream.seen[0]?.headers["authorization"]).toBe(`Bearer ${renewed.accessToken}`);
+    expect(w.upstream.everythingSeen(), "the ended token was never sent").not.toContain(first.accessToken);
+    expect(w.upstream.refused, "the Conduit refused nothing").toHaveLength(0);
+    expect(browser.closed, "and the stream stays open").toBeUndefined();
+
+    // The session holds the renewed tokens: the next page request is not another exchange.
+    const raw = JSON.parse((await w.store.get(`pages-session:${person.id}`)) as string) as { auth: Record<string, unknown> };
+    expect(raw.auth["accessToken"]).toBe(renewed.accessToken);
+    expect(raw.auth["refreshToken"]).toBe(renewed.refreshToken);
+    expect((await request(w.base).get("/").set("Cookie", person.cookie)).status).toBe(200);
+    expect(w.keycloak.refreshCalls).toBe(1);
+  });
+
+  it("at the margin it renews, and with more than the margin left it does not", async () => {
+    const w = await world();
+    const person = await w.signIn();
+    w.advance(LIFE - MARGIN - 1);
+    sockets.push(opened(await reconnect(w.port, { cookie: person.cookie })));
+    await connected(w.upstream, 1);
+    expect(w.keycloak.refreshCalls).toBe(0);
+    expect(w.upstream.seen[0]?.headers["authorization"]).toBe(`Bearer ${w.keycloak.issued[0]!.accessToken}`);
+    w.advance(1);
+    sockets.push(opened(await reconnect(w.port, { cookie: person.cookie })));
+    await connected(w.upstream, 2);
+    expect(w.keycloak.refreshCalls).toBe(1);
+    expect(w.upstream.seen[1]?.headers["authorization"]).toBe(`Bearer ${w.keycloak.issued[1]!.accessToken}`);
+  });
+
+  it("two reconnects and a page request at once after the token's end make one exchange, and the provider keeps the session", async () => {
+    const w = await world();
+    const person = await w.signIn();
+    w.advance(LIFE + 30);
+    const [one, two, page] = await Promise.all([
+      reconnect(w.port, { cookie: person.cookie }),
+      reconnect(w.port, { cookie: person.cookie }),
+      request(w.base).get("/").set("Cookie", person.cookie),
+    ]);
+    sockets.push(opened(one), opened(two));
+    expect(page.status).toBe(200);
+    await connected(w.upstream, 2);
+    expect(w.keycloak.refreshes.map((x) => x.status), "one exchange, never two with one refresh token").toEqual([200]);
+    expect(w.keycloak.sessions.get(person.sid)?.ended).toBe(false);
+    const renewed = w.keycloak.issued[1]!.accessToken;
+    expect(w.upstream.seen.map((s) => s.headers["authorization"])).toEqual([`Bearer ${renewed}`, `Bearer ${renewed}`]);
+  });
+
+  it.each([
+    ["the provider no longer has the session", (w: Awaited<ReturnType<typeof world>>, sid: string): Promise<void> => Promise.resolve(w.keycloak.endSession(sid))],
+    [
+      "the provider refuses the client's secret",
+      (w: Awaited<ReturnType<typeof world>>): Promise<void> => {
+        w.keycloak.clientSecret = generateSecret();
+        return Promise.resolve();
+      },
+    ],
+    ["the provider cannot be reached", (w: Awaited<ReturnType<typeof world>>): Promise<void> => w.keycloak.stop()],
+  ])("when %s and the token has ended, the socket is closed in the sign-in's words, the session ends and the old token is never sent", async (_name, cause) => {
+    const w = await world();
+    const person = await w.signIn();
+    await cause(w, person.sid);
+    w.advance(LIFE + 30);
+
+    const browser = opened(await reconnect(w.port, { cookie: person.cookie }));
+    sockets.push(browser);
+    await until("the browser's socket to close", () => browser.closed !== undefined);
+    expect(browser.closed).toEqual({ code: 1008, reason: SIGNED_OUT_WORDS });
+    expect(w.upstream.tcp, "the Conduit was never contacted").toBe(0);
+    expect(w.upstream.everythingSeen()).not.toContain(w.keycloak.issued[0]!.accessToken);
+    expect(w.store.keys().filter((key) => key.startsWith("pages-session:")), "the session is ended").toEqual([]);
+
+    // The same cookie again: no session, so a plain 401 before anything is opened, and no exchange is made for it.
+    const exchanges = w.keycloak.refreshCalls;
+    expect(await reconnect(w.port, { cookie: person.cookie })).toEqual({ refused: 401 });
+    expect(w.keycloak.refreshCalls).toBe(exchanges);
+    expect(w.upstream.tcp).toBe(0);
+
+    // Nothing of a token, the refresh token or the secret in what was said or logged.
+    const said = `${browser.closed?.reason ?? ""}\n${w.io.logs.join("\n")}\n${w.io.errors.join("\n")}`;
+    expectNoSecret({ fake: w.keycloak, clientSecret: w.held.clientSecret }, said, "the close and the log");
+    expect(w.io.errors.filter((line) => line.startsWith("pages: session ended: "))).toHaveLength(1);
+  });
+
+  it("an unreachable provider is not an ended session while the token held is good: the stream connects with it", async () => {
+    const w = await world();
+    const person = await w.signIn();
+    await w.keycloak.stop();
+    w.advance(LIFE - MARGIN); // inside the margin, not yet ended
+    const browser = opened(await reconnect(w.port, { cookie: person.cookie }));
+    sockets.push(browser);
+    await connected(w.upstream, 1);
+    expect(w.upstream.seen[0]?.headers["authorization"]).toBe(`Bearer ${w.keycloak.issued[0]!.accessToken}`);
+    await settle();
+    expect(browser.closed).toBeUndefined();
+    expect(w.store.keys().filter((key) => key.startsWith("pages-session:"))).toEqual([`pages-session:${person.id}`]);
+  });
+
+  it("a stream upgrade does not renew for a session it did not authenticate: no cookie, a forged cookie, a wrong origin", async () => {
+    const w = await world();
+    const person = await w.signIn();
+    w.advance(LIFE + 30);
+    expect(await reconnect(w.port, {})).toEqual({ refused: 401 });
+    expect(await reconnect(w.port, { cookie: signedCookie("A".repeat(43), "not-the-secret-not-the-secret-0000") })).toEqual({ refused: 401 });
+    expect(await reconnect(w.port, { cookie: person.cookie, origin: "https://evil.test" })).toEqual({ refused: 403 });
+    expect(w.keycloak.refreshCalls, "no exchange was made for any of them").toBe(0);
+    expect(w.upstream.tcp).toBe(0);
   });
 });

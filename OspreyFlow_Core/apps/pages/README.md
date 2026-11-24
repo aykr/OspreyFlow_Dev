@@ -42,7 +42,9 @@ Needs-you reminder, the five places as links); a page fills its `place` block. T
 - **Renewal and sign-out** (slice PL9b, `server/accessToken.ts`, `server/providerSessions.ts`, `server/oidc.ts`):
   `accessTokenFor` renews the access token with the refresh token held on the server when it has 60 seconds or fewer left, makes one
   exchange at a time for a session (the other calls wait for it, and a copy of the session read before it is brought up to date), and
-  updates the session. The provider's refusal ends the session: a page is sent to sign in again, a `/v1` call is answered 401. A
+  updates the session. The live-update WebSocket's upgrade (`server/stream.ts`, handled outside Express) asks the same renewal through the app's
+  `streamTokenFor` before it opens the Conduit's socket, so a reconnect after the token's end carries a renewed token; a provider
+  that will not renew ends the session and the browser's socket is closed 1008 in the sign-in's words. The provider's refusal ends the session: a page is sent to sign in again, a `/v1` call is answered 401. A
   provider that cannot be reached is not an ended session while the token still held is good; a request that may have been received
   is never presented again. Sign-out ends the pages session, then the person's at the provider: the answer to the form post is a
   same-origin address with an opaque single-use name (a redirect after a form post is held to `form-action 'self'`), and the ID

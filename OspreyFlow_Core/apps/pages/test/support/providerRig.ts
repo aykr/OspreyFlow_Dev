@@ -207,7 +207,7 @@ function loginCookieOf(res: Pick<Response, "headers">): string {
 
 /** The whole round trip, as one browser makes it. `sessionId` is a provider session the browser already holds (single sign-on). */
 export async function signInAs(
-  r: Rig,
+  r: Pick<Rig, "fake"> & { app: Parameters<typeof request>[0] },
   options: { username?: string; sessionId?: string; returnTo?: string } = {},
 ): Promise<Person> {
   const username = options.username ?? "alex";
@@ -247,7 +247,7 @@ function pieces(token: string): string[] {
 }
 
 /** What nobody but the service and the provider may see, in a text: every token the provider issued, the client secret, the session secret. */
-export function secretsOf(r: Rig, extra: string[] = []): string[] {
+export function secretsOf(r: Pick<Rig, "fake" | "clientSecret">, extra: string[] = []): string[] {
   return [
     ...r.fake.issued.flatMap((i) => [...pieces(i.accessToken), ...pieces(i.refreshToken), ...pieces(i.idToken)]),
     ...r.fake.issued.flatMap((i) => [i.accessMarker, i.refreshMarker]),
@@ -258,7 +258,7 @@ export function secretsOf(r: Rig, extra: string[] = []): string[] {
 }
 
 /** Throws when a secret is in the text, in any of the forms a proxy or a log could write it, or any token-shaped string is. */
-export function expectNoSecret(r: Rig, text: string, where: string, extra: string[] = []): void {
+export function expectNoSecret(r: Pick<Rig, "fake" | "clientSecret">, text: string, where: string, extra: string[] = []): void {
   for (const secret of secretsOf(r, extra)) {
     for (const form of [secret, encodeURIComponent(secret), Buffer.from(secret).toString("base64"), Buffer.from(secret).toString("base64url")]) {
       if (text.includes(form)) throw new Error(`${where}: a secret (${secret.slice(0, 12)}…) is in what was said`);

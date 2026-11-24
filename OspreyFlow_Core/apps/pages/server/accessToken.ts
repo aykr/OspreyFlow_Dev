@@ -8,8 +8,12 @@
  * site are as they were: they pass the record they hold, and the record is what changes.
  *
  * HOW A RECORD REACHES THE RENEWAL. The record carries no reference to the provider or to the request, so a request binds its
- * own record once (`bindRenewal`, from the app's middleware) and `accessTokenFor` finds the binding by the record's identity. A
- * record that is not bound (a sign-in's own, the sign-out's) is returned as it is: no exchange is made for it.
+ * own record once (`bind`, from the app's middleware) and `accessTokenFor` finds the binding by the record's identity. There are
+ * two such places and no third: the app's middleware, for every request Express handles, and the app's `streamTokenFor`, for the
+ * live-update WebSocket's upgrade, which `stream.ts` handles outside Express and which therefore never meets the middleware; both
+ * use this one renewal, so a reconnect of the stream and a page request at the end of one token make one exchange between them.
+ * A record that is not bound (a sign-in's own, the sign-out's) is returned as it is: no exchange is made for it, by design (a
+ * sign-in's token is new; a sign-out must not wait for a token).
  *
  * SINGLE FLIGHT. A person's page makes several calls at once, each with its own copy of the session record. The copies are
  * one session, and a rotating provider revokes the session when a refresh token is presented twice. So the renewal keeps, in
