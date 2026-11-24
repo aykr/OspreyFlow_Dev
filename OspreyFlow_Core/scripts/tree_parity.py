@@ -151,5 +151,13 @@ def govuk_tree_state(
     return PARTIAL
 
 
+def govuk_tree_routes(route_list: Path | None = None) -> list[str]:
+    """The paths the GOV.UK tree has a page for: its route list, as written (empty when the list is
+    absent). The one reading of that file, beside the state derived from it; a renderer routing a
+    function's path to the page service asks this, and reads no list of its own."""
+    route_list = ROUTE_LIST if route_list is None else route_list
+    return list(_routes(route_list) or [])
+
+
 if __name__ == "__main__":
     print(govuk_tree_state())

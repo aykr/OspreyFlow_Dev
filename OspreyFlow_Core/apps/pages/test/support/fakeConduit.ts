@@ -22,7 +22,14 @@
  *  - an import into a composite or a drawn dataset is 409 with a string `detail` (`composite_read_only`, `drawn_not_loaded`),
  *    after the rights; the export has no such refusal;
  *  - the export's `name` is 1 to 253 characters and `version` 1 to 64: more or fewer is FastAPI's 422, `detail` a list;
- *  - an import with no `release.yaml` is 422 with the plan's `refused` words, as a refused plan comes back.
+ *  - an import with no `release.yaml` is 422 with the plan's `refused` words, as a refused plan comes back;
+ *  - the domain model's routes (`/v1/datasets/{id}/model`, slice IS2a), in the order the real ones run: the right
+ *    `edit_target_model` first (403 `{"detail": "Missing right: ..."}`), then the dataset (404 `{"detail": "Not Found"}`, the same
+ *    for one the person's cases do not read and one that does not exist), then the body. `PUT` and `DELETE` on the draft need
+ *    `expected_version` (a whole number of 1 or more; FastAPI's own 422, `detail` a list), and a body with a field the schema does
+ *    not have is refused (`extra=forbid`); then the store's own refusals, 409 `{"error": "model_refused", "detail": words}`: no
+ *    draft to save, a draft someone else opened (the words name who holds it and none of its content) and a version the draft is
+ *    no longer (the store's words, "read it again"). The creator check runs before the version check, as the store's does.
  */
 import { createServer } from "node:http";
 import type { IncomingHttpHeaders, IncomingMessage, Server, ServerResponse } from "node:http";
@@ -42,6 +49,8 @@ export interface CaseRow {
 export interface Person {
   /** The bearer this person's sessions carry. */
   token: string;
+  /** The principal id the Conduit resolves for them (`GET /v1/me`); a draft's creator is this. */
+  id?: string;
   rights: string[];
   /** The role ids the Conduit resolved for this person (`GET /v1/me`). */
   roles?: string[];
@@ -80,6 +89,56 @@ export const COMPOSITE_WORDS = "This is the composite “Harbour prison extract 
 export const DRAWN_WORDS =
   "a drawn dataset is drawn on its board, not loaded: nothing is loaded or run into it, and it reaches another dataset by being merged into it";
 
+/** One version of a dataset's domain model, as the Conduit serialises it (`TargetModel`). */
+export interface FakeModel {
+  dataset_id: string;
+  version: number;
+  state: "draft" | "live" | "previous";
+  packs: Record<string, number>;
+  extensions: Record<string, unknown>[];
+  reference_lists: string[];
+  created_at: string;
+  created_by: string;
+  made_live_at: string | null;
+  made_live_by: string | null;
+  reverted_from: number | null;
+  /** The draft's revision: changes on every save and is never one a draft had before (`TargetModel.revision`). */
+  revision: string;
+}
+
+/** A dataset's live version and open draft, either of which may be none. */
+export interface FakeModelState {
+  live: FakeModel | null;
+  draft: FakeModel | null;
+}
+
+/** The words the store gives (`services/api/target_models.py`), copied so a change there is a change here. */
+export const MODEL_WORDS = {
+  second: (version: number) => `this dataset already has a draft, version ${version}: save or discard it first`,
+  noDraftToSave: "there is no draft to save: open one first",
+  noDraftToDiscard: "there is no draft to discard",
+  notCreator: (version: number, by: string, opened: string) =>
+    `the domain model has an in-progress draft (version ${version}) by ${by}, opened ${opened}: only ${by} can save into, replace or discard it. Ask ${by} to make it live or discard it in Studio › Model, then open your own`,
+  stale: (meant: number, now: number, opened: string) =>
+    `you meant your draft's version ${meant}, but your draft is now version ${now}, opened ${opened}: read it again before changing it`,
+  /** The same version, but the draft was saved again or discarded and opened again since the copy was read. */
+  outOfDate: (version: number, opened: string) =>
+    `your copy of the draft (version ${version}, opened ${opened}) is out of date: the draft was saved again, or discarded and opened again, since you read it: read it again before changing it`,
+};
+
+let revisions = 0;
+/** A revision the draft has not had before, as the store makes one (a random token there, a counter here). */
+export const freshRevision = (): string => `rev-${++revisions}`;
+
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+/** `%d %B %Y at %H:%M UTC`, as the store words a draft's opening. */
+export function openedWords(iso: string): string {
+  const at = new Date(iso);
+  const two = (n: number): string => String(n).padStart(2, "0");
+  return `${two(at.getUTCDate())} ${MONTHS[at.getUTCMonth()] as string} ${at.getUTCFullYear()} at ${two(at.getUTCHours())}:${two(at.getUTCMinutes())} UTC`;
+}
+
 export interface Seen {
   method: string;
   /** The request target as it reached the fake. */
@@ -102,6 +161,12 @@ export interface FakeConduit {
   failing: Set<string>;
   /** A next real import answers 422 with these words (a draft someone opened since the check). */
   refuseNextWrite: string[] | undefined;
+  /** Each dataset's domain model (slice IS2a), which the model routes read and change: a test seeds it and reads it back. */
+  models: Map<string, FakeModelState>;
+  /** A model route's next answer is this 409 `model_refused` detail instead of the real rule's (to plant words the page must not trust). */
+  nextModelRefusal: string | undefined;
+  /** A model route's next answer is a 409 that is not the store's (`error` is another code): words the page must not show. */
+  nextOtherConflict: string | undefined;
   people: Map<string, Person>;
   stop(): Promise<void>;
 }
@@ -138,6 +203,9 @@ export async function fakeConduit(people: Person[]): Promise<FakeConduit> {
     written: [],
     failing: new Set(),
     refuseNextWrite: undefined,
+    models: new Map(),
+    nextModelRefusal: undefined,
+    nextOtherConflict: undefined,
     people: new Map(people.map((p) => [p.token, p])),
     stop: () => new Promise((resolve) => server.close(() => resolve())),
   };
@@ -182,7 +250,7 @@ export async function fakeConduit(people: Person[]): Promise<FakeConduit> {
     const has = (...rights: string[]): boolean => rights.every((r) => person.rights.includes(r));
 
     if (path === "/v1/me" && method === "GET") {
-      return json(res, 200, { id: "analyst-1", clearance: "OFFICIAL", org_unit: "unit-1", roles: person.roles ?? [], receivable_handling_codes: [] });
+      return json(res, 200, { id: person.id ?? "analyst-1", clearance: "OFFICIAL", org_unit: "unit-1", roles: person.roles ?? [], receivable_handling_codes: [] });
     }
     if (path === "/v1/me/rights" && method === "GET") return json(res, 200, { rights: [...person.rights].sort() });
     if (path === "/v1/investigations" && method === "GET") return json(res, 200, person.cases);
@@ -308,6 +376,124 @@ export async function fakeConduit(people: Person[]): Promise<FakeConduit> {
         replaces_own_draft: person.ownDraft !== undefined,
         ...(person.ownDraft === undefined ? {} : { own_draft_version: person.ownDraft }),
       });
+    }
+    found = /^\/v1\/datasets\/([^/]+)\/model(\/draft)?$/.exec(path);
+    if (found && (path.endsWith("/model") ? method === "GET" : ["POST", "PUT", "DELETE"].includes(method))) {
+      // The route's own dependencies, in the order the real app runs them: the right, then the dataset.
+      if (!has("edit_target_model")) return json(res, 403, { detail: "Missing right: edit_target_model" });
+      const dataset = decodeURIComponent(found[1] as string);
+      if (!visibleDataset(dataset)) return json(res, 404, { detail: "Not Found" });
+      const state = fake.models.get(dataset) ?? { live: null, draft: null };
+      fake.models.set(dataset, state);
+      const me = person.id ?? "analyst-1";
+      if (method === "GET") return json(res, 200, { live: state.live, draft: state.draft });
+      const refuse = (detail: string): void => json(res, 409, { error: "model_refused", detail });
+      if (method === "POST") {
+        if (state.draft) return refuse(MODEL_WORDS.second(state.draft.version));
+        state.draft = {
+          dataset_id: dataset,
+          version: (state.live?.version ?? 0) + 1,
+          state: "draft",
+          packs: { ...(state.live?.packs ?? {}) },
+          extensions: [...(state.live?.extensions ?? [])],
+          reference_lists: [...(state.live?.reference_lists ?? [])],
+          created_at: new Date().toISOString(),
+          created_by: me,
+          made_live_at: null,
+          made_live_by: null,
+          reverted_from: null,
+          revision: freshRevision(),
+        };
+        return json(res, 201, state.draft);
+      }
+      let expected: number | undefined;
+      let expectedRevision: string | undefined;
+      let content: { packs?: unknown; extensions?: unknown; reference_lists?: unknown } = {};
+      if (method === "PUT") {
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(body);
+        } catch {
+          return json(res, 422, { detail: [{ type: "json_invalid", loc: ["body"], msg: "JSON decode error" }] });
+        }
+        if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+          return json(res, 422, { detail: [{ type: "model_attributes_type", loc: ["body"], msg: "Input should be a valid dictionary" }] });
+        }
+        const given = parsed as Record<string, unknown>;
+        const problems: unknown[] = [];
+        for (const key of Object.keys(given)) {
+          if (!["packs", "extensions", "reference_lists", "expected_version", "expected_revision"].includes(key)) {
+            problems.push({ type: "extra_forbidden", loc: ["body", key], msg: "Extra inputs are not permitted" });
+          }
+        }
+        const version = given["expected_version"];
+        if (version === undefined) problems.push({ type: "missing", loc: ["body", "expected_version"], msg: "Field required" });
+        else if (typeof version !== "number" || !Number.isInteger(version) || version < 1) {
+          problems.push({ type: "greater_than_equal", loc: ["body", "expected_version"], msg: "Input should be a valid integer, greater than or equal to 1" });
+        }
+        const packs = given["packs"] ?? {};
+        if (typeof packs !== "object" || packs === null || Array.isArray(packs)) {
+          problems.push({ type: "dict_type", loc: ["body", "packs"], msg: "Input should be a valid dictionary" });
+        } else {
+          for (const [pack, pinned] of Object.entries(packs)) {
+            if (!["fibo", "niem", "stix"].includes(pack)) problems.push({ type: "literal_error", loc: ["body", "packs", pack], msg: "Input should be 'fibo', 'niem' or 'stix'" });
+            else if (typeof pinned !== "number" || !Number.isInteger(pinned)) problems.push({ type: "int_type", loc: ["body", "packs", pack], msg: "Input should be a valid integer" });
+          }
+        }
+        if (given["extensions"] !== undefined && !Array.isArray(given["extensions"])) {
+          problems.push({ type: "list_type", loc: ["body", "extensions"], msg: "Input should be a valid list" });
+        }
+        const lists = given["reference_lists"];
+        if (lists !== undefined && (!Array.isArray(lists) || lists.some((id) => typeof id !== "string"))) {
+          problems.push({ type: "list_type", loc: ["body", "reference_lists"], msg: "Input should be a valid list of strings" });
+        }
+        const revision = given["expected_revision"];
+        if (revision !== undefined && revision !== null && (typeof revision !== "string" || revision === "" || revision.length > 64)) {
+          problems.push({ type: "string_too_short", loc: ["body", "expected_revision"], msg: "Input should be a string of 1 to 64 characters" });
+        }
+        if (problems.length > 0) return json(res, 422, { detail: problems });
+        expected = version as number;
+        if (typeof revision === "string") expectedRevision = revision;
+        content = { packs: given["packs"] ?? {}, extensions: given["extensions"] ?? [], reference_lists: given["reference_lists"] ?? [] };
+      } else {
+        const asked = target.searchParams.get("expected_version");
+        if (asked === null) return json(res, 422, missing(["expected_version"]));
+        if (!/^\d+$/.test(asked) || Number(asked) < 1) {
+          return json(res, 422, { detail: [{ type: "int_parsing", loc: ["query", "expected_version"], msg: "Input should be a valid integer, greater than or equal to 1" }] });
+        }
+        expected = Number(asked);
+        const revision = target.searchParams.get("expected_revision");
+        if (revision !== null) {
+          if (revision === "" || revision.length > 64) return json(res, 422, { detail: [{ type: "string_too_short", loc: ["query", "expected_revision"], msg: "Input should be a string of 1 to 64 characters" }] });
+          expectedRevision = revision;
+        }
+      }
+      const draft = state.draft;
+      if (fake.nextOtherConflict !== undefined) {
+        const words = fake.nextOtherConflict;
+        fake.nextOtherConflict = undefined;
+        return json(res, 409, { error: "owner_needed", detail: words });
+      }
+      if (fake.nextModelRefusal !== undefined) {
+        const words = fake.nextModelRefusal;
+        fake.nextModelRefusal = undefined;
+        return refuse(words);
+      }
+      if (draft === null) return refuse(method === "PUT" ? MODEL_WORDS.noDraftToSave : MODEL_WORDS.noDraftToDiscard);
+      const opened = openedWords(draft.created_at);
+      // The creator first, then the version: the store's own order. The words name who holds it and none of what is in it.
+      if (draft.created_by !== me) return refuse(MODEL_WORDS.notCreator(draft.version, draft.created_by, opened));
+      if (expected !== draft.version) return refuse(MODEL_WORDS.stale(expected, draft.version, opened));
+      // The version alone cannot tell two copies of one draft apart (a save keeps it; a discard and a new draft reuse it).
+      if (expectedRevision !== undefined && expectedRevision !== draft.revision) return refuse(MODEL_WORDS.outOfDate(draft.version, opened));
+      if (method === "DELETE") {
+        state.draft = null;
+        res.writeHead(204);
+        res.end();
+        return;
+      }
+      state.draft = { ...draft, revision: freshRevision(), packs: content.packs as Record<string, number>, extensions: content.extensions as Record<string, unknown>[], reference_lists: content.reference_lists as string[] };
+      return json(res, 200, state.draft);
     }
     return json(res, 404, { detail: "Not Found" });
   };

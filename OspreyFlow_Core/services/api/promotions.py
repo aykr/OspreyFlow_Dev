@@ -1224,13 +1224,17 @@ class Promotions:
         grant = await self._granted(grant_id, dataset, author, case_checked=False)
         await self.store.close_grant(grant.id, datetime.now(UTC))
 
-    async def delete_layer(self, case_id: str, layer_id: str) -> LayerDeleted:
+    async def delete_layer(
+        self, case_id: str, layer_id: str, *, by: str | None = None
+    ) -> LayerDeleted:
         """Every element wholly the layer's withdrawn, never deleted; the registry's items too.
         Promoted items hold the dataset as well and are never touched."""
         graph = self.boards.graph
         tx = await graph.begin_transaction()
         try:
-            gone = await graph.withdraw_layer(layer_id, f"{LAYER_DELETE_PREFIX}{case_id}", tx)
+            gone = await graph.withdraw_layer(
+                layer_id, f"{LAYER_DELETE_PREFIX}{case_id}", tx, by=by
+            )
         except Exception:
             await graph.rollback_transaction(tx)
             raise

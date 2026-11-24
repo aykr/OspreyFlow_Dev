@@ -80,9 +80,14 @@ async def revert_promotion(
     store: PromotionStore,
     items: Any,
     merge: Any | None = None,
+    *,
+    by: str | None = None,
 ) -> PromotionRecord:
     """The revert of a committed promotion: the dataset taken back from exactly its elements in
-    one transaction, the promotion recorded `reverted`, its items' `promoted_at` cleared. The
+    one transaction, the promotion recorded `reverted`, its items' `promoted_at` cleared. `by` is
+    the person doing it (the command's `--reverted-by`): saved with the time as `reverted_by` and
+    `reverted_at` on each element the revert takes out (the layer's withdrawal, a merge's own
+    writes), as a load's revert saves them (SE9, ADR-144 Amendment 7). The
     operator command's core, run with the Conduit stopped (ADR-127
     Amendment 9); never a route (ADR-143 open question 2, settled (a): Amendment 5 decision 8).
 
@@ -115,6 +120,7 @@ async def revert_promotion(
         if i.kind != "node" and i.withdrawn_at is None and i.promoted_at is None
     }  # fmt: skip
     layer_deleted = await store.layer_deleted(record.layer_id)
+    now = datetime.now(UTC)  # one time for every deletion this revert writes
     tx = await graph.begin_transaction()
     try:
         # Whatever the operator may read (the unfiltered lookup a load's revert asks too): this
@@ -131,10 +137,10 @@ async def revert_promotion(
             )
         await graph.revert_promotion(record.load_id, record.dataset_id, tx)
         if drawn_merge and merge is not None:  # refused above without it
-            await merge.undo_writes(record, tx)
+            await merge.undo_writes(record, tx, by=by, at=now)
         if layer_deleted:
             await graph.withdraw_layer(
-                record.layer_id, f"{LAYER_DELETE_PREFIX}{record.case_id}", tx
+                record.layer_id, f"{LAYER_DELETE_PREFIX}{record.case_id}", tx, by=by, at=now
             )
     except Exception:
         await graph.rollback_transaction(tx)
@@ -253,7 +259,7 @@ async def run(
         result_cardinality=len(record.node_ids) + len(record.edge_ids) + len(copies),
     )  # fmt: skip
     try:
-        await revert_promotion(record, graph, store, items, merge)
+        await revert_promotion(record, graph, store, items, merge, by=reverted_by)
     except PromotionRefused as refused:
         # Audited before it was tried, so its refusal is audited too: the trail says it did not
         # happen.

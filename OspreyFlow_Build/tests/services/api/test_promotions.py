@@ -1140,6 +1140,26 @@ def test_an_administrator_deletes_a_removed_cases_layer_and_never_an_open_ones(
     assert "delete_layer" in [r["action"] for r in pw.audit.records]
 
 
+def test_a_layers_deletion_records_the_person_who_made_it_on_each_route(
+    pw: SimpleNamespace, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """SE9, rule 12 at the real call site: the layer route and Admin's both hand the graph the
+    deleting person's id (`by=principal.id`), never the item's author (the board is alice's) and
+    never nothing. The plant: a route that drops `by` or passes the author leaves `deleted_by`
+    with another name, and this fails."""
+    monkeypatch.setitem(PEOPLE, "ada", Principal(
+        id="ada", clearance="SECRET", org_unit=UNIT, roles=["osprey-admin"]
+    ))  # fmt: skip
+    _item(_board())  # alice's own layer
+    pw.removed.add(K)
+    assert _as("dana").delete(f"/v1/datasets/src/removed-cases/{K}/layer").status_code == 200
+    assert [(kind, by) for kind, by, _at in pw.graph.deleted_by] == [("layer", "dana")]
+    assert _as("ada").post(f"/v1/admin/datasets/src/cases/{K}/delete").status_code == 200
+    assert [(kind, by) for kind, by, _at in pw.graph.deleted_by] == [
+        ("layer", "dana"), ("layer", "ada")
+    ]
+
+
 def test_admin_delete_is_scoped_to_the_datasets_unit(pw: SimpleNamespace) -> None:
     """Rule 4 at the unit boundary (the independent review's round 2, item 1; the owner's ruling
     of 9 November 2026): Admin's Delete is a destructive write with no undo, so only an administrator
@@ -1167,7 +1187,9 @@ def test_the_delete_check_fails_with_the_layer_withdrawn_whole(
 ) -> None:
     graph = pw.graph
 
-    async def whole(dataset_id: str, withdrawal: str, tx: str) -> PromotionReverted:
+    async def whole(
+        dataset_id: str, withdrawal: str, tx: str, **_recorded: object
+    ) -> PromotionReverted:
         nodes = [n.id for n in graph._graph_nodes.values() if dataset_id in n.datasets]
         edges = [e.id for e in graph._graph_edges if dataset_id in e.datasets]
         graph._pending[tx][2].append((nodes, edges, withdrawal))
@@ -1312,6 +1334,23 @@ async def test_the_commands_dry_run_writes_nothing_and_the_real_run_reverts(
     assert "revert_promotion" in [r["action"] for r in pw.audit.records]
     assert await _run_the_command(pw, promoted["load_id"], dry_run=False) == 1
     assert await _run_the_command(pw, "promotion-none", dry_run=False) == 1
+
+
+async def test_the_commands_layer_withdrawal_records_the_operator_it_was_given(
+    pw: SimpleNamespace,
+) -> None:
+    """SE9, rule 12 at the real call site: `--reverted-by` is required, so the layer's withdrawal
+    the revert makes for a promotion from a layer since deleted saves that person as
+    `reverted_by` (never nothing: a saved view's `missing` and the deletion record read it). Run
+    through `run`, the command's own entry, so a person dropped between `run` and the graph call
+    leaves `deleted_by` with `None` and this fails; the plant is the `by=` taken off
+    `withdraw_layer` in `revert_promotion`."""
+    board, made, link_item, _ = _drawn()
+    promoted = _promote(board, made["item_id"], link_item).json()
+    await pw.store.mark_layer_deleted(pw.store.records[promoted["id"]].layer_id, datetime.now(UTC))
+    assert await _run_the_command(pw, promoted["load_id"], dry_run=False) == 0
+    assert [(kind, by) for kind, by, _at in pw.graph.deleted_by] == [("layer", "ops")]
+    assert all(at is not None for _kind, _by, at in pw.graph.deleted_by)
 
 
 async def test_the_dry_run_check_fails_with_the_dry_run_writing(

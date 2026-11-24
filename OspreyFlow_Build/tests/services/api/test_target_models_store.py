@@ -210,6 +210,60 @@ async def test_the_indexes_refuse_a_second_live_or_draft_written_past_the_store(
         await conn.close()
 
 
+async def test_a_copy_of_a_draft_is_known_by_its_revision_on_postgres(
+    store: PostgresTargetModelStore, dsn: str
+) -> None:
+    """The draft's revision (OWED: needs the dev stack, not run in the slice that wrote it; the
+    in-memory twin is `test_target_model_draft_owner.py`). A save changes it and keeps the
+    version, a draft discarded and opened again at the same live version has another, a copy read
+    before either is refused in words with the row unchanged, and a row written before the column
+    existed is given one when the store connects."""
+    dataset = new_id()
+    first = await store.open_draft(dataset, ENGINEER)
+    assert first.revision
+    saved = await store.save_draft(
+        dataset, TargetModelDraftInput(packs={"fibo": 1}), ENGINEER,
+        expected_version=first.version, expected_revision=first.revision,
+    )  # fmt: skip
+    assert saved.version == first.version and saved.revision not in (None, first.revision)
+    held = await store.draft(dataset)
+    assert held is not None and held.revision == saved.revision
+    with pytest.raises(TargetModelRefused, match="out of date"):
+        await store.save_draft(
+            dataset, TargetModelDraftInput(packs={"niem": 1}), ENGINEER,
+            expected_version=first.version, expected_revision=first.revision,
+        )  # fmt: skip
+    with pytest.raises(TargetModelRefused, match="out of date"):
+        await store.discard_draft(
+            dataset, ENGINEER, expected_version=first.version, expected_revision=first.revision
+        )
+    assert await store.draft(dataset) == held  # neither changed the row
+    await store.discard_draft(
+        dataset, ENGINEER, expected_version=saved.version, expected_revision=saved.revision
+    )
+    again = await store.open_draft(dataset, ENGINEER)
+    assert again.version == first.version
+    assert again.revision not in (None, first.revision, saved.revision)
+    with pytest.raises(TargetModelRefused, match="out of date"):
+        await store.discard_draft(
+            dataset, ENGINEER, expected_version=first.version, expected_revision=saved.revision
+        )
+    # A row from before the column: the store gives it a revision when it connects.
+    conn = await asyncpg.connect(dsn)
+    try:
+        await conn.execute(
+            "UPDATE target_models SET revision = NULL WHERE dataset_id = $1", dataset
+        )
+    finally:
+        await conn.close()
+    migrated = await PostgresTargetModelStore.connect(dsn, core_types=CORE_TYPES_FOR_TESTS)
+    try:
+        legacy = await migrated.draft(dataset)
+        assert legacy is not None and legacy.revision and legacy.revision != again.revision
+    finally:
+        await migrated.close()
+
+
 async def test_the_index_check_fails_with_the_indexes_dropped(
     store: PostgresTargetModelStore, dsn: str
 ) -> None:

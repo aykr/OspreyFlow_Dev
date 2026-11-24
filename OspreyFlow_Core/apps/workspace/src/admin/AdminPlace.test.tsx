@@ -13,6 +13,16 @@ afterEach(() => {
 });
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status });
+/** The built-in roles as `list_roles_route` always sends them (`_built_in_roles`): every role the invite form offers, each with
+ * its rights (a short synthetic subset), and the Super user preset. The route never sends an empty list; the form refuses one. */
+const BUILT_IN = [
+  { id: "analyst", label: "Analyst", rights: ["investigate", "triage_alerts"], gives: [] },
+  { id: "data_engineer", label: "Data Engineer", rights: ["edit_pipelines", "operate_schedules"], gives: [] },
+  { id: "osprey-admin", label: "Admin", rights: ["administer_system", "manage_people", "read_audit"], gives: [] },
+  { id: "reports_viewer", label: "Reports Viewer", rights: ["read_reports"], gives: [] },
+  { id: "rule_author", label: "Rule author", rights: ["author_rules"], gives: [] },
+  { id: "super_user", label: "Super user", rights: ["investigate", "author_rules"], gives: ["analyst", "data_engineer", "rule_author"] },
+];
 const PERSON = { id: "u1", username: "osprey-demo-analyst", name: "Demo Analyst", enabled: true,
                  roles: ["analyst", "right:read_export_ledger"], clearance: "OFFICIAL", org_unit: "verify" };  // prettier-ignore
 
@@ -27,6 +37,10 @@ function serve(handler: (path: string, init?: RequestInit) => Response | null = 
       if (answered) return answered;
       if (path === "people") return json(200, [PERSON]);
       if (path === "organisation-arrivals") return json(200, []);
+      // The invite form waits for the roles' catalogue and for how people sign in (AD5). The real route always answers the
+      // built-in roles, each with its rights (`list_roles_route`), never an empty list: so does this.
+      if (path === "roles") return json(200, { built_in: BUILT_IN, custom: [] });
+      if (path === "sign-in") return json(200, { kind: "keycloak" });
       if (path === "people/u1/roles") return json(200, { ...PERSON, roles: (JSON.parse(String(init?.body)) as { roles: string[] }).roles });
       if (path === "dashboards" && init?.method === "POST")
         return json(201, { dashboard: { client_id: "osprey-dashboard-board", account_id: "sa-1", clearance: "OFFICIAL", org_unit: "verify" }, secret: "s3cret" });

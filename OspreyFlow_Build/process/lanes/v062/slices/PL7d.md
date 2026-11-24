@@ -31,3 +31,7 @@ The new test; `OspreyFlow_Build/tests/harness/test_reference_render.py` (PL7a2a:
 ## Out of scope
 
 Rendering `pages` in any deployment or turning `pages.enabled` on (the owner, per deployment); the GOV.UK tree and release; editing `release.yml`, `signatures.py`, any Makefile or `ci.yml`; the maintainer's manifest (RL1, which adds its own release step later); the identity switch (PL12e).
+
+## Never merge another part's unmerged tip (the owner, 23 November 2026)
+
+**Never merge another part's unmerged tip, or any branch but main, into your branch.** Take main in when the line tells you to, and nothing else. A part that did this (AD1b, with AD1a's tip) had the hook count the other part's tests as its own. If your part needs another part's change that has not merged, stop and tell the conductor.

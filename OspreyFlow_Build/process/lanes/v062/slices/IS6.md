@@ -1,0 +1,26 @@
+# SUPERSEDED on 24 November 2026: the owner ruled all seven points; the first slice is `slices/IS6a.md` (this paper is kept as the record of the questions). Slice IS6 · IS6 · The dataset's run order, stored (first slice of the whole-dataset load) — was a DRAFT
+
+**Written by the conductor on the night of 23 November 2026 from a read-only scout of main. There is no row for it in `slices.tsv`, so no builder can start it.** The owner asked for a part for every build whose needs are met; this one's first slice needs rulings that the decision records leave open (CLAUDE.md rule 11: a genuine spec gap is fixed in the spec, by an ADR if it is a real decision; that is the owner's).
+
+- **Build id:** IS6 (whole-dataset load). **Needs (met):** IS3 (the dataset map page), CO1.
+- **Binding text** (all in `OspreyFlow_Build/spec/06_DECISIONS.md`): ADR-140 Amendment 22 items 7 and 8 (about lines 41404 to 41407: "A single pipeline is still deployed and run on its own" and "'Runs after' is set by a person on the dataset map, with a suggestion worked out from which pipelines create the types another refers to"); ADR-141 Amendment 2 (about lines 41413 to 41438): point 1 one load runs the dataset's deployed pipelines in the order a person set, started by a person, the Studio or an outside scheduler through the run API extended beside `POST /v1/runs`; point 2 a failure stops only what depends on it, the report says ran, failed or not run, counts withheld per decision 7, the suggestion "shown, not enforced"; point 3 one neutral YAML job file with a published schema and no credential; point 5 (L08) a scheduled load keeps running when its owner is away, under a named cover, "the detail is decided with slice IS6"; point 6 the order is "stored with the dataset, versioned, and carried in a release export". `OspreyFlow_Build/spec/09_INGEST_STUDIO.md` about lines 259 to 278 ("IS6 adds the column when it stores the order"); `OspreyFlow_Build/spec/08_ACCEPTANCE_SCENARIOS.md` Scenario DM (about lines 701 to 720; DM2 requires four columns and **no** "runs after" column today).
+
+## What exists on main (the scout's findings; re-read each)
+
+- **The page:** `OspreyFlow_Core/apps/pages/server/datasetMap.ts`, `apps/pages/tree-default/studio/dataset-map.njk`; its test `OspreyFlow_Core/apps/pages/test/default/dataset-map.test.ts` asserts there is **no** "runs after" text (about lines 133 and 206): IS6 changes these **together with** the spec, never silently. `FUNCTIONS.yaml` (`OspreyFlow_Core/apps/pages/FUNCTIONS.yaml`) row `studio-dataset-map` (about lines 78 to 84) is still "planned" though the page exists.
+- **The Conduit:** `POST /v1/runs` runs **one** pipeline per call (`OspreyFlow_Core/services/api/app.py` about 18842 to 18889; `services/api/external_runs.py` `start_external_run`; a non-owner or dataset mismatch answers 404, the same as a missing pipeline). `GET /v1/investigations/{id}/ingest/recipe-registry` (about 13952 to 13975, gated by `EDIT_PIPELINES`) lists every recipe of the unit at any status with no dataset filter. `services/ingest/pipeline.py` `_run_order` orders stages **inside** one pipeline, not pipelines against each other.
+- **Does not exist:** a stored run order (no field in any model of `packages/schemas/ingest.py`), a whole-dataset run route, a scheduler job file or its schema, the L08 cover. "Answers 16 to 18" and "S21" that ADR-141 Amendment 2 cites are not in the repository.
+
+## The owner's seven rulings this slice needs (decision-record gaps; nothing starts until they are made)
+
+1. **Which right sets the order** (the record says only "a person"; a new right, `EDIT_PIPELINES`, or the dataset's owner).
+2. **Where the order is edited:** on IS3's page or on a page IS6 adds (`slices/STAGE4_SCOUTS_2026-11-20.md` leaves it open; `RULINGS.md` says IS6).
+3. **What happens with a cycle, and with a pipeline that is not deployed or not owned externally.**
+4. **The L08 cover:** who the named cover is, with what rights, and what happens when there is none. This is a security rule: **every finding on it is the owner's.**
+5. **Where the job file's schema is published.**
+6. **What "versioned" means for an order** (a number per save, a hash, a release row).
+7. **Whether the IS3 `FUNCTIONS.yaml` row moves to built** when this changes the page.
+
+## The first slice, once ruled (the scout's proposal; the conductor's draft)
+
+**Store the order per dataset: a stored, versioned order, one route to read it and one to set it, with its access-control tests. No run machinery, no scheduler file, no cover, no change to `POST /v1/runs`.** The dataset map's "runs after" column appears **only** when an order is stored (`dataset-map.test.ts` and the scenario test change with the spec: DM2 becomes "four columns, plus runs-after only when stored"). **Access control (rules 3, 4, 7, security-adjacent: a fault here is stopped and reported):** the order's routes use the dataset gate the other dataset routes use (`scope_to_dataset`, about line 10702) and answer a non-owner exactly as they answer a missing dataset; every read path has a test; a model-derived suggestion stays inferred and is never stored as the order (rule 5). **It must not touch** `external_runs.py`, `pipeline.py`, `POST /v1/runs`, `apps/workspace` or the protected files.

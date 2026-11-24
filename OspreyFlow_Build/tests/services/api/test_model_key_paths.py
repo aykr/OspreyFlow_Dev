@@ -1676,9 +1676,17 @@ async def test_nothing_from_the_virtual_key_listing_is_logged_answered_or_audite
 async def test_an_engine_s_removal_clears_its_virtual_key_n4(world: Scene) -> None:
     """N4, the route that clears a virtual key now that start-up does not list them: **an engine's
     removal deletes its own derived key** (`delete_engine_key`, by derivation: no listing, no key
-    read) **before the record forgets the engine**, so no key outlives its record. A removal the
-    gateway refuses leaves the engine and its key both (they agree), and the next removal clears
-    both. Plant: the delete skipped in `remove_engine` goes red."""
+    read) **before the record forgets the engine**, and a refusal leaves the engine and its key both
+    (they agree), and the next removal clears both. That is the only route. **An engine's access
+    token on the gateway is therefore not removed when the engine leaves the record any other way:
+    when the deployment is switched to local-only, when a models file is restored, when a
+    re-render drops an engine, or when an Add whose record cannot be saved is undone (the engine's
+    token is put on the gateway before the record is saved, and the undo withdraws the entries and
+    not the token; the 15-minute sweep removes only a check's own key, so it does not remove this
+    token; AD1c closes the route).** The token reaches no model unless an engine of the same name is
+    added again. The four cases are shown by `test_stale_engine_keys_are_named.py`, and the changed
+    master key (open row N6) has no route and stays named beside them. Plant: the delete skipped in
+    `remove_engine` goes red."""
     await world.set_up()
     engine_held = engine_key(world.master, "gemini")
     assert engine_held in world.gateway.virtual_keys(), "the plant: the engine's key is held"

@@ -22,7 +22,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from schemas.domain import DomainPack, PrincipalId
+from schemas.domain import DomainPack, PoleClass, PrincipalId, PropertyType
 from schemas.monitoring import ListSchedule
 
 #: R12: one `live`, at most one `draft`, every earlier version `previous`.
@@ -33,10 +33,40 @@ TargetModelState = Literal["draft", "live", "previous"]
 ExtensionKind = Literal["entity_type", "link_type", "property"]
 
 
+#: What a type does with a record that matches one already held: the two values the recipe
+#: engine's `on_match` takes (`schemas.ingest.RecipeEntity`), and no others. `reference` uses the
+#: record already held; `create` makes a new one each time.
+MatchingMode = Literal["reference", "create"]
+
+
+class MatchingRule(BaseModel):
+    """A type's rule for when two records are the same (ADR-140 Amendment 22 item 3; the owner's
+    ruling of 21 November 2026: it lives on the type record, not on each pipeline's element).
+
+    `match_on` is the field a record is found by and `on_match` what the engine does when it finds
+    one: the same two values the recipe engine takes today (`match_on` and `on_match`). A rule is
+    only as good as the matching code can make it: `match_on` must name one of the type's
+    identifiers or one of its indexed properties, because the store answers a lookup for those and
+    no others (`services/ingest/recipe_rules.py`, `reference_match_problems`). The store refuses a
+    rule that does not (`target_models._refuse_a_rule_a_reference_cannot_use`)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    match_on: str = Field(min_length=1)
+    on_match: MatchingMode = "reference"
+
+
 class ModelExtension(BaseModel):
     """A type or property the dataset's own model adds beyond the core and its packs (ADR-140
     decision 4; today's analyst-proposed type, ADR-090). Retired, never deleted: a rename is "add
-    the new, retire the old"."""
+    the new, retire the old".
+
+    **An entity type's record** carries its class (one of the five POLE classes, closed), its
+    identifiers and its matching rule (ADR-140 Amendment 22 item 3). **A property's record**
+    names the type it is on, its value type and whether it is indexed (the ontology's own
+    `PropertyDef.indexed`). Every one of these is optional, so an extension saved before they
+    existed still reads (a type with no class says so on screen) and is never changed by reading
+    it; a field that belongs to the other kind is refused."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -48,6 +78,16 @@ class ModelExtension(BaseModel):
     added_in: int = Field(ge=1)
     #: The model version that retired it; `None` while it is in force.
     retired_in: int | None = Field(default=None, ge=1)
+    #: An entity type's POLE class; `None` for one saved without (and for a link type or property).
+    pole_class: PoleClass | None = None
+    #: An entity type's identifiers, as the ontology's `EntityTypeDef.identifiers` has them.
+    identifiers: list[str] = Field(default_factory=list)
+    #: An entity type's rule for when two records are the same; `None` for none.
+    matching: MatchingRule | None = None
+    #: A property's value type; `None` for one saved without.
+    value_type: PropertyType | None = None
+    #: Whether a property is indexed (a lookup finds a record by it); false for a type.
+    indexed: bool = False
 
     @model_validator(mode="after")
     def _a_property_names_its_type(self) -> ModelExtension:
@@ -55,6 +95,16 @@ class ModelExtension(BaseModel):
             raise ValueError("a property names the type it is on, and a type names none")
         if self.retired_in is not None and self.retired_in <= self.added_in:
             raise ValueError("an extension is retired after the version that added it")
+        return self
+
+    @model_validator(mode="after")
+    def _a_field_belongs_to_its_kind(self) -> ModelExtension:
+        if self.kind != "entity_type" and (
+            self.pole_class is not None or self.identifiers or self.matching is not None
+        ):
+            raise ValueError("a class, identifiers and a matching rule belong to an entity type")
+        if self.kind != "property" and (self.value_type is not None or self.indexed):
+            raise ValueError("a value type and an indexed flag belong to a property")
         return self
 
 
@@ -78,16 +128,43 @@ class TargetModel(BaseModel):
     made_live_by: PrincipalId | None = None
     #: The version a revert copied, for a draft made by *Revert*; `None` otherwise.
     reverted_from: int | None = Field(default=None, ge=1)
+    #: Which copy of the draft this is: an opaque token the store makes when the draft is opened and
+    #: changes on every save, and never one a draft had before. The version alone cannot tell two
+    #: copies of one draft apart (a save keeps it; a draft discarded and opened again at the same
+    #: live version takes it again), so a save and a discard carry both (ADR-152 X5). `None` only
+    #: for a row written past the store.
+    revision: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 class TargetModelDraftInput(BaseModel):
-    """Saving the dataset's draft: its packs, extensions and lists as the editor leaves them."""
+    """Saving the dataset's draft: its packs, extensions and lists as the editor leaves them.
+
+    The store's own callers (the import, the link-type acceptance, the seed) build this and confirm
+    a version through the store's `expected_version` argument where they mean to. The route's
+    body is `TargetModelDraftSave`, which carries the version a person's copy was read at."""
 
     model_config = ConfigDict(extra="forbid")
 
     packs: dict[DomainPack, int] = Field(default_factory=dict)
     extensions: list[ModelExtension] = Field(default_factory=list)
     reference_lists: list[str] = Field(default_factory=list)
+
+
+class TargetModelDraftSave(TargetModelDraftInput):
+    """`PUT /v1/datasets/{dataset_id}/model/draft`: the draft as the editor leaves it, and the
+    version their copy of it was read at (ADR-152 X5; the owner's ruling of 21 November 2026). A
+    save made over a draft that is no longer that version is refused in the store's words, and a
+    body with no version is refused too, so a client that does not send one cannot skip the
+    check. A separate model, not a field of the input, so the callers that build the input
+    directly are not given a version they could set and have nothing read.
+
+    `expected_revision` is the revision the same copy was read at (`TargetModel.revision`): where it
+    is sent, a draft that was saved again, or discarded and opened again, since is refused too, even
+    at the same version, which a version alone cannot tell. The Studio page always sends it; it is
+    optional here so a caller that holds only a version (its check is the version's) still works."""
+
+    expected_version: int = Field(ge=1)
+    expected_revision: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 #: ADR-140 Amendment 9 decision 3: a `screening` list is screened against; a `reference` list is
@@ -256,9 +333,11 @@ class DrawnDatasetInput(BaseModel):
 
 
 ALL_MODELS: tuple[type[BaseModel], ...] = (
+    MatchingRule,
     ModelExtension,
     TargetModel,
     TargetModelDraftInput,
+    TargetModelDraftSave,
     ReferenceList,
     DatasetOwnerSetting,
     DatasetOwners,

@@ -1144,6 +1144,21 @@ def test_a_drawing_is_withdrawn_in_a_case_reading_a_composite(
     assert world.graph.node(made["element_id"]).audit.reverted
 
 
+def test_a_withdrawal_records_the_person_withdrawing(world: SimpleNamespace) -> None:
+    """SE9 (the owner's ruling (b)), rule 12 at the real call site: `Boards.withdraw` hands the
+    graph the withdrawing principal's id (only an item's author may withdraw it, so that is the
+    author; two authors on two boards each get their own name). The plant: a withdrawal that drops
+    `by` records no one, and this fails."""
+    for who in ("alice", "bob"):
+        board = _board(who)
+        made = _item(board, who)
+        answer = _as(who).post(f"/v1/investigations/{K}/board-items/{made['item_id']}/withdraw")
+        assert answer.status_code == 200, answer.text
+    assert [(kind, by) for kind, by, _at in world.graph.deleted_by] == [
+        ("withdraw", "alice"), ("withdraw", "bob")
+    ]
+
+
 # --- review round 2 -----------------------------------------------------------------------------
 
 

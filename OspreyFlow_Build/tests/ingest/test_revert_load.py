@@ -175,6 +175,8 @@ class Graph:
         #: Nodes an analyst's correction has superseded, and the links' states by id.
         self.superseded_nodes: set[str] = set()
         self.link_states: dict[str, StoredLink] = {}
+        #: SE9: the person and the time each revert was told to record (what the revert passes).
+        self.recorded: list[tuple[Any, Any]] = []
 
     async def begin_transaction(self) -> str:
         return "tx"
@@ -185,7 +187,10 @@ class Graph:
     async def rollback_transaction(self, tx: str) -> None:
         return None
 
-    async def revert_elements(self, node_ids: Any, edge_ids: Any, tx: str) -> None:
+    async def revert_elements(
+        self, node_ids: Any, edge_ids: Any, tx: str, *, by: Any = None, at: Any = None
+    ) -> None:
+        self.recorded.append((by, at))
         self.steps.hit("graph", ",".join(node_ids), ",".join(edge_ids))
         self.reverted.update(node_ids)
         self.reverted.update(edge_ids)
@@ -390,6 +395,15 @@ async def test_a_load_is_reverted_by_the_ids_its_record_lists_and_nothing_else()
     assert "someone-elses-edge" not in links
     assert [s.load_id for s in result.reverted] == ["load-1"]
     assert (result.reverted[0].nodes, result.reverted[0].links) == (2, 1)
+
+
+async def test_a_revert_tells_the_graph_who_reverted_and_when() -> None:
+    """SE9 (the owner's ruling (b)), rule 12 at the real call site: `revert` hands the graph's
+    write the person it was given and the revert's own time, so the record in the store names them.
+    The plant: dropping `by` or `at` from the call leaves `recorded` with None, and this fails."""
+    world = World(_record("load-1"))
+    await world.revert("load-1")
+    assert world.graph.recorded == [(OPERATOR, NOW)]
 
 
 async def test_a_revert_does_every_step_and_marks_the_ledger_last() -> None:
@@ -686,7 +700,7 @@ async def test_a_cancelled_graph_step_with_a_failing_rollback_is_still_the_cance
     world = World(_record("load-1"))
     rolled: list[str] = []
 
-    async def cancelled(node_ids: Any, edge_ids: Any, tx: str) -> None:
+    async def cancelled(node_ids: Any, edge_ids: Any, tx: str, **_recorded: object) -> None:
         raise asyncio.CancelledError
 
     async def rollback(tx: str) -> None:

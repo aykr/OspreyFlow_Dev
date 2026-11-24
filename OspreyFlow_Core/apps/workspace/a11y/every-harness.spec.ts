@@ -50,6 +50,10 @@ const EXTRA_STATES: Record<string, string[]> = {
   // gateway chosen.
   "models-harness.html": ["open=add", "open=key", "local=1", "open=limits", "usage=chosen", "usage=fail",
                           "open=add&kind=bedrock&iam=1&cloud=1", "open=add&kind=gateway&cloud=1",
+                          // ADR-135 Amendment 14: a check passed and refused, and a check waiting for Add.
+                          "open=add&check=passed", "open=add&check=refused", "held=1",
+                          // The owner's ruling 19: an edit whose address changed, its key asked with it.
+                          "open=edit&moved=1",
                           // ADR-135 Amendment 9: the extraction engine Laurium, shown read-only.
                           "cloud=1&engine=laurium"],  // prettier-ignore
   // ADR-146 decisions 2 and 6: Home with Rules and Monitoring's card and an alert's row.

@@ -291,3 +291,39 @@ async def test_the_stamping_graph_is_a_bulk_loader_exactly_when_what_it_wraps_is
     )
     assert await bulky.bulk_load_edges([link], chunk_size=10) == "loaded"
     assert inner.bulk[0].datasets == ["enron"]
+
+
+async def test_the_stamping_graph_passes_who_and_when_to_every_deletion_write() -> None:
+    """SE9, rule 12 at the wrapper's call site: the revert, the withdrawal, a drawn item's
+    withdrawal and a layer's withdrawal each reach the adapter with the `by` (and `at`) the caller
+    gave. The plant: a pass-through that drops either (as the wrapper did before the slice) leaves
+    the inner graph with None, and this fails for that write."""
+    seen: list[tuple[str, Any, Any]] = []
+
+    class _Deleting(_RecordingGraph):
+        async def revert_elements(self, nodes: Any, edges: Any, tx: Any, **kw: Any) -> None:
+            seen.append(("revert", kw.get("by"), kw.get("at")))
+
+        async def withdraw_elements(
+            self, nodes: Any, edges: Any, load_id: str, tx: Any, **kw: Any
+        ) -> None:
+            seen.append(("withdraw", kw.get("by"), kw.get("at")))
+
+        async def withdraw_layer(self, dataset_id: str, withdrawal: str, tx: Any, **kw: Any) -> Any:
+            seen.append(("layer", kw.get("by"), kw.get("at")))
+            return None
+
+    when = datetime(2026, 11, 22, 12, 0, tzinfo=UTC)
+    from services.api.dataset_scope import stamping
+
+    graph = stamping(_Deleting(), dataset="enron")  # type: ignore[arg-type]
+    await graph.revert_elements(["n"], [], "tx", by="alice", at=when)
+    await graph.withdraw_elements(["n"], [], "load-1", "tx", by="bob", at=when)
+    await graph.withdraw_drawn(["n"], [], "w-1", "tx", by="carol")  # type: ignore[attr-defined]
+    await graph.withdraw_layer("enron", "w-2", "tx", by="dana", at=when)
+    assert seen == [
+        ("revert", "alice", when),
+        ("withdraw", "bob", when),
+        ("withdraw", "carol", None),  # a drawn item's withdrawal names who; the store times it
+        ("layer", "dana", when),
+    ]

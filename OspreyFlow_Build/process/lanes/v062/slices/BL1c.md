@@ -27,7 +27,7 @@ All under `process/lanes/v062/`, and nothing else:
 
 ## Acceptance test
 
-`OspreyFlow_Build/tests/test_doc_citations_check.py` (extended; the new cases red first on main). **Say which folders it walks** (a scan row is written from that if it is a new walker).
+`OspreyFlow_Build/tests/test_doc_citations_skips_lane_papers.py` (**new**, red first on main: it does not exist; the new cases for the skipped folders and the skipped count live in this file; **the existing `test_doc_citations_check.py` stays in the checks and stays green**; the owner's rule that the acceptance command must fail on main, 23 November 2026: the first row named the whole existing test file, which already passes). **Say which folders it walks** (a scan row is written from that if it is a new walker; a builder cannot add it).
 
 ## Checks (pure; store ports pinned to 9)
 
@@ -36,3 +36,20 @@ All under `process/lanes/v062/`, and nothing else:
 ## Out of scope
 
 Any other check; the allowlist's contents; the product; the protected files (the `citation-check` target is unchanged).
+
+## Never merge another part's unmerged tip (the owner, 23 November 2026)
+
+**Never merge another part's unmerged tip, or any branch but main, into your branch.** Take main in when the line tells you to, and nothing else. A part that did this (AD1b, with AD1a's tip) had the hook count the other part's tests as its own. If your part needs another part's change that has not merged, stop and tell the conductor.
+
+## Round 2 (23 November 2026, the conductor): two errors in this brief, found by the verifier
+
+**Both findings are the conductor's errors in the brief, not yours.** The brief said the guides under `OspreyFlow_Core/docs/` and the slice line's scripts folder are "still checked". **They are not: the check never scans `docs/` (its search roots are spec, process, tools, apps, services, packages, scripts and harness), and the root `scripts` resolves to the product folder's `scripts`, so the slice line's own scripts folder under the Build folder is never scanned either.** Do this and nothing else:
+
+1. **Drop the case that plants a broken citation in a guide under `docs/`** (it cannot fail: the check does not read it). **Do not widen the check.** Say in the test file's docstring, in one short paragraph, that the guides under `OspreyFlow_Core/docs/` and the slice line's scripts folder sit outside this gate before and after this change.
+2. **Replace the "still checked" case that uses the slice line's scripts folder** with a path in a folder the real check really scans on the real tree (for example one under the product folder's `scripts/` or the Build folder's `tools/`), so the tree in the case has the shape the check sees. **Check that shape against the real tree: the new case's folder must be one the check's own scan reports as scanned.**
+3. **One new case on the real tree:** a folder the check does scan and that is not a lane paper (take one from the check's own scan) is reported as scanned, so the "still checked" list in the test is anchored to the real tree.
+4. No change to the check itself, the skip, the count it reports, or any other file. Re-run your checks and the scan-map check once.
+
+## Round 3 (23 November 2026, the conductor): one gap, one case
+
+**The verifier found one gap in your last-line test:** `test_the_last_line_of_output_says_how_many_files_were_skipped_on_failure` reads stdout and stderr separately, so it cannot fail if the count line moved above the list of broken citations; its docstring claims it proves the order. **Do this and nothing else:** make that case run the check as a subprocess on a throwaway tree with a broken citation under `spec/`, with stderr merged into stdout (`stderr=subprocess.STDOUT`), and assert the **last line of the merged output** is the count line and that the broken citation appears before it. **Red first:** show the case fails when the count line is printed before the list (plant it in a copy of the check, not in the real one). No change to the check itself or any other test.

@@ -61,6 +61,7 @@ ALLOWED = {
     # moved into place whole by `_files_up_to_date_staged`.
     ("scripts/refresh.py", "_models_up_to_date", "env_path"),
     ("scripts/refresh.py", "_release_up_to_date", "env_path"),
+    ("scripts/refresh.py", "_plain_lines_added", "env_path"),
 }
 
 _COPIES = {"copy", "copy2", "copyfile", "move"}

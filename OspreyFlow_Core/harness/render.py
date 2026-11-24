@@ -57,6 +57,7 @@ from typing import Any, cast
 
 import yaml
 
+from harness import pages_service
 from harness.images import (
     DigestResolver,
     ServiceImage,
@@ -92,6 +93,7 @@ from schemas.deployment import (
     compose_project,
     generated_folder,
     host_folder_source,
+    load_osprey_yaml,
 )
 
 #: Where the workspace's nginx serves the basemap's glyph files from
@@ -680,6 +682,14 @@ def service_images(config: OspreyConfig, *, build_context: str = "../../..") -> 
         # ADR-098 decision 2: the fast recogniser (Stanza), its model inside the image.
         _owned("ner", "services/ner/Dockerfile"),
     ]
+    if pages_service.enabled(config):
+        # ADR-152 Amendment 3 item 3: the page service, only with `pages.enabled` on. It reads no
+        # `deployment.env` whole (`reads_env_file=False`): it is given its two secrets by name and
+        # the settings `pages_service.service_environment` lists.
+        images.append(_owned(pages_service.SERVICE, pages_service.DOCKERFILE, reads_env_file=False))
+    if pages_service.workspace_removed(config):
+        # Invariant I22: a GOV.UK deployment whose tree is complete runs no workspace.
+        images = [image for image in images if image.service != "workspace"]
     if config.components.graph_store.value == "arcadedb":
         # ADR-101: 26.10.1, where an update no longer drops other records from an index key.
         images.append(ServiceImage("arcadedb", "arcadedata/arcadedb:26.10.1"))
@@ -1104,6 +1114,40 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
         # start after they are healthy, not merely after they are created. Found running the golden
         # path: with no ordering it died on `httpx.ConnectError` reaching a Keycloak that was still
         # importing its realm, and then restarted forever.
+        if entry.service == pages_service.SERVICE:
+            # ADR-152 Amendment 3 item 3 (decision 7): the page service's own variables, with
+            # `OSPREY_PAGES_TREE` from the brand and its two secrets by name. Ready when it answers
+            # `/healthz` (a Node image has no `wget`, so the check is Node's own `fetch`); it needs
+            # the session store, and the identity provider it signs people in against where there
+            # is one.
+            pages_environment = pages_service.service_environment(
+                config, with_sign_in=any(other.service == "keycloak" for other in images)
+            )
+            service["environment"] = pages_environment
+            signs_in = "OSPREY_PAGES_OIDC_ISSUER" in pages_environment
+            if "NODE_EXTRA_CA_CERTS" in pages_environment:
+                # The organisation's own CA, read-only, where node is told to look (as Keycloak's
+                # truststore is given it, below): the identity name's certificate is theirs.
+                assert config.network.tls is not None and config.network.tls.ca
+                service["volumes"] = [
+                    f"{config.network.tls.ca}:{pages_service.CA_IN_SERVICE}:ro",
+                ]
+            service["depends_on"] = {
+                dependency: {"condition": "service_healthy"}
+                for dependency in ("valkey", *(("keycloak",) if signs_in else ()))
+            }
+            service["healthcheck"] = {
+                "test": [
+                    "CMD",
+                    "node",
+                    "-e",
+                    f"fetch('http://127.0.0.1:{pages_service.PAGES_PORT}/healthz')"
+                    ".then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))",
+                ],
+                "interval": "10s",
+                "timeout": "5s",
+                "retries": 6,
+            }
         if entry.service == "workspace":
             # The map's place names: glyph files kept with the basemap, in the tiles folder's
             # `fonts/` (`scripts.fetch_basemap_glyphs`), served by the workspace's nginx at
@@ -1532,6 +1576,8 @@ def egress_needs(config: OspreyConfig) -> set[str]:
         needs |= {"api", "ingest"}  # staging, site images, the tile cache, media: the cloud's S3
     if external.media is not None:
         needs.add("api")  # media on Blob
+    if external.valkey is not None and pages_service.enabled(config):
+        needs.add(pages_service.SERVICE)  # the page service's sessions, in the managed cache
     if config.models.enabled_providers:
         needs.add("litellm")  # the client's own model providers (ADR-135)
     if config.mail is not None or config.governance.organisation_sign_in:
@@ -1548,6 +1594,17 @@ def _place_on_networks(config: OspreyConfig, services: dict[str, Any]) -> None:
     reaching_out = egress_needs(config)
     for name, service in services.items():
         service["networks"] = ["osprey", "egress"] if name in reaching_out else ["osprey"]
+    pages = services.get(pages_service.SERVICE)
+    if pages is not None and "OSPREY_PAGES_OIDC_ISSUER" in pages.get("environment", {}):
+        # The page service fetches its issuer itself, at sign-in, and the issuer is the public
+        # identity name (openid-client checks the discovery document's `issuer` against the address
+        # it asked, so the Conduit's internal Keycloak address is not one it can be given). The
+        # service stays on the internal network alone (ADR-114 Amendment 7: no route out; not
+        # `egress_needs`): the proxy answers to the identity name inside `osprey`, by an alias.
+        services["proxy"]["networks"] = {
+            "osprey": {"aliases": [pages_service.identity_alias(config)]},
+            "egress": {},
+        }
 
 
 #: Keycloak's role and database on the deployment's Postgres, made before Keycloak starts and run at
@@ -2071,6 +2128,9 @@ def render(
     `"registry"`) rather than this function silently mislabelling a registry-resolved digest as a
     local-daemon one.
     """
+    # ADR-152 Amendment 3 item 4: a GOV.UK deployment whose tree is complete and whose page service
+    # is not enabled is refused in words, in every shape, before anything is rendered.
+    pages_service.refuse_a_cutover_without_the_service(config)
     if resolver is None:
         resolver = (
             unresolved_digest_resolver if allow_unpinned else daemon_then_registry_digest_resolver
@@ -2156,7 +2216,9 @@ def load_config(path: Path) -> OspreyConfig:
     function had not."""
     if not path.exists():
         return OspreyConfig()
-    raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    # ADR-152 Amendment 3 item 1: `load_osprey_yaml`, not `yaml.safe_load`, so an unquoted `yes` or
+    # `on` in `pages.enabled` is refused in words rather than read as `true`.
+    raw = load_osprey_yaml(path.read_text(encoding="utf-8"))
     config = OspreyConfig.model_validate(raw)
     # ADR-143 Amendment 6: a scheme file named by `grading.scheme` is read beside this file.
     config.grading.read_file(path.parent)

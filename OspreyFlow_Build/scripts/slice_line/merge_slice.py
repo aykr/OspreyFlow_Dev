@@ -18,7 +18,8 @@
   3. a verifier's pass record exists for the branch's exact tip commit, from a session that did not build it; or,
      in its place and for that exact tip only, the owner's acceptance (resume.py accept: accepted-<tip>.json, its
      use logged in owner-changes.tsv) of that same verifier's findings record for the tip, unchanged;
-  4. the branch touches no protected path (the owner's files, the never-staged files, the line itself);
+  4. the branch touches no protected path (the owner's files, the never-staged files, the line itself; its own scan
+     row only when the merge result holds main's bytes for it, own_row_as_main: the owner's file 015);
   5. the acceptance test was red before the slice (the base, with the slice's acceptance files) ...
   6. ... and is green, with the slice's checks, on the merge result;
   7. today's full gate is green on the merge result (FULL_GATE: make -k ci and make test in the merge tree's own
@@ -798,6 +799,33 @@ def check_conflicts() -> list[str]:
     return said
 
 
+def own_row_as_main(slice_id: str, path: str, base: str, tip: str) -> bool:
+    """True only for the part's own scan_rows/<its id>.tsv when that file in the merge result is byte for byte what
+    main already holds (the owner's file 015, 23 November 2026: AD1b's builder wrote its row as its brief said, main
+    took the same row from the conductor, and the first check still refused it for what the branch changed since it
+    left main, not for what the merge would change). Nothing reaches main that the conductor or the owner did not put
+    there. Another part's row, a row main has not got, a row that conflicts or differs by one byte: False, refused as
+    every other protected path. Not a rule that a part may write its own row: the row decides which tests cover it."""
+    if path != f"{SCAN_ROWS_REL}/{slice_id}.tsv":
+        return False
+    held = subprocess.run(["git", "rev-parse", "-q", "--verify", f"{base}:{path}"], cwd=c.REPO, capture_output=True,
+                          text=True)
+    if held.returncode != 0:
+        return False
+    p = subprocess.run(["git", "merge-tree", "--write-tree", "--name-only", "--no-messages", base, tip], cwd=c.REPO,
+                       capture_output=True, text=True)
+    lines = p.stdout.splitlines()
+    if p.returncode not in (0, 1) or not lines:  # a conflict in the file leaves markers: not main's bytes
+        return False
+    got = subprocess.run(["git", "rev-parse", "-q", "--verify", f"{lines[0]}:{path}"], cwd=c.REPO, capture_output=True,
+                         text=True)
+    if got.returncode != 0 or got.stdout.strip() != held.stdout.strip():
+        return False
+    note(f"{path}: the part's own scan row, byte for byte main's in the merge result: not counted as the branch's "
+         "change (the owner's file 015)")
+    return True
+
+
 def records_only_conflict(base: str, tip: str) -> list[str]:
     """The files the tip conflicts with main in, when every one is in the records folder; [] otherwise."""
     files = merge_conflicts(base, tip)
@@ -1326,7 +1354,7 @@ def merge(slice_id: str) -> dict:
         accepted = acceptance(slice_id, tip)
         verify = accepted["verifier"] if accepted else verifier_pass(slice_id, tip)
         touched = c.git(["diff", "--name-only", f"{base}...{tip}"], c.REPO).splitlines()
-        bad = [p for p in touched if p.startswith(PROTECTED_PREFIXES)]
+        bad = [p for p in touched if p.startswith(PROTECTED_PREFIXES) and not own_row_as_main(slice_id, p, base, tip)]
         if bad:
             raise Refused("the branch touches protected paths: " + ", ".join(bad[:8]))
         dirty = [ln[3:] for ln in c.git(["status", "--porcelain", "--untracked-files=no"], c.REPO).splitlines()

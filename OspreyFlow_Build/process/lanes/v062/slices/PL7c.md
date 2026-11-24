@@ -22,3 +22,7 @@
 ## Out of scope
 
 Rendering `pages` in a deployment (PL7a2b); the register itself (PL11); the GOV.UK pages (their own builds); the Makefile, `ci.yml` and any `CLAUDE.md` (diffs for the owner).
+
+## Never merge another part's unmerged tip (the owner, 23 November 2026)
+
+**Never merge another part's unmerged tip, or any branch but main, into your branch.** Take main in when the line tells you to, and nothing else. A part that did this (AD1b, with AD1a's tip) had the hook count the other part's tests as its own. If your part needs another part's change that has not merged, stop and tell the conductor.

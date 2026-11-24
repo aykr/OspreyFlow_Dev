@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+from harness import pages_service
 from schemas.deployment import (
     PROFILE_CEILINGS,
     EntraSignInConfig,
@@ -66,7 +67,13 @@ def render_caddyfile(config: OspreyConfig, *, doors: bool = True) -> str:
     other name refused. Admin API off; on plain HTTP, no certificates at all. A cluster has no host
     to open the loopback doors to (`doors=False`)."""
     names = sites(config)
-    routes = [(names.host, "workspace:8080"), (f"id.{names.host}", "keycloak:8080")]
+    # ADR-152 Amendment 3 and decision 7: with the page service on, the paths of its route table go
+    # to `pages`; once a GOV.UK tree is complete every path does, and there is no workspace (I22).
+    # Off, none of this is written and the table is what it was.
+    no_workspace = pages_service.workspace_removed(config)
+    glass = pages_service.UPSTREAM if no_workspace else pages_service.WORKSPACE_UPSTREAM
+    pages_paths = [] if no_workspace else pages_service.route_paths(config)
+    routes = [(names.host, glass), (f"id.{names.host}", "keycloak:8080")]
     if config.reporting.superset:
         routes.append((f"bi.{names.host}", "superset:8088"))
     plain = names.scheme == "http"
@@ -105,7 +112,18 @@ def render_caddyfile(config: OspreyConfig, *, doors: bool = True) -> str:
             # Glass, on the sign-in page's own name, so they are same-origin there.
             handlers = [
                 "\thandle /assets/govuk/* {",
-                "\t\treverse_proxy workspace:8080",
+                f"\t\treverse_proxy {glass}",
+                "\t}",
+                "\thandle {",
+                f"\t\treverse_proxy {upstream}",
+                "\t}",
+            ]
+        elif name == names.host and no_workspace:
+            handlers = ["\thandle {", f"\t\treverse_proxy {upstream}", "\t}"]
+        elif name == names.host and pages_paths:
+            handlers = [
+                "\thandle @pages {",
+                f"\t\treverse_proxy {pages_service.UPSTREAM}",
                 "\t}",
                 "\thandle {",
                 f"\t\treverse_proxy {upstream}",
@@ -113,11 +131,28 @@ def render_caddyfile(config: OspreyConfig, *, doors: bool = True) -> str:
             ]
         else:
             handlers = [f"\treverse_proxy {upstream}"]
+        # The matcher is the site's own, outside the key's `route` (a named matcher is declared in
+        # the site block and used inside it).
+        matchers = (
+            ["\t" + pages_service.caddy_matcher(pages_paths)]
+            if name == names.host and pages_paths
+            else []
+        )
         if gate:
             handlers = _behind_the_key(
                 names.host, identity=name == f"id.{names.host}", handlers=handlers
             )
-        lines += ["", f"{names.scheme}://{name} {{", *given, *handlers, "}"]
+        address = f"{names.scheme}://{name}"
+        if (
+            name == f"id.{names.host}"
+            and doors
+            and (port := pages_service.identity_listener_port(config))
+        ):
+            # The page service reaches its issuer through the alias, inside the network, at the
+            # origin's port: the proxy listens there for this name too (the compose proxy alone:
+            # `doors`, which a cluster, with no alias, does not have).
+            address = f"{address}, {address}:{port}"
+        lines += ["", f"{address} {{", *given, *matchers, *handlers, "}"]
     # ADR-114 Amendment 7: the doors this machine alone uses, through the proxy, so the services
     # behind them need no published port — and so no route out (measured: a published port needs
     # a network that reaches the internet).
@@ -203,7 +238,7 @@ def _behind_the_key(host: str, *, identity: bool, handlers: list[str]) -> list[s
 
 
 #: A site named by host; a bare `:port` door (`loopback_doors`) is not a name and is not listed.
-_SITE = re.compile(r"^(?:https?://)(?P<name>[^\s{:][^\s{]*)\s*\{\s*$")
+_SITE = re.compile(r"^(?:https?://)(?P<name>[^\s{:,][^\s{,]*)(?:\s*,\s*\S+)*\s*\{\s*$")
 _UPSTREAM = re.compile(r"^\s*reverse_proxy\s+(?P<upstream>\S+)\s*$")
 
 

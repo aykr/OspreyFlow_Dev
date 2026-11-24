@@ -26,10 +26,10 @@ GOV.UK rules outside any theme folder today: `OspreyFlow_Core/packages/design/to
 
 The new test; `tests/glass_trees/test_design_gates_reach.py`, `tests/test_design_check.py`, `tests/test_colour_drift_check.py`, `tests/test_doc_citations_check.py`; `ruff check .` in `OspreyFlow_Core` and ruff format on the files changed. **No `tests/test_layout.py`.** Before your final report run by hand what the conductor runs again: ruff on every file changed and the scan-map check for the new test.
 
-## Scan-map rows for your new tests (the owner's rule for the night, 22 November 2026)
-
-**If a new test of yours walks a folder** (a directory walk, a glob over repository folders, `git ls-files`, reading files by pattern), **write its scan-map row yourself in your own file `OspreyFlow_Build/process/lanes/v062/scan_rows/PL12b.tsv`** (one line per test: the test path relative to `OspreyFlow_Build`, a tab, the prefixes it walks, a tab, one sentence saying what it walks), **and say so in your report** (which test, which prefixes). That includes your acceptance test (the theme-rules test under the glass-trees tests), which reads the themes' CSS folders. A test that only reads its own `tmp_path` still gets a row, saying so. The tests that exist already have their rows or are not new; add none for them.
-
 ## Out of scope
 
 Moving any rule, font or file (PL12d, after slice E); the identity switch (PL12e); the default-build test (PL12c); `apps/workspace` edits; the Makefile, `ci.yml` and any `CLAUDE.md`; the marketing sites.
+
+## Never merge another part's unmerged tip (the owner, 23 November 2026)
+
+**Never merge another part's unmerged tip, or any branch but main, into your branch.** Take main in when the line tells you to, and nothing else. A part that did this (AD1b, with AD1a's tip) had the hook count the other part's tests as its own. If your part needs another part's change that has not merged, stop and tell the conductor.

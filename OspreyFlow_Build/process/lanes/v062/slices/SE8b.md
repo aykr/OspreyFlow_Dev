@@ -32,3 +32,7 @@ The new test; `tests/services/api/test_export_routes.py`, `test_export_withheld.
 ## Out of scope
 
 Model calls (SE8a), sign-in events (SE8c), guide wording ("coming" until SE8 merges), any change to who may read the ledger beyond the no-case rule, `apps/workspace`, the protected files.
+
+## Never merge another part's unmerged tip (the owner, 23 November 2026)
+
+**Never merge another part's unmerged tip, or any branch but main, into your branch.** Take main in when the line tells you to, and nothing else. A part that did this (AD1b, with AD1a's tip) had the hook count the other part's tests as its own. If your part needs another part's change that has not merged, stop and tell the conductor.

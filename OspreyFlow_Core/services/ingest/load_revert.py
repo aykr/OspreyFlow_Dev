@@ -605,7 +605,7 @@ async def _revert_one(
         tx = await deps.graph.begin_transaction()
         try:
             if nodes or links:
-                await deps.graph.revert_elements(nodes, links, tx)
+                await deps.graph.revert_elements(nodes, links, tx, by=reverted_by, at=now)
             for prior in record.own_key_merges:
                 # ADR-110 Amendment 16: the link as it was before this load's merge, only while it
                 # reads back to what the load left (planning refused anything else).

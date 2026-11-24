@@ -24,7 +24,8 @@ export interface Reply {
 }
 
 export interface Call {
-  method?: "GET" | "POST";
+  /** `PUT` and `DELETE` are the draft's (slice IS2a): a save and a discard, each carrying the version the person's copy was read at. */
+  method?: "GET" | "POST" | "PUT" | "DELETE";
   /** A path made by `v1`. */
   path: string;
   query?: Record<string, string | number | boolean>;

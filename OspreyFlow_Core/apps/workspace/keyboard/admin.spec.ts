@@ -40,6 +40,9 @@ const CATALOGUE = {
     { id: "data_engineer", label: "Data Engineer", rights: ["edit_pipelines", "review_promotions"], gives: [] },
     // Route A2: Admin carries administration rights, so a giver without them is not offered it.
     { id: "osprey-admin", label: "Admin", rights: ["administer_system", "manage_people"], gives: [] },
+    // The route always sends every role the form offers (`_built_in_roles`); the form refuses a catalogue without one.
+    { id: "reports_viewer", label: "Reports Viewer", rights: ["read_reports"], gives: [] },
+    { id: "rule_author", label: "Rule author", rights: ["author_rules"], gives: [] },
     { id: "super_user", label: "Super user", rights: ["investigate", "edit_pipelines"], gives: ["analyst", "data_engineer", "rule_author"] },
   ],
   custom: [{ id: "r1", name: "Intel desk", version: 1, rights: ["investigate"], changed_by: "a", changed_at: "", holders: 1, team: TEAM }],

@@ -4512,6 +4512,281 @@ async def test_count_visible_past_one_chunk_counts_exactly_the_readable_ones(
         assert await adapter.count_visible(asked, READER) == 1050
 
 
+# `count_deleted_visible` (SE9, ADR-144 Amendment 7) is the count behind a saved view's `missing`: how
+# many of the given ids are **deleted** (reverted or withdrawn, and not superseded) and would pass
+# `principal`'s access step if they were live. The access step is in the store's query (rule 3), so a
+# deletion above the reader, in a dataset they do not read, or under a restricted handling code is in no
+# number they are told, and a missing id and a hidden deleted one answer alike. Each reason is its own
+# case, as for `count_visible`, so a plant that lifts one axis of the access step from this query fails
+# the case for that axis by name. Each deletion is written through the adapter's real method.
+
+
+async def _delete_nodes(
+    adapter: GraphPort, how: str, node_ids: list[str], *, by: str | None = None
+) -> None:
+    """Delete `node_ids` by the route named: a load's revert, a refresh's withdrawal, or a removed
+    case layer's withdrawal (the nodes are in the dataset `enron` alone, as the layer's must be)."""
+    tx = await adapter.begin_transaction()
+    if how == "revert":
+        await adapter.revert_elements(node_ids, [], tx, by=by)
+    elif how == "withdraw":
+        await adapter.withdraw_elements(node_ids, [], "refresh-2", tx, by=by)
+    else:
+        await adapter.withdraw_layer("enron", "layer-deleted-1", tx, by=by)
+    await adapter.commit_transaction(tx)
+
+
+_DELETIONS = ["revert", "withdraw", "layer"]
+
+
+@pytest.mark.parametrize("how", _DELETIONS)
+async def test_count_deleted_visible_counts_a_deletion_the_reader_could_see(
+    factory: GraphAdapterFactory, how: str
+) -> None:
+    async with factory.context() as adapter:
+        (gone, kept), _ = await _write(
+            adapter, [_node("Person", classification="OFFICIAL", datasets=["enron"]) for _ in "ab"], []
+        )
+        assert await adapter.count_deleted_visible([gone, kept], READER) == 0  # nothing deleted yet
+        await _delete_nodes(adapter, how, [gone])
+        if how == "layer":  # the layer withdraws everything wholly in it: both are gone
+            assert await adapter.count_deleted_visible([gone, kept], READER) == 2
+        else:
+            assert await adapter.count_deleted_visible([gone, kept], READER) == 1
+            assert await adapter.count_deleted_visible([kept], READER) == 0
+        assert await adapter.count_visible([gone], READER) == 0  # it is deleted: no read finds it
+
+
+@pytest.mark.parametrize("how", ["revert", "withdraw"])
+@pytest.mark.parametrize("reason", ["clearance", "handling_code", "dataset"])
+async def test_count_deleted_visible_leaves_out_a_deletion_the_reader_could_not_see(
+    factory: GraphAdapterFactory, reason: str, how: str
+) -> None:
+    """One never visible to the reader (above their clearance, under a restricted code, in a dataset
+    their case does not read), then deleted: counted for no one who could not see it, and for the one
+    who could (the filter finds the record, the axis is what leaves it out)."""
+    async with factory.context() as adapter:
+        (visible,), _ = await _write(
+            adapter, [_node("Person", classification="OFFICIAL", datasets=["enron"])], []
+        )
+        hidden = await _unreadable_node(adapter, reason)
+        await _delete_nodes(adapter, how, [visible, hidden])
+        assert await adapter.count_deleted_visible([hidden, visible], READER) == 1
+        assert await adapter.count_deleted_visible([hidden], READER) == 0
+        if reason in ("clearance", "dataset"):
+            opener = CLEARED if reason == "clearance" else READER_BOTH
+            assert await adapter.count_deleted_visible([hidden], opener) == 1
+        if reason == "handling_code":
+            assert await adapter.count_deleted_visible([hidden], RESTRICTED_READER) == 1
+
+
+async def test_count_deleted_visible_leaves_out_a_node_re_marked_above_the_reader_before_its_deletion(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Visible when saved, re-marked SECRET by a write, then deleted: it is above the reader now, so
+    it is in no number they are told; a reader cleared to SECRET is told of it."""
+    async with factory.context() as adapter:
+        (node_id,), _ = await _write(
+            adapter, [_node("Person", classification="OFFICIAL", datasets=["enron"])], []
+        )
+        remarked = _node("Person", classification="SECRET", datasets=["enron"]).model_copy(
+            update={"id": node_id}
+        )
+        await _write(adapter, [remarked], [])
+        await _delete_nodes(adapter, "revert", [node_id])
+        assert await adapter.count_deleted_visible([node_id], READER) == 0
+        assert await adapter.count_deleted_visible([node_id], CLEARED) == 1
+
+
+async def test_count_deleted_visible_does_not_count_a_node_deleted_and_created_again(
+    factory: GraphAdapterFactory,
+) -> None:
+    """A write to a reverted node's id is a fresh create (ADR-127 Amendment 6): the flag and the
+    record are cleared together, so it is live, read, and not missing. Deleted once more, it counts."""
+    async with factory.context() as adapter:
+        (node_id,), _ = await _write(
+            adapter, [_node("Person", classification="OFFICIAL", datasets=["enron"])], []
+        )
+        await _delete_nodes(adapter, "revert", [node_id], by="loader-1")
+        assert await adapter.count_deleted_visible([node_id], READER) == 1
+        again = _node("Person", classification="OFFICIAL", datasets=["enron"]).model_copy(
+            update={"id": node_id}
+        )
+        await _write(adapter, [again], [])
+        assert await adapter.count_deleted_visible([node_id], READER) == 0
+        assert await adapter.count_visible([node_id], READER) == 1
+        await _delete_nodes(adapter, "revert", [node_id])
+        assert await adapter.count_deleted_visible([node_id], READER) == 1
+
+
+async def test_count_deleted_visible_counts_a_deletion_by_the_reader_and_by_another(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Who deleted is for the record, not the count: a reader's own deletion counts, a colleague's
+    deletion of something the reader could see counts, and neither depends on the person named."""
+    async with factory.context() as adapter:
+        (mine, theirs, nobody), _ = await _write(
+            adapter, [_node("Person", classification="OFFICIAL", datasets=["enron"]) for _ in "abc"], []
+        )
+        await _delete_nodes(adapter, "revert", [mine], by=READER.id)
+        await _delete_nodes(adapter, "revert", [theirs], by="another-analyst")
+        await _delete_nodes(adapter, "revert", [nobody])  # no one named
+        for ids in ([mine], [theirs], [nobody], [mine, theirs, nobody]):
+            assert await adapter.count_deleted_visible(ids, READER) == len(ids)
+
+
+async def test_count_deleted_visible_does_not_count_a_supersession(
+    factory: GraphAdapterFactory,
+) -> None:
+    """A correction replaces a node with a revision of its own: the old one is not deleted. And an
+    old revision that is also reverted is still a supersession, never a deletion."""
+    async with factory.context() as adapter:
+        superseded = await _unreadable_node(adapter, "superseded")
+        assert await adapter.count_deleted_visible([superseded], READER) == 0
+        await _delete_nodes(adapter, "revert", [superseded])
+        assert await adapter.count_deleted_visible([superseded], READER) == 0
+        # A live node and an absent one count nothing either.
+        (live,), _ = await _write(
+            adapter, [_node("Person", classification="OFFICIAL", datasets=["enron"])], []
+        )
+        assert await adapter.count_deleted_visible([live, new_node_id()], READER) == 0
+
+
+async def test_count_deleted_visible_answers_alike_for_a_missing_id_and_a_hidden_deleted_one(
+    factory: GraphAdapterFactory,
+) -> None:
+    """The rule-3 oracle probe: whatever the reason an id is not counted (nobody holds it, it is
+    live, it is hidden and deleted, hidden and live), the numbers are the same, so the number cannot
+    say whether a hidden node ever existed or was deleted."""
+    async with factory.context() as adapter:
+        (visible,), _ = await _write(
+            adapter, [_node("Person", classification="OFFICIAL", datasets=["enron"])], []
+        )
+        await _delete_nodes(adapter, "revert", [visible])
+        hidden_deleted = [await _unreadable_node(adapter, r) for r in ("clearance", "dataset")]
+        await _delete_nodes(adapter, "revert", [hidden_deleted[0]])
+        await _delete_nodes(adapter, "revert", [hidden_deleted[1]])
+        hidden_live = await _unreadable_node(adapter, "handling_code")
+        for other in (new_node_id(), hidden_deleted[0], hidden_deleted[1], hidden_live):
+            assert await adapter.count_deleted_visible([visible, other], READER) == 1
+            assert await adapter.count_deleted_visible([other], READER) == 0
+
+
+async def test_count_deleted_visible_counts_a_duplicated_id_once_and_no_ids_as_none(
+    factory: GraphAdapterFactory,
+) -> None:
+    async with factory.context() as adapter:
+        (a, b), _ = await _write(
+            adapter, [_node("Person", classification="OFFICIAL", datasets=["enron"]) for _ in "ab"], []
+        )
+        await _delete_nodes(adapter, "revert", [a, b])
+        assert await adapter.count_deleted_visible([b, a, b, a, a], READER) == 2
+        assert await adapter.count_deleted_visible([], READER) == 0
+        with pytest.raises(TypeError):
+            await adapter.count_deleted_visible(a, READER)
+
+
+async def test_count_deleted_visible_past_one_chunk_counts_exactly_the_visible_deletions(
+    factory: GraphAdapterFactory,
+) -> None:
+    """1,050 deleted and readable, 50 deleted and hidden, 50 live and 50 absent, mixed across the
+    chunks: 1,050 whatever the chunk boundaries do."""
+    async with factory.context() as adapter:
+        tx = await adapter.begin_transaction()
+        deleted = await adapter.upsert_nodes(
+            [_node("Person", classification="OFFICIAL", datasets=["enron"]) for _ in range(1050)], tx
+        )
+        hidden = await adapter.upsert_nodes(
+            [_node("Person", classification="SECRET", datasets=["enron"]) for _ in range(50)], tx
+        )
+        live = await adapter.upsert_nodes(
+            [_node("Person", classification="OFFICIAL", datasets=["enron"]) for _ in range(50)], tx
+        )
+        await adapter.commit_transaction(tx)
+        await _delete_nodes(adapter, "revert", [*deleted, *hidden])
+        extra = [*hidden, *live, *[new_node_id() for _ in range(50)]]
+        asked: list[str] = []
+        for i, node_id in enumerate(deleted):
+            asked.append(node_id)
+            if i % 7 == 0 and extra:
+                asked.append(extra.pop())
+        assert len(asked) > 1000
+        assert await adapter.count_deleted_visible(asked, READER) == 1050
+
+
+async def test_a_deletion_with_no_time_counts_and_a_restore_or_a_rollback_leaves_none(
+    factory: GraphAdapterFactory,
+) -> None:
+    """The time and the person are the record's, not the count's: a deletion written before the
+    store kept them (neither set) counts for a reader who could see it. A withdrawal taken back is
+    not a deletion; and a revert rolled back with its transaction records nothing and counts
+    nothing (the flag, the time and the person are one write)."""
+    async with factory.context() as adapter:
+        client = getattr(adapter, "_client", None)
+        (old, withdrawn, rolled_back), _ = await _write(
+            adapter, [_node("Person", classification="OFFICIAL", datasets=["enron"]) for _ in "abc"], []
+        )
+        await _delete_nodes(adapter, "revert", [old])
+        if client is not None:
+            await client.sql(
+                "UPDATE mx_Person SET reverted_at = null, reverted_by = null WHERE id = :id",
+                params={"id": old},
+            )
+        assert await adapter.count_deleted_visible([old], READER) == 1
+        await _delete_nodes(adapter, "withdraw", [withdrawn])
+        assert await adapter.count_deleted_visible([withdrawn], READER) == 1
+        tx = await adapter.begin_transaction()
+        await adapter.restore_withdrawn("refresh-2", tx)
+        await adapter.commit_transaction(tx)
+        assert await adapter.count_deleted_visible([withdrawn], READER) == 0
+        tx = await adapter.begin_transaction()
+        await adapter.revert_elements([rolled_back], [], tx, by="loader-1")
+        await adapter.rollback_transaction(tx)
+        assert await adapter.count_deleted_visible([rolled_back], READER) == 0
+        if client is not None:
+            rows = await client.sql(
+                "SELECT id, reverted_at, reverted_by FROM mx_Person WHERE id IN :ids",
+                params={"ids": [withdrawn, rolled_back]},
+            )
+            assert {r["id"]: (r.get("reverted_at"), r.get("reverted_by")) for r in rows} == {
+                withdrawn: (None, None),
+                rolled_back: (None, None),
+            }
+
+
+async def test_a_revert_and_a_withdrawal_record_when_and_by_whom_with_the_flag(
+    factory: GraphAdapterFactory,
+) -> None:
+    """ADR-144 Amendment 7 decision 1: every write that sets `reverted` sets `reverted_at` and
+    `reverted_by` in the same statement. Read from the store directly (the port gives no read of
+    them), so a write that set the flag alone fails here."""
+    async with factory.context() as adapter:
+        client = getattr(adapter, "_client", None)
+        if client is None:
+            pytest.skip("this adapter keeps its record somewhere the suite cannot read")
+        ids, _ = await _write(
+            adapter, [_node("Person", classification="OFFICIAL", datasets=["enron"]) for _ in "abc"], []
+        )
+        before = now_utc()
+        stamp = before + timedelta(seconds=1)
+        tx = await adapter.begin_transaction()
+        await adapter.revert_elements([ids[0]], [], tx, by="analyst-1", at=stamp)
+        await adapter.withdraw_elements([ids[1]], [], "refresh-2", tx, by="analyst-2", at=stamp)
+        await adapter.withdraw_layer("enron", "layer-deleted-1", tx, by="analyst-3", at=stamp)
+        await adapter.commit_transaction(tx)
+        rows = await client.sql(
+            "SELECT id, reverted, reverted_at, reverted_by FROM mx_Person WHERE id IN :ids",
+            params={"ids": ids},
+        )
+        by_id = {r["id"]: r for r in rows}
+        assert by_id[ids[0]]["reverted_by"] == "analyst-1"
+        assert by_id[ids[1]]["reverted_by"] == "analyst-2"
+        assert by_id[ids[2]]["reverted_by"] == "analyst-3"
+        for node_id in ids:
+            assert by_id[node_id]["reverted"] is True
+            assert by_id[node_id]["reverted_at"] is not None
+
+
 @dataclass(frozen=True)
 class _Unreadable:
     """A link `READER` cannot read. `opener` is a principal who differs from `READER` in just the

@@ -41607,8 +41607,14 @@ the guide's lines that were not updated then.
    reaching the product, and the listing is removed from start-up and from every reconcile
    (`GatewayAdmin.revoke_stale_engine_keys` no longer exists).** *What clears a stale virtual key now:* an
    engine's **removal** deletes its derived key (`delete_engine_key`, by derivation from the master key: no
-   listing, no key read) before the record forgets the engine, so no key outlives its record, and a refusal
-   leaves the engine and its key both, which agree; the note of intent covers the credential, which is another
+   listing, no key read) before the record forgets the engine, and a refusal leaves the engine and its key both,
+   which agree. That is the only route. **An engine's access token on the gateway is therefore not removed when
+   the engine leaves the record any other way: when the deployment is switched to local-only, when a models file
+   is restored, when a re-render drops an engine, or when an Add whose record cannot be saved is undone (the
+   engine's token is put on the gateway before the record is saved, and the undo withdraws the entries and not
+   the token; the 15-minute sweep removes only a check's own key, so it does not remove this token; AD1c closes
+   the route).** The token reaches no model unless an engine of the same
+   name is added again. The note of intent covers the credential, which is another
    thing. **What has no route (open row N6, in the release notes until closed):** after the gateway's master key is
    changed, the engine keys derived under the old one stay valid for whoever holds them, because nothing the
    Conduit holds names them (the old master is not kept, and no hash of an engine's key is recorded). The ways to

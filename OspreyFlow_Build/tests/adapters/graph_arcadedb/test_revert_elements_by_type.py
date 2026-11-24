@@ -34,7 +34,9 @@ _UPDATE = re.compile(
     # ADR-110 Amendment 6 point 3: reverting the load that made an element also clears
     # `withdrawn_by_load`, so a withdrawing refresh's later revert cannot bring it back. The
     # adapter has sent it since 28f3174; this expectation had not followed (L1.2a's brief).
-    r"UPDATE `(\w+)` SET reverted = true, withdrawn_by_load = null WHERE id IN :ids"
+    # SE9 (ADR-144 Amendment 7): the same statement sets when and by whom, with the flag.
+    r"UPDATE `(\w+)` SET reverted = true, reverted_at = :at, reverted_by = :whom, "
+    r"withdrawn_by_load = null WHERE id IN :ids"
 )
 _LOADS = re.compile(
     r"SELECT id, audit\.load_id AS load_id, reverted, superseded_by FROM `(\w+)` WHERE id IN :ids"
@@ -104,6 +106,8 @@ class TypedStore:
                 if i in table:
                     # What the statement sets, both of it: the flag and the withdrawal cleared.
                     table[i]["reverted"] = True
+                    table[i]["reverted_at"] = params["at"]
+                    table[i]["reverted_by"] = params["whom"]
                     table[i]["withdrawn_by_load"] = None
             return []
         if (m := _LOADS.fullmatch(command)) is not None:

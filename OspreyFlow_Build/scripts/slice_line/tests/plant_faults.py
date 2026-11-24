@@ -564,6 +564,12 @@ M = [
  ("server_gate.py", '        if r.get("slice") == slice_id and r.get("tip") == tip and', '        if r.get("slice") == slice_id and', "with_no_verdict_only_the_slices_own"),
  ("server_gate.py", '        if r.get("slice") == slice_id and r.get("tip") == tip and', '        if r.get("tip") == tip and', "with_no_verdict_only_the_slices_own"),
  ("merge_slice.py", '    if (e or {}).get("newer_without_verdict"):', '    if False:', "se6c or never_hides"),
+ # the owner's file 015: a part's own scan row, byte for byte main's in the merge result, and nothing else
+ ("merge_slice.py", '    if got.returncode != 0 or got.stdout.strip() != held.stdout.strip():', '    if got.returncode != 0:', "one_byte_from_main"),
+ ("merge_slice.py", '    if path != f"{SCAN_ROWS_REL}/{slice_id}.tsv":', '    if not path.startswith(SCAN_ROWS_REL + "/"):', "another_part_s_row"),
+ ("merge_slice.py", '    if held.returncode != 0:\n        return False', '    if held.returncode != 0:\n        return True', "main_has_not_got"),
+ ("merge_slice.py", 'and not own_row_as_main(slice_id, p, base, tip)]', '] if not any(own_row_as_main(slice_id, q, base, tip) for q in touched) else []', "second_protected_path_riding_along"),
+ ("merge_slice.py", '    note(f"{path}: the part\'s own scan row', '    (lambda *a: None)(f"{path}: the part\'s own scan row', "own_row_byte_for_byte"),
  # the owner's file 011: the runner's own result shape (run 97dc976c7be6d175), read as the runner gives it
  ("server_gate.py", '):  # the runner\'s own shape, a run with no tree too\n        return own_run(result)', ') and False:\n        return own_run(result)', "real_result_reads or switch_on_a_green_for_the_macs_tree or same_green_is_agree"),
  ("server_gate.py", '"main": result.get("main") if i == 0 else None,', '"main": None,', "real_result_reads"),

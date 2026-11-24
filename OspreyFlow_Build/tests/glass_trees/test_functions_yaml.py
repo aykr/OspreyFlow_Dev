@@ -67,8 +67,6 @@ EXPECTED_FUNCTIONS = 47
 # The list may only shrink: a new function with none fails the test. A slice that writes a scenario removes
 # the id here and fills the row's `scenario`.
 KNOWN_WITHOUT_SCENARIO = {
-    "studio-model-text",
-    "studio-model-proposals",
     "studio-screening-lists",
     "studio-pipeline-canvas",
     "studio-preview",
