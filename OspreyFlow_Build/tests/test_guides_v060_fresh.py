@@ -58,9 +58,9 @@ def guides() -> dict[str, str]:
 
 
 def test_the_changelog_says_v060_is_installed_fresh_and_version_names_it() -> None:
-    # VERSION named v0.6.0 at its cut; from v0.6.1 (a patch, 16 Nov) it names a later release of the same line,
+    # VERSION named v0.6.0 at its cut; from v0.6.1 (a patch, 16 Nov) it names a later release of the same line (v0.7.0 from 24 Nov, D227),
     # and the v0.6.0 section below still says fresh install only.
-    assert (CORE / "VERSION").read_text(encoding="utf-8").strip() in ("v0.6.0", "v0.6.1")
+    assert (CORE / "VERSION").read_text(encoding="utf-8").strip() in ("v0.6.0", "v0.6.1", "v0.7.0")
     log = (CORE / "CHANGELOG.md").read_text(encoding="utf-8")
     m = re.search(r"^## (v0\.6\.0) — \d{4}-\d{2}-\d{2}$", log, re.MULTILINE)
     assert m, "v0.6.0's section in the CHANGELOG (the latest release until v0.6.1's patch, 16 Nov)"

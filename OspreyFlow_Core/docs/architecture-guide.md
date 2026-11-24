@@ -51,7 +51,7 @@ every start; an offline bundle serves updates (administration guide, section 14)
 bar draws a small usage-tracking image from an address outside the deployment, and it is the person's browser that asks
 for it, so the deployment's internal network does not stand in its way. Superset's content policy in
 v0.6.1 and earlier allowed that address, so a browser that could reach the internet could send the request
-(read in the image's code, not measured in a browser). The fix is in v0.6.2: a content policy for
+(read in the image's code, not measured in a browser). The fix is in v0.7.0: a content policy for
 Superset that allows no outside address, so a browser refuses the image before it asks. A Small deployment on an https
 address fetches a certificate by default, unless the administrator gives it one. The model gateway's own
 cost-map fetch is switched off, and the speech server runs with its model hub offline, but its download step
@@ -98,10 +98,11 @@ its own.
 <!-- document-control:begin -->
 ## Document control
 
-**Version 1.13** · 2026-11-21 · For OspreyFlow v0.6.1 · Issued
+**Version 1.14** · 2026-11-24 · For OspreyFlow v0.6.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 1.14 | 2026-11-24 | *Why OspreyFlow is built this way*: the Superset tracking fix is said to be in v0.7.0, the number the coming release will carry (the owner's ruling of 24 November 2026: one release, numbered 0.7.0, no interim release). PDF made again. |
 | 1.13 | 2026-11-21 | §2: the first sentence no longer says everything between the Conduit and the Vault crosses one of four ports. It says what crosses the four typed ports (the graph store, the analytics store, graph algorithms and the model engines), that the media store, the recognition pass and the search index's feed each have a narrower one, and that the relational store, the working-set store and the search index are not behind a port (the owner's sentence, DC1c round 7). §6: the person is passed into every read, through the ports for the graph store, the analytics store and graph algorithms and in the query itself for the search index. PDF made again. |
 | 1.12 | 2026-11-21 | *Why OspreyFlow is built this way*, held to the truth check a fourth time (DC1c, round 5). Software sovereignty: the line no longer says replaceable software keeps a record from being held hostage, and no longer says each store or engine sits behind a port; it argues for software you can read, change, host and replace on its merits, says which stores and engines are behind a port (the graph store, the analytics store, graph algorithms, the model engines, the media store and the recognition pass) and says the relational store, the working-set store and the search index are not, so replacing one is not an adapter's work. Held by `tests/test_intent_in_the_guides.py`. PDF made again. |
 | 1.11 | 2026-11-21 | *Why OspreyFlow is built this way* and §6, held to the truth check a third time (DC1c, the verifier's findings): the audit sentences say case reads, refusals of access to a case and *changes* are audited, not "every change", and §6 adds that no test yet checks that each route that changes data writes a row; the privacy sentence says what each person sees is *meant to be* bounded. Held by `tests/test_intent_in_the_guides.py`. PDF made again. |

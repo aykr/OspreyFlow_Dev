@@ -27,7 +27,7 @@ fullest account, with what holds each constraint today and what is "coming".
   (`models.local_only` is true until you change it). A first install needs the internet, a default
   install fetches its model files on every start, and a Small deployment on an https address fetches
   a certificate unless you give it yours. Superset's usage-tracking image, which the person's
-  browser asks for, is not stopped in v0.6.1 and earlier; v0.6.2 stops it with a content policy that
+  browser asks for, is not stopped in v0.6.1 and earlier; v0.7.0 stops it with a content policy that
   allows no outside address.
 - **Privacy control.** What each person sees is meant to be bounded by handling markings and case
   membership, so the clearances and case levels you give people are what set the limit of what they can
