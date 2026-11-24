@@ -16,6 +16,11 @@ Which test fails if the invariant is broken (rule 12):
 * a scripts-off cell names a size, order or fold "kept" in this browser (with no script nothing reads the browser's
   storage, so the state is the default one): `test_no_scripts_off_cell_names_a_kept_value` and the planted cases
   `test_a_scripts_off_cell_naming_a_kept_height_is_refused` and `test_a_scripts_off_cell_naming_a_kept_order_is_refused`;
+* the paragraph above the table states the no-script state in terms that contradict a row (it once said every panel is
+  open "in its normal state (the default size, order and fold)", while the fold row's normal state is folded and the
+  timeline's is folded; a mounting slice following the paragraph would have drawn three panels folded with no control to
+  open them): `test_the_paragraph_defers_to_the_scripts_off_column` and the planted case
+  `test_a_paragraph_promising_the_default_fold_is_refused`;
 * the store keeps something the table says is for the tab only, or the other way: `test_the_store_keeps_what_the_table_says`
   and `test_a_store_that_disagrees_with_the_table_is_refused`;
 * the minimum width is anything but 300 in the spec or in `layoutSizes.ts`, or a 240 minimum is back in the sashes'
@@ -127,6 +132,31 @@ def check_scripts_off_names_no_kept_value(text: str) -> list[str]:
     return faults
 
 
+def no_script_paragraph(text: str) -> str:
+    """The prose between the table's heading and the table itself."""
+    at = text.index(TABLE_HEADING)
+    return text[at : text.index("| Action id", at)]
+
+
+def check_paragraph_defers_to_the_column(text: str) -> list[str]:
+    """The paragraph gives no state of its own for the no-script page: the *Scripts off* column does, row by row.
+
+    The normal state of the fold and of the timeline is folded; with no script nothing could open them, so the column
+    says open. A paragraph that says "default ... fold" for the no-script state contradicts those rows.
+    """
+    paragraph = no_script_paragraph(text)
+    faults = []
+    if "With no script" not in paragraph:
+        faults.append("the paragraph does not state the no-script rule ('With no script ...')")
+    if "*Scripts off* column" not in paragraph:
+        faults.append("the paragraph does not defer to the *Scripts off* column")
+    sentence = paragraph[paragraph.index("With no script") :] if "With no script" in paragraph else ""
+    sentence = sentence.split("(the owner:")[0]
+    if re.search(r"\bfold", sentence, re.IGNORECASE) or re.search(r"default[^.]*fold", sentence, re.IGNORECASE):
+        faults.append("the no-script sentence names the fold, whose normal state is folded and whose no-script state is open")
+    return faults
+
+
 def kept_by_id(text: str) -> dict[str, str]:
     return {row_id(row): KEPT_WORDS.get(row[1].lower(), row[1]) for row in table_rows(text)}
 
@@ -176,6 +206,10 @@ def test_every_row_is_complete() -> None:
 
 def test_no_scripts_off_cell_names_a_kept_value() -> None:
     assert check_scripts_off_names_no_kept_value(spec_text()) == []
+
+
+def test_the_paragraph_defers_to_the_scripts_off_column() -> None:
+    assert check_paragraph_defers_to_the_column(spec_text()) == []
 
 
 def test_the_timeline_rows_say_130px_with_no_script() -> None:
@@ -264,6 +298,22 @@ def test_a_scripts_off_cell_naming_a_kept_order_is_refused() -> None:
     planted = plant_scripts_off(3, "Open in the order stored in this browser, with no control")
     faults = check_scripts_off_names_no_kept_value(planted)
     assert len(faults) == 1 and "stored" in faults[0], faults
+
+
+def test_a_paragraph_promising_the_default_fold_is_refused() -> None:
+    # The sentence as it stood before the verifier's finding, in the paragraph it was in.
+    text = spec_text()
+    at = text.index("With no script")
+    end = text.index("(the owner:", at)
+    old = (
+        "With no script nothing here runs, and nothing reads this browser's storage: every\npanel is open in its normal state "
+        "(the default size, order and fold, never a kept one), and the markup carries no control for any of these actions** "
+    )
+    planted = text[:at] + old + text[end:]
+    assert planted != text
+    faults = check_paragraph_defers_to_the_column(planted)
+    assert any("names the fold" in fault for fault in faults), faults
+    assert any("Scripts off" in fault for fault in faults), faults
 
 
 def test_a_store_that_disagrees_with_the_table_is_refused() -> None:

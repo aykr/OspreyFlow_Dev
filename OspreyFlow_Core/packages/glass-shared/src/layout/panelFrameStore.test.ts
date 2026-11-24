@@ -1973,3 +1973,103 @@ describe("attach: the root's guard, with the root nested in an element that has 
     expect(store.getState().sideWidth).toBe(DEFAULT_SIDE_WIDTH);
   });
 });
+
+// ------------------------------------------------- round 8 (the verifier's finding on round 7): a default is never saved
+
+// A new store with nothing saved, in a window too small for the default, brought the column and the timeline down and
+// wrote the lower size to this browser's storage, so a reload in a roomy window opened at it and not at the spec table's
+// 340 and 130. A size the analyst never chose is shown at the window's limit and is not written; a size they did choose
+// (a kept one above today's limit, or one asked for that is not just what is shown) still is. Each case reads the
+// storage straight after the call, before any `getState()`.
+
+describe("a default the window cannot hold is shown lower and never saved (the spec table: 340px and 130px)", () => {
+  const stored = () => localStorage.getItem(LAYOUT_SIZES_KEY);
+  const TIGHT_WIDTH: Viewport = { windowHeight: 800, workWidth: 600 }; // the column's limit is 300
+  const SHORT: Viewport = { windowHeight: 150, workWidth: 1600 }; // the timeline's limit is 105
+  const ROOMY: Viewport = { windowHeight: 1200, workWidth: 1600 };
+
+  function made(viewport: Viewport) {
+    forgetLayoutSizesForTest();
+    const parts = page();
+    const store = createPanelFrameStore({ viewport: () => viewport });
+    live.push(store);
+    attachPanelFrame(parts.root as unknown as PanelFrameRoot, store);
+    return { ...parts, store };
+  }
+
+  it("a store made at workWidth 600 with nothing saved leaves storage empty and draws 300; a reload at 1600 opens at 340", () => {
+    expect(stored()).toBeNull();
+    const { controls, side, store } = made(TIGHT_WIDTH);
+    expect(stored(), "the default was written to this browser's storage").toBeNull();
+    expect(controls.sideSash.getAttribute("aria-valuenow")).toBe("300");
+    expect(side.getAttribute("data-side-width")).toBe("300");
+    store.destroy();
+    const again = made(ROOMY);
+    expect(again.controls.sideSash.getAttribute("aria-valuenow")).toBe(String(DEFAULT_SIDE_WIDTH));
+    expect(again.side.getAttribute("data-side-width")).toBe("340");
+    expect(stored()).toBeNull();
+  });
+
+  it("a store made in a window 150 high with nothing saved leaves storage empty and draws 105; a reload in a tall window opens at 130", () => {
+    const { controls, timeline, store } = made(SHORT);
+    expect(stored(), "the default was written to this browser's storage").toBeNull();
+    expect(controls.timelineSash.getAttribute("aria-valuenow")).toBe("105");
+    expect(timeline.getAttribute("data-timeline-height")).toBe("105");
+    store.destroy();
+    const again = made(ROOMY);
+    expect(again.controls.timelineSash.getAttribute("aria-valuenow")).toBe(String(DEFAULT_TIMELINE_HEIGHT));
+    expect(stored()).toBeNull();
+  });
+
+  it("the same through the store's own state, with no page and no storage written", () => {
+    const store = createPanelFrameStore({ viewport: () => ({ windowHeight: 150, workWidth: 600 }) });
+    live.push(store);
+    const state = store.getState();
+    expect([state.sideWidth, state.timelineHeight]).toEqual([300, 105]);
+    expect(stored()).toBeNull();
+  });
+
+  it("a window that shrinks after the page is made, then a fit and a key that changes nothing, still write nothing", () => {
+    let now: Viewport = ROOMY;
+    forgetLayoutSizesForTest();
+    const parts = page();
+    const store = createPanelFrameStore({ viewport: () => now });
+    live.push(store);
+    attachPanelFrame(parts.root as unknown as PanelFrameRoot, store);
+    now = { windowHeight: 150, workWidth: 600 };
+    store.actions.fitToWindow();
+    expect(stored(), "a resize wrote the default").toBeNull();
+    expect(parts.controls.sideSash.getAttribute("aria-valuenow")).toBe("300");
+    expect(parts.controls.timelineSash.getAttribute("aria-valuenow")).toBe("105");
+    // Growing a column already at its limit, and Home (the default, held to the limit), change what is shown by nothing.
+    parts.controls.sideSash.dispatch("keydown", { key: "ArrowLeft" });
+    parts.controls.sideSash.dispatch("keydown", { key: "Home" });
+    parts.controls.timelineSash.dispatch("keydown", { key: "ArrowUp" });
+    parts.controls.timelineSash.dispatch("keydown", { key: "Home" });
+    expect(stored(), "a key that changed nothing wrote the default").toBeNull();
+    // The window grows again: the default is back, because it was never replaced.
+    now = ROOMY;
+    store.actions.fitToWindow();
+    expect(parts.controls.sideSash.getAttribute("aria-valuenow")).toBe("340");
+    expect(parts.controls.timelineSash.getAttribute("aria-valuenow")).toBe("130");
+  });
+
+  it("a size the analyst kept above today's limit is still brought down in storage (the round-2 rule)", () => {
+    localStorage.setItem(LAYOUT_SIZES_KEY, JSON.stringify({ sideWidth: 450, timelineHeight: 300, panelHeights: {} }));
+    made({ windowHeight: 150, workWidth: 600 });
+    expect(JSON.parse(stored() ?? "{}")).toMatchObject({ sideWidth: 300, timelineHeight: 105 });
+  });
+
+  it("a size the analyst chooses is written (320 in a window that allows up to 480)", () => {
+    const { store } = made({ windowHeight: 800, workWidth: 1000 });
+    store.actions.setSideWidth(320);
+    expect(JSON.parse(stored() ?? "{}").sideWidth).toBe(320);
+  });
+
+  it("a stored default that is over the limit (340, kept explicitly) is held in memory, not rewritten as 300", () => {
+    localStorage.setItem(LAYOUT_SIZES_KEY, JSON.stringify({ sideWidth: 340, timelineHeight: 130, panelHeights: {} }));
+    const { controls } = made({ windowHeight: 150, workWidth: 600 });
+    expect(JSON.parse(stored() ?? "{}")).toMatchObject({ sideWidth: 340, timelineHeight: 130 });
+    expect(controls.sideSash.getAttribute("aria-valuenow")).toBe("300");
+  });
+});
