@@ -552,6 +552,45 @@ the local demonstration deployment, whose generated compose had drifted from a f
 (hand-edited ingest mounts), the two services and their settings were appended by hand with the
 owner's agreement (11 October 2026) rather than re-rendering over the drift.
 
+### 2.8 The page service's addresses: derived once (ADR-152 Amendment 3, decisions 4 and 7; the owner's rulings of 23 and 24 November 2026)
+
+With `pages.enabled` on, the page service is given an issuer, a public origin, a sign-in client and,
+where it needs one, a trust file; the front proxy answers to the identity name inside the network and
+listens for it on one more port; the compose file and the chart carry the alias. Each of these was
+once worked out where it was used, and each round of the first build found a new place two of them
+disagreed (a default port the service refused, a listener that clashed with the proxy's plain-HTTP
+port so the front proxy did not start). **`derive` in `OspreyFlow_Core/harness/page_addresses.py` is
+the only place that computes any of them.** It returns the issuer, the public origin (its default
+port removed), the identity alias, the identity listener's port, the trust variable and the three
+sign-in variables, or a refusal in plain words that names `pages.enabled` and the cause. The page
+service's render module, the front proxy's module (the Caddyfile and the ports it publishes) and the
+cloud-platform renderer read what it returns and compute none of it; nothing in the Caddyfile, the
+compose file or the chart names a port, a host or an alias that `derive` did not return. The page
+service's own checks (`apps/pages/server/config.ts`) are not weakened: every value `derive` returns
+must pass them, and every Caddyfile it leads to must load in the proxy image's own Caddy.
+
+**What is derived, and what is refused.** The cases are the rows of
+`OspreyFlow_Build/tests/fixtures/page_addresses_cases.json`, which the Python tests, the node test
+and the real-Caddy test all read.
+
+| Rule | In words |
+| --- | --- |
+| Origin | The public origin is the address's own `URL.origin`: lower case, with the scheme's default port (`:443`, `:80`) left off. The issuer is `<scheme>://id.<host>[:port]/realms/osprey`; the alias is `id.<host>`. |
+| Plain HTTP | Refused: the identity address is neither https nor loopback, and the service signs nobody in over plain HTTP. Serve it over HTTPS, or leave `pages.enabled` off. |
+| The shapes | The cloud-platform shape is refused until it has its own sign-in; a GOV.UK deployment whose tree is complete with the setting off is refused (ADR-152 Amendment 3, item 4). |
+| An address with more than an origin | A path, a query, a fragment or a user name is refused; so is an IP address or a bracketed (IPv6) host, outright, because the identity address needs a name a certificate can carry (the owner, 24 November). |
+| Trust | The proxy's own internal authority is not trusted (a `.localhost`, `.local`, `.internal` or `.home.arpa` name, or `localhost`, served without `network.tls`): refused. The organisation's own certificate with no `ca` is refused, because the service cannot tell which root to trust; with a `ca` the service is given it as `NODE_EXTRA_CA_CERTS`. |
+| The identity listener | Where the origin's port is not the port the proxy itself listens on for HTTPS (443, or 8443 with the organisation's certificate), the identity name is also listened on at the origin's port, inside the container. |
+| A port that is taken | An HTTPS origin on a port the front proxy publishes or serves as plain HTTP is refused: its plain-HTTP ports (80 and 8080, in every shape), the loopback doors it publishes (the graph store's, and the Conduit's when `network.expose_conduit` asks), and every other port it publishes except its own HTTPS port. The list comes from the one place that publishes them (`proxy_ports` in `OspreyFlow_Core/harness/site.py`), so a port added there is covered at once (the owner, 24 November). |
+| The shared key | With `network.access_key` the page service's routes sit inside the key's `route`; the identity alias and the issuer's discovery document, keys and token are on the key's open list. |
+
+**Where the real Caddy runs.** `OspreyFlow_Build/tests/harness/test_page_addresses_caddy.py` runs
+`caddy validate` from the proxy image (`caddy:2.11.4-alpine`, with no network and read-only mounts)
+on each case's rendered Caddyfile; it does not skip, and where neither the image nor a Caddy 2.11
+binary can be run it fails in words. The Mac's gate runs it on every merge. The test server has no
+container tooling and lists it as not run. GitHub's `access-key-proxy-test` job is a second place.
+The pure model of the port clash stays as a fast check, never alone.
+
 ## 3. Standing it up on a laptop
 
 ```bash
