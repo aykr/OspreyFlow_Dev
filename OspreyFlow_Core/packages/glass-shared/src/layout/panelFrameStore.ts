@@ -440,10 +440,11 @@ export function createPanelFrameStore(options: PanelFrameStoreOptions = {}): Pan
       const grows = axis === "side-width" ? "ArrowLeft" : axis === "panel-height" ? "ArrowDown" : "ArrowUp";
       const shrinks = axis === "side-width" ? "ArrowRight" : axis === "panel-height" ? "ArrowUp" : "ArrowDown";
       if (key.key === "Home") {
-        // Home asks the one writer for the default, which holds it to the limit like any other size.
-        if (axis === "side-width") writeSize({ axis: "side-width" }, "default");
-        else if (axis === "timeline-height") writeSize({ axis: "timeline-height" }, "default");
-        else if (panel !== null) writeSize({ axis: "panel-height", id: panel }, "default");
+        // Home asks the one writer for the default, which holds it to the limit like any other size, and to the page's
+        // own bound (`maxPx`) as the arrow keys are: what the sash draws as its maximum is what Home can reach.
+        if (axis === "side-width") writeSize({ axis: "side-width" }, "default", context.maxPx);
+        else if (axis === "timeline-height") writeSize({ axis: "timeline-height" }, "default", context.maxPx);
+        else if (panel !== null) writeSize({ axis: "panel-height", id: panel }, "default", context.maxPx);
         return true;
       }
       if (key.key !== grows && key.key !== shrinks) return false;

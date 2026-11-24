@@ -1667,6 +1667,23 @@ describe("a page's data-max on the sashes holds on every path: keys, Home, the p
     expect(getLayoutSizes().timelineHeight).toBe(100);
   });
 
+  it("Home through the store alone, given the sash's bound as the key path gives it, stores the bound (no attach to correct it afterwards)", () => {
+    now = { windowHeight: 1200, workWidth: 1600 };
+    const store = createPanelFrameStore({ viewport });
+    live.push(store);
+    store.actions.resizeByKey("timeline-height", { key: "Home" }, { maxPx: 100 });
+    expect(getLayoutSizes().timelineHeight).toBe(100);
+    expect(stored().timelineHeight).toBe(100);
+    store.actions.resizeByKey("side-width", { key: "Home" }, { maxPx: 320 });
+    expect(getLayoutSizes().sideWidth).toBe(320);
+    expect(stored().sideWidth).toBe(320);
+    // A bound above the window's limit lifts nothing, and one under the minimum never goes under it.
+    store.actions.resizeByKey("timeline-height", { key: "Home" }, { maxPx: 9000 });
+    expect(getLayoutSizes().timelineHeight).toBe(DEFAULT_TIMELINE_HEIGHT);
+    store.actions.resizeByKey("side-width", { key: "Home" }, { maxPx: 10 });
+    expect(getLayoutSizes().sideWidth).toBe(300);
+  });
+
   it("a sash with no data-max is not bounded by another sash's: the default still comes back in a roomy window", () => {
     now = VIEWPORTS.roomy as Viewport;
     const parts = page();

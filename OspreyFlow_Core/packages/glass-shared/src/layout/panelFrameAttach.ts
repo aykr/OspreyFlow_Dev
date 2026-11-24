@@ -24,6 +24,10 @@
 //                                  each key press (`Viewport` in `panelFrameStore.ts`), so a window resized after the
 //                                  page was written is still held. `data-max` can only lower a limit, never lift it.
 //
+// A sash's `data-max` is held on every path: the key path (Home as the arrows) passes it to the writer, and before it
+// draws a state the attach asks the one writer to hold any size above a sash's bound to that bound (a stored value, the
+// pointer's set, a window resize), so `aria-valuenow` is never above the `aria-valuemax` drawn beside it.
+//
 // Each sash also carries `aria-valuemax`, the limit the writer applies now (the store's live limit, lowered by the
 // sash's `data-max`), and the attach redraws it when the window it can reach through `ownerDocument.defaultView`
 // resizes. Without a window it draws from the store's own limit and the page may call `fitToWindow` itself.
@@ -201,9 +205,41 @@ export function attachPanelFrame(root: PanelFrameRoot, store: PanelFrameStore): 
 
   root.addEventListener("click", onClick);
   root.addEventListener("keydown", onKeyDown);
-  const render = (state: PanelFrameState): void => draw(root, state);
-  render(store.getState());
+  /**
+   * A sash's `data-max` is a bound the writer applies on every path. The key path passes it; a size that arrived without
+   * it (a stored value, the pointer's set, a window resize) is above it only until here, where the one writer is asked to
+   * hold it to the bound before anything is drawn. Returns whether it wrote, in which case the new state is drawn by the
+   * subscription and this one is not.
+   */
+  const holdToBounds = (state: PanelFrameState): boolean => {
+    for (const sash of all(root, "[data-sash]")) {
+      const maxPx = numberAttribute(sash, "data-max");
+      if (maxPx === undefined) continue;
+      const axis = sash.getAttribute("data-sash");
+      if (axis === "side-width" && state.sideWidth > lowerLimit(state.limits.sideWidth, MIN_SIDE_WIDTH, maxPx)) {
+        store.actions.setSideWidth(state.sideWidth, { maxPx });
+        return true;
+      }
+      if (axis === "timeline-height" && state.timelineHeight > lowerLimit(state.limits.timelineHeight, MIN_TIMELINE_HEIGHT, maxPx)) {
+        store.actions.setTimelineHeight(state.timelineHeight, { maxPx });
+        return true;
+      }
+      const id = sash.getAttribute("data-panel") as SidePanelId;
+      const own = axis === "panel-height" ? state.panelHeights[id] : undefined;
+      if (own !== undefined && own > lowerLimit(state.limits.panelHeight, MIN_PANEL_HEIGHT, maxPx)) {
+        store.actions.setPanelHeight(id, own, { maxPx });
+        return true;
+      }
+    }
+    return false;
+  };
+  const render = (state: PanelFrameState): void => {
+    // Each write makes a state of its own, drawn by the subscription; this loop ends when no sash is above its bound.
+    if (!holdToBounds(state)) draw(root, state);
+  };
+  // Subscribed before the first draw: a write made to hold a size to its bound is drawn by the subscription.
   const unsubscribe = store.subscribe(render);
+  render(store.getState());
   // The window may change after the page was written: the store works the limits out again and the sashes are redrawn.
   const view = root.ownerDocument?.defaultView ?? null;
   const onResize = (): void => store.actions.fitToWindow();
