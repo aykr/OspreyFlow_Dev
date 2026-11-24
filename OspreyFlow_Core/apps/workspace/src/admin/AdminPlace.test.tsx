@@ -27,6 +27,9 @@ function serve(handler: (path: string, init?: RequestInit) => Response | null = 
       if (answered) return answered;
       if (path === "people") return json(200, [PERSON]);
       if (path === "organisation-arrivals") return json(200, []);
+      // The invite form waits for the roles' catalogue and for how people sign in (AD5), as the real routes answer them.
+      if (path === "roles") return json(200, { built_in: [], custom: [] });
+      if (path === "sign-in") return json(200, { kind: "keycloak" });
       if (path === "people/u1/roles") return json(200, { ...PERSON, roles: (JSON.parse(String(init?.body)) as { roles: string[] }).roles });
       if (path === "dashboards" && init?.method === "POST")
         return json(201, { dashboard: { client_id: "osprey-dashboard-board", account_id: "sa-1", clearance: "OFFICIAL", org_unit: "verify" }, secret: "s3cret" });

@@ -4,7 +4,7 @@
 // it depends on has loaded; until then it says it is loading, or says in words what could not be read; never a choice,
 // never a statement of what the inviter can give. What the form reads: the inviter (`GET /v1/me`), the handling scheme
 // (`GET /v1/handling-scheme`), the roles catalogue (`GET /v1/admin/roles`, which decides which role boxes are offered),
-// how people sign in (`GET /v1/admin/sign-in`, which decides whether this form is drawn at all, or Entra's instead), and
+// how people sign in (`GET /v1/admin/sign-in`, which decides whether this form is drawn at all, or Entra's instead; a kind that cannot be read stays Keycloak's, as `PeopleEntra.test.tsx` holds), and
 // the giver's rights (the `rights` prop, `GET /v1/me/rights` read by the App). Each is late and failed here, in every order.
 //
 // The fetch double refuses what the real routes refuse (rule 15; `invite_person_route`, `app.py`): `_within_your_reach`
@@ -132,12 +132,11 @@ const hold = () => {
   return { gate, release };
 };
 
-const WORDS: Record<Key | "empty", string> = {
+const WORDS: Record<Exclude<Key, "signin"> | "empty", string> = {
   me: "Your own clearance and handling codes could not be read, so nobody can be invited from here now.",
   scheme: "This deployment's classifications and handling codes could not be read, so nobody can be invited from here now.",
   empty: "This deployment's handling scheme has no classification levels, so nobody can be invited from here now.",
   roles: "The roles this deployment offers could not be read, so nobody can be invited from here now.",
-  signin: "How people sign in here could not be read, so nobody can be invited from here now.",
 };
 
 /** The form as it must first be drawn, with every read in: the inviter's reach, and Admin withheld (the catalogue is in). */
@@ -258,14 +257,20 @@ describe("how people sign in (GET /v1/admin/sign-in) decides whether this form i
   it.each([
     ["with a 503", "503"],
     ["with a network failure", "broken"],
-  ] as const)("when it fails %s: says so in words and offers no form", async (_how, mode) => {
-    serve({ ...ok(), signin: { mode } });
-    place();
-    expect((await screen.findByRole("alert")).textContent).toContain(WORDS.signin);
-    await sectionLoaded();
-    await later();
-    mustNotBeUsable();
-  });
+  ] as const)(
+    "when it fails %s: it is Keycloak's People as before (`PeopleEntra.test.tsx`), but only once it has failed: late, no form until then",
+    async (_how, mode) => {
+      const signin = hold();
+      serve({ ...ok(), signin: { mode, gate: signin.gate } });
+      place();
+      await sectionLoaded();
+      await later();
+      mustNotBeUsable();
+      signin.release();
+      drawnCorrectly(await screen.findByRole("form", { name: "Invite a person" }));
+      expect(screen.queryByRole("alert")).toBeNull();
+    },
+  );
 });
 
 describe("the giver's own rights (the `rights` prop, read by the App) decide which role boxes are offered", () => {
@@ -284,7 +289,7 @@ describe("the giver's own rights (the `rights` prop, read by the App) decide whi
 });
 
 describe("each read, late and failed in turn", () => {
-  const FAILURES: [Key | "empty", Key, Mode][] = [
+  const FAILURES: [Exclude<Key, "signin"> | "empty", Key, Mode][] = [
     ["me", "me", "503"],
     ["me", "me", "broken"],
     ["me", "me", "bad"],
@@ -295,8 +300,6 @@ describe("each read, late and failed in turn", () => {
     ["roles", "roles", "503"],
     ["roles", "roles", "broken"],
     ["roles", "roles", "bad"],
-    ["signin", "signin", "503"],
-    ["signin", "signin", "broken"],
   ];
 
   it.each(FAILURES)("%s: %s read %s, at once, says its own words and no form", async (words, key, mode) => {
@@ -357,7 +360,7 @@ describe("each read, late and failed in turn", () => {
         mustNotBeUsable();
         expect(screen.queryByRole("status")?.textContent ?? "").toContain("Reading what you can give");
       }
-      gates[order[order.length - 1]].release();
+      gates[order.at(-1) as Key].release();
       drawnCorrectly(await screen.findByRole("form", { name: "Invite a person" }));
     },
   );
