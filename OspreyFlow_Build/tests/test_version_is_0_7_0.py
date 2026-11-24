@@ -3,7 +3,8 @@ plan, no interim release; rename once, now). Slice RL1b.
 
 What the ruling asks, and what here fails if it is broken:
 
-- `OspreyFlow_Core/VERSION` says `v0.7.0` -> `test_the_version_file_says_v0_7_0`.
+- `OspreyFlow_Core/VERSION` says `v0.7.0-dev` until the cut (ADR-114 Amendment 47; RL2 sets the bare `v0.7.0`)
+  -> `test_the_version_file_says_v0_7_0`.
 - No text still to be read names the old number (guides, the CHANGELOG, a message, a docstring that says what this
   release does) -> `test_no_text_still_to_be_read_names_the_old_number`, which walks every file git tracks in the
   repository and leaves out the records. The records (decision records, the reservations table, the slice line's own
@@ -111,7 +112,11 @@ def read_tracked() -> dict[str, str]:
 
 
 def test_the_version_file_says_v0_7_0() -> None:
-    assert (CORE / "VERSION").read_text(encoding="utf-8") == "v0.7.0\n"
+    """Between releases `VERSION` is the release the code is heading to: `v0.7.0-dev` (ADR-114 Amendment 47,
+    decisions 1, 2 and 4). A bare `v0.7.0` would make every checkout of main count as the released v0.7.0 (the update
+    check would say "Up to date"). The cut (RL2) sets the bare tag in the candidate commit; this test is then changed
+    with it."""
+    assert (CORE / "VERSION").read_text(encoding="utf-8") == "v0.7.0-dev\n"
 
 
 def test_no_text_still_to_be_read_names_the_old_number() -> None:
