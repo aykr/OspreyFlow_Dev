@@ -303,7 +303,7 @@ M = [
  ("merge_slice.py", '        if not sid or sid in builders:', '        if not sid:', "never_takes_a_builders_session"),
  # LINE_FIXES_5_BRIEF.md, A: the line clears a stop itself (resume.py self-clear), never what is the owner's alone
  ("resume.py", '    if rnd >= OWNERS_ROUND:\n', '    if False:\n', "eighth_round"),
- ("resume.py", '    hit = SECURITY_WORDS.search(stop_words(st, rec, tip))\n', '    hit = None\n', "naming_a_key"),
+ ("resume.py", '    hit = security_hit(stop_words(st, rec, tip))\n', '    hit = None\n', "naming_a_key"),
  ("resume.py", '        parts.append(body if head.startswith(("RED: checks", "RED: acceptance", "RED: scans")) else str(problem))', '        parts.append(str(problem))', "echoed_command_alone"),
  ("resume.py", '    if moved or waiting:\n', '    if False:\n', "refreeze_that_changes"),
  ("resume.py", '    waiting = unapplied(slice_id, "refreeze")\n', '    waiting = []\n', "refreeze_that_changes"),
@@ -629,6 +629,16 @@ M = [
  ("resume.py", '        c.log_standing_use(slice_id, CLS, "self-clear", "red", "c", what, {"red_stop": red})', '        c.log_self_clear(slice_id, "red", "c", what)', "clear_line_stops_cause_c_a_scan_map_red"),
  ("resume.py", '        c.log_standing_use(slice_id, CLS, "self-clear", stop, "a", what, {"red_stop": red})', '        c.log_self_clear(slice_id, stop, "a", what)', "clear_line_stops_each_use or clear_line_stops_at_its_budget"),
  ("common.py", '{**row, **(extra or {})})', 'row)', "clear_line_stops_each_use"),
+ # the owner, 24 November 2026 (PL8a): the word check's key spares the known keyboard phrases only
+ ("resume.py", "                              r\"the (?:enter|escape|tab) key|key bindings?|key shortcuts?)\\b\", re.I)", "                              r\"the (?:enter|escape|tab) key|key bindings?|key shortcuts?|\\w* ?key)\\b\", re.I)", "every_other_key_and_every_other_word"),
+ ("resume.py", "KEYBOARD_PHRASES = re.compile(r\"\\b(?:key ?press(?:es)?|keydown|keyup|keyboard-only|keyboard|home key|end key|arrow keys|\"", "KEYBOARD_PHRASES = re.compile(r\"(?:key ?press(?:es)?|keydown|keyup|keyboard-only|keyboard|home key|end key|arrow keys|\"", "every_other_key_and_every_other_word"),
+ ("resume.py", "    return SECURITY_WORDS.search(KEYBOARD_PHRASES.sub(\" \", text))", "    return SECURITY_WORDS.search(text)", "pl8a_s_accept_over_a_key_press"),
+ ("resume.py", "keyboard-only|keyboard|home key", "keyboard-only|home key", "each_known_keyboard_phrase"),
+ ("resume.py", "the (?:enter|escape|tab) key", "the (?:enter|escape) key", "each_known_keyboard_phrase"),
+ ("resume.py", "    hit = security_hit(stop_words(st, rec, tip))  # the self-clear", "    hit = SECURITY_WORDS.search(stop_words(st, rec, tip))  # the self-clear", "every_word_check_in_resume"),
+ ("resume.py", "    hit = security_hit(stop_words(st, rec, tip))\n", "    hit = SECURITY_WORDS.search(stop_words(st, rec, tip))\n", "every_word_check_in_resume"),
+ ("resume.py", "on his own line.\"\"\"\n    hit = security_hit(", "on his own line.\"\"\"\n    hit = SECURITY_WORDS.search(", "pl8a_s_accept_over_a_key_press"),
+ ("resume.py", "only_gaps(verify[\"findings\"], legacy)\n    hit = security_hit(", "only_gaps(verify[\"findings\"], legacy)\n    hit = SECURITY_WORDS.search(", "every_word_check_in_resume"),
  # the owner, 24 November 2026 (the test server down): the per-machine stack hosts; an unreachable host noted, not waited for
  ("merge_slice.py", "    return own if own.is_file() else tree / \"OspreyFlow_Build/scripts/lane_stack_hosts.tsv\"", "    return tree / \"OspreyFlow_Build/scripts/lane_stack_hosts.tsv\"", "per_machine_hosts_file"),
  ("merge_slice.py", "    if p.returncode == 255:\n        return f\"{UNREACHABLE}", "    if False:\n        return f\"{UNREACHABLE}", "unreachable_stack_host_is_noted"),

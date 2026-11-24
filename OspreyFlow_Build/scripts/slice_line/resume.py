@@ -308,7 +308,7 @@ def round_after_refusal(slice_id: str, wt: Path, st: dict, rec: Path, rnd: int, 
     red = red_stopped(slice_id, rec)
     if red:
         refuse(f"{slice_id} has been stopped for red checks ({red}): its rounds are the owner's")
-    hit = SECURITY_WORDS.search(stop_words(st, rec, tip))  # the self-clear's word check, unchanged
+    hit = security_hit(stop_words(st, rec, tip))  # the self-clear's word check, unchanged
     if hit:
         refuse(f"the refusal names a key, a credential or a security rule ({hit.group(0)!r} in its findings)")
     cause = refusal_cause(rec, tip)
@@ -485,7 +485,7 @@ def before_the_limit(slice_id: str, phase: str, rnd: int, limit: int, tip: str, 
 def no_key_finding(verify: dict) -> None:
     """The owner's word of 21 November 2026 (his file 003): a fault that can expose a key, show it back, log it or send
     it where it was not given is never accepted, at any round, on the standing word or on his own line."""
-    hit = SECURITY_WORDS.search(" ".join(" ".join(str(f.get(k, "")) for k in ("file", "what", "evidence"))
+    hit = security_hit(" ".join(" ".join(str(f.get(k, "")) for k in ("file", "what", "evidence"))
                                          for f in verify["findings"]))
     if hit:
         raise Refused(f"a finding names a key, a credential or a security rule ({hit.group(0)!r}): the owner's accept "
@@ -541,7 +541,7 @@ def standing_accept(slice_id: str, frozen: dict, st: dict, rec: Path) -> list[st
     newest_record_is(slice_id, tip)
     legacy = rs.is_legacy(verify)
     only_gaps(verify["findings"], legacy)
-    hit = SECURITY_WORDS.search(" ".join(" ".join(str(f.get(k, "")) for k in ("file", "what", "evidence"))
+    hit = security_hit(" ".join(" ".join(str(f.get(k, "")) for k in ("file", "what", "evidence"))
                                          for f in verify["findings"]))
     if hit:  # LINE_FIXES_5_BRIEF.md, 3: a security or key finding is never covered by the standing word
         raise Refused(f"a finding names a key, a credential or a security rule ({hit.group(0)!r}): never accepted on "
@@ -699,6 +699,16 @@ OWNERS_ROUND = 8
 #: word, in any case, on purpose: a word too many leaves the stop with the owner, as before; a word too few never can.
 SECURITY_WORDS = re.compile(r"key|credential|secret|token|passw|security|secure|auth|oidc|cve|vulnerab|certificate|"
                             r"encrypt|signing|guard\.py|emails\.sha256|sha256", re.I)
+#: The known keyboard phrases, taken out of the words before SECURITY_WORDS is matched (the owner, 24 November 2026:
+#: PL8a's accept was refused over "an analyst's key press", the third keyboard false match). These only, each a whole
+#: phrase: any other "key" still matches, so an unknown use still stops. The other words are not touched.
+KEYBOARD_PHRASES = re.compile(r"\b(?:key ?press(?:es)?|keydown|keyup|keyboard-only|keyboard|home key|end key|arrow keys|"
+                              r"the (?:enter|escape|tab) key|key bindings?|key shortcuts?)\b", re.I)
+
+
+def security_hit(text: str):
+    """SECURITY_WORDS' match in `text` once the known keyboard phrases are taken out, or None."""
+    return SECURITY_WORDS.search(KEYBOARD_PHRASES.sub(" ", text))
 
 
 def unapplied(slice_id: str, action: str) -> list[str]:
@@ -741,7 +751,7 @@ def owners_alone(slice_id: str, frozen: dict, st: dict, rec: Path, stop: str, ti
     if rnd >= OWNERS_ROUND:
         raise Refused(f"{slice_id} is in round {rnd}: any stop at the eighth round is the owner's alone. It waits for "
                       "the owner's line. Nothing changed.")
-    hit = SECURITY_WORDS.search(stop_words(st, rec, tip))
+    hit = security_hit(stop_words(st, rec, tip))
     if hit:
         raise Refused(f"{slice_id}'s stop names a key, a credential or a security rule ({hit.group(0)!r} in its "
                       "findings): the line never clears it. It waits for the owner's line. Nothing changed.")
