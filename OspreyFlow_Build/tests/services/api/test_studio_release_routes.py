@@ -25,6 +25,7 @@ from fastapi.testclient import TestClient
 from services.api.app import (
     app,
     get_audit,
+    get_export_ledger,
     get_handling_scheme,
     get_list_rows,
     get_list_store,
@@ -53,6 +54,7 @@ from schemas.ingest import (
     StudioRecipeDraft,
     StudioRecipeStatus,
 )
+from tests.services.api.export_ledger_fakes import RefusingLedger
 from tests.services.api.test_app import _FakeAudit
 from tests.services.api.test_studio_recipe_routes import _draft, _FakeStudioRecipes
 from tests.services.api.test_studio_staging_routes import STORAGE, store  # noqa: F401
@@ -187,6 +189,11 @@ def ingest(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return root
 
 
+class _FakeLedger(RefusingLedger):
+    """The export ledger's `record`, keeping what it was given and refusing a row with no subject
+    as the real store does (SE8b, rule 15)."""
+
+
 class _World:
     def __init__(self, ingest: Path, *, sql: bool = False, handling: dict[str, str] | None = None):
         location = str(ingest / "pid" / "visits.csv")
@@ -209,6 +216,7 @@ class _World:
         )  # fmt: skip
         self.audit = _FakeAudit()
         self.run_orders = InMemoryRunOrderStore()
+        self.ledger = _FakeLedger()
 
     def install(self, principal: Principal) -> TestClient:
         app.dependency_overrides.update(
@@ -222,6 +230,7 @@ class _World:
                 get_staging_storage: lambda: STORAGE,
                 get_audit: lambda: self.audit,
                 get_run_orders: lambda: self.run_orders,
+                get_export_ledger: lambda: self.ledger,
                 get_handling_scheme: lambda: load_uk_le_scheme(),
                 get_ontology: lambda: load_default_ontology(),
             }
@@ -313,6 +322,21 @@ def test_a_changed_bundle_is_refused_whole(store: Path, ingest: Path) -> None:
     assert answer.status_code == 422
     assert any("SHA-256 differs" in p for p in answer.json()["refused"])
     assert world.recipes.create_calls == [] and world.models.saved == []
+
+
+def test_an_export_writes_its_ledger_row_with_no_case_and_the_marking_of_its_pipeline(
+    store: Path, ingest: Path
+) -> None:
+    """SE8b: a release has no case; its row says the dataset it concerns, by id, the files that
+    left, and the highest marking of the pipelines in the bundle (the planted pipeline's)."""
+    world = _World(ingest, handling={**_HANDLING, "classification": "OFFICIAL-SENSITIVE"})
+    _export(world.install(ENGINEER.model_copy(update={"clearance": "SECRET"})))
+    (entry,) = world.ledger.entries
+    assert entry.investigation_id is None
+    assert (entry.subject_kind, entry.subject_id) == ("dataset", "pid")
+    assert (entry.artefact_kind, entry.principal_id) == ("dataset_release", ENGINEER.id)
+    assert (entry.handling_level, entry.withheld) == ("OFFICIAL-SENSITIVE", False)
+    assert "pid-release" not in entry.model_dump_json(), "the name the person typed is not recorded"
 
 
 def test_a_pipeline_marked_above_the_exporter_is_left_out_and_counted(
@@ -428,6 +452,7 @@ def test_a_round_trip_lands_the_same_pipeline_model_and_list(
     second.rows = ParquetListRows(STORAGE)
     second.audit = _FakeAudit()
     second.run_orders = InMemoryRunOrderStore()
+    second.ledger = _FakeLedger()
     client = second.install(ENGINEER)
     answer = client.post("/v1/datasets/pid/release/import", json={"files": files})
     assert answer.status_code == 200, answer.text

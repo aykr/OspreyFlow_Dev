@@ -44,6 +44,7 @@ from schemas.domain import (
     ReportFigures,
 )
 from schemas.explore import TypeCounts
+from tests.services.api.report_store_fakes import UnlimitedReachAlerts
 
 ONTOLOGY = load_deployment_ontology()
 TODAY = date(2026, 10, 24)
@@ -158,11 +159,11 @@ class _Spy:
 def spy(monkeypatch: pytest.MonkeyPatch) -> _Spy:
     spy = _Spy()
 
-    async def _no_alerts(*args: object, **kwargs: object) -> list[object]:
-        return []
+    async def _no_alerts(*args: object, **kwargs: object) -> tuple[list[object], bool]:
+        return [], False
 
     # ADR-134 decision 2: the report reads every kind of alert through the one queue.
-    monkeypatch.setattr(reports_module, "monitoring_queue", _no_alerts)
+    monkeypatch.setattr(reports_module, "monitoring_queue_and_left_out", _no_alerts)
     monkeypatch.setattr(reports_module, "_kyc_figures", spy.kyc)
     return spy
 
@@ -171,7 +172,7 @@ async def _report(
     domains: Sequence[str], explore: ExploreService, reader: Principal = READER
 ) -> ReportFigures:
     return await case_report(
-        alerts=None,  # type: ignore[arg-type]
+        alerts=UnlimitedReachAlerts(),  # type: ignore[arg-type]
         graph=None,  # type: ignore[arg-type]
         analytics=None,  # type: ignore[arg-type]
         held=None,  # type: ignore[arg-type]
@@ -541,6 +542,10 @@ class _Sink:
     async def record(self, *args: object, **kwargs: object) -> None:
         return None
 
+    async def withheld_for(self, *args: object, **kwargs: object) -> bool:
+        """The case's standing sentence the figures' ledger row carries (SE8b)."""
+        return False
+
 
 @pytest.fixture
 def client(spy: _Spy):  # type: ignore[no-untyped-def]
@@ -558,16 +563,18 @@ def client(spy: _Spy):  # type: ignore[no-untyped-def]
         get_investigations,
         get_ontology,
         get_principal,
+        get_working_set,
     )
 
     def build(domains: list[str]) -> tuple[TestClient, _Graph]:
         explore, graph = _explore(PLANTED)
         app.dependency_overrides[get_investigations] = lambda: _Cases(domains)
         app.dependency_overrides[get_principal] = lambda: VIEWER
-        app.dependency_overrides[get_alerts_store] = lambda: object()
+        app.dependency_overrides[get_alerts_store] = lambda: UnlimitedReachAlerts()
         app.dependency_overrides[get_analytics] = lambda: object()
         app.dependency_overrides[get_audit] = lambda: _Sink()
         app.dependency_overrides[get_export_ledger] = lambda: _Sink()
+        app.dependency_overrides[get_working_set] = lambda: _Sink()
         app.dependency_overrides[get_graph] = lambda: object()
         app.dependency_overrides[get_held_rows] = lambda: object()
         app.dependency_overrides[get_compute] = lambda: object()

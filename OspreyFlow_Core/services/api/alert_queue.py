@@ -140,6 +140,28 @@ async def monitoring_queue(
     older_than_days: int | None = None,
     lead_of: Collection[str] = (),
 ) -> list[QueuedAlert]:
+    """The one queue, as `reader` may see it: `monitoring_queue_and_left_out` without its flag."""
+    shown, _ = await monitoring_queue_and_left_out(
+        store, graph, analytics, investigation_id, reader, kinds=kinds, severities=severities,
+        statuses=statuses, show=show, older_than_days=older_than_days, lead_of=lead_of,
+    )  # fmt: skip
+    return shown
+
+
+async def monitoring_queue_and_left_out(
+    store: AlertStore,
+    graph: GraphPort,
+    analytics: AnalyticsPort,
+    investigation_id: str,
+    reader: Principal,
+    *,
+    kinds: Sequence[str] | None = None,
+    severities: Sequence[str] | None = None,
+    statuses: Sequence[str] | None = None,
+    show: QueueShow | None = None,
+    older_than_days: int | None = None,
+    lead_of: Collection[str] = (),
+) -> tuple[list[QueuedAlert], bool]:
     """ADR-133 decision 5: the one queue, as `reader` may see it. Which rows is the query's answer
     (`AlertStore.list_queue`, rule 3); everything they cite (nodes, links and transactions, ADR-146
     decision 10) is then read **once per kind, in one batch**, as the reader, through each
@@ -148,7 +170,14 @@ async def monitoring_queue(
     counted, the order of the rest is unchanged, and the reads are the same calls with the same ids
     whether it is hidden or not — so no count, order or timing says a hidden alert is there. Its
     explanation refuses it the same way (`explain_with_evidence`), so the list and the explanation
-    agree."""
+    agree.
+
+    **And whether it left any out (SE8b).** The second answer is a yes or no, never a count: whether
+    any alert the query returned was left out whole because the reader cannot read what it cites
+    (or the raiser's reads do not admit it). It is what a report's ledger row says as `withheld`
+    (the figures were lowered by what the reader may not see), and it is read from this loop's own
+    decision, so it cannot disagree with the list. An alert left out by the queue's own filters
+    (status, *Mine*) is not withheld from the reader and does not set it."""
     await settle_repoints(store, graph)
     rows = await store.list_queue(
         investigation_id, reader, kinds=kinds, severities=severities, statuses=statuses,
@@ -159,8 +188,10 @@ async def monitoring_queue(
     )
     admitted = await raiser_reads_admitting(store, [row.alert for row in rows], reader)
     shown: list[QueuedAlert] = []
+    left_out = False
     for row in rows:
         if not readable.whole(row.alert) or row.alert.id not in admitted:
+            left_out = True
             continue
         # ADR-146 Amendment 7: served with only the citations the reader may read whole.
         row.alert = as_read(row.alert, readable.citations_read(row.alert))
@@ -172,7 +203,7 @@ async def monitoring_queue(
         ids = evidence_node_ids(row.alert)
         named = {i: readable.nodes[i] for i in ids}
         shown.append(_queued(row, summary_of(row.alert, named), lead_of=lead_of))
-    return shown
+    return shown, left_out
 
 
 def _as_filtered(
@@ -643,20 +674,23 @@ async def _close(
             action="approve" if proposed_by is not None else "close",
             disposition=disposition, disposition_reason=reason,
         ), alert)  # fmt: skip
-    return _as_shown(await store.set_queue_triage(
-        alert_id,
-        investigation_id,
-        member,
-        expect_status=expect,
-        status="closed",
-        assignee=alert.assignee or member.id,
-        disposition=disposition,
-        disposition_reason=reason,
-        decided_by=member.id,
-        # No node here: the close's record owns the node's rename (to the newest revision the graph
-        # holds, after any re-mark), and writing the confirmed node back would undo it.
-        close_proposed_by=proposed_by,
-    ), alert)
+    return _as_shown(
+        await store.set_queue_triage(
+            alert_id,
+            investigation_id,
+            member,
+            expect_status=expect,
+            status="closed",
+            assignee=alert.assignee or member.id,
+            disposition=disposition,
+            disposition_reason=reason,
+            decided_by=member.id,
+            # No node here: the close's record owns the node's rename (to the newest revision the
+            # graph holds, after any re-mark), and writing the confirmed node back would undo it.
+            close_proposed_by=proposed_by,
+        ),
+        alert,
+    )
 
 
 class AssignmentRefused(Exception):
@@ -769,6 +803,7 @@ __all__ = [
     "explain",
     "explain_with_evidence",
     "monitoring_queue",
+    "monitoring_queue_and_left_out",
     "node_name",
     "queue",
     "release",

@@ -1676,9 +1676,35 @@ embedding leave no audit row; the model gateway's own usage record is per engine
 or case. One record of every model call (who asked, for which case, to which engine) is SE8's, not built, and no test
 fails today when a model call is not recorded. *Sign-in:* the Conduit and the `pages` service record no sign-in
 or session event; recording them is SE8's, not built. *Exports:* the export
-ledger (`export_ledger`) records who, when, case, handling level and withheld flag for report, assessment, pack
-and report-feed exports; the dataset release export, the rule file export and a source file read write an audit
-row and no ledger row; a platform backup and an object transfer write neither. *The table:* append-only in
+ledger (`export_ledger`) records who, when, the case (empty for an export that has none), what the export
+concerns (`subject_kind` and `subject_id`, an id and never a name: a case, a pack, a case's report, a dataset or a
+rule), the handling level (empty where the export has none: a dataset release holding no pipeline) and the
+withheld flag, for every export the Conduit makes: a report, assessment or pack export, the report feed, the
+Reports view's figures, a dataset release and a rule file. A ledger row is written before the artefact is
+returned, and a row that cannot be written fails the export with a 503, as the audit writer does. A report's
+withheld flag is true when the reader's rights lowered one of its alert or held figures: an alert the queue left out
+because the reader cannot read what it cites, an alert on the layer a case borrows read-only from its original case when the
+reader holds no level on that original (the one refusal in a case's read set that is the reader's own rights), or (for an
+editor's held figures) a held row their marking or reach leaves out. The case's own dataset scope is not the reader's rights and sets nothing: an
+owned or team monitor or hotlist alert raised on a dataset the case does not read is not a figure of that case (the owner's ruling of
+23 November 2026, option A, which covers the alert part of the flag). **The flag is a floor, not a ceiling.** It does not yet see the
+KYC and POLE figures, which are counted as the reader, so the reader's rights can lower them: a lowered KYC or POLE total is
+recorded `withheld=False` today. This is a known gap, not a design decision (the conductor's finding, reported to the owner on
+24 November 2026), and **the floor is the owner's to accept or to replace by the port change; until then a lowered KYC or POLE
+total is recorded `withheld=False`.** Only the graph adapter can say what its own count left out (rule 3: the Conduit may not compute an unfiltered count and
+compare), so the complete fix is a port change in a part of its own, SE8e: the counts result gains a `withheld` boolean from the
+adapter, and the report's flag becomes one `any` over every figure source. `test_report_figures_withheld.py` pins today's answer
+(`..._is_a_known_floor_until_SE8e`); when SE8e lands those are the tests that flip. `GET /v1/exports`
+reads them all by its one right, as it reads every case's, with one condition on a row that has no case:
+a dataset's release row is in the read only for a reader who may know the dataset, the condition being in the query's
+`WHERE`. At `GET /v1/exports` that reader is the administrator alone, who lists every dataset: the route takes the plain
+principal, which outside a case carries no dataset reach, whatever the token holds, so the compliance role by itself, with
+or without a reach of its own, is given no release row and no sign that one was left out, until the owner gives that role
+a reach to be read at this route (the store's own reach condition is there for that day, and no request meets it now). A held document's file shown in the document reader is
+an access audited per read, not an export. A platform backup and an object transfer are an operator's commands
+(the cloud profile's CronJob; `ospreyflow backup`), run outside the Conduit with no principal and no ledger
+connection: they write no ledger row, and nothing the Conduit can record says that one ran.
+`test_export_ledger_completeness.py` fails if an export route writes no row. *The table:* append-only in
 intent: the database does not yet refuse an UPDATE or a DELETE from another role, and there is no hash chain.
 The guides say "coming" for the two unbuilt records, until SE8 merges.
 

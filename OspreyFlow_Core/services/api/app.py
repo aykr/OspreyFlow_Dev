@@ -12344,6 +12344,7 @@ async def export_dataset_release(
     handling_scheme: HandlingSchemeDep,
     audit: AuditDep,
     run_orders: RunOrdersDep,
+    export_ledger: ExportLedgerDep,
     name: Annotated[str, Query(min_length=1, max_length=253)],
     version: Annotated[str, Query(min_length=1, max_length=64)],
 ) -> ReleaseExport:
@@ -12369,6 +12370,27 @@ async def export_dataset_release(
         return JSONResponse(  # type: ignore[return-value]
             status_code=422, content={"error": "release_refused", "problems": refused.problems}
         )
+    # SE8b: a release has no case, so its row has none and says which dataset it concerns, by id.
+    # The release's own name and version are what the person typed and stay out of it. The count is
+    # the files in the answer; the marking is the bundle's highest pipeline marking (`None` for a
+    # bundle that holds none); `withheld` is whether pipelines were left out, as `left_out` tells
+    # the person. Written before the bundle is returned: a ledger that cannot be written fails the
+    # export (503).
+    await export_ledger.record(
+        ExportLedgerEntry(
+            id=new_id(),
+            investigation_id=None,
+            principal_id=principal.id,
+            artefact_kind="dataset_release",
+            handling_level=result.marking,
+            exported_at=datetime.now(UTC),
+            item_count=len(result.files),
+            withheld=result.left_out > 0,
+            manifest_policy="disclose",
+            subject_kind="dataset",
+            subject_id=dataset_id,
+        )
+    )
     await audit.record(
         principal=principal,
         action="export_dataset_release",
@@ -14917,9 +14939,11 @@ async def _case_report(
     ontology: OntologySchema,
     period_weeks: int,
     analytics: AnalyticsPort,
-) -> ReportFigures:
+) -> tuple[ReportFigures, bool]:
+    """The case's figures as `principal` may see them, and whether they were lowered by what the
+    principal may not see (`reports.case_report_and_withheld`): what the ledger row says."""
     level = await investigations.effective_level(investigation.id, principal)
-    return await reports_module.case_report(
+    return await reports_module.case_report_and_withheld(
         alerts=alerts_store,
         graph=graph,
         analytics=analytics,
@@ -14933,6 +14957,41 @@ async def _case_report(
         today=datetime.now(UTC).date(),
         period_weeks=period_weeks,
         show_held=level is not None and level.rank >= AccessLevel.EDITOR.rank,
+    )
+
+
+async def _record_figures_export(
+    ledger: ExportLedgerStore,
+    *,
+    kind: Literal["report_feed", "case_report"],
+    investigation: Investigation,
+    principal: Principal,
+    withheld: bool,
+    rows: int,
+) -> None:
+    """The ledger row of the figures leaving the Glass (SE8b): who, which case, when, how many rows,
+    and whether the reader's figures were lowered by what they may not see. The figures are
+    counted as their reader (rule 3: an alert the reader cannot see whole is in no total), so the
+    flag is the figures' own (`_case_report`'s second answer, from the computation that lowered
+    them), never a constant (the feed wrote `False` for every read before this) and never the
+    case's working-set sentence, which asks a different question (what the case's stored set
+    holds), of a set no figure is counted from. A yes or no, never a count. The row is written
+    before the figures are returned; a ledger that cannot be written raises `AuditWriteError`
+    (503) and the figures are not sent."""
+    await ledger.record(
+        ExportLedgerEntry(
+            id=new_id(),
+            investigation_id=investigation.id,
+            principal_id=principal.id,
+            artefact_kind=kind,
+            handling_level=principal.clearance,
+            exported_at=datetime.now(UTC),
+            item_count=rows,
+            withheld=withheld,
+            manifest_policy="omit",
+            subject_kind="report",
+            subject_id=investigation.id,
+        )
     )
 
 
@@ -14951,15 +15010,22 @@ async def read_case_report(
     explore: ExploreDep,
     ontology: OntologyDep,
     audit: AuditDep,
+    export_ledger: ExportLedgerDep,
     analytics: AnalyticsDep,
     weeks: Annotated[int, Query(ge=1, le=52)] = 12,
 ) -> ReportFigures:
     """The Reports view (ADR-111): the case's figures, every one counted as the reader (rule 3);
-    held rows only for Editors and above; past its bound, `limit_exceeded` (rule 2)."""
-    figures = await _case_report(
+    held rows only for Editors and above; past its bound, `limit_exceeded` (rule 2). The figures
+    are handed to the Glass, which prints and saves them, so the read is in the export ledger as
+    the feed's is (the owner's ruling of 21 November 2026)."""
+    figures, withheld = await _case_report(
         investigation, principal, investigations=investigations, graph=graph,
         alerts_store=alerts_store, held_rows=held_rows, compute=compute, explore=explore,
         ontology=ontology, period_weeks=weeks, analytics=analytics,
+    )  # fmt: skip
+    await _record_figures_export(
+        export_ledger, kind="case_report", investigation=investigation, principal=principal,
+        withheld=withheld, rows=len(reports_module.feed_rows(figures)),
     )  # fmt: skip
     await audit.record(
         principal=principal,
@@ -14995,25 +15061,16 @@ async def read_report_feed(
     """The reporting feed a dashboard pulls (ADR-111 decisions 6 to 8): the same figures as the
     Reports view, as JSON or CSV — figures only. Every read is audited and written to the export
     ledger as metadata (who, which case, when), since the figures leave the Glass."""
-    figures = await _case_report(
+    figures, withheld = await _case_report(
         investigation, principal, investigations=investigations, graph=graph,
         alerts_store=alerts_store, held_rows=held_rows, compute=compute, explore=explore,
         ontology=ontology, period_weeks=weeks, analytics=analytics,
     )  # fmt: skip
     rows = reports_module.feed_rows(figures)
-    await export_ledger.record(
-        ExportLedgerEntry(
-            id=new_id(),
-            investigation_id=investigation.id,
-            principal_id=principal.id,
-            artefact_kind="report_feed",
-            handling_level=principal.clearance,
-            exported_at=datetime.now(UTC),
-            item_count=len(rows),
-            withheld=False,
-            manifest_policy="omit",
-        )
-    )
+    await _record_figures_export(
+        export_ledger, kind="report_feed", investigation=investigation, principal=principal,
+        withheld=withheld, rows=len(rows),
+    )  # fmt: skip
     await audit.record(
         principal=principal,
         action="read_report_feed",
@@ -16411,14 +16468,33 @@ async def export_rule_standard_file(
     principal: PrincipalDep,
     typology_rules: TypologyRulesDep,
     audit: AuditDep,
+    export_ledger: ExportLedgerDep,
 ) -> Response:
     """The rule's `.bpmn` or `.dmn`, read as the rules list reads it (the reader's reach in its
-    `WHERE`): a rule the reader may not see is the same 404 as a missing one. Audited."""
+    `WHERE`): a rule the reader may not see is the same 404 as a missing one. Audited, and in the
+    export ledger (SE8b): the rule it concerns by id, never its name or its files."""
     rule = await typology_rules.get_listed(rule_id, investigation.id, principal)
     # ADR-146 Amendment 5: the files saved beside the version the reader reaches, byte for byte.
     kept = await typology_rules.rule_files(rule.id, rule.version)
     stored = None if kept is None else StoredRuleFiles(bpmn=kept.bpmn, dmn=kept.dmn)
     exported = export_rule_file(rule, kind, stored=stored)
+    # One file of one rule, whole: it is a rule the reader was given by the same read as the list,
+    # so nothing is withheld from it and it carries no marking of its own. Before the file is sent.
+    await export_ledger.record(
+        ExportLedgerEntry(
+            id=new_id(),
+            investigation_id=investigation.id,
+            principal_id=principal.id,
+            artefact_kind="rule_file",
+            handling_level=None,
+            exported_at=datetime.now(UTC),
+            item_count=1,
+            withheld=False,
+            manifest_policy="omit",
+            subject_kind="rule",
+            subject_id=rule.id,
+        )
+    )
     await audit.record(principal=principal, action="export_rule_file",
                        investigation_id=investigation.id,
                        resolved_query={"rule_id": rule_id, "file": kind},

@@ -1,0 +1,95 @@
+count: 70
+# Theme rules outside their theme's folder, as they stood on 22 November 2026 (build id PL12, slice PL12b;
+# ADR-152 Amendment 4). One line per rule: path under OspreyFlow_Core, a key that survives a line moving
+# (the rule's selector with its @media condition, whitespace collapsed; a long one is cut and ends in a
+# hash of the whole), and the kind (rule, string-rule, font-entry, font-face, font-use, custom-property).
+# Tab-separated. `python -m tools.theme_rule_check --list` prints what the check finds now.
+#
+# THE LIST MAY ONLY SHRINK. The first line is the number of entries below, and the check
+# (tools/theme_rule_check.py, shown red and green by tests/glass_trees/test_theme_rules.py) fails if the
+# file holds more or fewer entries than it records, if an entry's rule is no longer found (a stale entry:
+# delete it), if a rule is found that no entry excuses, or if the count is above RATCHET_CEILING in the tool.
+#
+# How it reaches zero. A slice that removes a rule, or moves it into the theme's own folder
+# (OspreyFlow_Core/packages/themes/<name>/, PL12d), deletes that rule's line, lowers `count:` above and
+# lowers RATCHET_CEILING in the tool to the same figure. Any slice that removes a rule may do this; no
+# other change to this file is allowed. NOBODY MAY RAISE THE COUNT, or add a line, without the owner's word.
+# The list reaches zero when the React GOV.UK look is retired: one release after the cutover, by a build of
+# its own, on the owner's word at that time (ADR-152 Amendment 4, item 8). Until then a Default build still
+# carries the React workspace's GOV.UK component rules, and no text says otherwise.
+#
+# What the entries are, by file: the GOV.UK brand blocks of the shared tokens, the shared primitives and
+# panel type, and the GDS Transport entry of the fonts list (all five move to the GOV.UK theme folder in
+# PL12d); the React workspace's five component stylesheets that name the brand (they stay until the React
+# look is retired, and nothing here moves them); and the sign-in theme's two rules in a Python string in
+# harness/keycloak_theme.py (harness/govuk_chrome.js holds no CSS rule, only markup and selectors in code).
+apps/workspace/src/admin/admin.css	.admin-nav--govuk	rule
+apps/workspace/src/admin/admin.css	.admin-nav--govuk .admin-nav__item--current	rule
+apps/workspace/src/admin/admin.css	.admin-nav--govuk .admin-nav__item--current .admin-nav__link	rule
+apps/workspace/src/admin/admin.css	.admin-nav--govuk .admin-nav__link	rule
+apps/workspace/src/admin/admin.css	.admin-nav--govuk .admin-nav__link:focus-visible	rule
+apps/workspace/src/admin/admin.css	.admin-nav--govuk .admin-nav__link:hover	rule
+apps/workspace/src/admin/admin.css	@media (min-width: 641px) :: [data-brand="govuk"] #main-content .admin-place .admin-nav	rule
+apps/workspace/src/admin/admin.css	[data-brand="govuk"] #main-content .admin-place	rule
+apps/workspace/src/admin/admin.css	[data-brand="govuk"] #main-content :has(> .admin-place)	rule
+apps/workspace/src/admin/admin.css	[data-brand="govuk"] .admin-place :is(.admin-nav__link, .admin-nav__coming-item, .admin-nav__comin... #20d5f20c	rule
+apps/workspace/src/questions/askPage.css	.ask-page--govuk .ask-page__back	rule
+apps/workspace/src/questions/askPage.css	.ask-page--govuk h2:focus	rule
+apps/workspace/src/search/searchResults.css	.search-results--govuk .search-results__action, .search-results--govuk .search-results__clear	rule
+apps/workspace/src/search/searchResults.css	.search-results--govuk .search-results__back	rule
+apps/workspace/src/search/searchResults.css	.search-results--govuk .search-results__group	rule
+apps/workspace/src/search/searchResults.css	.search-results--govuk .search-results__per-group	rule
+apps/workspace/src/search/searchResults.css	.search-results__title:focus, .search-results--govuk h2:focus	rule
+apps/workspace/src/shell/places.css	.context-banner, .context-banner--govuk .govuk-notification-banner__content	rule
+apps/workspace/src/shell/places.css	.context-banner--folded .govuk-notification-banner__content	rule
+apps/workspace/src/shell/places.css	.context-banner--folded .govuk-notification-banner__title	rule
+apps/workspace/src/shell/places.css	.context-banner--folded :is(.btn, .govuk-link)	rule
+apps/workspace/src/shell/places.css	.context-banner--govuk .context-banner__cross	rule
+apps/workspace/src/shell/places.css	.context-banner--govuk .govuk-notification-banner__content	rule
+apps/workspace/src/shell/places.css	.context-banner--squeezed, .context-banner--govuk .govuk-notification-banner__content.context-banner--squeezed	rule
+apps/workspace/src/shell/places.css	.govuk-header__container:has(.govuk-header__places)	rule
+apps/workspace/src/shell/places.css	.govuk-header__places	rule
+apps/workspace/src/shell/places.css	.govuk-notification-banner.context-banner--folded	rule
+apps/workspace/src/shell/places.css	.govuk-notification-banner.context-banner--govuk	rule
+apps/workspace/src/shell/places.css	.govuk-places__item	rule
+apps/workspace/src/shell/places.css	.govuk-places__item .place-switcher__count	rule
+apps/workspace/src/shell/places.css	.govuk-places__item:focus-visible	rule
+apps/workspace/src/shell/places.css	.govuk-places__item:hover	rule
+apps/workspace/src/shell/places.css	.govuk-places__item[aria-current="page"]	rule
+apps/workspace/src/shell/places.css	.place-switcher__list, .govuk-places__list	rule
+apps/workspace/src/shell/places.css	:is(.context-banner, .context-banner--govuk) .govuk-back-link.context-banner__whole	rule
+apps/workspace/src/shell/places.css	:is(.context-banner, .context-banner--govuk) .govuk-tag.context-banner__tag	rule
+apps/workspace/src/shell/places.css	:is(.context-banner, .context-banner--govuk) .menu-button--case	rule
+apps/workspace/src/shell/places.css	:is(.context-banner, .context-banner--govuk) :is(button, a)	rule
+apps/workspace/src/shell/places.css	:is(.context-banner, .context-banner--govuk) :is(button, a, .menu-button__label)	rule
+apps/workspace/src/shell/places.css	[data-brand="govuk"] .brand-chrome--compact .govuk-header__container	rule
+apps/workspace/src/shell/places.css	[data-brand="govuk"] .brand-chrome--compact .govuk-header__logo	rule
+apps/workspace/src/shell/places.css	[data-brand="govuk"] .brand-chrome--compact .govuk-header__logotype	rule
+apps/workspace/src/shell/places.css	[data-brand="govuk"] .brand-chrome--compact .govuk-phase-banner	rule
+apps/workspace/src/shell/places.css	[data-brand="govuk"] .brand-chrome--compact .govuk-phase-banner__content	rule
+apps/workspace/src/shell/places.css	[data-brand="govuk"] .brand-chrome--compact .govuk-phase-banner__content__tag	rule
+apps/workspace/src/shell/places.css	[data-brand="govuk"] .brand-chrome--compact .govuk-places__item	rule
+apps/workspace/src/views/views.css	.case-views--govuk .case-views__actions	rule
+apps/workspace/src/views/views.css	.case-views--govuk .case-views__button	rule
+apps/workspace/src/views/views.css	.case-views--govuk .case-views__confirm	rule
+apps/workspace/src/views/views.css	.case-views--govuk .govuk-summary-list .govuk-summary-list__actions	rule
+apps/workspace/src/views/views.css	.case-views--govuk .govuk-summary-list .govuk-summary-list__key	rule
+apps/workspace/src/views/views.css	.case-views--govuk .govuk-summary-list .govuk-summary-list__key, .case-views--govuk .govuk-summary... #901e8d29	rule
+apps/workspace/src/views/views.css	.case-views--govuk .govuk-summary-list .govuk-summary-list__row	rule
+apps/workspace/src/views/views.css	.case-views--govuk .govuk-summary-list .govuk-summary-list__value	rule
+apps/workspace/src/views/views.css	.case-views--govuk .govuk-summary-list .govuk-summary-list__value .govuk-tag	rule
+apps/workspace/src/views/views.css	.save-view--govuk	rule
+apps/workspace/src/views/views.css	.view-lens-banner .govuk-back-link	rule
+harness/keycloak_theme.py	[data-brand="govuk"] #kc-header	string-rule
+harness/keycloak_theme.py	[data-brand="govuk"] .osprey-wordmark, [data-brand="govuk"] #kc-header-wrapper::before	string-rule
+packages/design/fonts.json	GDS Transport	font-entry
+packages/design/panelType.css	[data-brand="govuk"] :is(.drawer, .canvas-menu-panel, .menu-panel, .view-lens-banner, .save-view) ... #8af88dbb	rule
+packages/design/panelType.css	[data-brand="govuk"] :is(.drawer, .canvas-menu-panel, .menu-panel, .view-lens-banner, .save-view) ... #b34b64d6	rule
+packages/design/primitives.css	[data-brand="govuk"] .classification-strip	rule
+packages/design/tokens.css	@media (max-width: 640px) :: [data-brand="govuk"]	rule
+packages/design/tokens.css	[data-brand="govuk"]	rule
+packages/design/tokens.css	[data-brand="govuk"]	rule
+packages/design/tokens.css	[data-brand="govuk"] *:focus-visible	rule
+packages/design/tokens.css	[data-brand="govuk"] :is(.govuk-header, .govuk-footer, .govuk-phase-banner) a	rule
+packages/design/tokens.css	[data-brand="govuk"] :is(.welcome, .home, .admin-place)	rule
+packages/design/tokens.css	[data-brand="govuk"] :is(.welcome-header, .welcome-hero, .welcome-section, .welcome-footer, .home-... #386f2acc	rule

@@ -19,6 +19,7 @@ from services.api.working_set.service import WorkingSetService
 from ontology.handling import load_uk_le_scheme
 from schemas.domain import Handling, Principal, Subgraph
 
+from .export_ledger_fakes import RefusingLedger
 from .working_set.fakes import FakeGraphPort, FakeWorkingSetStore
 from .working_set.test_visible_link import node
 
@@ -28,12 +29,8 @@ OFFICIAL = Principal(id="analyst-1", clearance="OFFICIAL", org_unit="unit-1")
 SECRET = Principal(id="analyst-2", clearance="SECRET", org_unit="unit-1")
 
 
-class _Ledger:
-    def __init__(self) -> None:
-        self.entries: list[Any] = []
-
-    async def record(self, entry: Any) -> None:
-        self.entries.append(entry)
+class _Ledger(RefusingLedger):
+    """Keeps the rows, and refuses one with no subject as the real store does (rule 15)."""
 
 
 class _NoJudgements:
@@ -153,3 +150,29 @@ async def test_the_manifest_and_the_ledger_hold_no_count() -> None:
     assert "withheld_count" not in result.manifest.model_dump()
     assert "withheld_count" not in ledger.entries[0].model_dump()
     assert set(result.manifest.model_dump()) == {"policy", "withheld"}
+
+
+async def test_the_stand_in_ledger_refuses_a_row_with_no_subject_as_the_real_store_does() -> None:
+    """The route tests' ledger must not be more permissive than `ExportLedgerStore.record` (rule 15):
+    a row that names no subject is refused with the real store's own `ValueError`, whichever half
+    is missing, and a whole row is kept. (The entry model's own `subject_kind` is a closed set, so
+    an empty one is built past it, as the store's check is for a row that got this far.)"""
+    from datetime import UTC, datetime
+
+    from services.api.export import ExportLedgerEntry
+
+    def row(kind: str, subject: str) -> ExportLedgerEntry:
+        return ExportLedgerEntry.model_construct(
+            id="x", investigation_id=None, principal_id="p", artefact_kind="rule_file",
+            handling_level=None, exported_at=datetime(2026, 1, 1, tzinfo=UTC),
+            item_count=1, withheld=False, manifest_policy="omit", justification_given=False,
+            originator_reference_given=False, subject_kind=kind, subject_id=subject,
+        )  # fmt: skip
+
+    ledger = RefusingLedger()
+    for bad in (row("", "r-1"), row("rule", "")):
+        with pytest.raises(ValueError, match="names no subject"):
+            await ledger.record(bad)
+    assert ledger.entries == []
+    await ledger.record(row("rule", "r-1"))
+    assert len(ledger.entries) == 1

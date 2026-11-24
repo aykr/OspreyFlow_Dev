@@ -44,6 +44,7 @@ from services.api.investigations import (
     InvestigationNotFoundError,
 )
 from services.api.target_models import CORE_TYPES_FOR_TESTS, InMemoryTargetModelStore
+from tests.services.api.export_ledger_fakes import RefusingLedger
 
 from ontology.handling import load_uk_le_scheme
 from ontology.packs import load_deployment_ontology
@@ -442,8 +443,10 @@ def test_a_make_live_adding_fibo_brings_the_kyc_figures_to_every_case(
 
     now = datetime.now(UTC)
 
-    async def no_alerts(*_args: Any, **_kwargs: Any) -> ReportFigures:
-        return ReportFigures(period_weeks=12, as_of=now.date(), generated_at=now, alerts_total=0)
+    async def no_alerts(*_args: Any, **_kwargs: Any) -> tuple[ReportFigures, bool]:
+        figures = ReportFigures(period_weeks=12, as_of=now.date(), generated_at=now, alerts_total=0)
+        # The route reads the figures and whether the reader's rights lowered them.
+        return figures, False
 
     async def one_customer(*_args: Any, **_kwargs: Any) -> KycFigures:
         return KycFigures(customers=1, verified=1, unverified=0)
@@ -455,7 +458,7 @@ def test_a_make_live_adding_fibo_brings_the_kyc_figures_to_every_case(
     async def as_author(case_id: str, principal: Any) -> AccessLevel | None:
         return world.cases.grants.get(case_id, {}).get(principal.id)
 
-    monkeypatch.setattr(reports_module, "alert_report", no_alerts)
+    monkeypatch.setattr(reports_module, "alert_report_and_left_out", no_alerts)
     monkeypatch.setattr(reports_module, "_kyc_figures", one_customer)
     monkeypatch.setattr(reports_module, "pole_figures", lambda *_a, **_k: None)
     monkeypatch.setattr(world.cases, "effective_level", as_author, raising=False)
@@ -464,9 +467,14 @@ def test_a_make_live_adding_fibo_brings_the_kyc_figures_to_every_case(
         async def list_authorized(self, *_args: Any, **_kwargs: Any) -> list[Any]:
             return []
 
+        async def left_out_for(self, *_args: Any, **_kwargs: Any) -> bool:
+            return False  # nothing in this case is above the reader's marking
+
     for name in ("graph", "alerts_store", "compute", "analytics"):
         monkeypatch.setattr(app.state, name, object(), raising=False)
     monkeypatch.setattr(app.state, "held_rows", _Held(), raising=False)
+    # A report read writes its ledger row (SE8b); the stand-in refuses what the real ledger refuses.
+    monkeypatch.setattr(app.state, "export_ledger", RefusingLedger(), raising=False)
     app.dependency_overrides[app_module.get_explore] = lambda: _Explore()
     try:
         world.client.post("/v1/datasets/ds-a/model/draft", headers=_as("engineer"))
