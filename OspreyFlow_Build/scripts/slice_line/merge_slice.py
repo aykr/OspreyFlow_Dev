@@ -1447,6 +1447,12 @@ def counted_gate(slice_id: str, tip: str, base: str, after: Path, log: Path) -> 
         return {**out, "why": "the owner's switch (server_counts) is off"}
     if why:
         return {**out, "why": why}
+    build = server_gate.build_part(slice_id, tip, base, tree)  # 017: the container checks, the build account's
+    if build["counted"]:
+        e = {**e, "passed_targets": [*e["passed_targets"], *build["taken"]]}
+        log.open("a").write(f"\nthe build account's run {build['run_id']} counts for the container checks: "
+                            f"{', '.join(build['taken'])}\n")
+    out["build"] = build
     records = server_gate.records_moved(e, base, tip, tree)[0] if e.get("main") != base and not e.get("index") else []
     plan = server_gate.remainder(e, after, log.with_suffix(".remainder.mk"), records)
     log.open("a").write(f"\nthe demo server's run {rid} counts for {', '.join(plan['taken'])}"

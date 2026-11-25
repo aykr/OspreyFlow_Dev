@@ -32,6 +32,13 @@
                                               `auto`: the runs of this slice at its tip that this script recorded,
                                               newest first, until one is trusted.
 
+The build checks (the owner's file 017, item 1, 25 November 2026): when `build-server.json` exists (the same schema as
+the setting), each single slice's bundle is also sent, at the same moment, to the build account's forced command,
+`checks <ID>` (build_server/runner.py), which runs the merge's container checks in its own rootless Docker. Its result
+comes back only through the backup repository, for the merge (server_gate.build_part); this script prints only
+whether it was sent, keeps what the build account holds (build-held.json) and one line per send (build-sent.jsonl).
+Nothing the build account answers, or fails to, changes this script's result or exit.
+
 The Mac's merge run (merge_slice.py merge) is the only gate to main. This script changes nothing in merge_slice.py,
 stop_check.py or the guard, and writes no record the merge reads: nothing under ~/.ospreyflow/slice-line/records/.
 It writes the note, OspreyFlow_Build/process/lanes/v062/early_warning/<slice>-<tip first 8>.md in the main checkout
@@ -126,8 +133,14 @@ import lists as named_lists  # noqa: E402
 import protocol as proto  # noqa: E402
 
 SETTING = c.DATA / "demo-server.json"
+#: 017, item 1 (the owner, 25 November 2026): the build account's container checks. Its own setting (the same schema,
+#: its own key, whose forced command takes `checks <ID>` and a bundle), its own record of the main it holds, and one
+#: line per send. Without the setting nothing is sent; nothing it answers changes the early warning's result.
+BUILD_SETTING = c.DATA / "build-server.json"
 OWN = c.DATA / "early-warning"
 HELD = OWN / "held.json"
+BUILD_HELD = OWN / "build-held.json"
+BUILD_SENT = OWN / "build-sent.jsonl"
 #: Every run this script started or polled, one JSON line each (slice, tip, id, tree, stack): only where to ask, never
 #: what the answer was. `--trust auto` reads it for the run ids to ask the server about (009, item 3).
 RUNS = OWN / "runs.jsonl"
@@ -159,14 +172,14 @@ class Refused(Exception):
     pass
 
 
-def load_setting() -> dict:
-    if not SETTING.is_file():
-        raise Refused(f"No setting file ({SETTING}): the early warning never runs without one. The owner creates it "
+def load_setting(path: Path = SETTING) -> dict:
+    if not path.is_file():
+        raise Refused(f"No setting file ({path}): the early warning never runs without one. The owner creates it "
                       "once the runner is installed and the key is in place; its schema is in this script's --help.")
     try:
-        s = json.loads(SETTING.read_text())
+        s = json.loads(path.read_text())
     except (OSError, ValueError):
-        raise Refused(f"The setting file ({SETTING}) is not readable JSON.")
+        raise Refused(f"The setting file ({path}) is not readable JSON.")
     if not isinstance(s, dict) or not all(isinstance(s.get(k), str) and s.get(k) for k in ("host", "user", "key_file")):
         raise Refused("The setting file needs host, user and key_file (see --help).")
     if not SAFE_HOST.match(s["host"]) or not SAFE_USER.match(s["user"]):
@@ -322,12 +335,12 @@ def standing_cmd(argv: list) -> int:
     return code
 
 
-def make_bundle(branch, dest: Path, full: bool) -> None:
+def make_bundle(branch, dest: Path, full: bool, held_file: Path = HELD) -> None:
     """A git bundle of main's tip and the slice's tip (or each slice's, for a stack), from commits only (never a
     working-tree file); less what the server already holds, unless `full`."""
     branches = [branch] if isinstance(branch, str) else list(branch)
     main = c.git(["rev-parse", "refs/heads/main"], c.REPO)
-    held = (c.read_json(HELD) or {}).get("main", "")
+    held = (c.read_json(held_file) or {}).get("main", "")
     args = ["bundle", "create", "-q", str(dest), "refs/heads/main", *[f"refs/heads/{b}" for b in branches]]
     if not full and re.fullmatch(r"[0-9a-f]{40}", held or "") and \
             subprocess.run(["git", "merge-base", "--is-ancestor", held, main], cwd=c.REPO).returncode == 0:
@@ -396,6 +409,41 @@ def start(s: dict, branch, order: list | None = None) -> tuple[str, dict | None,
                 continue
             return ("started" if data and data.get("state") == "started" else "failed"), data, code
     return "failed", None, 255
+
+
+def send_checks(slice_id: str, branch: str, tip: str) -> str:
+    """017, item 1: the same bundle's shape (main's tip and the slice's) sent to the build account's forced command,
+    `checks <ID>`, at the moment the early warning is sent; once more in full if the build account lacks what an
+    incremental one is built on. Its result comes back only through the backup repository (server_gate.build_part),
+    never over SSH. Words for the terminal, which never name the setting; one line in build-sent.jsonl."""
+    if not BUILD_SETTING.is_file():
+        return "not sent (no build setting)"
+    try:
+        bs = load_setting(BUILD_SETTING)
+    except Refused:
+        return "not sent (the build setting is not usable)"
+    data, code = None, 255
+    with tempfile.TemporaryDirectory(prefix="build-checks-") as d:
+        for full in (False, True):
+            b = Path(d) / "slice.bundle"
+            b.unlink(missing_ok=True)
+            make_bundle(branch, b, full, BUILD_HELD)
+            with b.open("rb") as fh:
+                code, data = ssh(bs, ["checks", slice_id], stdin=fh, timeout=900)
+            if not (data and data.get("state") == "refused" and data.get("reason") == "bundle-prerequisites"):
+                break
+    state = (data or {}).get("state")
+    OWN.mkdir(parents=True, exist_ok=True)
+    if state == "started" and re.fullmatch(r"[0-9a-f]{40}", str(data.get("holds_main", ""))):
+        c.write_json(BUILD_HELD, {"main": data["holds_main"], "at": c.now()})
+    with BUILD_SENT.open("a") as fh:
+        fh.write(json.dumps({"slice": slice_id, "tip": tip, "at": c.now(), "state": state or "no answer",
+                             "id": (data or {}).get("id"), "reason": (data or {}).get("reason"), "ssh": code}) + "\n")
+    if state == "started" and re.fullmatch(proto.ID_PATTERN, str(data.get("id", ""))):
+        return f"sent (run {data['id']}; its result comes back through the backup repository)"
+    if state == "refused":
+        return f"refused by the build account ({data.get('reason')})"
+    return f"no answer from the build account (ssh exit {code})"
 
 
 def poll(s: dict, jid: str) -> tuple[dict | None, int]:
@@ -1006,6 +1054,11 @@ def main(argv: list[str] | None = None) -> int:
         jid, sent = a.result, None
     else:
         state, sent, code = start(s, branch)
+        try:  # 017: at the same moment; its result never comes back here, and its failure never stops this one
+            built = send_checks(a.slice, branch, tip)
+        except Exception as e:  # noqa: BLE001
+            built = f"not sent (the send failed: {type(e).__name__})"
+        print("Build checks: " + built)
         if state != "started":
             headline, exit_code, why = outcome(sent, code)
             path = write_note(a.slice, tip, sent, headline, why, "", s, None, standing)

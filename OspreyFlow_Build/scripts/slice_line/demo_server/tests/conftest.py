@@ -52,6 +52,20 @@ if os.environ.get("FAKE_SSH") == "down":
     sys.stderr.write("ssh: connect to host %s port 22: Connection refused\n" % dest.split("@")[-1])
     sys.exit(255)
 data = sys.stdin.buffer.read()
+if args[args.index("--") + 1].split("@")[0] == "ospreyflow_build":  # 017: the build account's forced command
+    if os.environ.get("FAKE_SSH_BUILD") == "down":
+        sys.stderr.write("ssh: connect to host %s port 22: Connection refused\n" % args[args.index("--") + 1])
+        sys.exit(255)
+    if words[:1] == ["checks"]:
+        n = len(list(log.parent.glob("build-sent-*.bundle")))
+        (log.parent / ("build-sent-%d.bundle" % n)).write_bytes(data)
+    env = {"PATH": os.environ["FAKE_BUILD_PATH"], "HOME": os.environ["FAKE_BUILD_HOME"],
+           "XDG_RUNTIME_DIR": os.environ["FAKE_BUILD_RUN"]}
+    if words:
+        env["SSH_ORIGINAL_COMMAND"] = " ".join(words)
+    r = subprocess.run([sys.executable, os.environ["FAKE_BUILD_WRAPPER"], os.environ["FAKE_BUILD_RUNNER"],
+                        os.environ["FAKE_BUILD_HARNESS"]], input=data, env=env)
+    sys.exit(r.returncode)
 if words[:1] == ["run"]:
     n = len(list(Path(os.environ["FAKE_SSH_LOG"]).parent.glob("sent-*.bundle")))
     (log.parent / ("sent-%d.bundle" % n)).write_bytes(data)
