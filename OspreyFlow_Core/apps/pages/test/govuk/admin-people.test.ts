@@ -410,6 +410,26 @@ describe("the People list (the govuk tree)", () => {
     ]);
   });
 
+  it("AP3: a guest account is marked as one, in the React section's words, whatever else its state says; a person who has not signed in yet is not a guest", async () => {
+    const guestWords = "Guest: homed outside this organisation's Entra ID; signs in only while guest accounts are admitted";
+    const states = [
+      account({ id: "g1", username: "guest.one", name: "Guest One", guest: true }),
+      account({ id: "g2", username: "guest.two", name: "Guest Two", guest: true, enabled: false }),
+      account({ id: "g3", username: "guest.three", name: "Guest Three", guest: true, must_set_password: true, organisation_linked: true }),
+      account({ id: "g4", username: "entra.new", name: "Entra New", signed_in: false, email: "entra.new@example.test", access_read_at: "2026-11-01T09:00:00Z" }),
+      account({ id: "g5", username: "plain.one", name: "Plain One", receivable_handling_codes: ["a"] }),
+    ];
+    const w = await world({ people: states });
+    const rows = tableOf((await people(w)).text)?.rows ?? [];
+    expect(rows.map((r) => r.state)).toEqual([
+      ["Enabled", guestWords],
+      ["Disabled", guestWords],
+      ["Invited — must set a password", "Signs in through the organisation", guestWords],
+      ["Enabled"],
+      ["Enabled"],
+    ]);
+  });
+
   it("AP4: a list with no person says so and draws no table; a Conduit that failed says the people could not be read, and draws no part of a table", async () => {
     const none = await world({ people: [] });
     const empty = await people(none);

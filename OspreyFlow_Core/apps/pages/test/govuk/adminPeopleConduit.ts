@@ -40,6 +40,13 @@ export interface Account {
   must_set_password?: boolean;
   system_account?: boolean;
   organisation_linked?: boolean;
+  email?: string | null;
+  receivable_handling_codes?: string[];
+  /** Has signed in at least once; false for an Entra ID person added by object id (`PersonAccount.signed_in`). */
+  signed_in?: boolean;
+  /** On Entra ID, a guest (B2B) account (`PersonAccount.guest`). */
+  guest?: boolean;
+  access_read_at?: string | null;
 }
 
 /** What a call to the fixture saw: the headers a browser's request would add are in `headers`, so that a test can show none came. */
@@ -89,9 +96,23 @@ export const BUILT_IN = [
 export const MANAGE_PEOPLE = "manage_people";
 export const REFUSAL = { detail: { error: "right_required", right: MANAGE_PEOPLE } };
 
-/** A person, as `PersonAccount` has them: the fields not named take the model's defaults. */
+/** A person, as `PersonAccount` has them (every field of the model, `packages/schemas/admin.py`): the fields not named take the model's defaults. */
 export function account(over: Partial<Account> & Pick<Account, "id" | "username" | "name">): Account {
-  return { enabled: true, roles: [], clearance: null, org_unit: null, must_set_password: false, system_account: false, organisation_linked: false, ...over };
+  return {
+    enabled: true,
+    roles: [],
+    clearance: null,
+    org_unit: null,
+    email: null,
+    receivable_handling_codes: [],
+    must_set_password: false,
+    system_account: false,
+    organisation_linked: false,
+    signed_in: true,
+    guest: false,
+    access_read_at: null,
+    ...over,
+  };
 }
 
 export async function adminConduit(options: AdminConduitOptions): Promise<AdminConduit> {
