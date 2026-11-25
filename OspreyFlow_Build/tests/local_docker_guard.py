@@ -31,6 +31,9 @@ from typing import Any
 import pytest
 
 SWITCH = "no-local-stacks"
+#: Every refusing `docker`'s folder is made with this prefix (`install`). Under xdist each worker
+#: installs its own on top of the controller's, which its environment inherits.
+SHIM_PREFIX = "osprey-no-docker-"
 
 
 def switch_path(environ: os._Environ[str] | dict[str, str] | None = None) -> Path:
@@ -162,7 +165,10 @@ def guarded_popen(
 # mount, a mount that is not `:ro`, another network, no `--rm`, another script, a shell, an
 # environment, another executable, another test asking, and every other docker command (the
 # test's own earlier `docker image inspect` and `caddy hash-password` runs are gone for that
-# reason). Every other docker call stays refused under the switch, the refusing `docker` on the
+# reason). Under xdist (`make test`, the merge gate) each worker's plugin puts a second refusing
+# `docker` in front of the one its controller put on the `PATH` the worker inherited, so the lookup
+# of the real docker leaves out every folder made with `SHIM_PREFIX`, not only its own (PL7f round
+# 10; `test_the_one_command_holds_under_the_merge_gates_own_run`). Every other docker call stays refused under the switch, the refusing `docker` on the
 # session's `PATH` included: the one exempt call is handed the real docker (found on the `PATH`
 # without the shim's folder), and nothing else is.
 #
@@ -210,10 +216,19 @@ def is_the_caddy_validation(args: Any, kwargs: dict[str, Any], asking: str) -> b
     return args[-4:] == [CADDY_IMAGE, "sh", "-c", CADDY_SCRIPT]
 
 
+def _a_refusing_shims_folder(folder: str, shim_dir: Path | None) -> bool:
+    """This process's own shim folder, or one an enclosing session made: under xdist the worker's
+    `PATH` is the controller's (its shim first) with the worker's own put in front, and the
+    controller's refusing `docker` is not the real one (PL7f round 10)."""
+    if not folder:
+        return False
+    return bool(shim_dir and Path(folder) == shim_dir) or Path(folder).name.startswith(SHIM_PREFIX)
+
+
 def the_real_docker(shim_dir: Path | None) -> str | None:
-    """The docker on the `PATH` as it is now, leaving out the refusing shim's own folder."""
+    """The docker on the `PATH` as it is now, leaving out every refusing shim's folder."""
     folders = os.environ.get("PATH", "").split(os.pathsep)
-    kept = [f for f in folders if not (shim_dir and f and Path(f) == shim_dir)]
+    kept = [f for f in folders if not _a_refusing_shims_folder(f, shim_dir)]
     return shutil.which("docker", path=os.pathsep.join(kept))
 
 
@@ -235,7 +250,7 @@ def install() -> None:
     switch = switch_path()
     if not switch.exists():
         return
-    shim_dir = Path(tempfile.mkdtemp(prefix="osprey-no-docker-"))
+    shim_dir = Path(tempfile.mkdtemp(prefix=SHIM_PREFIX))
     _installed.update(popen=subprocess.Popen, path=os.environ.get("PATH", ""), shim_dir=shim_dir)
     subprocess.Popen = guarded_popen(subprocess.Popen, switch, shim_dir)  # type: ignore[assignment, misc]
     refusing_docker(shim_dir, switch)

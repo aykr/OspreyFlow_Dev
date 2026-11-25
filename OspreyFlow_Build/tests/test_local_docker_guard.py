@@ -393,7 +393,11 @@ def _caddy_suite(tmp_path: Path) -> tuple[Path, dict[str, str], Path]:
         "from tests.conftest import pytest_configure, pytest_plugins  # noqa: F401\n",
         encoding="utf-8",
     )
-    (suite / "pytest.ini").write_text("[pytest]\n", encoding="utf-8")
+    # The real settings' own paths: an xdist worker is a fresh process, it imports what `-c` names.
+    core = BUILD.parent / "OspreyFlow_Core"
+    (suite / "pytest.ini").write_text(
+        f"[pytest]\npythonpath = {BUILD} {core} {core}/packages {core}/cli\n", encoding="utf-8"
+    )
     for name, body in CADDY_INNER.items():
         (suite / name).write_text(body, encoding="utf-8")
     env = {
