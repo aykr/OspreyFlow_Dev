@@ -28,7 +28,8 @@
 // draws a state the attach asks the one writer to hold any size above a sash's bound to that bound (a stored value, the
 // pointer's set, a window resize), so `aria-valuenow` is never above the `aria-valuemax` drawn beside it. A size the
 // analyst never chose (the default) is only drawn at a bound, never written to storage: a draw, a fit and a resize save
-// nothing (Home and the arrow keys, an analyst's act, do).
+// nothing. An arrow key that moves a sash is the analyst's act and stores what it reaches; a key that changes nothing on
+// the screen (Home at a default already drawn at the bound, a grow key at the bound) stores nothing either (round 11).
 //
 // What a sash shows is `shownSize` in the store (round 10): the state's value held to the range drawn beside it, a stacked
 // panel with no height of its own included (its measured `data-from`). The arrow keys step from that same value, so the

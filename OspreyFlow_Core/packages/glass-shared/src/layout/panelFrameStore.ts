@@ -366,24 +366,33 @@ export function createPanelFrameStore(options: PanelFrameStoreOptions = {}): Pan
   };
 
   /**
+   * What the sash shows for a kept size: `shownSize`, the same value the draw and the key stepping read, held to the
+   * window's limit lowered by the page's `maxPx`. A write that comes to this changes nothing on the screen (round 11).
+   */
+  const heldBy = (kept: LayoutSizes, axis: "side-width" | "timeline-height", limits: Limits, maxPx?: number): number | undefined =>
+    shownSize({ ...kept, limits }, axis, { maxPx });
+
+  /**
    * One size, held between its minimum and its limit (`"default"`: the size a reset gives, held to the limit too).
    *
    * A column or timeline still at its default, with no other size kept, is not a size the analyst chose: when only the
    * window's limit brings it down it is shown lower (`shownSizes`) and nothing is written, so a reload in a roomy window
    * opens at the default again. `fitting` is a size being brought down to the window or to a page's bound (not one asked for): it writes only
-   * a size that is not the default. A size asked for writes unless it is just what is already shown.
+   * a size that is not the default. A size asked for writes unless it is just what is already shown, and what is shown is
+   * the size as the page's bound holds it too (`heldBy`): a grow key at the bound, or Home, changes nothing and writes
+   * nothing, so a bound the analyst never chose is not stored as theirs (round 11).
    */
   const apply = (target: SizeTarget, request: number | "default", limits: Limits, maxPx?: number, fitting = false): void => {
     const kept = getLayoutSizes();
     if (target.axis === "side-width") {
       const to = request === "default" ? DEFAULT_SIDE_WIDTH : request;
       const next = clamp(to, MIN_SIDE_WIDTH, lowered(limits.sideWidth, MIN_SIDE_WIDTH, maxPx));
-      if (kept.sideWidth === DEFAULT_SIDE_WIDTH && (fitting || next === shownSizes(kept, limits).sideWidth)) return;
+      if (kept.sideWidth === DEFAULT_SIDE_WIDTH && (fitting || next === heldBy(kept, "side-width", limits, maxPx))) return;
       sizeStore.setSideWidth(next);
     } else if (target.axis === "timeline-height") {
       const to = request === "default" ? DEFAULT_TIMELINE_HEIGHT : request;
       const next = clamp(to, MIN_TIMELINE_HEIGHT, lowered(limits.timelineHeight, MIN_TIMELINE_HEIGHT, maxPx));
-      if (kept.timelineHeight === DEFAULT_TIMELINE_HEIGHT && (fitting || next === shownSizes(kept, limits).timelineHeight)) return;
+      if (kept.timelineHeight === DEFAULT_TIMELINE_HEIGHT && (fitting || next === heldBy(kept, "timeline-height", limits, maxPx))) return;
       sizeStore.setTimelineHeight(next);
     } else if (request === "default") {
       // A stacked panel's default is no height of its own: it shares the column again, so there is nothing to exceed.
@@ -520,7 +529,13 @@ export function createPanelFrameStore(options: PanelFrameStoreOptions = {}): Pan
       if (from === undefined) return true;
       if (axis === "side-width") actions.setSideWidth(from + delta, { maxPx: context.maxPx });
       else if (axis === "timeline-height") actions.setTimelineHeight(from + delta, { maxPx: context.maxPx });
-      else if (panel !== null) actions.setPanelHeight(panel, from + delta, { maxPx: context.maxPx });
+      else if (panel !== null) {
+        // A stacked panel that shares the column has no height of its own: a key that would leave it where it is drawn
+        // (a grow key at its bound) chooses nothing, so it does not give the panel the measured height as its own.
+        const to = clamp(from + delta, MIN_PANEL_HEIGHT, lowerLimit(state.limits.panelHeight, MIN_PANEL_HEIGHT, context.maxPx));
+        if (state.panelHeights[panel] === undefined && to === from) return true;
+        actions.setPanelHeight(panel, from + delta, { maxPx: context.maxPx });
+      }
       return true;
     },
     toggleDetails: () => toggleSidePanel(),
