@@ -3,6 +3,10 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 25 November 2026, about 13:30 UTC: AD1c's PUBLIC defaults, option (a) (the owner, in chat)
+
+**AD1c (a), one more round closing both:** each database the render makes takes CONNECT and TEMPORARY from PUBLIC and grants CONNECT to its own role(s) alone (`litellm` to the gateway's role and the reader); EXECUTE on functions taken from PUBLIC in `litellm`; planted faults refused by the database itself; on a managed server a revoke the login may not make is said in words and never stops the gateway; **and the reader's verifier command run in the pinned image on the server's container checks** (patch 52). Amendment 15 decision 1 stands as written. **Point 2, amended about 13:40 UTC:** do not wait on the server's container checks (patch 52's server half is installed tonight); **use D234's pattern**: exempt in `tests/local_docker_guard.py` exactly this test's one command (`docker run --rm --network none`, the pinned `postgres:16.4` image), named by the test, a planted second command refused; it moves to the server's checks when 52 is live and the exemption comes out. **Planted faults for every revoke.**
+
 ## 25 November 2026, about 12:40 UTC: GR3b's three questions; hand-back 53; GG2a's cut-off (the owner, in chat)
 
 **GR3b:** (a) **one part per route**: the report route first (GR3b), then AD3b and RM1b as each page's next part; (b) **GR3a merges first**; (c) **the drift check** (goldens against what the route answers now) **runs in `make test` on every merge**; **regenerating the goldens is a separate target a builder runs on purpose, never automatic.** GR3b is cut after GR3a merges.

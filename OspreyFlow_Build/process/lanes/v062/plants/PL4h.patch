@@ -1,0 +1,16 @@
+diff --git a/OspreyFlow_Core/apps/workspace/src/copyTextsTestKit.ts b/OspreyFlow_Core/apps/workspace/src/copyTextsTestKit.ts
+index d52d566..9d04319 100644
+--- a/OspreyFlow_Core/apps/workspace/src/copyTextsTestKit.ts
++++ b/OspreyFlow_Core/apps/workspace/src/copyTextsTestKit.ts
+@@ -19,6 +19,11 @@ export const ROOTS: readonly string[] = [SRC, SHARED_SRC];
+ 
+ /** The files under `roots` (by default both), skipping tests, test kits and generated types. */
+ export function sourceFiles(roots: readonly string[] = ROOTS): string[] {
++  // A planted fault (PL4h): the walk as slow as a loaded server makes it, 6 s a call.
++  const until = Date.now() + 6000;
++  while (Date.now() < until) {
++    // busy: a slow walk
++  }
+   return roots.flatMap((root) => filesUnder(root));
+ }
+ 
