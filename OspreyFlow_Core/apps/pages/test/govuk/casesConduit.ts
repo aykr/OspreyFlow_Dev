@@ -5,8 +5,12 @@
  * What it refuses, in the real routes' order (`services/api/app.py`):
  *  - the router first, for anyone: a path it has not is 404 `{"detail": "Not Found"}`, a method the path does not serve is 405
  *    `{"detail": "Method Not Allowed"}`. The methods are the real routes': `/v1/investigations` GET and POST (a new case);
- *    `/v1/investigations/{id}` GET, PATCH (a rename) and DELETE (a removal); `/v1/investigations/{id}/brief` GET;
- *  - then who the bearer is: none, or one it does not know, is 401 `{"detail": "Not authenticated"}` (a token in the query is ignored);
+ *    `/v1/investigations/{id}` GET, PATCH (a rename) and DELETE (a removal); `/v1/investigations/{id}/brief` GET. Every other path under
+ *    a case (`/views`, `/datasets`, `/tab`, `/access` and the rest the real Conduit serves) is NOT modelled: 500, recorded, never a 404
+ *    the real router would not give;
+ *  - then who the bearer is: none is 401 `{"detail": "Not authenticated"}` (FastAPI's `HTTPBearer`; a token in the query is ignored, so
+ *    refused as none); one it does not know is 401 with the resolver's own reason as the detail (`get_principal`: `detail=str(exc)`,
+ *    whose words vary with the reason; the page draws none of them);
  *  - then a route-level right (`dependencies=[Depends(require_right(...))]`, run before the case's gate): the brief needs `investigate`,
  *    a rename `share_case`, a removal `remove_case` and a new case `create_case`; without it, 403
  *    `{"detail": {"error": "right_required", "right": <right>}}`;
@@ -92,6 +96,8 @@ export interface CasesConduit {
 }
 
 export const NOT_FOUND_CASE = { error: "investigation_not_found" };
+/** The resolver's reason for a bearer it does not know: one of its own sentences (`packages/principal_auth`), standing for all. */
+export const UNKNOWN_BEARER = "token is missing required claim: subject ('sub')";
 export const rightRefusal = (right: string): unknown => ({ detail: { error: "right_required", right } });
 
 /** What the Conduit sends for a case read (`Investigation`, without its excluded field). */
@@ -113,8 +119,10 @@ export const listingOf = (c: Case, reader: Reader): Record<string, unknown> => (
   created_by: c.created_by,
   domains: c.domains,
   tab_hidden: (reader.hidden ?? []).includes(c.id),
-  datasets: c.datasets.map((d) => d.name),
-  dataset_ids: c.datasets.map((d) => d.id),
+  // `datasets.of_case` reads no dataset for a reader holding no right (`reads_dataset_names`, ADR-099 Amendment 11): the same empty
+  // list whatever the case reads.
+  datasets: reader.rights.length > 0 ? c.datasets.map((d) => d.name) : [],
+  dataset_ids: reader.rights.length > 0 ? c.datasets.map((d) => d.id) : [],
 });
 
 /** What the Conduit sends for a brief (`CaseBrief`) to this reader: attachments they may not read are left out entirely. */
@@ -160,6 +168,9 @@ export async function casesConduit(options: CasesConduitOptions): Promise<CasesC
     const path = url.split("?")[0] ?? "";
     const method = req.method ?? "";
     // The router answers first, as FastAPI's does.
+    if (/^\/v1\/investigations\/[^/]+\/.+$/.test(path) && !/^\/v1\/investigations\/[^/]+\/brief$/.test(path)) {
+      return send(500, { detail: "the fixture Conduit does not model this route of a case" });
+    }
     const match = /^\/v1\/investigations(?:\/([^/]+)(\/brief)?)?$/.exec(path);
     if (!match) return send(404, { detail: "Not Found" });
     const id = match[1] === undefined ? undefined : decodeURIComponent(match[1]);
@@ -168,8 +179,9 @@ export async function casesConduit(options: CasesConduitOptions): Promise<CasesC
     if (!(methods[route] as string[]).includes(method)) return send(405, { detail: "Method Not Allowed" });
     const header = req.headers["authorization"];
     const token = typeof header === "string" && header.startsWith("Bearer ") ? header.slice(7) : undefined;
+    if (token === undefined) return send(401, { detail: "Not authenticated" });
     const reader = options.readers.find((r) => r.token === token);
-    if (!reader) return send(401, { detail: "Not authenticated" });
+    if (!reader) return send(401, { detail: UNKNOWN_BEARER });
     // A route-level right, before the case's gate.
     const right = route === "brief" ? "investigate" : route === "list" && method === "POST" ? "create_case" : method === "PATCH" ? "share_case" : method === "DELETE" ? "remove_case" : undefined;
     if (right !== undefined && !reader.rights.includes(right)) return send(403, rightRefusal(right));

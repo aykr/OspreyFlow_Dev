@@ -45,7 +45,7 @@ import { testClock } from "../support/clock.js";
 import { cookieFrom, csrfFromPage, request } from "../support/http.js";
 import { generateSecret } from "../support/secret.js";
 import { bearer, providerFor, textOf } from "../support/studioWorld.js";
-import { NOT_FOUND_CASE, briefOf, casesConduit, investigationOf, listingOf, rightRefusal } from "./casesConduit.js";
+import { NOT_FOUND_CASE, UNKNOWN_BEARER, briefOf, casesConduit, investigationOf, listingOf, rightRefusal } from "./casesConduit.js";
 import type { Case, CasesConduit, CasesConduitOptions, Reader } from "./casesConduit.js";
 
 // The compiled service is checked against `server/types/glassShared.d.ts`; this holds each declaration the cases page added to the
@@ -76,7 +76,8 @@ afterEach(async () => {
 
 const UNIT = "harbour-unit";
 
-/** The cases of the fixture's store, in the store's own order: neither by name nor by when they were made, so a sort shows. */
+/** The cases of the fixture's store, in an order no sort gives: not by name or by label either way (Untitled, Harbour, Quay), and not by
+ * when they were made either way (September, August, November). The real store sends newest first; a page that sorted would show. */
 const CASES: Case[] = [
   {
     id: "c-toll",
@@ -97,7 +98,7 @@ const CASES: Case[] = [
   {
     id: "c-harbour",
     name: "Harbour watch",
-    created_at: "2026-10-02T09:05:00Z",
+    created_at: "2026-08-01T09:05:00Z",
     created_by: "acct-blake",
     owning_unit: UNIT,
     domains: ["fibo"],
@@ -122,7 +123,7 @@ const CASES: Case[] = [
   },
   {
     id: "c-ferry",
-    name: "Ferry routes",
+    name: "Quay routes",
     created_at: "2026-11-20T16:00:00Z",
     created_by: "acct-alex",
     owning_unit: UNIT,
@@ -366,6 +367,23 @@ function inOrderProblems(text: string, words: string[]): string[] {
   return [];
 }
 
+/** What an empty brief must be (CS5): said in words, with no list and no heading of the brief's parts. */
+const emptyBriefProblems = (html: string): string[] => {
+  const found: string[] = [];
+  if (!mainText(html).includes(CASES_WORDS.noBrief)) found.push("the empty brief is not said in words");
+  if (/<ol|<ul/.test(mainOf(html))) found.push("the empty brief is drawn as a list");
+  if (mainText(html).includes(CASES_WORDS.priority)) found.push("the empty brief is drawn with its parts' headings");
+  return found;
+};
+
+/** What a failed read of the list must be (CS9): the words, as an alert, and no table or part of one. */
+const failedListProblems = (html: string): string[] => {
+  const found: string[] = [];
+  if (!/<p role="alert">[^<]*could not be read/.test(mainOf(html))) found.push("the failure is not said as an alert");
+  if (/<table|<th\b|<caption/.test(mainOf(html))) found.push("a failed read draws a table or part of one");
+  return found;
+};
+
 /** The calls one render of a case's page must make, and no others (CS8). */
 const caseCalls = (id: string): string[] => [`GET /v1/investigations/${encodeURIComponent(id)}`, `GET /v1/investigations/${encodeURIComponent(id)}/brief`, "GET /v1/investigations"];
 const callProblems = (made: string[], want: string[]): string[] => (JSON.stringify(made) === JSON.stringify(want) ? [] : [`the page asked ${JSON.stringify(made)}, not ${JSON.stringify(want)}`]);
@@ -471,6 +489,11 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
     // Not the other unit's case, though the reader holds a grant on it, and not the unshared one: the Conduit's list, nothing added.
     expect(mainText(res.text)).not.toMatch(/Elsewhere case|Unshared case/);
     expect(neverProblems(res.text)).toEqual([]);
+    // A reader holding no right is sent no dataset (the route's rule): each row says none shown, never that the case reads none.
+    const unrighted = await world({ rights: [] });
+    const rows = tableOf((await getAs(unrighted, PATH)).text)?.rows ?? [];
+    expect(rows.map((r) => r.cells[3])).toEqual(["None shown", "None shown", "None shown"]);
+    expect(CASES_WORDS.noDatasets).toBe("None shown");
   });
 
   it("CS2: a reader with no case is told so in one sentence, with no table, caption or column header", async () => {
@@ -507,6 +530,7 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
   it("CS5: an empty brief is said in words, and never drawn as an empty list", async () => {
     const w = await world();
     const ferry = await getAs(w, pageOf("c-ferry"));
+    expect(emptyBriefProblems(ferry.text)).toEqual([]);
     expect(mainText(ferry.text)).toContain("This case has no brief yet.");
     expect(mainOf(ferry.text)).not.toMatch(/<ol|<ul/);
     expect(mainText(ferry.text)).not.toContain(CASES_WORDS.priority);
@@ -528,11 +552,22 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
       expect(refusalProblems(res, unknown), id).toEqual([]);
       expect(calls(w.conduit), id).toEqual([`GET /v1/investigations/${id}`]);
     }
-    for (const query of ["?case=", "?case=c-harbour&case=c-ferry", "?case=c-harbour&case="]) {
+    for (const query of ["?case=", "?case=c-harbour&case=c-ferry", "?case=c-harbour&case=", "?case=.", "?case=..", "?case=%2E%2E"]) {
       w.conduit.calls.splice(0);
       const res = await getAs(w, `${PATH}${query}`);
       expect(refusalProblems(res, unknown), query).toEqual([]);
       expect(calls(w.conduit), query).toEqual([]);
+    }
+  });
+
+  it("CS6: any other refusal of the case's read (a 403 for a level too low, a 409, a 422) is the same page, and the brief is not asked", async () => {
+    for (const status of [403, 409, 422]) {
+      const w = await world({ case_answer: { status, body: { detail: "this needs the viewer level on the case" } } });
+      const unknown = await getAs(w, NOWHERE);
+      w.conduit.calls.splice(0);
+      const res = await getAs(w, pageOf("c-harbour"));
+      expect(refusalProblems(res, unknown), String(status)).toEqual([]);
+      expect(calls(w.conduit), String(status)).toEqual([caseCalls("c-harbour")[0]]);
     }
   });
 
@@ -585,6 +620,7 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
       expect(res.status, JSON.stringify(options)).toBe(502);
       expect(mainOf(res.text)).not.toMatch(/<table|<th\b/);
       expect(mainText(res.text)).toContain(CASES_WORDS.unreadableList);
+      expect(failedListProblems(res.text)).toEqual([]);
     }
     const caseFailures: WorldOptions[] = [
       { case_answer: { status: 503, body: { detail: "down" } } },
@@ -631,7 +667,7 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
         tried += 1;
       }
     }
-    expect(tried).toBeGreaterThanOrEqual(22);
+    expect(tried).toBe(25);
     // Every field of every model of a shape no field of these models has (an object): the type check of each field, one case a field.
     // (Found by planting: with one field's type check taken out, presence alone still passed every case above.)
     for (const model of models) {
@@ -654,6 +690,9 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
       ["BriefRequirement", "status", "closed"],
       ["BriefRequirement", "answered_at", 0],
       ["BriefAttachment", "kind", "document"],
+      ["InvestigationListing", "created_at", "yesterday"],
+      ["Investigation", "created_at", "not a time"],
+      ["BriefRequirement", "answered_at", "soon"],
     ];
     for (const [model, field, value] of wrong) {
       const b = withField(model, field, value);
@@ -733,10 +772,8 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
       const rows = rowsOf(real);
       expect(rows).toHaveLength(3);
       const withRows = (next: string[]): string => real.replace(rows.join("\n"), next.join("\n"));
-      // A case of another unit added by the page from a second read: the real view's own row for it, put in the real page.
-      const added = listView([...listBody(), listingOf(CASES[3] as Case, { ...sampleReader, levels: { ...LEVELS } })]);
-      expect(added?.kind).toBe("table");
       const plants: [string, string][] = [
+        // A case of another unit added by the page from a second read: a row of the real page, renamed, put after the others.
         ["a case added from a second read", withRows([...rows, (rows[0] as string).replace(/Untitled case[^<]*/, "Elsewhere case")])],
         ["a row skipped", withRows([rows[0] as string, rows[2] as string])],
         ["the rows sorted by name", withRows([rows[2] as string, rows[1] as string, rows[0] as string])],
@@ -759,7 +796,9 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
       expect(inOrderProblems(mainText(real.replace(">Open<", ">open<")), want).length).toBeGreaterThan(0);
       expect(neverProblems(real.replace(CASES_WORDS.kinds.trend, `${CASES_WORDS.kinds.trend}: Berths after dark`)).length).toBeGreaterThan(0);
       const ferry = (await getAs(w, pageOf("c-ferry"))).text;
-      expect(mainText(ferry.replace("This case has no brief yet.", "<ol></ol>"))).not.toContain("This case has no brief yet.");
+      expect(emptyBriefProblems(ferry)).toEqual([]);
+      expect(emptyBriefProblems(ferry.replace("<p>This case has no brief yet.</p>", "<ol></ol>"))).not.toEqual([]);
+      expect(emptyBriefProblems(ferry.replace("<p>This case has no brief yet.</p>", "<p>This case has no brief yet.</p><h3>Priority information requirement</h3>"))).not.toEqual([]);
     });
 
     it("CS15: the refusal's check fails for a 'you do not have access' sentence, the 403 passed through, the Conduit's words", async () => {
@@ -778,7 +817,9 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
       const w = await world({ list_answer: { status: 500, body: {} } });
       const failed = (await getAs(w, PATH)).text;
       const emptyTable = failed.replace(CASES_WORDS.unreadableList.replace(/'/g, "&#39;"), `<table><caption>${CASES_WORDS.caption}</caption><thead><tr><th scope="col">Case</th></tr></thead><tbody></tbody></table>`);
-      expect(mainText(emptyTable)).not.toContain(CASES_WORDS.unreadableList);
+      expect(failedListProblems(failed)).toEqual([]);
+      expect(failedListProblems(emptyTable)).not.toEqual([]);
+      expect(failedListProblems(failed.replace('<p role="alert">', "<p>"))).not.toEqual([]);
       expect(structureProblems(emptyTable)).toContain("a table has no row");
       // A reader that took a missing field as empty: the real view given a default for it draws, where the real one refuses.
       const lenient = (body: unknown): unknown => listView((body as Record<string, unknown>[]).map((row) => ({ datasets: [], ...row })));
@@ -832,11 +873,13 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
       };
       const as = { headers: { Authorization: `Bearer ${w.reader.token}` } };
       expect(await ask("/v1/investigations")).toEqual({ status: 401, body: { detail: "Not authenticated" } });
-      expect(await ask("/v1/investigations", { headers: { Authorization: "Bearer someone-else" } })).toEqual({ status: 401, body: { detail: "Not authenticated" } });
+      expect(await ask("/v1/investigations", { headers: { Authorization: "Bearer someone-else" } })).toEqual({ status: 401, body: { detail: UNKNOWN_BEARER } });
       expect(await ask(`/v1/investigations?access_token=${w.reader.token}`)).toEqual({ status: 401, body: { detail: "Not authenticated" } });
       expect(await ask("/v1/investigations/c-harbour/brief", { method: "POST", ...as })).toEqual({ status: 405, body: { detail: "Method Not Allowed" } });
       expect(await ask("/v1/investigations/c-harbour/brief", { method: "PUT" })).toEqual({ status: 405, body: { detail: "Method Not Allowed" } });
-      expect(await ask("/v1/investigations/c-harbour/views", as)).toEqual({ status: 404, body: { detail: "Not Found" } });
+      // A route the real Conduit serves under a case and the fixture does not model: never a 404 the real router would not give.
+      expect((await ask("/v1/investigations/c-harbour/views", as)).status).toBe(500);
+      expect(await ask("/v1/investigation", as)).toEqual({ status: 404, body: { detail: "Not Found" } });
       for (const id of ["c-unshared", "c-elsewhere", "c-no-such-case"]) expect(await ask(`/v1/investigations/${id}`, as), id).toEqual({ status: 404, body: NOT_FOUND_CASE });
       // The brief's right is checked before the case's gate, as the route-level dependency runs first.
       expect(await ask("/v1/investigations/c-no-such-case/brief", as)).toEqual({ status: 403, body: rightRefusal("investigate") });
@@ -851,6 +894,9 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
       expect(brief.requirements[0]?.attachments.map((a) => a.id)).toEqual(["t-berths", "v-quay"]);
       const listed = (await (await fetch(`${w2.conduit.url}/v1/investigations`, as2)).json()) as { id: string }[];
       expect(listed.map((c) => c.id)).toEqual(MINE);
+      // A reader holding no right is sent the list with no dataset in it (`datasets.of_case`'s `reads_dataset_names`).
+      const bare = (await (await fetch(w.conduit.url + "/v1/investigations", as)).json()) as { datasets: string[]; dataset_ids: string[] }[];
+      expect(bare.map((c) => [c.datasets, c.dataset_ids])).toEqual([[[], []], [[], []], [[], []]]);
       const one = (await (await fetch(`${w2.conduit.url}/v1/investigations/c-harbour`, as2)).json()) as Record<string, unknown>;
       expect("domains_chosen" in one).toBe(false);
     });

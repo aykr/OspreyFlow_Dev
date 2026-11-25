@@ -16,7 +16,7 @@
  *  - the case's read or the brief's refused (any 4xx but a 401: no level, another unit and no such case are the route's one 404; the
  *    brief's 403 for want of the right to investigate is the same to the reader): a 404 with the page of a path nothing serves, drawn
  *    from the same words and template, with none of the Conduit's words; nothing more is asked after a refusal;
- *  - a `case` that is empty, repeated or not a plain value: the same 404, and nothing is asked;
+ *  - a `case` that is empty, repeated, a dot segment or not a plain value: the same 404, and nothing is asked;
  *  - a 401 from any read: the Studio's words, to sign in again (a 401);
  *  - the Conduit failing, not answering, or answering what the page cannot draw from (the strict reader, `views/casesWords.ts`), or a list
  *    that does not hold the case: could not be read (a 502), with no table, no brief and no part of one (rule 2).
@@ -61,7 +61,9 @@ async function casesGet(req: Request, res: Response): Promise<void> {
   const wanted = req.query["case"];
   const oneCase = wanted !== undefined;
   // A case named once, as a plain value: anything else is a page that is not there, and nothing is asked.
-  if (oneCase && (typeof wanted !== "string" || wanted === "")) return notFound(res);
+  // `.` and `..` are refused too: `v1` encodes each segment, but a dot segment is one the address's own parser folds away, so it would
+  // ask another route than the case's.
+  if (oneCase && (typeof wanted !== "string" || wanted === "" || wanted === "." || wanted === "..")) return notFound(res);
   const title = oneCase ? CASES_WORDS.about : CASES_WORDS.listTitle;
   const unreadable = (status = 502): void => void res.status(status).render("cases", context(title, { kind: oneCase ? "unreadable-case" : "unreadable-list" }));
   const ended = (): void => void res.status(401).render("cases", context(title, { kind: "ended" }, { ended: refusalWords(401, undefined, "") }));

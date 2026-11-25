@@ -65,6 +65,16 @@ PAGE_LIST = PAGES / "server" / "pageList.ts"
 APP = CORE / "services" / "api" / "app.py"
 INVESTIGATIONS = CORE / "services" / "api" / "investigations.py"
 CASE_BRIEF = CORE / "services" / "api" / "case_brief.py"
+DOMAIN = CORE / "packages" / "schemas" / "domain.py"
+
+#: Each closed field's allowed values: the page's list (in `casesWords.ts`) and where the model's own are defined (an enum's members'
+#: values, or a `Literal` alias), so a value added to a model fails here and never reaches a reader's page as "could not be read".
+VALUES: dict[str, tuple[str, Path, str]] = {
+    "LEVELS": ("AccessLevel", INVESTIGATIONS, "enum"),
+    "PACKS": ("DomainPack", DOMAIN, "literal"),
+    "STATUSES": ("RequirementStatus", CASE_BRIEF, "literal"),
+    "KINDS": ("AttachmentKind", CASE_BRIEF, "literal"),
+}
 
 SECTION = "## Scenario CS"
 ID = re.compile(r"^CS\d+$")
@@ -215,6 +225,7 @@ def inputs() -> dict[str, Any]:
         "page_list": read(PAGE_LIST),
         "words": read(WORDS),
         "models": {name: read(path) for name, path in MODELS.items()},
+        "value_sources": {path: read(path) for _, path, _ in VALUES.values()},
     }
 
 
@@ -371,6 +382,38 @@ def census_problems(data: dict[str, Any]) -> list[str]:
     return found
 
 
+def model_values(source: str, name: str, how: str) -> list[str] | None:
+    """The values of the enum `name` (its members' string values) or of the `Literal` alias `name`, in order, from `source`."""
+    for node in ast.walk(ast.parse(source)):
+        if how == "enum" and isinstance(node, ast.ClassDef) and node.name == name:
+            return [
+                item.value.value
+                for item in node.body
+                if isinstance(item, ast.Assign) and isinstance(item.value, ast.Constant) and isinstance(item.value.value, str)
+            ]
+        if how == "literal" and isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == name for t in node.targets):
+            value = node.value
+            if isinstance(value, ast.Subscript) and isinstance(value.value, ast.Name) and value.value.id == "Literal":
+                items = value.slice.elts if isinstance(value.slice, ast.Tuple) else [value.slice]
+                return [e.value for e in items if isinstance(e, ast.Constant)]
+    return None
+
+
+def values_problems(data: dict[str, Any]) -> list[str]:
+    found: list[str] = []
+    for listed, (name, path, how) in VALUES.items():
+        page = re.search(rf"export const {listed}(?::[^=]*)? = \[([^\]]*)\]", data["words"])
+        if page is None:
+            found.append(f"casesWords.ts declares no {listed} list")
+            continue
+        model = model_values(data["value_sources"][path], name, how)
+        if model is None:
+            found.append(f"{name} is not in {path.name}")
+        elif sorted(names(page.group(1))) != sorted(model):
+            found.append(f"the page's {listed} are {names(page.group(1))}, but {name} holds {model}")
+    return found
+
+
 CHECKS = (
     scenario_problems,
     prose_problems,
@@ -379,6 +422,7 @@ CHECKS = (
     route_problems,
     module_problems,
     census_problems,
+    values_problems,
 )
 
 
@@ -422,6 +466,10 @@ def test_the_page_module_is_the_cases_rows_at_its_path() -> None:
 
 def test_the_field_census_is_the_models_fields() -> None:
     assert census_problems(inputs()) == []
+
+
+def test_the_page_allows_exactly_the_models_values() -> None:
+    assert values_problems(inputs()) == []
 
 
 # ---------------------------------------------------------------------------------------------------- planted faults (rule 15)
@@ -562,6 +610,42 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
         _model("Investigation", "domains_chosen: bool = Field(default=False, exclude=True)", "domains_chosen: bool = Field(default=False)"),
         census_problems,
         "never on the wire",
+    ),
+]
+
+
+def _source(path: Path, old: str, new: str) -> Callable[[dict[str, Any]], None]:
+    def plant(data: dict[str, Any]) -> None:
+        assert old in data["value_sources"][path], f"the plant's anchor {old!r} is not in {path.name}"
+        data["value_sources"][path] = data["value_sources"][path].replace(old, new, 1)
+
+    return plant
+
+
+PLANTS += [
+    (
+        "a kind added to the model's attachments",
+        _source(CASE_BRIEF, 'AttachmentKind = Literal["trend", "pattern", "assessment", "view"]', 'AttachmentKind = Literal["trend", "pattern", "assessment", "view", "document"]'),
+        values_problems,
+        "AttachmentKind holds",
+    ),
+    (
+        "a level added to the model",
+        _source(INVESTIGATIONS, '    AUTHOR = "author"\n', '    AUTHOR = "author"\n    OWNER = "owner"\n'),
+        values_problems,
+        "AccessLevel holds",
+    ),
+    (
+        "a pack added to the model",
+        _source(DOMAIN, 'DomainPack = Literal["fibo", "niem", "stix"]', 'DomainPack = Literal["fibo", "niem", "stix", "pole"]'),
+        values_problems,
+        "DomainPack holds",
+    ),
+    (
+        "a status dropped from the page",
+        _replace("words", 'export const STATUSES = ["open", "answered"] as const;', 'export const STATUSES = ["open"] as const;'),
+        values_problems,
+        "the page's STATUSES",
     ),
 ]
 

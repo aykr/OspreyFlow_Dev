@@ -27,7 +27,9 @@ export const CASES_WORDS = {
   columns: ["Case", "Your level", "Domains", "Datasets", "Made"],
   closed: "You closed this case's tab",
   noCases: "You have no cases to show.",
-  noDatasets: "None",
+  // An empty list is said as none shown, never as "none": the route sends no dataset to a reader holding no right (ADR-099
+  // Amendment 11, `services/api/datasets.py`), so the page cannot tell a case that reads none from one whose datasets are withheld.
+  noDatasets: "None shown",
   about: "About this case",
   level: "Your level",
   domains: "Domains",
@@ -69,10 +71,12 @@ export const REQUIRED = Object.fromEntries(
   Object.entries(CENSUS).map(([model, { drawn, left }]) => [model, [...drawn, ...left].filter((field) => !NOT_SENT.includes(field))]),
 ) as Record<Model, string[]>;
 
-const LEVELS = ["viewer", "editor", "author"] as const;
-const PACKS: readonly string[] = ["fibo", "niem", "stix"];
-const STATUSES = ["open", "answered"] as const;
-const KINDS = ["trend", "pattern", "assessment", "view"] as const;
+// The values each closed field may take: the models' own (`AccessLevel`, `DomainPack`, `RequirementStatus`, `AttachmentKind`), which
+// `tests/glass_trees/test_govuk_cases_scenario.py` holds these lists to, so a value added to a model fails that test, not a reader's page.
+export const LEVELS = ["viewer", "editor", "author"] as const;
+export const PACKS: readonly string[] = ["fibo", "niem", "stix"];
+export const STATUSES = ["open", "answered"] as const;
+export const KINDS = ["trend", "pattern", "assessment", "view"] as const;
 
 type Level = (typeof LEVELS)[number];
 type Kind = (typeof KINDS)[number];
@@ -113,6 +117,8 @@ const isText = (value: unknown): value is string => typeof value === "string";
 const isTexts = (value: unknown): value is string[] => Array.isArray(value) && (value as unknown[]).every(isText);
 const isPacks = (value: unknown): value is DomainPack[] => isTexts(value) && value.every((pack) => PACKS.includes(pack));
 const isLevel = (value: unknown): value is Level => LEVELS.some((level) => level === value);
+/** A moment the page can write: a time `utcStampOf` would draw as given is a body the page does not draw from. */
+const isTime = (value: unknown): value is string => isText(value) && !Number.isNaN(new Date(value).getTime());
 
 // No separate presence check: each field is checked for its type below, and `undefined` is no field's type (`answered_at` is a time or
 // `null`), so a missing field is refused by the same check as a wrong one. A presence check beside it was planted out and nothing went
@@ -127,7 +133,7 @@ function listingOf(row: unknown):
   | undefined {
   if (!isObject(row)) return undefined;
   const { id, name, level, created_at, created_by, domains, tab_hidden, datasets, dataset_ids } = row;
-  if (!isText(id) || !isText(name) || !isLevel(level) || !isText(created_at) || !isText(created_by)) return undefined;
+  if (!isText(id) || !isText(name) || !isLevel(level) || !isTime(created_at) || !isText(created_by)) return undefined;
   if (!isPacks(domains) || typeof tab_hidden !== "boolean" || !isTexts(datasets) || !isTexts(dataset_ids)) return undefined;
   return { id, name, level, created_at, domains, tab_hidden, datasets };
 }
@@ -174,7 +180,7 @@ function requirementOf(body: unknown): RequirementRow | undefined {
   if (!isObject(body)) return undefined;
   const { id, text, status, answered_at, attachments } = body;
   if (!isText(id) || !isText(text) || !STATUSES.some((known) => known === status)) return undefined;
-  if (!(answered_at === null || isText(answered_at)) || !Array.isArray(attachments)) return undefined;
+  if (!(answered_at === null || isTime(answered_at)) || !Array.isArray(attachments)) return undefined;
   const kinds: string[] = [];
   for (const attachment of attachments as unknown[]) {
     const kind = attachmentOf(attachment);
@@ -211,7 +217,7 @@ function briefOf(body: unknown): BriefView | undefined {
 export function caseView(caseId: string, investigation: unknown, brief: unknown, list: unknown): CaseView | undefined {
   if (!isObject(investigation)) return undefined;
   const { id, name, created_at, created_by, owning_unit, domains } = investigation;
-  if (!isText(id) || !isText(name) || !isText(created_at) || !isText(created_by) || !isText(owning_unit) || !isPacks(domains)) return undefined;
+  if (!isText(id) || !isText(name) || !isTime(created_at) || !isText(created_by) || !isText(owning_unit) || !isPacks(domains)) return undefined;
   const listings = listingsOf(list);
   const briefView = briefOf(brief);
   if (listings === undefined || briefView === undefined) return undefined;
