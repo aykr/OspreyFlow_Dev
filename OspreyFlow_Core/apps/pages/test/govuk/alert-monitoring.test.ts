@@ -265,6 +265,7 @@ interface Route {
     closed_by_outcome: { week_start: string; label: string; count: number }[];
     time_to_close: { label: string; value: number }[];
     hotlist_matches: { week_start: string; count: number }[];
+    open_by_source: { label: string; typology: string; age: string; count: number }[];
   };
   held: { held: number; released: number; rejected: number } | null;
 }
@@ -287,6 +288,21 @@ function weeklyFrom(route: Route): [string, number][] {
 const DAYS = new Intl.DateTimeFormat("en-GB", { dateStyle: "long", timeZone: "UTC" });
 const day = (iso: string): string => DAYS.format(new Date(iso));
 
+/** The open alerts' figures in step: the count in words is the sum of the table's cells, and each row has the four age bands (AM1, AM5). */
+function openProblems(html: string): string[] {
+  const found: string[] = [];
+  const text = words(html);
+  const said = /(\d[\d,]*) alerts? open/.exec(text);
+  if (!said) return ["the page does not say how many alerts are open"];
+  const table = tablesOf(html).find((t) => t.caption === "Open alerts by source and age");
+  const rows = table?.rows ?? [];
+  const sum = rows.reduce((n, r) => n + r.cells.reduce((m, c) => m + Number(c.replace(/,/g, "")), 0), 0);
+  if (Number(said[1]?.replace(/,/g, "")) !== sum) found.push(`the page says ${said[1] as string} open where its table adds up to ${sum}`);
+  if (table && table.heads.join("|") !== "Source|Under a day|1 to 7 days|7 to 30 days|Over 30 days") found.push(`the open alerts table's columns are ${table.heads.join("|")}`);
+  for (const r of rows) if (r.cells.length !== 4) found.push(`the open alerts row ${r.head} has ${r.cells.length} figures, not one for each of the four ages`);
+  return found;
+}
+
 const reportCalls = (conduit: FakeReportConduit): string[] => conduit.calls.map((c) => `${c.method} ${c.path}${c.query.size > 0 ? `?${c.query.toString()}` : ""}`);
 
 // ------------------------------------------------------------------------------------------------ the page
@@ -303,6 +319,17 @@ describe("the alert monitoring figures (the govuk tree)", () => {
     const route = await routeSays(v.conduit, official.token, CASE);
     const tables = figuresOnPage(res.text);
     // The week's total is the sum of its rows as the route sent them, in order of week; the page adds nothing of its own.
+    // The open alerts, as the route counts them for this reader (every one it may see, whenever raised), in the order the route sent.
+    expect(tables["Open alerts by source and age"]).toEqual([
+      ["Hotlists", "0", "0", "1", "0"],
+      ["Rapid movement", "0", "0", "2", "0"],
+      ["Structuring", "0", "0", "2", "0"],
+    ]);
+    expect(route.monitoring.open_by_source).toEqual([
+      { label: "hotlists", typology: "", age: "7 to 30 days", count: 1 },
+      { label: "typology", typology: "rapid_movement", age: "7 to 30 days", count: 2 },
+      { label: "typology", typology: "structuring", age: "7 to 30 days", count: 2 },
+    ]);
     expect(tables["Alerts raised each week"]).toEqual(weeklyFrom(route).map(([week, n]) => [day(week), String(n)]));
     expect(tables["Alerts raised by rule"]).toEqual([
       ["Rapid movement", "2"],
@@ -318,7 +345,8 @@ describe("the alert monitoring figures (the govuk tree)", () => {
     expect(text).toContain("Counted for you: an alert concerning anything you cannot see is in no figure here.");
     expect(text).toContain(`${OFFICIAL_TOTAL} alerts raised in the last 12 weeks`);
     expect(text).toContain("1 match");
-    expect(headingsOf(res.text)).toEqual(["Alert monitoring", "Raised each week", "Raised by rule", "Closed by outcome", "Time to close", "Hotlist matches", "Team view", "Held rows"]);
+    expect(text).toContain("5 alerts open");
+    expect(headingsOf(res.text)).toEqual(["Alert monitoring", "Alerts", "Raised each week", "Raised by rule", "Closed by outcome", "Time to close", "Hotlist matches", "Team view", "Held rows"]);
   });
 
   it("AM1: the period is the week of a link, and a value that is not a period is the default", async () => {
@@ -408,6 +436,7 @@ describe("the alert monitoring figures (the govuk tree)", () => {
     expect(text).toContain("This report would count 15 alerts, past its limit of 10. Choose a shorter period.");
     expect(mainOf(res.text)).not.toMatch(/<svg|<table/);
     expect(text).not.toContain("Raised each week");
+    expect(text).not.toContain("alerts open");
     // The way out is a link to each shorter period, and no other.
     const links = [...mainOf(res.text).matchAll(/<a\b([^>]*)>([^<]*)<\/a>/g)].map((m) => [attr(m[1] as string, "href"), m[2]]).filter(([href]) => String(href).startsWith("/reports"));
     expect(links).toEqual([[`/reports?case=${CASE}&weeks=4`, "Last 4 weeks"]]);
@@ -505,6 +534,83 @@ describe("the alert monitoring figures (the govuk tree)", () => {
     expect(Object.keys(asViewer)).toContain("Alerts closed by outcome");
     expect(Object.keys(asViewer)).not.toContain("Held rows by what became of them");
     expect(structureProblems(html)).toEqual([]);
+  });
+
+  it("AM1: draws the open alerts the route sent, as the count in words and a captioned table of source and age, before the rest", async () => {
+    const v = await visitAs(readerOf({}));
+    v.conduit.world.set(CASE, [
+      { week: "2026-11-23", label: "typology", typology: "structuring", needs: "OFFICIAL" },
+      { week: "2026-11-23", label: "typology", typology: "structuring", needs: "OFFICIAL", closedAs: "true_positive", tookBand: "under a day" },
+      { week: "2026-11-16", createdOn: "2026-11-20", label: "typology", typology: "structuring", needs: "OFFICIAL" },
+      { week: "2026-11-02", label: "monitors", needs: "OFFICIAL" },
+      { week: "2026-09-28", label: "monitors", needs: "OFFICIAL" },
+      { week: "2026-09-28", label: "monitors", needs: "OFFICIAL" },
+      { week: "2026-09-28", label: "hotlists", needs: "OFFICIAL", closedAs: "false_positive", tookBand: "over 30 days" },
+    ]);
+    const route = await routeSays(v.conduit, v.token, CASE, 52);
+    expect(route.monitoring.open_by_source.map((c) => `${c.label}:${c.typology}:${c.age}:${c.count}`)).toEqual([
+      "monitors::7 to 30 days:1",
+      "monitors::over 30 days:2",
+      "typology:structuring:1 to 7 days:1",
+      "typology:structuring:under a day:1",
+    ]);
+    const html = (await v.get(`/reports?case=${CASE}&weeks=52`)).text;
+    expect(words(html)).toContain("4 alerts open");
+    expect(figuresOnPage(html)["Open alerts by source and age"]).toEqual([
+      ["Monitors", "0", "0", "1", "2"],
+      ["Structuring", "1", "1", "0", "0"],
+    ]);
+    expect(openProblems(html)).toEqual([]);
+    expect(structureProblems(html)).toEqual([]);
+    // Its heading comes first, as the board's does, and the page is no more a chart than the team view is.
+    expect(headingsOf(html).slice(0, 2)).toEqual(["Alert monitoring", "Alerts"]);
+    expect(scriptsOffProblems(html)).toEqual([]);
+  });
+
+  it("AM1: with no alert open the page says 0 alerts open and draws no table of nothing", async () => {
+    const v = await visitAs(readerOf({}));
+    v.conduit.world.set(CASE, [{ week: "2026-11-09", label: "typology", typology: "structuring", needs: "OFFICIAL", closedAs: "true_positive", tookBand: "1 to 7 days" }]);
+    expect((await routeSays(v.conduit, v.token, CASE)).monitoring.open_by_source).toEqual([]);
+    const html = (await v.get(`/reports?case=${CASE}`)).text;
+    expect(words(html)).toContain("0 alerts open");
+    expect(Object.keys(figuresOnPage(html))).not.toContain("Open alerts by source and age");
+    expect(openProblems(html)).toEqual([]);
+  });
+
+  it("AM5: a period with nothing raised in it still draws the open alerts the route sent, whatever their age", async () => {
+    // The real route counts the open alerts over every alert the reader may see, not those raised in the period (`_panel_figures`).
+    const viewer = readerOf({ id: "viewer", cases: { [CASE]: "viewer" } });
+    const v = await visitAs(readerOf({}), [viewer]);
+    const old = (over: Partial<WorldAlert>): WorldAlert => ({ week: "2026-01-05", label: "typology", typology: "structuring", needs: "OFFICIAL", ...over });
+    v.conduit.world.set(CASE, [old({}), old({}), old({ label: "hotlists", typology: undefined }), old({ closedAs: "true_positive", closedWeek: "2026-11-16", tookBand: "over 30 days" })]);
+    const route = await routeSays(v.conduit, v.token, CASE);
+    expect(route.monitoring.raised_by_rule, "the fixture models a period with nothing raised in it").toEqual([]);
+    expect(route.monitoring.open_by_source.length, "and open alerts in it").toBeGreaterThan(0);
+    const html = (await v.get(`/reports?case=${CASE}`)).text;
+    expect(words(html)).toContain("No alerts were raised in this period.");
+    expect(words(html)).toContain("3 alerts open");
+    expect(figuresOnPage(html)["Open alerts by source and age"]).toEqual([
+      ["Hotlists", "0", "0", "0", "1"],
+      ["Structuring", "0", "0", "0", "2"],
+    ]);
+    expect(openProblems(html)).toEqual([]);
+    // A Viewer is sent them too: the route counts them for the reader and holds nothing back for a level.
+    const seen = (await (await visitOn(v.conduit, viewer)).get(`/reports?case=${CASE}`)).text;
+    expect(words(seen)).toContain("3 alerts open");
+  });
+
+  it("AM3: the open alerts are the reader's own: a count of open alerts only a secret reader may see is on no other page", async () => {
+    const official = readerOf({ id: "reader-official", clearance: "OFFICIAL" });
+    const secret = readerOf({ id: "reader-secret", clearance: "SECRET" });
+    const asOfficial = await visitAs(official, [secret]);
+    const asSecret = await visitOn(asOfficial.conduit, secret);
+    const seenByOfficial = (await asOfficial.get(`/reports?case=${CASE}`)).text;
+    const seenBySecret = (await asSecret.get(`/reports?case=${CASE}`)).text;
+    expect(words(seenByOfficial)).toContain("5 alerts open");
+    expect(words(seenBySecret)).toContain("12 alerts open");
+    expect(figuresOnPage(seenBySecret)["Open alerts by source and age"]).toContainEqual(["Circular flow", "0", "0", "7", "0"]);
+    expect(figuresOnPage(seenByOfficial)["Open alerts by source and age"]?.map((r) => r[0])).toEqual(["Hotlists", "Rapid movement", "Structuring"]);
+    expect(leakProblems(seenByOfficial, ["Circular flow", "12 alerts open"])).toEqual([]);
   });
 
   it("AM5: a section with nothing to count says so, and a chart is never drawn with no bar", async () => {
@@ -720,6 +826,7 @@ describe("each check is red against the real page with one thing changed (AM11)"
     ["a row header with no scope", (h) => h.replace('<th scope="row">', "<th>"), structureProblems, /scope="row"/],
     ["a second heading of the first level", (h) => h.replace("</main>", "<h1>Again</h1></main>"), structureProblems, /exactly one heading of the first level/],
     ["a skipped heading level", (h) => h.replace(/<h2\b/, "<h4"), structureProblems, /skips from level/],
+    ["an open alerts count that is not its table", (h) => h.replace(/<tr><th scope="row">Hotlists<\/th><td>0<\/td><td>0<\/td><td>1<\/td>/, '<tr><th scope="row">Hotlists</th><td>0</td><td>0</td><td>4</td>'), openProblems, /adds up to/],
     ["a hidden rule in the official reader's page", (h) => h.replace("</main>", "<p>Circular flow 7</p></main>"), (h) => leakProblems(h, ["Circular flow"]), /Circular flow/],
   ];
 

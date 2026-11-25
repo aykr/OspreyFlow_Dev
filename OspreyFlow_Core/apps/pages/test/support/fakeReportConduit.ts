@@ -19,6 +19,8 @@
  *  - every figure is counted as the reader: an alert whose citations name anything above the reader's clearance is in no total,
  *    week, rule, outcome or age (the queue's all-or-nothing check, `alert_queue.monitoring_queue_and_left_out`, ADR-039), and the
  *    bound is counted from what the reader sees; past it, 409 `limit_exceeded` with `would_be` of the visible alerts alone;
+ *  - `open_by_source` counts the open alerts the reader may see by rule group and age band, whenever they were raised, so a period
+ *    with nothing raised can still hold open alerts (`_panel_figures`; a `typology` of `""` for any group but a typology's own);
  *  - `alerts_total` is the count of TYPOLOGY alerts alone, while `monitoring` counts every kind (`reports.py` lines 278 to 288);
  *  - the held rows' figures are for Editors and above only: a Viewer's report carries `held: null`.
  */
@@ -35,6 +37,8 @@ export interface WorldAlert {
   week: string;
   label: "typology" | "hotlists" | "monitors";
   typology?: string;
+  /** The day it was raised, within `week`, when its age matters (an open alert's band); absent, the Monday of `week`. */
+  createdOn?: string;
   /** What the nodes it cites need to be read. */
   needs: Clearance;
   /** How it was closed (`true_positive`, `false_positive`, ...), or `closed` for none; absent while it is open. */
@@ -95,6 +99,25 @@ function count<T>(items: T[], key: (item: T) => string): Map<string, number> {
 /** The week an alert was closed in: the real route counts a closure by its decision date. */
 const decidedWeek = (a: WorldAlert): string => a.closedWeek ?? a.week;
 
+/** `reports.py` `_age_label`: under a day, under seven, under thirty, then over. */
+function ageBand(createdWeek: string): (typeof AGE_LABELS)[number] {
+  const days = (Date.parse(`${AS_OF}T09:00:00Z`) - Date.parse(`${createdWeek}T00:00:00Z`)) / DAY;
+  return days < 1 ? AGE_LABELS[0] : days < 7 ? AGE_LABELS[1] : days < 30 ? AGE_LABELS[2] : AGE_LABELS[3];
+}
+
+/**
+ * The real route's `open_by_source` (`reports.py` `_panel_figures`): every alert the reader may see that is still in the queue,
+ * whenever it was raised (the period does not cut it), counted by rule group and age band, sorted by (label, typology, age) as
+ * the route sorts its tuples. A closed alert is in none of them.
+ */
+function openBySource(seen: WorldAlert[]): { label: string; typology: string; age: string; count: number }[] {
+  const open = count(seen.filter((a) => a.closedAs === undefined), (a) => `${a.label}|${a.typology ?? ""}|${ageBand(a.createdOn ?? a.week)}`);
+  return [...open].map(([key, n]) => {
+    const [label, typology, age] = key.split("|") as [string, string, string];
+    return { label, typology, age, count: n };
+  });
+}
+
 /**
  * The figures of the real `MonitoringFigures`. `seen` is every alert the reader may see, whenever it was raised; `since` is the
  * period's start (`YYYY-MM-DD`): only `raised_by_rule` and `hotlist_matches` are cut to the alerts raised in it.
@@ -141,7 +164,7 @@ function figuresOf(seen: WorldAlert[], since: string, weeks: number, level: "vie
       closed_by_outcome: closed,
       time_to_close: AGE_LABELS.map((label) => ({ label, value: took.get(label) ?? 0 })),
       hotlist_matches: hotlists,
-      open_by_source: [],
+      open_by_source: openBySource(seen),
       team,
     },
     held: level === "viewer" ? null : { held: 2, released: 5, rejected: 1 },
