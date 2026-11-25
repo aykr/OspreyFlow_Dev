@@ -125,8 +125,8 @@ SECTIONS = {
     "welcome": "The welcome page before sign-in: its About section and footer links.",
     "appearance": "How every page looks: the deployment's brand, and what its page title names.",
     "pages": (
-        "Whether the deployment runs the page service (the server-rendered pages): off, "
-        "and turned on for one deployment at a time by the owner."
+        "The page service (the server-rendered pages): the setting exists and is off; "
+        "it is not for use yet."
     ),
     "grading": "The scheme every drawn node and link is graded in (ADR-143 decision 11); changed only by `ospreyflow grading change`.",
     "deployment": "Which deployment this is, on a machine that runs more than one.",

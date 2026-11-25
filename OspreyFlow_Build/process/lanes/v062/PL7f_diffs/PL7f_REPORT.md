@@ -1,0 +1,329 @@
+# Slice PL7f, round 1: report
+
+## Round 2, the owner's ruling D234 (25 November 2026): the Docker exemption, and the Caddy test run
+
+**Done, option 1 as ruled.** `tests/local_docker_guard.py` exempts exactly one command, and `no-local-stacks` is untouched
+(still on this Mac; I did not rename it or move `OSPREY_LEASE_DIR`).
+
+* **The one command**, matched on its whole shape as `subprocess.run` hands it to `Popen` (`is_the_caddy_validation`):
+  `docker run --rm --network none -v <folder>:/cases:ro -v <folder>:/etc/caddy:ro -v <folder>:/certs:ro
+  caddy:2.11.4-alpine sh -c <script>`, asked by `tests/harness/test_page_addresses_caddy.py` (pytest's
+  `PYTEST_CURRENT_TEST` names the file, equal to the path, so `x/tests/...`, `....bak` and collection are refused). The script
+  is the guard's own constant (`CADDY_SCRIPT`), which the test imports, so the two cannot differ. Each folder must lie under
+  the system's temporary folder (so no mount can name the Docker socket, the home folder or `/`; the test's `tmp_path` does).
+  `shell`, `env`, `executable` and any extra positional argument are refused. The one exempt call is handed the real docker
+  (found on the `PATH` without the refusing shim's folder); every other call, the shim on the session's `PATH` included,
+  is refused as before.
+* **The comment beside the exemption** says it comes out when **017-1** lands and the test moves to the server's container
+  checks.
+* **Red first (rule 15).** Commit `bb6e830` (tests alone): collection fails, "no attribute `CADDY_IMAGE`". Then the
+  exemption matched **on the image alone** (scratch): **28 of the refusal cases fail** (a fourth mount, the docker socket as a
+  mount, a writable mount, no mode, another network, `--network=host`, no `--rm`, a published port, `--privileged`, another
+  script, another program, another docker command, the hash-password run, a full docker path, `shell`, `env`, `executable`,
+  another test, a same-named file elsewhere, collection) plus the end-to-end case. Then the real match: **65 passed** in
+  `test_local_docker_guard.py`: 33 refused shapes in the argument-list form the wrapper receives (each with a fourth mount
+  and each with `--network` other than `none`, among them), the exempt shape allowed for the one test, the image equal to
+  `harness.site.PROXY_IMAGE`, the comment naming 017-1, and one end-to-end run through `subprocess.run` and the session's
+  own wrapper (the stand-in docker records one call, from the Caddy-named file; four others in the same file and the same
+  command from another file are skipped in words and start nothing).
+* **What the Caddy test changed** (an acceptance file, changed for this ruling alone): it no longer asks the switch or runs
+  `docker image inspect`, and it no longer hashes the shared key with a second container, since neither is the one exempt
+  command. Caddy's `validate` reads the hash as base64 and goes no further (measured: `x` is refused, a bcrypt-shaped
+  string loads), so a placeholder of that shape (`PLACEHOLDER_HASH`, the hash of nothing, no key) stands in. The run itself
+  says whether the image is there (`--network none` cannot pull it). Its fail-in-words behaviour where neither docker nor a
+  binary can run is as it was, and a guard refusal is caught and failed in words (never a skip): shown, with the exemption
+  scratched out, as 42 errors saying "the Docker guard refused the call", and the exemption put back.
+* **The Caddy test passes on `caddy:2.11.4-alpine` with the switch held:** 43 passed in about 4 seconds, every derived
+  Caddyfile valid under both brands, the six round-9 clashes refused by the real Caddy, the two policy rows loaded (as in
+  section 4). **The gate:** the six check files plus the guard tests 1212 passed, 1 skipped; `npm test --workspace apps/pages`
+  862 passed; `ruff check .`, `design-check`, `colour_drift_check`, `test-file-coverage-check` (1286 files, no drift),
+  `schemas-check`, `citation-check`, the keycloak theme tests and the guide tests clean.
+* **Main taken in** (commit `a6282e0`, nothing but main): the guide's version row is 2.43 beside main's 2.42, the generated
+  TypeScript, the PDFs and the manifest were made again from their sources, not hand-merged.
+
+## Round 2 (the conductor, 24 November 2026)
+
+1. **The Caddy test did not run in this session's gate.** The conductor's message says the switch was lifted
+   (`no-local-stacks` renamed `no-local-stacks.off`), but on this Mac, at the time of the last run, `~/.ospreyflow/` holds
+   `no-local-stacks` (empty, dated 9 November) and no `.off` file, so the guard still refused and the test failed in its own
+   words (42 errors in the Caddy file; everything else green). **Resolved by D234, above.** I did not point
+   `OSPREY_LEASE_DIR` elsewhere to get round the switch (that is the owner's decision), and I did not rename his file.
+2. The override variable is renamed `OSPREY_CADDY_BINARY` (test, messages, docstring, this report, the README).
+   `make test-file-coverage-check`: "1279 test file(s), 0 allowlisted, no new drift." The round-1 diff that wired the test
+   as live-service (an `--ignore` in `ci.yml` and a Makefile hunk) is **withdrawn**; `PL7f_CI_YML.diff` keeps only the
+   GitHub step that runs the test in the proxy job. Nothing else changed.
+
+## 1. The decision that was the owner's (found building; ruled D234, option 1; see the top of this file)
+
+**On this Mac the real-Caddy test cannot run in the gate.** The owner's per-machine switch of 9 November 2026
+(`~/.ospreyflow/no-local-stacks`, held here) makes the repository's Docker guard (`tests/local_docker_guard.py`) skip
+every test that calls the docker CLI, in its own words: "a server-only test". The server has no container tooling. So
+under the guard no merge passes through the real Caddy, which is what the owner's condition of 23 November asks.
+The guard is not mine to loosen (an exemption is the owner's). What the test does, so it never skips quietly: it asks
+the switch first and **fails in words** where it is held (and no Caddy 2.11 binary is given in `OSPREY_CADDY_BINARY`), so on
+this Mac the gate is red on that one file until he decides. Options, recommendation first:
+
+1. **Exempt this one test's one command in the guard** (`docker run --rm --network none`, three read-only mounts, the
+   pinned image; no stack, no port, no volume, no network): the guard names the test, and the test runs on every merge.
+2. Run the merge gate with `OSPREY_LEASE_DIR` pointing at a folder with no switch, for this file alone.
+3. Leave the switch as it is and accept that the real Caddy runs on GitHub only (`access-key-proxy-test`), which is
+   not the owner's condition.
+
+I ran the test by hand with `OSPREY_LEASE_DIR` set to an empty folder (a hermetic `docker run --rm --network none`, no
+stack touched; the owner's containers were not touched): **43 passed**. Results in section 4.
+
+## 2. What is built
+
+| Part | Where | What |
+| --- | --- | --- |
+| One place | `OspreyFlow_Core/harness/page_addresses.py` (new, 504 lines, about 140 of them prose) | `derive(config)` returns a `PageAddresses` (public origin without its default port, identity, issuer, alias, identity port, extra listener, the proxy's own HTTPS port, trust, and the three sign-in variables by `sign_in()`), a `Refusal` (key and words; `.error()` is the typed error), or `None` (setting off). `require` raises. Each refusal is a function of its own (`_on_cloud_platform`, `_origin_problem`, `_needs_https`, `_port_taken`, `_needs_trust`, `_needs_ca`), in that order. |
+| The ports | `OspreyFlow_Core/harness/site.py` | `proxy_ports(config)`: the one list of what the compose proxy uses (container port, host port, words, compose spelling). The compose file's `ports` are built from it; `derive` refuses an origin on any entry but the proxy's own HTTPS port. `PLAIN_HTTP_PORTS` (80, 8080): plain HTTP in some shape, refused in every shape (case 19). |
+| Table | `OspreyFlow_Build/tests/fixtures/page_addresses_cases.json` | 50 rows for cases 1 to 19 and one "off" row. |
+| Python | `tests/harness/test_page_addresses.py` (+ `page_addresses_fixtures.py`, shared) | the table against `derive`, the render's refusals, the rendered files, the real `config.ts` through node, a scan that no other module computes an address, and the planted faults. |
+| Node | `OspreyFlow_Core/apps/pages/test/server/pageAddresses.test.ts` | below. |
+| Caddy | `tests/harness/test_page_addresses_caddy.py` | below. |
+
+**Lines.** `pages_service.py` 483 to 147: **362 lines removed**, 26 added (its exceptions, words, `service_accepts_issuer`,
+`origin_problem`, `caddy_signs_itself`, `identity_listener_port`, `identity_alias`, `refuse_*`, `CA_IN_SERVICE` are gone;
+`service_environment` copies what `derive` returns). `site.py`: 89 added, 23 removed (`identity_listener_port` call,
+`_own_certificate_service`'s ports and the three port branches of `proxy_service` replaced by `proxy_ports`).
+`render.py` 20/16 (the alias, the trust mount and the sign-in flag read `derive`'s object), `cloud_platform/__init__.py`
+2/2. `test_pages_setting.py` 81/56: round 8's stand-in `_page_service_refuses` is deleted (it asks the real `config.ts`
+through node); the patched functions moved to `harness.page_addresses`; and the rows the owner's table changes (below).
+
+**How the node test calls `config.ts`.** vitest reads `apps/pages/server/config.ts` as it is (no build, no `tsx`) and
+calls the exported `loadConfig`, which runs `publicOrigin()`, `oidcSettings()` and `addressSetting` (not exported, and not
+re-implemented). It finds the table in whichever sibling of `OspreyFlow_Core` holds it (Core may not name the Build
+folder: `test_core_stands_alone.py`), fails in words if the monorepo has no table, and skips only outside the monorepo.
+It is shown red inside itself (a `:443` on the origin, an upper-case host, a plain-HTTP issuer, a path, a user name, an
+issuer that is no address), and by hand against a table row planted with `:443` (4 tests fail, with config.ts's own
+words). The Python test also runs the real `loadConfig` through node (`--experimental-strip-types`) on every
+rendered environment.
+
+**Folders each test walks (for the scan-map row).**
+`test_page_addresses.py`: reads `OspreyFlow_Build/tests/fixtures/page_addresses_cases.json`; imports
+`OspreyFlow_Core/harness/` and `OspreyFlow_Core/packages/schemas/`; runs `OspreyFlow_Core/apps/pages/server/config.ts`
+(node); reads, as text, the top-level `*.py` of `OspreyFlow_Core/harness/` and `harness/cloud_platform/__init__.py` (no
+recursion); writes only to `tmp_path`. `test_page_addresses_caddy.py`: the same table and renderers and `PROXY_IMAGE`;
+writes a Caddyfile per case, a self-made certificate and the shared-key file under `tmp_path`; runs the image.
+`pageAddresses.test.ts`: the table and `config.ts`. **It is an ordinary test for `tools/test_file_coverage_check.py`**
+(round 2: its binary override is `OSPREY_CADDY_BINARY`, not an `OSPREY_TEST_*` variable), so it runs in `make test`.
+
+## 3. The table, case by case (what `derive` returns; what the real Caddy said)
+
+"Real Caddy" is `caddy validate` of the rendered Caddyfile under each brand (derived rows), or of the Caddyfile the render
+would write **with the refusal taken out** (refused rows: the pure round-9 plant at the shape the render writes).
+
+| Row | Configuration | derive returns | Real Caddy (ospreyflow / govuk) |
+| --- | --- | --- | --- |
+| 1-lite-plain-http (case 1) | local-lite, `http://reference.ospreyflow.localhost:8081` | **refuse** `needs_https` | - |
+| 1-small-plain-http (case 1) | small, `http://osprey.example.org:8081` | **refuse** `schema` | - |
+| 2-lite-https-localhost (case 2) | local-lite, `https://reference.ospreyflow.localhost:8443` | **refuse** `needs_trust` | - |
+| 3-acme-default-port (case 3) | small, `https://osprey.example.org` | origin `https://osprey.example.org`; issuer `https://id.osprey.example.org/realms/osprey`; alias `id.osprey.example.org`; port 443; extra listener None; trust none | valid / valid |
+| 4-own-certificate-with-ca (case 4) | small, `https://osprey.example.org`, own certificate with ca | origin `https://osprey.example.org`; issuer `https://id.osprey.example.org/realms/osprey`; alias `id.osprey.example.org`; port 443; extra listener 443; trust `/etc/ssl/organisation-ca.pem` | valid / valid |
+| 5-own-certificate-no-ca-private-authority (case 5) | small, `https://osprey.intra.example.gov.uk`, own certificate no ca | **refuse** `needs_ca` | - |
+| 6-own-certificate-no-ca-internal (case 6) | small, `https://osprey.internal`, own certificate no ca | **refuse** `needs_ca` | - |
+| 6-own-certificate-no-ca-local-port (case 6) | small, `https://osprey.local:9443`, own certificate no ca | **refuse** `needs_ca` | - |
+| 6-own-certificate-no-ca-home-arpa (case 6) | small, `https://osprey.home.arpa`, own certificate no ca | **refuse** `needs_ca` | - |
+| 6-own-certificate-no-ca-localhost (case 6) | small, `https://localhost`, own certificate no ca | **refuse** `needs_ca` | - |
+| 6-own-certificate-no-ca-ip (case 6) | small, `https://10.1.2.3`, own certificate no ca | **refuse** `needs_origin` | - |
+| 7-acme-explicit-443 (case 7) | small, `https://osprey.example.org:443` | origin `https://osprey.example.org`; issuer `https://id.osprey.example.org/realms/osprey`; alias `id.osprey.example.org`; port 443; extra listener None; trust none | valid / valid |
+| 7-own-certificate-explicit-443 (case 7) | small, `https://osprey.example.org:443`, own certificate with ca | origin `https://osprey.example.org`; issuer `https://id.osprey.example.org/realms/osprey`; alias `id.osprey.example.org`; port 443; extra listener 443; trust `/etc/ssl/organisation-ca.pem` | valid / valid |
+| 8-lite-plain-http-explicit-80 (case 8) | local-lite, `http://reference.ospreyflow.localhost:80` | **refuse** `needs_https` | - |
+| 9-own-certificate-8080 (case 9) | small, `https://osprey.example.org:8080`, own certificate with ca | **refuse** `port_taken` | refusal out: REFUSED (Error: adapting config using caddyfile: server block 1, key 1 (https:/...) |
+| 10-own-certificate-8443 (case 10) | small, `https://osprey.example.org:8443`, own certificate with ca | origin `https://osprey.example.org:8443`; issuer `https://id.osprey.example.org:8443/realms/osprey`; alias `id.osprey.example.org`; port 8443; extra listener None; trust `/etc/ssl/organisation-ca.pem` | valid / valid |
+| 11-own-certificate-9443 (case 11) | small, `https://osprey.example.org:9443`, own certificate with ca | origin `https://osprey.example.org:9443`; issuer `https://id.osprey.example.org:9443/realms/osprey`; alias `id.osprey.example.org`; port 9443; extra listener 9443; trust `/etc/ssl/organisation-ca.pem` | valid / valid |
+| 11-acme-9443 (case 11) | small, `https://osprey.example.org:9443` | origin `https://osprey.example.org:9443`; issuer `https://id.osprey.example.org:9443/realms/osprey`; alias `id.osprey.example.org`; port 9443; extra listener 9443; trust none | valid / valid |
+| 12-own-certificate-graph-store-door (case 12) | small, `https://osprey.example.org:2480`, own certificate with ca | **refuse** `port_taken` | refusal out: REFUSED (Error: adapting config using caddyfile: server listening on [:2480] is...) |
+| 12-own-certificate-conduit-door (case 12) | small, `https://osprey.example.org:8000`, own certificate with ca, Conduit door exposed | **refuse** `port_taken` | refusal out: REFUSED (Error: adapting config using caddyfile: server listening on [:8000] is...) |
+| 12-own-certificate-conduit-door-not-exposed (case 12) | small, `https://osprey.example.org:8000`, own certificate with ca | origin `https://osprey.example.org:8000`; issuer `https://id.osprey.example.org:8000/realms/osprey`; alias `id.osprey.example.org`; port 8000; extra listener 8000; trust `/etc/ssl/organisation-ca.pem` | valid / valid |
+| 12-own-certificate-redirect-port (case 12) | small, `https://osprey.example.org:80`, own certificate with ca, redirect | **refuse** `port_taken` | refusal out: valid |
+| 12-acme-plain-http-port (case 12) | small, `https://osprey.example.org:80` | **refuse** `port_taken` | refusal out: REFUSED (Error: adapting config using caddyfile: server block 1, key 1 (https:/...) |
+| 12-acme-graph-store-door (case 12) | small, `https://osprey.example.org:2480` | **refuse** `port_taken` | refusal out: REFUSED (Error: adapting config using caddyfile: server listening on [:2480] is...) |
+| 12-acme-conduit-door (case 12) | small, `https://osprey.example.org:8000`, Conduit door exposed | **refuse** `port_taken` | refusal out: REFUSED (Error: adapting config using caddyfile: server listening on [:8000] is...) |
+| 12-acme-conduit-door-not-exposed (case 12) | small, `https://osprey.example.org:8000` | origin `https://osprey.example.org:8000`; issuer `https://id.osprey.example.org:8000/realms/osprey`; alias `id.osprey.example.org`; port 8000; extra listener 8000; trust none | valid / valid |
+| 12-acme-own-https-port-8443 (case 12) | small, `https://osprey.example.org:8443` | origin `https://osprey.example.org:8443`; issuer `https://id.osprey.example.org:8443/realms/osprey`; alias `id.osprey.example.org`; port 8443; extra listener 8443; trust none | valid / valid |
+| 13-path (case 13) | small, `https://osprey.example.org/app` | **refuse** `needs_origin` | - |
+| 13-query (case 13) | small, `https://osprey.example.org?x=1` | **refuse** `needs_origin` | - |
+| 13-fragment (case 13) | small, `https://osprey.example.org#x` | **refuse** `needs_origin` | - |
+| 13-userinfo (case 13) | small, `https://user:pw@osprey.example.org` | **refuse** `needs_origin` | - |
+| 13-trailing-slash (case 13) | small, `https://osprey.example.org/` | **refuse** `schema` | - |
+| 14-upper-case-host (case 14) | small, `https://OSPREY.Example.ORG` | origin `https://osprey.example.org`; issuer `https://id.osprey.example.org/realms/osprey`; alias `id.osprey.example.org`; port 443; extra listener None; trust none | valid / valid |
+| 14-ipv6-bracketed-port (case 14) | small, `https://[::1]:8443` | **refuse** `needs_origin` | - |
+| 14-ipv6-bracketed (case 14) | small, `https://[2001:db8::1]` | **refuse** `needs_origin` | - |
+| 14-ipv4 (case 14) | small, `https://10.1.2.3` | **refuse** `needs_origin` | - |
+| 14-ipv4-port (case 14) | small, `https://10.1.2.3:9443` | **refuse** `needs_origin` | - |
+| 15-access-key-acme (case 15) | small, `https://osprey.example.org`, shared key | origin `https://osprey.example.org`; issuer `https://id.osprey.example.org/realms/osprey`; alias `id.osprey.example.org`; port 443; extra listener None; trust none | valid / valid |
+| 15-access-key-own-certificate (case 15) | small, `https://osprey.example.org:9443`, own certificate with ca, shared key | origin `https://osprey.example.org:9443`; issuer `https://id.osprey.example.org:9443/realms/osprey`; alias `id.osprey.example.org`; port 9443; extra listener 9443; trust `/etc/ssl/organisation-ca.pem` | valid / valid |
+| 16-cluster-default-port (case 16) | cluster, `https://osprey.example.org` | origin `https://osprey.example.org`; issuer `https://id.osprey.example.org/realms/osprey`; alias `id.osprey.example.org`; port 443; extra listener None; trust none | valid / valid |
+| 16-cluster-9443 (case 16) | cluster, `https://osprey.example.org:9443` | origin `https://osprey.example.org:9443`; issuer `https://id.osprey.example.org:9443/realms/osprey`; alias `id.osprey.example.org`; port 9443; extra listener None; trust none | valid / valid |
+| 16-cluster-explicit-443 (case 16) | cluster, `https://osprey.example.org:443` | origin `https://osprey.example.org`; issuer `https://id.osprey.example.org/realms/osprey`; alias `id.osprey.example.org`; port 443; extra listener None; trust none | valid / valid |
+| 16-cluster-ip (case 16) | cluster, `https://10.1.2.3` | **refuse** `needs_origin` | - |
+| 12-cluster-plain-http-port (case 12, round 4) | cluster, `https://osprey.example.org:80` | **refuse** `port_taken` | - |
+| 19-cluster-8080 (case 19, round 4) | cluster, `https://osprey.example.org:8080` | **refuse** `port_taken` | - |
+| 17-cloud-platform (case 17) | cloud-platform, `https://osprey.example.org` | **refuse** `cloud_platform` | - |
+| 17-cloud-platform-poc (case 17) | cloud-platform-poc, `https://osprey.example.org` | **refuse** `cloud_platform` | - |
+| 18-govuk-cutover-setting-off (case 18) | small, `https://osprey.example.org` | **refuse** `cutover` | - |
+| 19-acme-8080 (case 19) | small, `https://osprey.example.org:8080` | **refuse** `port_taken` | refusal out: valid |
+| 19-own-certificate-8080 (case 19) | small, `https://osprey.example.org:8080`, own certificate with ca | **refuse** `port_taken` | - |
+| 19-own-certificate-no-ca-8080 (case 19) | small, `https://osprey.example.org:8080`, own certificate no ca | **refuse** `port_taken` | - |
+| 0-off (case 0) | small, `https://osprey.example.org:443` | nothing (setting off) | - |
+
+Readings of the table that the owner should confirm (none is a guess about sign-in; each is a refusal or a value):
+
+* **Case 4** says "listener port the proxy's own HTTPS port (8443)". I return both: `proxy_https_port` 8443 and an
+  **extra listener 443** (the issuer carries the origin's default port, the alias reaches the proxy at 443, and nothing
+  listens there with an own certificate unless the extra listener is added: measured on 23 November in PL7a2b round 5).
+* **Case 6, the IP address row**: refused by case 14's rule first (an IP is no name), so its key is `needs_origin`, not
+  `needs_ca`. Both name `pages.enabled`.
+* **Case 8 and case 1 (small)**: a Small cannot be plain HTTP (the schema refuses it before the page service is asked), so
+  case 8 is a local-lite row; the small plain-HTTP row is the schema's refusal.
+* **Case 16**: a cluster always has a managed cache (the schema refuses a cluster without `external.valkey`), so there is
+  no "without a managed cache" configuration; the rows are the cluster as the schema allows it. A cluster has no
+  alias, no extra listener and no doors; **round 4 corrects the reading "so no port can clash"**: its load balancer
+  publishes 80 (Caddy's plain-HTTP listener) and 443, and an HTTPS origin on 80 or 8080 is refused there too
+  (rows `12-cluster-plain-http-port` and `19-cluster-8080`).
+* **Case 19 with ACME, and case 12 with the plain-HTTP port in every shape.** Port 80 and 8080 are refused whichever
+  certificate the deployment has. The real Caddy **accepts** two of those Caddyfiles (ACME on 8080, own certificate on 80
+  with the redirect): the refusals are the owner's policy, not Caddy's, and the Caddy test says so. Two origins the old
+  tests rendered (own certificate on 80, ACME on 8080) are now refused, and `test_pages_setting.py` says so.
+* **Case 12, host-side**: the redirect's published port 80 beside an own certificate is refused (Docker would publish it
+  twice); the list is `proxy_ports`'s, so a port added there is covered at once.
+* **Case 13, trailing slash**: refused by the schema (with the setting off too, as before); the other four by `derive`.
+
+## 4. Where the real Caddy ran, and what it said
+
+The Mac, by hand, with the guard's switch folder pointed at an empty folder (section 1): the image `caddy:2.11.4-alpine`,
+`--network none`, one container for all 48 Caddyfiles, in about 17 seconds for the whole file.
+**All 32 derived Caddyfiles (16 derived rows, both brands) load ("Valid configuration").**
+**Red first**: with `_port_taken` taken out, the render writes the round-9 Caddyfile and the real Caddy **refuses six
+of eight**, for the clash it was built to refuse: own certificate on 8080 ("scheme and port violate convention", the
+round-9 case), the graph store's and the Conduit's doors beside either shape ("server listening on [:2480] is configured
+for HTTPS and cannot natively multiplex HTTP and HTTPS: http://:2480"), ACME on port 80. The same deployments with the
+setting off load. It loads the other two (policy rows above). The pure model of the clash finds the same six and none in a
+Caddyfile the real Caddy loads. **Where it runs:** the Mac's gate (once the owner decides section 1); GitHub's
+`access-key-proxy-test` job as a second place (diff, section 5); the server runs no containers, so it lists the file as
+not run, never as passed.
+
+## 5. Diffs for the owner (none applied): `README.md` beside this file
+
+`PL7f_ADR152_AM5.diff` (Amendment 5 text and its reservation row); `PL7f_CI_YML.diff` (the GitHub step that runs the Caddy
+test in `access-key-proxy-test`; not needed for the merge gate, and `make test-file-coverage-check` is clean without it).
+
+## 6. The text
+
+`spec/05_DEPLOYMENT.md` section 2.8 says what is derived and refused, cites the owner's ruling of 24 November 2026, and says
+`derive` is the only place. The release note (`CHANGELOG.md`), and the setting's description (so the generated guide
+appendix and both guide copies) say the setting exists, is off and is not for use. **Nothing says "available"**, and no
+guide line names the page service as turned on.
+
+## 7. Checks run
+
+Acceptance: `vitest run pageAddresses` 22 passed; `test_page_addresses.py` 182 passed, 1 skipped (the cutover row runs
+only under its own brand). Checks: `npm test --workspace apps/pages` 718 passed; the six pytest files 1120 passed, 1 skipped
+(with the Caddy file run by hand as in section 1); `ruff check .` clean; `make design-check` clean; `make schemas-check`,
+`citation-check`, `client-name-check` clean; the guide tests 122 passed. The whole of `tests/harness`, `tests/schemas`
+and `test_core_stands_alone.py` ran with one failure, the schema drift gate, caused by my own edit of the setting's
+description before I regenerated the types, and green after.
+
+## Round 2, the verifier's findings (sign-in: the owner's)
+
+**1. The realm client.** `realm.pages_client` now takes its origin from `derive` (`derived.public_origin` where the setting is
+on; `sites(config).glass` where it is off, which is the same one normaliser, `page_addresses.parse_origin`). Redirect, web
+origin and post-logout address are made from it. Case 7 registers `https://osprey.example.org/session/callback`; case 14
+registers the lower-case origin. Every place under `harness/` that touches `public_origin`, with whether it reads `derive`:
+`page_addresses.py` (makes it); `pages_service.py:133` (copies `derived.public_origin`); `realm.py` `pages_client` (reads
+`derive`, above); `register_sign_in.py:277` (calls `pages_client(config)`, so reads `derive`; its own `origin` at :260 is
+Superset's, from `SUPERSET_PUBLIC_ORIGIN`); `site.py` `sites()` (builds every address from `page_addresses.parse_origin`,
+`identity_name`, `dashboards_name` and `address`, so Keycloak's `KC_HOSTNAME` at `render.py:1253` and the Caddyfile's identity
+site are the same strings as the service's, and a default port is written nowhere); `cloud_platform/__init__.py:172` (an https
+check, no address); `webapp.py:402` (a placeholder value for a preview); `tls_check.py` (advice text); `site.py:92` (a header
+comment).
+
+**2. The tests.** `test_no_other_module_computes_an_address` now walks every module under `harness/` (the folder and its
+sub-folders) and looks for the raw setting and for `id.`/`bi.` names, not only for the variable names: each hit is listed in
+`ORIGIN_TOUCHES_ALLOWED` with its reason, and a listing that no longer matches a line fails. The `:443` stripping is gone from
+`test_the_derived_identity_is_the_address_the_deployment_already_names`. `test_keycloaks_issuer_the_realm_client_and_the_service_agree`
+compares, per table row, the issuer Keycloak will publish (from its rendered `KC_HOSTNAME`), the realm client's redirect, web
+origin and post-logout address, and the page service's settings, as strings. Red first (commit `e1fede0`): the verifier's
+cases 7 and 14 against the client as it was, Keycloak given a port the service is not, and a planted change to `derive`'s
+`public_origin` that turns a case red; each fails for the stated reason.
+
+**3. Case 7 stays derived, and why no measurement was needed.** The origin `https://host:443` is normalised once to
+`https://host`, and Keycloak is given `https://id.host` with no port: the same string as case 3 (an origin written without the
+port), which the deployment already serves. The issuer is therefore equal by construction on both sides, and no claim is made
+about what Keycloak would publish if it were handed `:443`, because it never is. If the owner prefers case 7 refused again
+(the conductor's fallback), it is one refusal in `derive` and the rows 7 and 8 flipped in the table. Backlog line, for the
+conductor: measure against a real Keycloak whether a hostname written with `:443` publishes `:443` in `iss`, so the deployment
+can say whether a written default port may ever be passed through.
+
+
+## Round 4 (25 November 2026): the cluster's port refusal, and the setting-off render restored
+
+**1. The port refusal holds in every shape.** `_port_taken` no longer returns early for a cluster. Its list of
+ports comes from the one place that publishes them for that shape: `harness.cluster.proxy_ports` (renamed from the private
+`_proxy_ports`, the same function the chart's workload ports are written from: 80 and 443), beside the compose
+shapes' `harness.site.proxy_ports`; the plain-HTTP ports 80 and 8080 count in every shape. Red first (commit `24a2572`):
+two table rows, `12-cluster-plain-http-port` and `19-cluster-8080`, failed `test_derive_returns_what_the_table_says` and
+`test_a_refused_case_is_refused_by_the_render_in_the_same_words` (derived where the table says refused). Green after.
+`test_a_cluster_proxy_has_no_identity_listener_to_clash` took `:8080` for its origin and now takes `:9443`: with the refusal
+in place `:8080` is the case it used to prove was *not* refused, and that reading was wrong.
+
+**Left for the owner (not changed, nothing asked):** the verifier's second remark, that row `16-cluster-9443` is derived
+(issuer `https://id.osprey.example.org:9443/realms/osprey`) while the cluster's load balancer publishes 80 and 443 only and a
+cluster has no alias or extra listener, so nothing in the cluster render listens on 9443. The same is true of the Glass's own
+address on a cluster written with another port (`proxy_ports` ignores the origin's port for HTTPS), so it is older than this part.
+Decision wanted: refuse a cluster HTTPS origin on any port but 443 (one more line in `_taken_ports`), or leave it.
+
+**2. The setting-off render is exactly what main rendered.** The cause: `site.sites()` built every address through the one
+normaliser, which drops a written default port and lower-cases the host, with the setting off as well as on; and the Glass client,
+the sign-in theme's Glass origin and the organisation's redirect addresses stopped reading the origin as written. Measured
+by taking the tree of commit `a03f026` (main before this part) out of git and rendering 22 shapes and origins with both trees
+(`pages_off_capture.py`): the compose shapes changed `KC_HOSTNAME`, the env file's `OSPREY_IDENTITY_ORIGIN`,
+`OSPREY_GLASS_ORIGIN`, `OSPREY_DASHBOARDS_ORIGIN` and `CORS_ALLOWED_ORIGINS`, `glass.json`'s `identity_provider` and the
+runbook's addresses for a written `:443` (and `:80` on plain HTTP); the cluster and the cloud platform changed the chart's
+origins; every shape changed the Glass client's redirect, web origin and post-logout address, the organisation's redirect addresses
+and the theme's Glass origin for an upper-case host or a written default port. **Fix:** `page_addresses.keeps_the_written_port`
+(true only with the setting off) is read by `page_addresses.address`, the one place `sites()` writes an address from;
+`client_origin` and `broker_identity` hand the realm and the theme the origin as written where the setting is off, and the
+derived one where it is on. It did not need to undo anything the setting-on cases need: with the setting on nothing changes
+(every earlier table row and the Caddy test are as before).
+
+**The pin.** `tests/fixtures/pages_off_addresses_reference.json` holds, for each of 22 shape-and-origin cases (default port
+written and not, upper-case host, another port, own certificate, all the shapes), the address fields of `sites`, the
+Glass client, the organisation's redirect addresses, the theme's Glass origin and every rendered line that holds the host. It
+was made by `tests/harness/pages_off_capture.py` run against `OspreyFlow_Core` taken out of git at `a03f026`; the test
+`test_the_off_reference_is_what_the_commit_renders` takes the commit out of git again and fails if the file is not what it renders
+(skipped in words only in a clone that lacks the commit, where the file stays the pin), and
+`test_off_every_identity_and_sign_in_address_is_what_main_rendered` compares this checkout's render with the file, case by case.
+Red first (same commit): 11 of 22 cases failed for exactly the differences above. `test_a_written_default_port_forgotten_is_red`
+plants the old normaliser at `page_addresses.address` and shows `compose.yaml` and `deployment.env` named.
+Where each place that writes the public origin now reads: `site.sites`, `realm._glass_client`,
+`realm.pages_client`, `realm.organisation_redirect_uris`, `keycloak_theme.login_theme_options` all read `page_addresses`.
+
+**Also found and fixed:** `test_realm_pages_client.py::test_the_other_shapes_refuse_the_service` still named the refusals that
+round 1 moved out of `pages_service`; it was outside the checks list and failed since then. It calls `page_addresses.require`.
+
+## Round 9 (the owner's reserve add-round; the scout's table `PL7f_ROUND9_TABLE.md`, two rows)
+
+**Row 1: a cluster HTTPS origin on a port the load balancer does not publish.** `harness.cluster.proxy_ports` lists 80 and
+443 for any HTTPS origin; the cluster publishes **no HTTPS port but 443**, so every other port is refused. `derive` has a new
+check of its own, `_not_published` (after `_port_taken`), which reads that list (and `cluster.HTTPS_PUBLISHED`, now a named
+constant there beside `PLAIN_HTTP_PUBLISHED`; page_addresses' own `_CLUSTER_HTTPS_PORT` is gone) and refuses in words naming
+`pages.enabled`, the port and "does not publish". Ports the list names beside 443 (80) are still refused as taken, with their
+own words. Red first (commit `8282e65`): row `16-cluster-9443` becomes a refusal (key `port_taken`); it failed
+`test_derive_returns_what_the_table_says` and the render-refusal test; new tests: a refusal on 9443 and 8444, red with
+`_not_published` taken out, 443 still derived (and refused if the list stops naming it). Row 16's reading is "small's
+rule, on the cluster's own list"; no other row of the approved table changed. `test_pages_setting.py`: the two cluster tests
+that took 9443 as derived now take 443 / assert the refusal. Spec 05 section 2.8 says it.
+
+**Row 2: the Glass client, the theme and the organisation's address.** The code was already `derive`'s (no code change); the
+gap was a test. `test_the_glass_client_the_theme_and_the_organisation_agree_with_derive` (every derived row: the Glass's
+redirect, web origin and post-logout address, the theme's `glass_origin`, the organisation's redirect and post-logout
+addresses, compared as they are against `derive`), and `test_the_other_sign_in_addresses_are_red_for_main_s_raw_origin_form`
+(main's raw-origin form planted in `client_origin` and in `broker_identity`, cases 7 and 14: red, naming the place). Spec 05
+section 2.8 names both tests.
+
+**Checks:** the three acceptance files, `test_pages_setting.py`, `test_reference_render.py`, `test_cloud_platform_render.py`,
+`test_doc_citations_check.py` (1219 passed, 1 skipped, as before); the Caddy test ran the image `caddy:2.11.4-alpine` (41
+passed, none skipped); `npm test --workspace apps/pages` (861); ruff; design-check; colour-drift; the theme tests.

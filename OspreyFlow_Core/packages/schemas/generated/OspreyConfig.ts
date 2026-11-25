@@ -222,7 +222,7 @@ export type ApiClientId = string;
  */
 export type SupersetClientId = string | null;
 /**
- * The pages service's own app registration (application id), when the pages service is on: people sign in to it with it, and its delegated token is the person on every route their rights allow, as the Glass's (ADR-152 decision 11)
+ * The pages service's own app registration (application id). The page service is not for use yet; this is what people will sign in to it with, and its delegated token will be the person on every route their rights allow, as the Glass's (ADR-152 decision 11)
  */
 export type PagesClientId = string | null;
 /**
@@ -553,7 +553,7 @@ export type BannerText = string | null;
  */
 export type GovukIdentity = boolean;
 /**
- * Default: false. Whether this deployment runs the page service, the server-rendered pages. true or false, nothing else: it is turned on for one deployment at a time, by the owner, in that deployment's own file.
+ * Default: false. Whether this deployment runs the page service, the server-rendered pages. The setting exists and is off; it is not for use yet, and nothing is switched on by it for a deployment you run. true or false, nothing else.
  */
 export type Enabled = boolean;
 /**

@@ -39,7 +39,7 @@ from typing import Any
 
 import yaml
 
-from harness import pages_service
+from harness import page_addresses, pages_service
 from harness.cloud_platform.settings import (
     KUBE_API,
     PlatformSettings,
@@ -148,7 +148,7 @@ def _cp(config: OspreyConfig) -> CloudPlatformConfig:
 def _refuse(config: OspreyConfig) -> None:
     # The page service has no sign-in on this shape yet (PL7a2b case C): refused in words, not
     # rendered without it.
-    pages_service.refuse_on_cloud_platform(config)
+    page_addresses.require(config)
     if config.map is None:
         raise CloudPlatformNotRenderable(
             "the Conduit reads its basemaps from osprey.yaml's map: section at start and cannot "
