@@ -22,7 +22,7 @@ images" (its header; `spec/00` §7). JavaScript packages are code, and `make lic
 (`tools/licence_check.mjs`) reads each installed package's declared licence (`license-checker`) against §7's allowlist (MIT and
 BSD-3-Clause allowed outright). So ruled item 4's "register rows for both" and case 9 below are replaced by: **Sigma
 4 and its graphology pass `make licence-check` (`license-checker` over the installed packages)**, and their licences are named in `spec/02`'s library
-table beside Sigma 3's. The owner was told, and his ruling 6 (PL11b) is held until he confirms it is withdrawn. **The budget itself is measured on the owner's Mac when he
+table beside Sigma 3's. The owner was told; he withdrew his ruling 6 (PL11b) at about 07:45 UTC the same day. **The budget itself is measured on the owner's Mac when he
 is back** (his ruling of 18 November, `RULINGS.md` line 386: "GG2's scope and the I12 thresholds [deferred] until
 GG2a (the budget page) has measured Sigma 4 on the owner's Mac; the numbers go to the owner then").
 

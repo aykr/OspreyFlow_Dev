@@ -3,6 +3,12 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 25 November 2026, morning: PL8a's structural round, PL7f's reserve, ruling 6 withdrawn (the owner, in chat, about 07:45 UTC)
+
+1. **PL8a: option (a), one structural round 12** (D225 item 3): Home forgets the stored size; a size is written only when it is the size the analyst's own action asked for, never a clamped value; one test over every panel action × bound × starting state. Its add-round line is in.
+2. **PL7f: two add-round lines are in resume.tsv in reserve**, so it has rounds to spare before GG2a's 13:00 cut-off; **the conductor uses them only if a verifier finds more** at its rounds limit.
+3. **Ruling 6 (PL11b) is withdrawn:** the licence register is for what the code gate cannot see, and `make licence-check` already covers Sigma, graphology and MapLibre. **The conductor's correction to GG2a's item 4 and case 9 stands.**
+
 ## 25 November 2026: the away rounds, AD1c, GR4a, GG2a and the licence register (the owner, in chat, about 06:30 UTC)
 
 1. **PL8a:** the add-round line for today; round 11 on its table.
