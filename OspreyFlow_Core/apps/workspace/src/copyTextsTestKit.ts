@@ -9,6 +9,7 @@ import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 
 import ts from "typescript";
+import { beforeAll } from "vitest";
 
 export const SRC = join(__dirname);
 /** The shared package's source, where the plain modules that left the workspace live (slices PL4c to PL4d2):
@@ -17,9 +18,33 @@ export const SHARED_SRC = join(__dirname, "..", "..", "..", "packages", "glass-s
 /** The roots the guards walk: the one list every copy guard and its reach test use. */
 export const ROOTS: readonly string[] = [SRC, SHARED_SRC];
 
+/** The walks made so far, by root (PL4h). Each guard file used to walk and read the whole source again in every test
+ * (seven calls a file, 1.5 to 2 s alone and 5.4 to 7 s under a loaded server, past vitest's 5 s): a root is now walked
+ * once per file and its list shared. A temporary copy of the shared package is entered here when it is made
+ * (`copySharedPackage`), since its files are the package's own, so a plant's walk reads the same list rather than
+ * walking the disc again. Nothing is cached across test files: each vitest file has its own module. */
+const walks = new Map<string, readonly string[]>();
+
+function walked(root: string): readonly string[] {
+  let found = walks.get(root);
+  if (!found) {
+    found = filesUnder(root);
+    walks.set(root, found);
+  }
+  return found;
+}
+
+// The one walk of the two real roots is paid here, in a hook of its own, not inside whichever test runs first. Its timeout is
+// explicit and explained (never raised for the suite or the config): the walk reads two folders of a few hundred files
+// (about 0.1 s alone), and a loaded server has made the same walk and the tests' reads take 5 times as long, so a minute
+// is far past the slowest figure seen and still ends a walk that hangs.
+beforeAll(() => {
+  sourceFiles();
+}, 60_000);
+
 /** The files under `roots` (by default both), skipping tests, test kits and generated types. */
 export function sourceFiles(roots: readonly string[] = ROOTS): string[] {
-  return roots.flatMap((root) => filesUnder(root));
+  return roots.flatMap((root) => walked(root));
 }
 
 /** The path as the guards print it: relative to its own root, the shared package's marked. */
@@ -118,76 +143,88 @@ export function movedClients(): string[] {
   return sourceFiles([SHARED_SRC]).filter((path) => MOVED_FOLDERS.test(path));
 }
 
+/** A temporary copy of the shared package, entered in `walks` as the package's own list moved under the copy (a plant only
+ * appends a line to files that are there, so the copy has the files the package has), and a cleanup that forgets it. */
+function copySharedPackage(): { root: string; remove: () => void } {
+  const root = mkdtempSync(join(tmpdir(), "copy-guard-"));
+  cpSync(SHARED_SRC, root, { recursive: true });
+  walks.set(
+    root,
+    walked(SHARED_SRC).map((path) => join(root, relative(SHARED_SRC, path))),
+  );
+  return {
+    root,
+    remove: () => {
+      walks.delete(root);
+      rmSync(root, { recursive: true, force: true });
+    },
+  };
+}
+
 /** A copy of the shared package in a temporary folder, with `line` appended to its file named `basename`; returns the
  * folder, that file's path relative to it, and a cleanup. For the guards' plants (rule 15): the plant sits in a real
  * moved client, and the guard's own walk and test are run over the copy. */
 export function plantedCopy(basename: string, line: string): { root: string; file: string; remove: () => void } {
-  const root = mkdtempSync(join(tmpdir(), "copy-guard-"));
-  cpSync(SHARED_SRC, root, { recursive: true });
+  const { root, remove } = copySharedPackage();
   const target = sourceFiles([root]).find((path) => path.endsWith(`/${basename}`));
   if (!target) throw new Error(`no ${basename} in the shared package`);
   writeFileSync(target, `${readFileSync(target, "utf-8")}\n${line}\n`);
-  return { root, file: relative(root, target), remove: () => rmSync(root, { recursive: true, force: true }) };
+  return { root, file: relative(root, target), remove };
 }
 
 /** A copy of the shared package with `line` appended to each of the twelve report clients; returns the folder, the files'
  * paths relative to it (in `REPORT_CLIENTS`' order), and a cleanup. The report guards' plants (rule 15): one in each. */
 export function plantedReportClients(line: string): { root: string; files: string[]; remove: () => void } {
-  const root = mkdtempSync(join(tmpdir(), "copy-guard-"));
-  cpSync(SHARED_SRC, root, { recursive: true });
+  const { root, remove } = copySharedPackage();
   for (const file of REPORT_CLIENTS) {
     const target = join(root, file);
     writeFileSync(target, `${readFileSync(target, "utf-8")}\n${line}\n`);
   }
-  return { root, files: [...REPORT_CLIENTS], remove: () => rmSync(root, { recursive: true, force: true }) };
+  return { root, files: [...REPORT_CLIENTS], remove };
 }
 
 /** A copy of the shared package with `line` appended to each of the sixteen link clients; returns the folder, the files'
  * paths relative to it (in `LINK_CLIENTS`' order), and a cleanup. The link guards' plants (rule 15): one in each. */
 export function plantedLinkClients(line: string): { root: string; files: string[]; remove: () => void } {
-  const root = mkdtempSync(join(tmpdir(), "copy-guard-"));
-  cpSync(SHARED_SRC, root, { recursive: true });
+  const { root, remove } = copySharedPackage();
   for (const file of LINK_CLIENTS) {
     const target = join(root, file);
     writeFileSync(target, `${readFileSync(target, "utf-8")}\n${line}\n`);
   }
-  return { root, files: [...LINK_CLIENTS], remove: () => rmSync(root, { recursive: true, force: true }) };
+  return { root, files: [...LINK_CLIENTS], remove };
 }
 
 /** A copy of the shared package with `line` appended to each of the twelve plain clients; returns the folder, the files'
  * paths relative to it (in `PLAIN_CLIENTS`' order), and a cleanup. The plain guards' plants (rule 15): one in each. */
 export function plantedPlainClients(line: string): { root: string; files: string[]; remove: () => void } {
-  const root = mkdtempSync(join(tmpdir(), "copy-guard-"));
-  cpSync(SHARED_SRC, root, { recursive: true });
+  const { root, remove } = copySharedPackage();
   for (const file of PLAIN_CLIENTS) {
     const target = join(root, file);
     writeFileSync(target, `${readFileSync(target, "utf-8")}\n${line}\n`);
   }
-  return { root, files: [...PLAIN_CLIENTS], remove: () => rmSync(root, { recursive: true, force: true }) };
+  return { root, files: [...PLAIN_CLIENTS], remove };
 }
 
 /** A copy of the shared package with `line` appended to each of the seven case files; returns the folder, the files'
  * paths relative to it (in `CASE_CLIENTS`' order), and a cleanup. The case guards' plants (rule 15): one in each. */
 export function plantedCaseClients(line: string): { root: string; files: string[]; remove: () => void } {
-  const root = mkdtempSync(join(tmpdir(), "copy-guard-"));
-  cpSync(SHARED_SRC, root, { recursive: true });
+  const { root, remove } = copySharedPackage();
   for (const file of CASE_CLIENTS) {
     const target = join(root, file);
     writeFileSync(target, `${readFileSync(target, "utf-8")}\n${line}\n`);
   }
-  return { root, files: [...CASE_CLIENTS], remove: () => rmSync(root, { recursive: true, force: true }) };
+  return { root, files: [...CASE_CLIENTS], remove };
 }
 
 /** A copy of the shared package with `line` appended to each of the six admin and home files; returns the folder, the files'
  * paths relative to it (in `ADMIN_CLIENTS`' order), and a cleanup. The guards' plants (rule 15): one in each. */
 export function plantedAdminClients(line: string): { root: string; files: string[]; remove: () => void } {
-  const root = mkdtempSync(join(tmpdir(), "copy-guard-"));
-  cpSync(SHARED_SRC, root, { recursive: true });
+  const { root, remove } = copySharedPackage();
   for (const file of ADMIN_CLIENTS) {
     const target = join(root, file);
     writeFileSync(target, `${readFileSync(target, "utf-8")}\n${line}\n`);
   }
-  return { root, files: [...ADMIN_CLIENTS], remove: () => rmSync(root, { recursive: true, force: true }) };
+  return { root, files: [...ADMIN_CLIENTS], remove };
 }
 
 function filesUnder(dir: string): string[] {
