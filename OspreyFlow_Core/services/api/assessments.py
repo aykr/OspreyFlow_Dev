@@ -660,9 +660,7 @@ async def confirm_assumption_links(
         raise UnverifiableLinkError(unknown)
 
 
-async def flag_judgements_citing_superseded_node(
-    store: JudgementStore, node_id: str
-) -> list[str]:
+async def flag_judgements_citing_superseded_node(store: JudgementStore, node_id: str) -> list[str]:
     """The review-flag loop's own hook — `01_DOMAIN_MODEL.md` §5: "When a supporting node is later
     split, corrected or retracted, every judgement resting on it is flagged for review." Called
     immediately after a real `GraphPort.supersede_node` succeeds
