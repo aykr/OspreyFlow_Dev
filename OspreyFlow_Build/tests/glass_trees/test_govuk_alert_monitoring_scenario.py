@@ -431,6 +431,12 @@ def _world() -> list[Any]:
         alert = Alert(id=f"a-{number}", rule_id=f"typology:{typology}", owner_id="raiser", mode=AlertMode.FULL,
                       created_at=when, typology=typology, referent_node_ids=[node])  # fmt: skip
         made.append(QueuedAlert(alert=alert, summary="", kind="typology"))
+    # The other kinds, which the route counts in `monitoring` and not in `alerts_total` (`reports.py`: the total is "typology alerts
+    # only, as they always have"): two the official reader may see and one only the secret reader may.
+    for number, (kind, node) in enumerate([("hotlist", "n-official"), ("monitor", "n-official"), ("hotlist", "n-secret")], start=100):
+        other = Alert(id=f"a-{number}", rule_id=f"{kind}:r", owner_id="raiser", mode=AlertMode.FULL,
+                      created_at=when, referent_node_ids=[node])  # fmt: skip
+        made.append(QueuedAlert(alert=other, summary="", kind=kind))
     return made
 
 
@@ -450,6 +456,7 @@ def _counted(figures: dict[str, Any]) -> dict[str, Any]:
     monitoring = figures["monitoring"]
     return {
         "total": figures["alerts_total"],
+        "raised": sum(c["count"] for c in monitoring["raised_by_rule"]),
         "by_rule": sorted({(c["typology"], c["count"]) for c in monitoring["raised_by_rule"] if c["label"] == "typology"}),
     }
 
@@ -460,6 +467,8 @@ def hidden_counts_leak(seen_by_official: dict[str, Any]) -> list[str]:
     counted = _counted(seen_by_official)
     if counted["total"] != 5:
         found.append(f"the official reader's total is {counted['total']}, not the 5 they may see")
+    if counted["raised"] != 7:
+        found.append(f"the official reader's raised-by-rule figures add up to {counted['raised']}, not the 7 they may see")
     if any(typology == SECRET_ONLY_TYPOLOGY for typology, _ in counted["by_rule"]):
         found.append("a rule that only the secret reader may see is in the official reader's figures")
     return found
@@ -489,11 +498,38 @@ def test_the_alert_monitoring_page_shows_only_the_readers_own_counts(monkeypatch
         official_again = _figures_as(client, OFFICIAL_READER)
         assert hidden_counts_leak(official) == []
         assert _counted(secret)["total"] == 10, "the secret reader's own figures are the whole world's"
+        assert _counted(secret)["raised"] == 13, "and every kind of alert of it is in the raised figures"
         assert any(t == SECRET_ONLY_TYPOLOGY for t, _ in _counted(secret)["by_rule"])
         assert _counted(official_again) == _counted(official), "a second read as the first reader is answered from the other reader's"
         assert "hidden" not in str(official).lower()
     finally:
         app.dependency_overrides.clear()
+
+
+def test_the_total_counts_typology_alerts_alone_and_the_monitoring_figures_count_every_kind(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The fact the page must not get wrong (a round-2 finding): `alerts_total` is not "every alert raised". The page's headline and its
+    empty case are the sum of `raised_by_rule`, which counts hotlist and monitor alerts as well; a case whose alerts in the period are
+    all of those has `alerts_total` 0 and figures to draw."""
+    from services.api import reports
+    from services.api.app import app
+
+    from tests.services.api.test_reports_viewer_journey import _journey_client
+
+    try:
+        client = _journey_client(monkeypatch, OFFICIAL_READER)
+        monkeypatch.setattr(reports, "monitoring_queue_and_left_out", _as_the_reader)
+        official = _counted(_figures_as(client, OFFICIAL_READER))
+        assert (official["total"], official["raised"]) == (5, 7), "the total is the typology alerts, the raised figures are every kind"
+        monkeypatch.setattr(reports, "monitoring_queue_and_left_out", _only_other_kinds)
+        others = _counted(_figures_as(client, OFFICIAL_READER))
+        assert (others["total"], others["raised"]) == (0, 2), "a case of hotlist and monitor alerts alone: no total, and figures all the same"
+    finally:
+        app.dependency_overrides.clear()
+
+
+async def _only_other_kinds(store: Any, graph: Any, analytics: Any, investigation_id: str, reader: Principal, **kwargs: Any) -> Any:
+    shown = [q for q in _world() if q.kind != "typology" and q.alert.referent_node_ids == ["n-official"]]
+    return shown, False
 
 
 def test_the_leak_check_fails_for_one_identity_read_for_every_reader(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -450,6 +450,45 @@ describe("the alert monitoring figures (the govuk tree)", () => {
     expect(chartProblems(html)).toEqual([]);
   });
 
+  it("AM5: a period whose alerts are all hotlist or monitor alerts is drawn from the figures the route sent, not said to have none", async () => {
+    // The real route's `alerts_total` counts typology alerts only (the fake does the same): here it is 0 while three alerts were raised.
+    const v = await visitAs(readerOf({}));
+    v.conduit.world.set(CASE, [
+      { week: "2026-11-09", label: "hotlists", needs: "OFFICIAL" },
+      { week: "2026-11-16", label: "hotlists", needs: "OFFICIAL", closedAs: "true_positive", tookBand: "1 to 7 days" },
+      { week: "2026-11-16", label: "monitors", needs: "OFFICIAL" },
+    ]);
+    const route = await routeSays(v.conduit, v.token, CASE);
+    expect(route.alerts_total).toBe(0);
+    const html = (await v.get(`/reports?case=${CASE}`)).text;
+    const text = words(html);
+    expect(text).toContain("3 alerts raised in the last 12 weeks");
+    expect(text).not.toContain("No alerts were raised in this period.");
+    expect(text).not.toContain("0 alerts raised");
+    const tables = figuresOnPage(html);
+    expect(tables["Alerts raised each week"]).toEqual([
+      [day("2026-11-09"), "1"],
+      [day("2026-11-16"), "2"],
+    ]);
+    expect(tables["Alerts raised by rule"]).toEqual([
+      ["Hotlists", "2"],
+      ["Monitors", "1"],
+    ]);
+    expect(tables["Alerts closed by outcome"]).toEqual([["True match", "1"]]);
+    expect(text).toContain("2 matches");
+    expect(chartProblems(html)).toEqual([]);
+  });
+
+  it("AM1: the headline is the sum of the raised-each-week table on the same page, for every kind of alert", async () => {
+    const v = await visitAs(readerOf({}));
+    const html = (await v.get(`/reports?case=${CASE}`)).text;
+    const week = figuresOnPage(html)["Alerts raised each week"] as string[][];
+    const sum = week.reduce((n, row) => n + Number((row[1] as string).replace(/,/g, "")), 0);
+    expect(words(html)).toContain(`${sum} alerts raised in the last 12 weeks`);
+    // The route's own `alerts_total` is the typology alerts alone, so it is one less than that here (the hotlist alert).
+    expect((await routeSays(v.conduit, v.token, CASE)).alerts_total).toBe(sum - 1);
+  });
+
   it("AM6: a missing case, no case, a non-viewer and a reader without read_reports are the one page, the same status and the same words", async () => {
     const reader = readerOf({ id: "reader" });
     const noRight = readerOf({ id: "no-right", rights: [] });

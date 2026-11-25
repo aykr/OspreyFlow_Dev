@@ -14,6 +14,7 @@
  *  - every figure is counted as the reader: an alert whose citations name anything above the reader's clearance is in no total,
  *    week, rule, outcome or age (the queue's all-or-nothing check, `alert_queue.monitoring_queue_and_left_out`, ADR-039), and the
  *    bound is counted from what the reader sees; past it, 409 `limit_exceeded` with `would_be` of the visible alerts alone;
+ *  - `alerts_total` is the count of TYPOLOGY alerts alone, while `monitoring` counts every kind (`reports.py` lines 278 to 288);
  *  - the held rows' figures are for Editors and above only: a Viewer's report carries `held: null`.
  */
 import { createServer } from "node:http";
@@ -113,7 +114,9 @@ function figuresOf(alerts: WorldAlert[], weeks: number, level: "viewer" | "edito
     period_weeks: weeks,
     as_of: `${AS_OF}T09:00:00Z`,
     generated_at: `${AS_OF}T09:00:00Z`,
-    alerts_total: alerts.length,
+    // As the real route: `alerts_total` counts typology alerts only (`reports.py` `alert_report_and_left_out`, "as they always have");
+    // the monitoring figures below count every kind. A fake that sent the sum of every kind would hide a page that reads this as that.
+    alerts_total: alerts.filter((a) => a.label === "typology").length,
     alerts_by_week: [],
     open_by_age: [],
     outcomes: [],
