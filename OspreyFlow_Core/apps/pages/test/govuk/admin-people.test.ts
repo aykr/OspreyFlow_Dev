@@ -794,8 +794,8 @@ describe("each check above is red against the real page, file or fixture with on
       expect(await ask(route, { method: "PUT" }), `PUT ${route}, no bearer`).toEqual(NOT_ALLOWED);
     }
     // The real routes serve a POST on the people (the invite) and the roles (a custom role): the same bearer and right first, then the
-    // body's own model (`InviteInput` needs a username; `CustomRoleInput` a name and rights). A POST on the rows route is not served.
-    for (const [route, fields] of [["/v1/admin/people", ["username"]], ["/v1/admin/roles", ["name", "rights"]]] as const) {
+    // body's own model (`InviteInput` needs clearance, org_unit and a username, in the order pydantic lists them: the parent `AccessInput`'s fields first; `CustomRoleInput` a name and rights). A POST on the rows route is not served.
+    for (const [route, fields] of [["/v1/admin/people", ["clearance", "org_unit", "username"]], ["/v1/admin/roles", ["name", "rights"]]] as const) {
       expect(await ask(route, { method: "POST", body: "{}" }), `POST ${route}, no bearer`).toEqual(NOT_AUTHENTICATED);
       expect(await ask(route, as(bearer(), "POST", "{}")), `POST ${route}, unknown bearer`).toEqual(NOT_AUTHENTICATED);
       expect(await ask(route, as(token, "POST", "{}")), `POST ${route}, no right`).toEqual({ status: 403, body: REFUSAL });
@@ -807,6 +807,10 @@ describe("each check above is red against the real page, file or fixture with on
       );
       expect((await ask(route, as(holder, "POST", "not json"))).status, `POST ${route}, not json`).toBe(422);
     }
+    // A body with only the username (what the fixture once let through) is refused for the two fields `AccessInput` requires.
+    const partial = await ask("/v1/admin/people", as(holder, "POST", JSON.stringify({ username: "new.person" })));
+    expect(partial.status, "POST /v1/admin/people with a username alone").toBe(422);
+    expect((partial.body as { detail: { loc: unknown[] }[] }).detail.map((d) => d.loc)).toEqual([["body", "clearance"], ["body", "org_unit"]]);
     expect(await ask("/v1/admin/people/rows", as(holder, "POST", "{}")), "POST on the rows route").toEqual(NOT_ALLOWED);
     expect(await ask("/v1/admin/nothing", as(holder))).toEqual({ status: 404, body: { detail: "Not Found" } });
     expect(((await ask("/v1/admin/people", as(holder))).body as unknown[]).length).toBe(PEOPLE.length);
