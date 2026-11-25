@@ -5,7 +5,7 @@ entirely: no count, no placeholder, no sign it exists (rule 3). This is exactly 
 cannot see is hidden today (ADR-046), and it uses the same step.
 
 The four red tests are green. The controls are green, with one exception named below: its assertion had recorded the fault
-itself. Four planted faults at the real call sites each put one hidden link back and are found.
+itself. Three planted faults at the real call sites each put one hidden link back and are found (this line said four; it was three, corrected in SE7c round 2, below).
 
 Branch `away/access-fix`, from `away/access-assessments` (`2bb9e1750`). Commits `73b2fb292` (the fix, the spec line, the
 tests) and `ea7114713` (line widths). Not pushed, not merged. Synthetic data only. Run through `~/osprey-d246/d246_ns.sh` from
@@ -126,3 +126,26 @@ check that finds nothing in the real route:
 - **The owner's confirmations:** the write side's error name, and that this is the shape ruled. The finding's question 2(a)
   is done: hidden links dropped and the gap still shown, not the gap hidden in full.
 - **The Glass's wording** of the new refusal (above).
+
+## Correction and additions, SE7c round 2 (25 November 2026)
+
+The verifier found three test gaps in round 1. Each is closed in `test_assessment_links_access.py` (now 21 tests, all passed):
+
+- **The report said four planted faults; the file had three, all on the read side.** Four are now on the write side as
+  well, so there are seven. At the real call sites (`services.api.app`): `confirm_assumption_links` replaced by one that
+  stores the row and then confirms (`test_a_save_that_checks_its_links_after_storing_them_is_found`), `confirm_assumption_links`
+  replaced by a no-op (`test_an_assumption_save_that_confirms_nothing_is_found`), `confirm_gap_links` replaced by a no-op
+  (`test_a_gap_save_that_confirms_nothing_is_found`); and inside the filter's own decision, `visible_judgement_ids` that also
+  counts the other case's judgements (`test_a_judgement_filter_that_ignores_the_case_is_found`).
+- **The assumption save's refusal** (`test_an_assumption_save_refusal_names_only_what_the_saver_sent_and_stores_nothing`)
+  asserts the same as the gap's: 422 `unverifiable_link`, `link_ids` the ids sent, a hidden and an absent judgement refused
+  in the same words, nothing stored, and the SECRET reader of the case served no assumption.
+- **Another case's judgement** (`test_an_assumption_cannot_link_a_judgement_of_another_case`): a judgement the saver is shown in
+  its own case is refused when linked from this one; a judgement of this case is accepted (the control). This pins spec/03
+  line 633's "another case's".
+
+**Observed against the product's own code** (the real `app.py` or `assessments.py` edited, then restored from a saved copy,
+`git status` clean after): the assumption confirmation moved after `assumptions_store.save` fails four tests (the two new
+refusal tests and two plants); the gap confirmation removed fails four (the old gap test, the SQL-pin control, the refusal
+shape test and the plant); a `visible_judgement_ids` that also reads the other case fails two (the case test and its plant).
+Before round 2, the first of these passed every test in the file.
