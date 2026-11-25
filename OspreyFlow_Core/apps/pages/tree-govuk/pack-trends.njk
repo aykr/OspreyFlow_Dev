@@ -1,0 +1,47 @@
+{#- Trends shown together (slice GR4a; scenario TS): one pack's trend items, read-only, drawn on the server and whole without a script.
+    Each trend is a section under a second-level heading of its title, with its period, the day it was counted on, its marking and the
+    sentence of its figures, then a chart and, after it, a table of the same figures. The chart is plain SVG with classes (the owner's
+    ruling of 24 November 2026): its bars are `rect` elements placed by their own attributes, coloured by the stylesheet and never by a
+    style or a fill; its text alternative is its `title`. The table has a caption, column headers (th, scope col) and a row header for
+    each period (th, scope row). That some items are not shown is said once, before the trends, with no number and never which (I21).
+    Nothing here is a form, a button or a control, and nothing counts: the page draws what it is given. The words are
+    `server/views/packTrendsWords.ts`'s. The one link of the page's own is the way back. -#}
+{% extends "layout.njk" %}
+{% block content %}
+<h1>{{ words.title }}</h1>
+{% if view.kind == "trends" %}
+<p>{{ words.lede }}</p>
+<p>{{ view.pack }}</p>
+<p>{{ view.standing }}</p>
+{% if view.highest %}<p>{{ view.highest }}</p>
+{% endif %}
+{% if view.withheld %}<p class="pack-trends__withheld">{{ words.withheld }}</p>
+{% endif %}
+{% for trend in view.trends %}
+<section class="pack-trend" aria-labelledby="pack-trend-{{ loop.index }}">
+<h2 id="pack-trend-{{ loop.index }}">{{ trend.title }}</h2>
+<p>{{ trend.period }}</p>
+<p>{{ trend.countedOn }}</p>
+<p>{{ trend.marking }}</p>
+<p>{{ trend.sentence }}</p>
+<svg class="pack-trend__chart" viewBox="0 0 {{ trend.chart.width }} {{ trend.chart.height }}" role="img" aria-labelledby="pack-trend-{{ loop.index }}-chart" focusable="false"><title id="pack-trend-{{ loop.index }}-chart">{{ trend.chart.label }}</title>{% for bar in trend.chart.bars %}<rect class="pack-trend__bar" x="{{ bar.x }}" y="{{ bar.y }}" width="{{ bar.width }}" height="{{ bar.height }}"></rect>{% endfor %}</svg>
+<table class="table">
+<caption class="caption">{{ trend.table.caption }}</caption>
+<thead>
+<tr>{% for column in trend.table.columns %}<th scope="col">{{ column }}</th>{% endfor %}</tr>
+</thead>
+<tbody>
+{% for row in trend.table.rows %}<tr><th scope="row">{{ row.head }}</th>{% for cell in row.cells %}<td>{{ cell }}</td>{% endfor %}</tr>
+{% endfor %}</tbody>
+</table>
+</section>
+{% else %}
+<p>{{ words.noTrends }}</p>
+{% endfor %}
+{% elif view.kind == "ended" %}
+<p role="alert">{{ ended }}</p>
+{% else %}
+<p role="alert">{{ words.unreadable }}</p>
+{% endif %}
+<p><a href="/">{{ words.back }}</a></p>
+{% endblock %}

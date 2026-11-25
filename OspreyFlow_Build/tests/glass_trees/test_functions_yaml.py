@@ -83,7 +83,6 @@ KNOWN_WITHOUT_SCENARIO = {
     "ask-chat",
     "drawing-boards",
     "matrix-ownership",
-    "reports-figures",
     "reports-dashboards",
     "needs-you",
     "top-bar-home",
