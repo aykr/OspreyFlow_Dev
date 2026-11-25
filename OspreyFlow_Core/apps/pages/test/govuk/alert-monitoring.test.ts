@@ -534,8 +534,9 @@ describe("the alert monitoring figures (the govuk tree)", () => {
       ["Over 30 days", "2"],
     ]);
     expect(tables["Team view by rule"]).toEqual([
-      ["Structuring", "1", "0", "0", "50% of 2"],
-      ["Hotlists", "1", "0", "0", "none closed"],
+      // Open and raised in January: older than a week, as the route counts it (`_panel_figures`).
+      ["Structuring", "1", "0", "1", "50% of 2"],
+      ["Hotlists", "1", "0", "1", "none closed"],
     ]);
     expect(tables["Held rows by what became of them"]).toEqual([
       ["Held", "2"],
@@ -625,6 +626,36 @@ describe("the alert monitoring figures (the govuk tree)", () => {
     expect(figuresOnPage(seenBySecret)["Open alerts by source and age"]).toContainEqual(["Circular flow", "0", "0", "7", "0"]);
     expect(figuresOnPage(seenByOfficial)["Open alerts by source and age"]?.map((r) => r[0])).toEqual(["Hotlists", "Rapid movement", "Structuring"]);
     expect(leakProblems(seenByOfficial, ["Circular flow", "12 alerts open"])).toEqual([]);
+  });
+
+  it("AM1: the team view's Mine and Older than 7 days are the route's own counts under their own headings, and Mine is the reader's own", async () => {
+    // Distinct, non-zero figures in every column, so a page that swapped two columns or put another figure under one is red (round 6, rule 15).
+    const reader = readerOf({ id: "reader" });
+    const colleague = readerOf({ id: "colleague" });
+    const v = await visitAs(reader, [colleague]);
+    const mk = (over: Partial<WorldAlert>): WorldAlert => ({ week: "2026-11-23", label: "typology", typology: "structuring", needs: "OFFICIAL", ...over });
+    v.conduit.world.set(CASE, [
+      mk({}), // no one on it, raised today
+      mk({}),
+      mk({ week: "2026-11-09" }), // no one on it, older than a week
+      mk({ week: "2026-11-16", assignee: "reader" }), // the reader's own, seven days and nine hours old
+      mk({ week: "2026-11-02", assignee: "reader" }),
+      mk({ week: "2026-10-05", assignee: "colleague" }), // another person's: neither unassigned nor the reader's own
+      mk({ week: "2026-10-05", assignee: "colleague" }),
+      mk({ week: "2026-10-05", assignee: "colleague" }),
+      mk({ week: "2026-11-09", closedAs: "false_positive", closedWeek: "2026-11-16", tookBand: "1 to 7 days", assignee: "reader" }),
+    ]);
+    const asReader = await v.get(`/reports?case=${CASE}`);
+    expect((await routeSays(v.conduit, v.token, CASE)).monitoring).toMatchObject({
+      team: [{ label: "typology", typology: "structuring", unassigned: 3, mine: 2, older_than_week: 6, closed: 1, not_of_interest: 1 }],
+    });
+    const team = tablesOf(asReader.text).find((t) => t.caption === "Team view by rule");
+    expect(team?.heads).toEqual(["Rule", "Unassigned", "Mine", "Older than 7 days", "Closed as not of interest"]);
+    expect(team?.rows).toEqual([expect.objectContaining({ head: "Structuring", cells: ["3", "2", "6", "100% of 1"] })]);
+    // Another reader of the same case is sent their own "Mine": the three alerts on them.
+    const asColleague = await visitOn(v.conduit, colleague);
+    const theirs = tablesOf((await asColleague.get(`/reports?case=${CASE}`)).text).find((t) => t.caption === "Team view by rule");
+    expect(theirs?.rows).toEqual([expect.objectContaining({ head: "Structuring", cells: ["3", "3", "6", "100% of 1"] })]);
   });
 
   it("AM5: a section with nothing to count says so, and a chart is never drawn with no bar", async () => {
@@ -727,7 +758,7 @@ describe("the alert monitoring figures (the govuk tree)", () => {
     expect(failing.text).not.toContain("Internal Server Error");
     expect(mainOf(failing.text)).not.toMatch(/<svg|<table/);
     v.conduit.failing.clear();
-    for (const body of ["not json at all", JSON.stringify({ alerts_total: 3 }), JSON.stringify({ alerts_total: "3", monitoring: {} }), JSON.stringify([1, 2])]) {
+    for (const body of ["not json at all", JSON.stringify({ alerts_total: 3 }), JSON.stringify({ alerts_total: "3", monitoring: {} }), JSON.stringify({ alerts_total: 3, monitoring: {} }), JSON.stringify([1, 2])]) {
       v.conduit.next = { status: 200, body };
       const odd = await v.get(`/reports?case=${CASE}`);
       expect(odd.status, body).toBe(502);
@@ -804,6 +835,176 @@ describe("the alert monitoring figures (the govuk tree)", () => {
     expect((await request(v.app).get(`/reports?case=${CASE}`)).status).toBe(404);
     expect(v.conduit.calls).toEqual([]);
   });
+});
+
+// ------------------------------------------------------------------------------------------------ a strict reader and a census (AM7, AM1)
+//
+// The owner's ruling of 25 November 2026 (GR3a's round 7): the page's reading of the report is exactly the figures' shape. A body that
+// lacks a field the route always sends is "the figures could not be read", never a zero; and every field of the generated type is either
+// drawn by the page or named as left out in spec/08 (`test_govuk_alert_monitoring_scenario.py` holds this list and that paragraph in step).
+// The list of cases is made from the generated type's own field list, so a field added to the model is a case with no one writing it.
+
+/** The fields of `ReportFigures` that the page does not draw, by name (a nested one as `Interface.field`): spec/08, scenario AM, "Fields of the report the page leaves out". */
+const LEFT_OUT = ["generated_at", "alerts_total", "alerts_by_week", "open_by_age", "outcomes", "kyc", "pole", "drawing"];
+
+interface Field {
+  name: string;
+  optional: boolean;
+  /** The type with every alias spelt out: `LabelledWeekCount[]`, `HeldFigures | null`, `number`, a union of quoted words. */
+  type: string;
+}
+
+const GENERATED = readFileSync(join(PAGES_DIR, "..", "..", "packages", "schemas", "generated", "ReportFigures.ts"), "utf8");
+const ALIASES = new Map([...GENERATED.matchAll(/^export type (\w+) = (.+);$/gm)].map((m) => [m[1] as string, m[2] as string]));
+const spelt = (type: string): string =>
+  type
+    .split(" | ")
+    .map((part) => {
+      let out = part;
+      while (ALIASES.has(out)) out = ALIASES.get(out) as string;
+      return out;
+    })
+    .join(" | ");
+const INTERFACES = new Map(
+  [...GENERATED.matchAll(/^export interface (\w+) \{\n([\s\S]*?)\n\}/gm)].map((m) => [
+    m[1] as string,
+    [...(m[2] as string).matchAll(/^ {2}(\w+)(\?)?: ([^;]+);$/gm)].map((f): Field => ({ name: f[1] as string, optional: f[2] === "?", type: spelt(f[3] as string) })),
+  ]),
+);
+const fieldsOf = (iface: string): Field[] => INTERFACES.get(iface) ?? [];
+
+function childOf(type: string): { iface: string; list: boolean } | undefined {
+  const found = /^(\w+)(\[\])?$/.exec(type.split(" | ").filter((part) => part !== "null").join(" | "));
+  return found && INTERFACES.has(found[1] as string) ? { iface: found[1] as string, list: found[2] !== undefined } : undefined;
+}
+
+const keyOf = (iface: string, field: string): string => (iface === "ReportFigures" ? field : `${iface}.${field}`);
+
+interface Spot {
+  iface: string;
+  field: Field;
+  /** Where the holders of the field are in the body: keys, and `*` for each item of a list. */
+  at: string[];
+}
+
+/** Every field the page reads, by walking the generated type: the fields it leaves out are not walked into. */
+function spotsOf(iface = "ReportFigures", at: string[] = []): Spot[] {
+  return fieldsOf(iface).flatMap((field): Spot[] => {
+    const child = childOf(field.type);
+    const here: Spot = { iface, field, at };
+    return child && !(iface === "ReportFigures" && LEFT_OUT.includes(field.name)) ? [here, ...spotsOf(child.iface, [...at, field.name, ...(child.list ? ["*"] : [])])] : [here];
+  });
+}
+
+const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
+
+function holdersAt(root: unknown, at: string[]): Record<string, unknown>[] {
+  let level: unknown[] = [root];
+  for (const key of at) level = level.flatMap((o) => (key === "*" ? (Array.isArray(o) ? o : []) : isObject(o) && key in o ? [o[key]] : []));
+  return level.filter(isObject);
+}
+
+const clone = (body: unknown): unknown => JSON.parse(JSON.stringify(body));
+const pathOf = (spot: Spot): string => ["ReportFigures", ...spot.at, spot.field.name].join(".").replace(/^ReportFigures\./, "");
+
+/** A value to put in a field of the sample so that, if the page draws it, the page changes: another figure, another word, another date. */
+function another(value: unknown, field: Field): unknown {
+  if (typeof value === "number") return value + 7;
+  if (typeof value !== "string") return undefined;
+  const words = [...field.type.matchAll(/"([^"]+)"/g)].map((m) => m[1] as string);
+  if (words.length > 0) return words.find((w) => w !== value) ?? value;
+  if (/^\d{4}-\d{2}-\d{2}/.test(value)) {
+    const later = new Date(`${value.slice(0, 10)}T00:00:00Z`);
+    later.setUTCDate(later.getUTCDate() + 21);
+    return later.toISOString().slice(0, 10) + value.slice(10);
+  }
+  return `${value}x`;
+}
+
+/** A value of a type built from the type alone, for a field the sample leaves empty or null. */
+function made(type: string): unknown {
+  const child = childOf(type);
+  if (child) {
+    const one = Object.fromEntries(fieldsOf(child.iface).map((f) => [f.name, made(f.type)]));
+    return child.list ? [one] : one;
+  }
+  const words = [...type.matchAll(/"([^"]+)"/g)].map((m) => m[1] as string);
+  if (words.length > 0) return words[0];
+  return type === "number" ? 3 : "2026-11-02";
+}
+
+describe("the figures the page reads are the figures the route always sends (the owner's ruling of 25 November 2026)", () => {
+  const spots = spotsOf();
+  const unreadable = "The figures could not be read just now. Nothing has changed. Try again in a few minutes.";
+
+  /** One visit, the route's own answer for it, and a way to have the page draw any body in place of it. */
+  async function sample(): Promise<{ body: Record<string, unknown>; page: (body: unknown) => Promise<{ status: number; html: string }> }> {
+    const v = await visitAs(readerOf({}));
+    const body = (await routeSays(v.conduit, v.token, CASE)) as unknown as Record<string, unknown>;
+    const page = async (sent: unknown): Promise<{ status: number; html: string }> => {
+      v.conduit.next = { status: 200, body: JSON.stringify(sent) };
+      const res = await v.get(`/reports?case=${CASE}`);
+      return { status: res.status, html: sameFor(res.text, v.csrf) };
+    };
+    return { body, page };
+  }
+
+  const refused = (answer: { status: number; html: string }): boolean => answer.status === 502 && words(answer.html).includes(unreadable) && !/<svg|<table/.test(mainOf(answer.html));
+
+  it("AM7: the list of fields is the generated type's own, and walks into every list and object the page reads", () => {
+    expect(spots.length).toBeGreaterThan(30);
+    expect(fieldsOf("ReportFigures").map((f) => f.name)).toEqual(expect.arrayContaining(["period_weeks", "monitoring", "held"]));
+    // Every name of the left-out list is a field of the generated type, so a field renamed in the model cannot leave a stale name here.
+    for (const key of LEFT_OUT) expect(spots.some((s) => keyOf(s.iface, s.field.name) === key), key).toBe(true);
+    // A field the page reads and the type marks optional is still required here: the route sends every field, a default included.
+    expect(fieldsOf("ReportFigures").find((f) => f.name === "monitoring")?.optional).toBe(true);
+  });
+
+  for (const spot of spots) {
+    const key = keyOf(spot.iface, spot.field.name);
+    const leftOut = LEFT_OUT.includes(key);
+    // What the page reads, or the type itself requires, is required; what neither does is not (a page that refused it would be refusing figures it never draws).
+    const required = !leftOut || !spot.field.optional;
+    it(`AM7: a body with no ${pathOf(spot)} is ${required ? "not the figures: a page of words with 502 and no figure" : "still the figures: the page does not read it"}`, async () => {
+      const { body, page } = await sample();
+      const holders = holdersAt(body, spot.at).filter((h) => spot.field.name in h);
+      expect(holders.length, `the route's answer for the sample holds no ${pathOf(spot)} to remove`).toBeGreaterThan(0);
+      const without = clone(body);
+      for (const h of holdersAt(without, spot.at)) delete h[spot.field.name];
+      const answer = await page(without);
+      if (required) expect(refused(answer), `status ${answer.status}`).toBe(true);
+      else expect(answer.status).toBe(200);
+    });
+  }
+
+  const keys = [...new Set(spots.map((s) => keyOf(s.iface, s.field.name)))].filter((key) => {
+    const spot = spots.find((s) => keyOf(s.iface, s.field.name) === key) as Spot;
+    return LEFT_OUT.includes(key) || childOf(spot.field.type) === undefined;
+  });
+  for (const key of keys) {
+    const leftOut = LEFT_OUT.includes(key);
+    it(`AM1: ${key} is ${leftOut ? "left out by the page (named in spec/08)" : "drawn by the page"}`, async () => {
+      const { body, page } = await sample();
+      const baseline = await page(body);
+      expect(baseline.status).toBe(200);
+      const changed = clone(body) as Record<string, unknown>;
+      let planted = 0;
+      for (const spot of spots.filter((s) => keyOf(s.iface, s.field.name) === key)) {
+        for (const h of holdersAt(changed, spot.at)) {
+          const value = h[spot.field.name];
+          const empty = value === null || (Array.isArray(value) && value.length === 0);
+          const next = empty ? made(spot.field.type) : another(value, spot.field);
+          if (next !== undefined) {
+            h[spot.field.name] = next;
+            planted += 1;
+          }
+        }
+      }
+      expect(planted, `nothing of ${key} could be changed in the sample`).toBeGreaterThan(0);
+      const drawn = (await page(changed)).html !== baseline.html;
+      expect(drawn, leftOut ? `${key} is named as left out and the page draws it: take it off the list and out of spec/08` : `${key} is neither drawn by the page nor named as left out in spec/08`).toBe(!leftOut);
+    });
+  }
 });
 
 // ------------------------------------------------------------------------------------------------ the checks can fail (AM11, rule 15)

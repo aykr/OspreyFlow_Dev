@@ -14,6 +14,9 @@ the report route that the owner's ruling rests on (item 2 of the slice's brief):
 * `spec/02` silent on the chart rule or the ruling                         -> `test_spec_02_says_the_chart_rule`
 * the figures row left without its scenarios, or the dashboards row given
   a slice, a route or a scenario                                            -> `test_the_figures_row_has_its_scenarios`
+* a field of the report that is neither drawn nor named in spec/08 as left
+  out, or named there and not on the page test's list, or not a field of
+  the generated type                                                         -> `test_the_left_out_fields_are_the_generated_types_own`
 * the route list without the page's path                                   -> `test_the_route_list_holds_the_page`
 * the Conduit answering a person with no level on the case other than it
   answers a case that is not there                                         -> `test_a_non_viewer_is_answered_as_a_missing_case_by_the_report_route`
@@ -33,7 +36,7 @@ in-memory copy of what it read; it never writes into the repository. The two Con
 answering from memory (no database, no port), as `tests/services/api/test_reports_viewer_journey.py` does. The files, from the
 repository's root: `OspreyFlow_Build/spec/{08_ACCEPTANCE_SCENARIOS,02_GLASS_FRONTEND}.md`,
 `OspreyFlow_Build/tests/services/api/test_reports_viewer_journey.py` (its harness is imported), and under `OspreyFlow_Core`:
-`apps/pages/FUNCTIONS.yaml`, `apps/pages/tree-govuk/routes.yaml`, `apps/pages/test/govuk/alert-monitoring.test.ts`,
+`apps/pages/FUNCTIONS.yaml`, `apps/pages/tree-govuk/routes.yaml`, `packages/schemas/generated/ReportFigures.ts`, `apps/pages/test/govuk/alert-monitoring.test.ts`,
 `apps/pages/test/govuk/keyboard/alert-monitoring.spec.ts`, `apps/pages/server/{alertMonitoring,pageList}.ts`,
 `apps/pages/server/views/alertMonitoringWords.ts`, `apps/pages/tree-govuk/alert-monitoring.njk`,
 `apps/workspace/src/reports/AlertMonitoringBoard.tsx`, `services/api/{app,investigations,reports}.py`.
@@ -68,6 +71,7 @@ SPEC_02 = SPEC / "02_GLASS_FRONTEND.md"
 FUNCTIONS = PAGES / "FUNCTIONS.yaml"
 ROUTES = PAGES / "tree-govuk" / "routes.yaml"
 PAGE_TEST = PAGES / "test" / "govuk" / "alert-monitoring.test.ts"
+GENERATED = CORE / "packages" / "schemas" / "generated" / "ReportFigures.ts"
 KEYBOARD_TESTS = {
     "keyboard/alert-monitoring.spec.ts": PAGES / "test" / "govuk" / "keyboard" / "alert-monitoring.spec.ts",
 }
@@ -151,6 +155,7 @@ def inputs() -> dict[str, Any]:
         "functions": yaml.safe_load(read(FUNCTIONS))["functions"],
         "routes": yaml.safe_load(read(ROUTES))["routes"],
         "page_test": read(PAGE_TEST),
+        "generated": read(GENERATED),
     }
 
 
@@ -250,6 +255,57 @@ def function_problems(data: dict[str, Any]) -> list[str]:
     return found
 
 
+#: The paragraph of scenario AM that names the report's fields the page leaves out.
+LEFT_OUT_HEAD = "**Fields of the report the page leaves out.**"
+
+
+def left_out_in_spec(spec_08: str) -> list[str] | None:
+    """The fields the paragraph names, or `None` when scenario AM has no such paragraph."""
+    for line in section_of(spec_08).splitlines():
+        if line.startswith(LEFT_OUT_HEAD):
+            return re.findall(r"`([^`]+)`", line)
+    return None
+
+
+def left_out_in_page_test(page_test: str) -> list[str]:
+    """The page test's own list of fields it expects the page not to draw (`const LEFT_OUT = [...]`)."""
+    found = re.search(r"const LEFT_OUT = \[([^\]]*)\]", page_test)
+    return re.findall(r'"([^"]+)"', found.group(1)) if found else []
+
+
+def generated_fields(generated: str) -> set[str]:
+    """Every field of the generated types, `ReportFigures`' own as a bare name and any other as `Interface.field`."""
+    out: set[str] = set()
+    for iface in re.finditer(r"^export interface (\w+) \{\n(.*?)\n\}", generated, flags=re.M | re.S):
+        for field in re.finditer(r"^ {2}(\w+)\??: ", iface.group(2), flags=re.M):
+            out.add(field.group(1) if iface.group(1) == "ReportFigures" else f"{iface.group(1)}.{field.group(1)}")
+    return out
+
+
+def field_problems(data: dict[str, Any]) -> list[str]:
+    """spec/08's list of the fields the page leaves out, the page test's list, and the generated type's own fields, in step.
+
+    The page test walks every field of the generated type and fails unless the page draws it or the field is on its list; this holds
+    that list to the document and to the type, so a name that no longer exists, or one the document does not say, is red.
+    """
+    named = left_out_in_spec(data["spec_08"])
+    if named is None:
+        return [f"scenario AM has no paragraph headed {LEFT_OUT_HEAD}"]
+    listed = left_out_in_page_test(data["page_test"])
+    found: list[str] = []
+    if not listed:
+        found.append("alert-monitoring.test.ts has no list `const LEFT_OUT = [...]` of the fields the page leaves out")
+    for field in sorted(set(listed) - set(named)):
+        found.append(f"{field} is on the page test's list of fields left out, and spec/08 does not name it")
+    for field in sorted(set(named) - set(listed)):
+        found.append(f"spec/08 names {field} as left out, and it is not on the page test's list")
+    fields = generated_fields(data["generated"])
+    for field in sorted(set(named) | set(listed)):
+        if field not in fields:
+            found.append(f"{field} is not a field of the generated report type")
+    return found
+
+
 def route_problems(data: dict[str, Any]) -> list[str]:
     found: list[str] = []
     if PATH not in data["routes"]:
@@ -264,7 +320,7 @@ def route_problems(data: dict[str, Any]) -> list[str]:
 
 def test_the_real_inputs_have_no_problem() -> None:
     data = inputs()
-    for check in (scenario_problems, citation_problems, spec_02_problems, function_problems, route_problems):
+    for check in (scenario_problems, citation_problems, spec_02_problems, function_problems, route_problems, field_problems):
         assert check(data) == [], check.__name__
 
 
@@ -291,6 +347,11 @@ def test_the_figures_row_has_its_scenarios() -> None:
 
 def test_the_route_list_holds_the_page() -> None:
     assert route_problems(inputs()) == []
+
+
+def test_the_left_out_fields_are_the_generated_types_own() -> None:
+    assert field_problems(inputs()) == []
+    assert left_out_in_page_test(read(PAGE_TEST)), "the page test's list is empty"
 
 
 # ---------------------------------------------------------------------------------------------------- the Conduit's own two answers (AM10)
@@ -656,6 +717,11 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
     ("the figures row without its route", _row("reports-figures", route=""), function_problems, "not /reports"),
     ("the dashboards row given a slice", _row("reports-dashboards", slice="GR3"), function_problems, "must be later"),
     ("the dashboards row given a route", _row("reports-dashboards", route=PATH), function_problems, "must be later"),
+    ("a field left out and not named in spec/08", _in_section("`kyc`, ", ""), field_problems, "does not name it"),
+    ("spec/08 naming a field the page test does not list", _in_section("`drawing`", "`drawing`, `monitoring`"), field_problems, "not on the page test's list"),
+    ("a name that is no field of the generated type", _in_section("`drawing`", "`drawing`, `no_such_field`"), field_problems, "not a field"),
+    ("the paragraph of left-out fields missing", _in_section(LEFT_OUT_HEAD, "**Something else.**"), field_problems, "no paragraph"),
+    ("the page test's list renamed away", _replace("page_test", "const LEFT_OUT = [", "const LEFT_OUT_NOT = ["), field_problems, "no list"),
     ("the page's path left out of the route list", lambda d: d["routes"].remove(PATH), route_problems, "does not hold"),
     ("the page's path listed twice", lambda d: d["routes"].append(PATH), route_problems, "twice"),
 ]

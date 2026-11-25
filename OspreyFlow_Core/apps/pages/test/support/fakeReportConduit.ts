@@ -21,6 +21,9 @@
  *    bound is counted from what the reader sees; past it, 409 `limit_exceeded` with `would_be` of the visible alerts alone;
  *  - `open_by_source` counts the open alerts the reader may see by rule group and age band, whenever they were raised, so a period
  *    with nothing raised can still hold open alerts (`_panel_figures`; a `typology` of `""` for any group but a typology's own);
+ *  - the team view counts as `_panel_figures` does, over the alerts still in the queue: `unassigned` those no one is on, `mine` those the
+ *    reader is on (another person's alert is neither), `older_than_week` those raised more than seven days before now;
+ *  - every field of `ReportFigures` is sent, a default included, as FastAPI serialises the model (`typology` is `""` where there is none);
  *  - `alerts_total` is the count of TYPOLOGY alerts alone, while `monitoring` counts every kind (`reports.py` lines 278 to 288);
  *  - the held rows' figures are for Editors and above only: a Viewer's report carries `held: null`.
  */
@@ -41,6 +44,8 @@ export interface WorldAlert {
   createdOn?: string;
   /** What the nodes it cites need to be read. */
   needs: Clearance;
+  /** The id of the person it is claimed by; absent while no one is on it. The real team view counts the reader's own as `mine` and the unclaimed as `unassigned`. */
+  assignee?: string;
   /** How it was closed (`true_positive`, `false_positive`, ...), or `closed` for none; absent while it is open. */
   closedAs?: string;
   /** The Monday of the week it was closed in; absent, the week it was raised in. The real route counts a closure by this, not by when the alert was raised. */
@@ -102,9 +107,12 @@ function count<T>(items: T[], key: (item: T) => string): Map<string, number> {
 /** The week an alert was closed in: the real route counts a closure by its decision date. */
 const decidedWeek = (a: WorldAlert): string => a.closedWeek ?? a.week;
 
+/** How many days old an alert raised on this day is at the fake's `now`. */
+const daysOld = (createdOn: string): number => (Date.parse(`${AS_OF}T09:00:00Z`) - Date.parse(`${createdOn}T00:00:00Z`)) / DAY;
+
 /** `reports.py` `_age_label`: under a day, under seven, under thirty, then over. */
-function ageBand(createdWeek: string): (typeof AGE_LABELS)[number] {
-  const days = (Date.parse(`${AS_OF}T09:00:00Z`) - Date.parse(`${createdWeek}T00:00:00Z`)) / DAY;
+function ageBand(createdOn: string): (typeof AGE_LABELS)[number] {
+  const days = daysOld(createdOn);
   return days < 1 ? AGE_LABELS[0] : days < 7 ? AGE_LABELS[1] : days < 30 ? AGE_LABELS[2] : AGE_LABELS[3];
 }
 
@@ -125,29 +133,32 @@ function openBySource(seen: WorldAlert[]): { label: string; typology: string; ag
  * The figures of the real `MonitoringFigures`. `seen` is every alert the reader may see, whenever it was raised; `since` is the
  * period's start (`YYYY-MM-DD`): only `raised_by_rule` and `hotlist_matches` are cut to the alerts raised in it.
  */
-function figuresOf(seen: WorldAlert[], since: string, weeks: number, level: "viewer" | "editor" | "author"): Record<string, unknown> {
+function figuresOf(seen: WorldAlert[], since: string, weeks: number, level: "viewer" | "editor" | "author", readerId: string): Record<string, unknown> {
   const alerts = seen.filter((a) => a.week >= since);
   const raised = [...count(alerts, (a) => `${a.week}|${a.label}|${a.typology ?? ""}`)].map(([key, n]) => {
     const [week, label, typology] = key.split("|") as [string, string, string];
-    return { week_start: week, label, ...(typology ? { typology } : {}), count: n };
+    return { week_start: week, label, typology, count: n };
   });
   const closedAlerts = seen.filter((a) => a.closedAs !== undefined && decidedWeek(a) >= since);
   const closed = [...count(closedAlerts, (a) => `${decidedWeek(a)}|${a.closedAs as string}`)].map(([key, n]) => {
     const [week, label] = key.split("|") as [string, string];
-    return { week_start: week, label, count: n };
+    return { week_start: week, label, typology: "", count: n };
   });
   const took = count(closedAlerts, (a) => a.tookBand ?? "under a day");
-  const hotlists = [...count(alerts.filter((a) => a.label === "hotlists"), (a) => a.week)].map(([week, n]) => ({ week_start: week, label: "hotlists", count: n }));
-  const groups = [...new Set(seen.map((a) => `${a.label}|${a.typology ?? ""}`))].map((key) => key.split("|") as [string, string]);
+  const hotlists = [...count(alerts.filter((a) => a.label === "hotlists"), (a) => a.week)].map(([week, n]) => ({ week_start: week, label: "hotlists", typology: "", count: n }));
+  const groups = [...new Set(seen.map((a) => `${a.label}|${a.typology ?? ""}`))].map((key) => key.split("|") as [string, string]).sort(([a, ta], [b, tb]) => (a < b ? -1 : a > b ? 1 : ta < tb ? -1 : ta > tb ? 1 : 0)); // the route's `sorted(team)`
   const team = groups.map(([label, typology]) => {
     const mine = seen.filter((a) => a.label === label && (a.typology ?? "") === typology);
     const done = mine.filter((a) => a.closedAs !== undefined && decidedWeek(a) >= since);
+    // `_panel_figures`: over the alerts still in the queue, whenever raised: no one on it is `unassigned`, the reader's own is `mine`
+    // (another person's is neither), and one raised more than seven days before now is `older_than_week`.
+    const queue = mine.filter((a) => a.closedAs === undefined);
     return {
       label,
-      ...(typology ? { typology } : {}),
-      unassigned: mine.filter((a) => a.closedAs === undefined).length,
-      mine: 0,
-      older_than_week: 0,
+      typology,
+      unassigned: queue.filter((a) => a.assignee === undefined).length,
+      mine: queue.filter((a) => a.assignee === readerId).length,
+      older_than_week: queue.filter((a) => daysOld(a.createdOn ?? a.week) > 7).length,
       closed: done.length,
       not_of_interest: done.filter((a) => a.closedAs === "false_positive" || a.closedAs === "no_further_action").length,
     };
@@ -242,7 +253,7 @@ export async function fakeReportConduit(readers: Reader[]): Promise<FakeReportCo
       const { cap, wouldBe } = fake.customersOver;
       return reply(res, 409, { error: "limit_exceeded", cap_kind: "customers", cap, would_be: wouldBe, options: ["shorter_period", "fewer_typologies"] });
     }
-    return reply(res, 200, figuresOf(seen, since, weeks, level));
+    return reply(res, 200, figuresOf(seen, since, weeks, level, reader.id));
   };
 
   const server: Server = createServer(handle);
