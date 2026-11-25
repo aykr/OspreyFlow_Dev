@@ -40,18 +40,18 @@ export function formatNumber(n: number): string {
   return NUMBER.format(n);
 }
 
-/** `packText.ts`'s `plural`. */
+/** `packages/glass-shared/src/reports/packText.ts`'s `plural`. */
 export function plural(n: number, one: string, many = `${one}s`): string {
   return `${NUMBER.format(n)} ${n === 1 ? one : many}`;
 }
 
-/** `packText.ts`'s `formatDay`: "11 October 2026"; an unreadable value is shown as it came. */
+/** `packages/glass-shared/src/reports/packText.ts`'s `formatDay`: "11 October 2026"; an unreadable value is shown as it came. */
 export function formatDay(iso: string): string {
   const when = new Date(iso);
   return Number.isNaN(when.getTime()) ? iso : DAY.format(when);
 }
 
-/** `alerts/names.ts`'s `TYPOLOGY_LABELS`. */
+/** `packages/glass-shared/src/alerts/names.ts`'s `TYPOLOGY_LABELS`. */
 const TYPOLOGY_LABELS: Record<string, string> = {
   structuring: "Structuring",
   rapid_movement: "Rapid movement",
@@ -67,12 +67,12 @@ const TYPOLOGY_LABELS: Record<string, string> = {
   velocity_rise: "Sudden rise in velocity",
 };
 
-/** `names.ts`'s `typologyLabel`. */
+/** `packages/glass-shared/src/alerts/names.ts`'s `typologyLabel`. */
 export function typologyLabel(typology: string | null | undefined): string {
   return (typology && TYPOLOGY_LABELS[typology]) || "Alert";
 }
 
-/** `alerts/closingReasons.ts`'s `CLOSING_REASONS`. */
+/** `packages/glass-shared/src/alerts/closingReasons.ts`'s `CLOSING_REASONS`. */
 const CLOSING_REASONS: Record<string, string> = {
   true_positive: "True match",
   false_positive: "False positive",
@@ -81,7 +81,7 @@ const CLOSING_REASONS: Record<string, string> = {
   referred: "Referred",
 };
 
-/** `closingReasons.ts`'s `closingReasonLabel`: "True match"; an unknown value as itself, never hidden. */
+/** `packages/glass-shared/src/alerts/closingReasons.ts`'s `closingReasonLabel`: "True match"; an unknown value as itself, never hidden. */
 export function closingReasonLabel(reason: string | null | undefined): string {
   return reason ? (CLOSING_REASONS[reason] ?? reason) : "";
 }
