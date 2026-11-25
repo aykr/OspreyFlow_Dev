@@ -4,7 +4,7 @@
  *
  * What the page says of a level, a domain pack, an untitled case and a moment is the shared package's (`packages/glass-shared`): the
  * Help page's level names, the Studio's pack labels, the case picker's untitled name and its way of writing a moment, imported and never
- * written again here. `scripts/build.mjs` bundles this file with the package, as it does `helpWords.ts`.
+ * written again here. `apps/pages/scripts/build.mjs` bundles this file with the package, as it does `helpWords.ts`.
  *
  * **The strict reader.** A body is read field by field against the route's model: `InvestigationListing` (`services/api/app.py`),
  * `Investigation` (`services/api/investigations.py`) and `CaseBrief`, `BriefRequirement` and `BriefAttachment`

@@ -436,6 +436,28 @@ async function drawn(b: Bodies): Promise<{ list: string; case: string; listStatu
   return { list: mainOf(list.text), case: mainOf(one.text), listStatus: list.status, caseStatus: one.status };
 }
 
+type Census = Record<string, { readonly drawn: readonly string[]; readonly left: readonly string[] }>;
+
+/** Every field a census says is drawn that changes nothing, and every field it says is left out that changes a page, when the field's
+ * value changes (CS11): the same function reads the real census and each planted one (CS15). */
+async function censusProblems(census: Census): Promise<string[]> {
+  const found: string[] = [];
+  const base = await drawn(bodies());
+  if (base.listStatus !== 200 || base.caseStatus !== 200) return [`the pages answered ${base.listStatus} and ${base.caseStatus}`];
+  for (const [model, { drawn: drawnFields, left }] of Object.entries(census)) {
+    const fields = [...drawnFields, ...left];
+    if (JSON.stringify(Object.keys(OTHER[model] ?? {}).sort()) !== JSON.stringify([...fields].sort())) found.push(`the census of ${model} is not the fields the test can change`);
+    for (const field of fields) {
+      if (NOT_SENT.includes(field)) continue;
+      const changed = await drawn(withField(model, field, (OTHER[model] as Record<string, unknown>)[field]));
+      const moved = changed.list !== base.list || changed.case !== base.case;
+      if (drawnFields.includes(field) && !moved) found.push(`${model}.${field} is drawn but changes nothing`);
+      if (!drawnFields.includes(field) && moved) found.push(`${model}.${field} is left out but changes the page`);
+    }
+  }
+  return found;
+}
+
 // ------------------------------------------------------------------------------------------------ the cases
 
 describe("the cases page on the GOV.UK tree (scenario CS)", () => {
@@ -641,18 +663,7 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
   });
 
   it("CS11: every field of the five models is drawn or named as left out; a drawn field changes the page and a left-out one does not", async () => {
-    const base = await drawn(bodies());
-    expect(base.listStatus).toBe(200);
-    expect(base.caseStatus).toBe(200);
-    for (const [model, { drawn: drawnFields, left }] of Object.entries(CENSUS)) {
-      expect(Object.keys(OTHER[model] ?? {}).sort(), model).toEqual([...drawnFields, ...left].sort());
-      for (const field of [...drawnFields, ...left]) {
-        if (NOT_SENT.includes(field)) continue;
-        const changed = await drawn(withField(model, field, (OTHER[model] as Record<string, unknown>)[field]));
-        const moved = changed.list !== base.list || changed.case !== base.case;
-        expect(moved, `${model}.${field} is ${(drawnFields as readonly string[]).includes(field) ? "drawn but changes nothing" : "left out but changes the page"}`).toBe((drawnFields as readonly string[]).includes(field));
-      }
-    }
+    expect(await censusProblems(CENSUS)).toEqual([]);
   });
 
   it("CS12: both pages are whole in structure, read-only, and their stops come in order", async () => {
@@ -779,10 +790,17 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
       expect(scriptsOffProblems(real.replace("</main>", '<script src="/x.js"></script></main>'))).not.toEqual([]);
       expect(scriptsOffProblems(real.replace("<table", '<table style="color: red"'))).not.toEqual([]);
       expect(scriptsOffProblems(real.replace("<a ", '<a onclick="x()" '))).not.toEqual([]);
-      // A census field said to be drawn that the page does not draw: the same comparison, with a left-out field's change.
-      const base = await drawn(bodies());
-      const leftOut = await drawn(withField("Investigation", "owning_unit", "another-unit"));
-      expect(leftOut.case === base.case && leftOut.list === base.list).toBe(true);
+      // The census, planted: a left-out field claimed as drawn (it changes nothing), a drawn field claimed as left out (it changes the
+      // page), and an attachment's title claimed as drawn, which the owner's ruling keeps off the page.
+      const moved = (model: keyof typeof CENSUS, field: string, to: "drawn" | "left"): Census => {
+        const { drawn: d, left: l } = CENSUS[model];
+        const without = (list: readonly string[]): string[] => list.filter((f) => f !== field);
+        return { ...CENSUS, [model]: to === "drawn" ? { drawn: [...d, field], left: without(l) } : { drawn: without(d), left: [...l, field] } };
+      };
+      expect(await censusProblems(moved("Investigation", "owning_unit", "drawn"))).toEqual(["Investigation.owning_unit is drawn but changes nothing"]);
+      expect(await censusProblems(moved("BriefAttachment", "title", "drawn"))).toEqual(["BriefAttachment.title is drawn but changes nothing"]);
+      expect(await censusProblems(moved("BriefRequirement", "status", "left"))).toEqual(["BriefRequirement.status is left out but changes the page"]);
+      expect(await censusProblems(moved("InvestigationListing", "tab_hidden", "left"))).toEqual(["InvestigationListing.tab_hidden is left out but changes the page"]);
     });
 
     it("CS15: the source checks fail for a filter, a sort or a cut in the page's code, and for a shared sentence written again", () => {
