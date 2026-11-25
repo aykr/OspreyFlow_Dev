@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 
 import ts from "typescript";
-import { beforeAll, vi } from "vitest";
+import { beforeAll } from "vitest";
 
 export const SRC = join(__dirname);
 /** The shared package's source, where the plain modules that left the workspace live (slices PL4c to PL4d2):
@@ -73,17 +73,19 @@ beforeAll(() => {
   sourceFiles();
 }, 60_000);
 
-/** The time any one test of a file that imports this kit may take: 30 s, set here for those files alone (never in the
- * config, never for the suite). What is left in a guard's test after the one walk is reading and parsing files, which the
- * guards' own code does (`copyWords.test.ts` reads and parses every file again in its first test, and the plants' copies in
- * the rest: its parser is its own, so the kit cannot share it). Measured on this slice's own machine, 12 cores: the largest
- * test, reading and parsing the 479 files of both roots, takes 0.65 to 0.75 s alone; with 36 busy loops running beside it
- * (three to a core) it took 2.3 to 2.9 s, about four times as long, so vitest's 5 s leaves under a factor of two there; and a
- * server's own load is not known from here (the owner saw 1.5 to 2 s alone and 5.4 to 7 s loaded for a file's walks, before
- * this change). So the limit is stated, ten times the loaded figure measured, and ends a test that hangs. The test files
- * stay as they were: the limit is applied to the tests collected after this module is imported, which is all of them. */
+/** The time a guard's test that walks, reads or parses files may take: 30 s. A test passes it as its own third argument
+ * (`it(name, fn, GUARD_TEST_TIMEOUT_MS)`), so the limit is seen where it applies; this module never sets it for a file, the
+ * suite or the config (PL4h round 5: an import-time `vi.setConfig` once gave every test of every importing file 30 s, a test
+ * that reads no file and `auth/resolvedPrincipal.test.ts` included). A test that reads no file keeps vitest's own 5 s.
+ *
+ * Why 30 s: what is left in a guard's test after the one walk is reading and parsing files, which the guards' own code does
+ * (`copyWords.test.ts` reads and parses every file again in its first test, and the plants' copies in the rest: its parser is
+ * its own, so the kit cannot share it). Measured on this slice's own machine, 12 cores: the largest test, reading and parsing
+ * the 479 files of both roots, takes 0.65 to 0.75 s alone; with 36 busy loops running beside it (three to a core) it took 2.3
+ * to 2.9 s, about four times as long, so vitest's 5 s leaves under a factor of two there; and a server's own load is not known
+ * from here (the owner saw 1.5 to 2 s alone and 5.4 to 7 s loaded for a file's walks, before this change). So the limit is
+ * stated, ten times the loaded figure measured, and ends a test that hangs. */
 export const GUARD_TEST_TIMEOUT_MS = 30_000;
-vi.setConfig({ testTimeout: GUARD_TEST_TIMEOUT_MS });
 
 /** The path as the guards print it: relative to its own root, the shared package's marked. */
 export function shown(path: string): string {

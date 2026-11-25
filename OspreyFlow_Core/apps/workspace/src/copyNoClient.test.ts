@@ -179,6 +179,7 @@ describe("the Glass's copy names no client and no setting still to be confirmed"
     const siblings = context.task.suite?.tasks ?? [];
     expect(siblings.length).toBeGreaterThan(8);
     for (const task of siblings) {
+      if (task.type !== "test") continue;
       const expected = readsNoFile.includes(task.name) || task === context.task ? VITEST_DEFAULT_TIMEOUT_MS : GUARD_TEST_TIMEOUT_MS;
       expect(task.timeout, task.name).toBe(expected);
     }

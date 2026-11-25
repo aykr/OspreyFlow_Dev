@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import {
   copyTexts,
@@ -124,12 +124,11 @@ describe("the copy guards' kit shares one walk and one parse and changes what is
     }
   });
 
-  it("gives a test its limit only when the test passes it: importing the kit changes no other test's, and not the config's", (context) => {
+  it("gives a test its limit only when the test passes it: importing the kit changes no other test's", (context) => {
     expect(GUARD_TEST_TIMEOUT_MS).toBeGreaterThan(VITEST_DEFAULT_TIMEOUT_MS);
     // This test passes no limit, so it has vitest's own, though the kit is imported (PL4h round 5: the kit once raised it
     // for every test of every file that imports it, `auth/resolvedPrincipal.test.ts` included).
     expect(context.task.timeout).toBe(VITEST_DEFAULT_TIMEOUT_MS);
-    expect(vi.getConfig().testTimeout).toBe(VITEST_DEFAULT_TIMEOUT_MS);
   });
 
   it("carries a limit that a test passes as its own argument", (context) => {
