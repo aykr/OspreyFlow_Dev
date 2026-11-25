@@ -10,7 +10,7 @@
  *    (the Conduit's words name the right, so the page must never show them);
  *  - a method a route does not serve is 405 `{"detail": "Method Not Allowed"}`, and a route it has not is 404 `{"detail": "Not Found"}`, both
  *    before the bearer is looked at (the router answers first). The methods are the real routes': `/v1/admin/people` and `/v1/admin/roles`
- *    serve GET and POST (the invite, `InviteInput`; a custom role, `CustomRoleInput`), and `/v1/admin/people/rows` serves GET and, as
+ *    serve GET and POST (the invite, `InviteInput`, which also requires `clearance` and `org_unit` from `AccessInput`; a custom role, `CustomRoleInput`), and `/v1/admin/people/rows` serves GET and, as
  *    the person `rows`, DELETE (`/v1/admin/people/{user_id}`); nothing else is served on them;
  *  - a POST the route serves is checked for who the reader is and the right first, as a GET is, and then for its body, as FastAPI does: a
  *    body missing a required field is 422 `{"detail": [{"type": "missing", "loc": ["body", <field>], "msg": "Field required", ...}]}`.
@@ -128,7 +128,8 @@ export async function adminConduit(options: AdminConduitOptions): Promise<AdminC
     };
     // The methods each path serves, and for a POST the fields its body model requires (`InviteInput`, `CustomRoleInput`).
     const methods: Record<string, string[]> = { "/v1/admin/people": ["GET", "POST"], "/v1/admin/people/rows": ["GET", "DELETE"], "/v1/admin/roles": ["GET", "POST"] };
-    const required: Record<string, string[]> = { "/v1/admin/people": ["username"], "/v1/admin/roles": ["name", "rights"] };
+    // In pydantic's order: the parent model's fields first (`AccessInput`: clearance, org_unit), then `InviteInput`'s own (username).
+    const required: Record<string, string[]> = { "/v1/admin/people": ["clearance", "org_unit", "username"], "/v1/admin/roles": ["name", "rights"] };
     // The router answers first, as FastAPI's does: a route it has not is 404 and a method the route does not serve is 405, for anyone.
     const served = methods[path];
     if (!served) return send(404, { detail: "Not Found" });
