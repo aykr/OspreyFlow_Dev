@@ -10,7 +10,7 @@
 #
 # Sizes are the profile's proposals (profile.yaml `resources` and `poc.cpu_limits`), not measurements:
 # step 4 (v052-measure) measures them on the client-size load.
-version: v0.6.1
+version: v0.7.0
 shape: poc
 
 # One of each (the poc shape's DEVELOPMENT_REPLICAS); Superset and the report sync too (the owner, 13 Nov).

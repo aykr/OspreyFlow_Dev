@@ -1,1 +1,0 @@
-tests/test_version_is_0_7_0.py	OspreyFlow_Core/,OspreyFlow_Build/	walks every git-tracked file (git ls-files) less OspreyFlow_Build/process/, OspreyFlow_Build/spec/06_DECISIONS.md and OspreyFlow_Build/spec/ADR_RESERVATIONS.md, to find any text that still names the old release number outside the allowed list
