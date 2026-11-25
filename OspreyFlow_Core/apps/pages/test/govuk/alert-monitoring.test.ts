@@ -739,6 +739,36 @@ describe("the alert monitoring figures (the govuk tree)", () => {
     expect(v.conduit.calls.filter((c) => c.authorization === `Bearer ${reader.token}`).map((c) => c.path)).toEqual(["/v1/investigations/case-that-is-not-there/reports"]);
   });
 
+  // ADR-152 invariant I15's second test, by the name the owner's approved correction gives it (the page is the alert monitoring figures,
+  // the one a dashboard-viewing reader opens): a reader without `read_reports` is answered exactly as a report that is not there is.
+  it("test_the_dashboard_page_answers_a_reader_without_read_reports_as_a_missing_report", async () => {
+    const reader = readerOf({ id: "reader" });
+    const noRight = readerOf({ id: "no-right", rights: [] });
+    const v = await visitAs(reader, [noRight]);
+    const asNoRight = await visitOn(v.conduit, noRight);
+    // The Conduit refuses the right first (403, naming it) and says a case there is not 404 (the real route's two refusals).
+    const missing = await v.get("/reports?case=case-that-is-not-there");
+    const withoutRight = await asNoRight.get(`/reports?case=${CASE}`);
+    const withoutRightMissing = await asNoRight.get("/reports?case=case-that-is-not-there");
+    expect(asNoRight.conduit.calls.filter((c) => c.authorization === `Bearer ${noRight.token}`).map((c) => c.path)).toEqual([
+      `/v1/investigations/${CASE}/reports`,
+      "/v1/investigations/case-that-is-not-there/reports",
+    ]);
+    // The same status (404, never 403), and the same words and markup (apart from the session's own token and nonce).
+    expect(missing.status).toBe(404);
+    for (const res of [withoutRight, withoutRightMissing]) expect(res.status).toBe(404);
+    const same = sameFor(missing.text, v.csrf);
+    expect(sameFor(withoutRight.text, asNoRight.csrf)).toBe(same);
+    expect(sameFor(withoutRightMissing.text, asNoRight.csrf)).toBe(same);
+    expect(words(withoutRight.text)).toContain("This case is not one you can open.");
+    // Nothing on it tells the two apart: no right named, no Conduit error code, no case echoed, no figure or chart.
+    for (const text of [withoutRight.text, withoutRightMissing.text]) {
+      expect(text).not.toMatch(/right_required|investigation_not_found|read_reports|reports right|Forbidden|Not Found|[Pp]ermission/);
+      expect(text).not.toContain("case-that-is-not-there");
+      expect(mainOf(text)).not.toMatch(/<svg|<table/);
+    }
+  });
+
   it("AM6: an unsigned request is sent to sign-in and learns nothing of the page", async () => {
     const v = await visitAs(readerOf({}));
     const res = await request(v.app).get(`/reports?case=${CASE}`);

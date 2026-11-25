@@ -650,10 +650,30 @@ def test_the_leak_check_fails_for_one_identity_read_for_every_reader(monkeypatch
         app.dependency_overrides.clear()
 
 
+I15_PAGE_TESTS = (
+    "test_the_alert_monitoring_page_shows_only_the_readers_own_counts",
+    "test_the_dashboard_page_answers_a_reader_without_read_reports_as_a_missing_report",
+)
+
+
+def i15_names_missing(page_test_source: str) -> list[str]:
+    """Each of ADR-152 invariant I15's page tests, by the name the decision gives it, that the vitest file does not hold."""
+    cases = [line for line in page_test_source.splitlines() if line.lstrip().startswith("it(")]  # a case's title, not a comment
+    return [name for name in I15_PAGE_TESTS if not any(name in line for line in cases)]
+
+
 def test_the_vitest_half_of_the_pair_is_there() -> None:
-    assert "test_the_alert_monitoring_page_shows_only_the_readers_own_counts" in read(PAGE_TEST), (
-        "I15's page half is not named in alert-monitoring.test.ts"
-    )
+    missing = i15_names_missing(read(PAGE_TEST))
+    assert missing == [], f"I15's page tests are not named in alert-monitoring.test.ts: {missing}"
+
+
+def test_the_i15_name_check_fails_for_either_name_renamed_away() -> None:
+    """Rule 15: the check, read against the real file with each name renamed away (the shape a rename leaves), names that one."""
+    source = read(PAGE_TEST)
+    for name in I15_PAGE_TESTS:
+        assert name in source
+        renamed = source.replace(name, name.replace("test_the_", "test_a_", 1))
+        assert i15_names_missing(renamed) == [name]
 
 
 # ---------------------------------------------------------------------------------------------------- planted faults (rule 15)
