@@ -311,11 +311,13 @@ functions:
     route: ""
     status: "planned"
   # The plan has not yet named a build for this row. C9 and C11 (spec/08) are proposed, not owner-ruled.
+  # Only the People list has a scenario so far (slice AD3a: AP1 to AP11, a read-only GOV.UK page at /admin/people). The row's route stays
+  # empty: the function is complete only when every section has its page, and the page is in `tree-govuk/routes.yaml` as the first of them.
   - id: admin
     name: "Admin: every section in `W/admin/sections.json` (people, roles, dashboard identities, datasets, connections, operations, system, models, maps, grading scheme, audit, demo packs; 2 still \"coming\")"
     where: "apps/workspace/src/admin/ except needsYou (6,326), plus apps/workspace/src/models/ (458)"
     slice: "R7"
-    scenario: ""
+    scenario: "AP1, AP2, AP3, AP4, AP5, AP6, AP7, AP8, AP9, AP10, AP11"
     route: ""
     status: "planned"
   # The plan has not yet named a build for this row; the inventory counts it inside the Admin row.

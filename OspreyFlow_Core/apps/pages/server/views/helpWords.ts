@@ -25,6 +25,9 @@ import {
   rightSays,
 } from "@ospreyflow/glass-shared";
 
+/** The name of a right, for the one other page that says it (`adminPeopleWords.ts`: the Admin People page): imported once here, with the package bundled in. */
+export { rightName };
+
 /** The page's own words, and the ids its sections are linked by. */
 export const HELP_WORDS = {
   title: "Help",

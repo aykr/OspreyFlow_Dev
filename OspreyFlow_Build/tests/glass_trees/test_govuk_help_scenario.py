@@ -266,8 +266,10 @@ def function_problems(data: dict[str, Any]) -> list[str]:
 
 def route_problems(data: dict[str, Any]) -> list[str]:
     routed = sorted(row["route"] for row in data["functions"] if row.get("route"))
-    if data["routes"] != ["/help"]:
-        return [f"the route list is {data['routes']!r}: the tree has one page, /help"]
+    # The tree's second page, the Admin People list (slice AD3a), is the first section of the `admin` row, whose own route stays empty
+    # while the function is incomplete: it is in the list, and no row carries it (`test_govuk_admin_people_scenario.py` holds that).
+    if data["routes"] != ["/help", "/admin/people"]:
+        return [f"the route list is {data['routes']!r}: the tree has two pages, /help and /admin/people"]
     if routed != ["/help"]:
         return [f"the rows that have a route are {routed!r}, not just /help"]
     return []
@@ -401,7 +403,7 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
     ("the old combined top bar row back", _row("functions", "top-bar-home", id="top-bar-home-help"), function_problems, "owner ruled it split"),
     ("reports not split", _row("functions", "reports-figures", id="reports"), function_problems, "owner ruled it split"),
     ("the dashboards row given a slice", _row("functions", "reports-dashboards", slice="GR3"), function_problems, "must be later"),
-    ("a route in the list the code has no page for", lambda d: d["routes"].append("/welcome"), route_problems, "one page"),
+    ("a route in the list the code has no page for", lambda d: d["routes"].append("/welcome"), route_problems, "two pages"),
     ("a row routed with the list left short", _row("functions", "top-bar-home", route="/"), route_problems, "not just /help"),
     ("no register row", _drop("register", "govuk-frontend"), register_problems, "not one"),
     ("a licence that is not MIT", _register_row(licence="GPL-3.0-only"), register_problems, "not MIT"),
