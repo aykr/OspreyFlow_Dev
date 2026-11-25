@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   copyTexts,
@@ -30,6 +30,9 @@ import {
 // to four a test, and the planted fault of PL4h makes a walk take 6 s, as a loaded server can, so these tests are given 30 s,
 // each its own and never raised for the suite or the config.
 const FRESH_WALKS_MS = 30_000;
+
+/** Vitest's own limit for a test that declares none: the config here sets no `testTimeout`. */
+const VITEST_DEFAULT_TIMEOUT_MS = 5_000;
 
 describe("the copy guards' kit shares one walk and one parse and changes what is read in nothing", () => {
   it("walks the same files as a fresh walk of each root on disc finds", () => {
@@ -121,11 +124,17 @@ describe("the copy guards' kit shares one walk and one parse and changes what is
     }
   });
 
-  it("gives the guards' tests an explicit limit, set by the kit and explained there", (context) => {
-    expect(GUARD_TEST_TIMEOUT_MS).toBeGreaterThan(5_000);
-    // This test was collected under it: its own task carries the limit, not vitest's 5 s.
-    expect(context.task.timeout).toBe(GUARD_TEST_TIMEOUT_MS);
+  it("gives a test its limit only when the test passes it: importing the kit changes no other test's, and not the config's", (context) => {
+    expect(GUARD_TEST_TIMEOUT_MS).toBeGreaterThan(VITEST_DEFAULT_TIMEOUT_MS);
+    // This test passes no limit, so it has vitest's own, though the kit is imported (PL4h round 5: the kit once raised it
+    // for every test of every file that imports it, `auth/resolvedPrincipal.test.ts` included).
+    expect(context.task.timeout).toBe(VITEST_DEFAULT_TIMEOUT_MS);
+    expect(vi.getConfig().testTimeout).toBe(VITEST_DEFAULT_TIMEOUT_MS);
   });
+
+  it("carries a limit that a test passes as its own argument", (context) => {
+    expect(context.task.timeout).toBe(GUARD_TEST_TIMEOUT_MS);
+  }, GUARD_TEST_TIMEOUT_MS);
 
   it("forgets a plant's copy when it is removed, so a later walk of that folder is a new one", () => {
     const planted = plantedCopy("updateNotice.ts", 'export const PLANTED = { note: "a placeholder value" };');
