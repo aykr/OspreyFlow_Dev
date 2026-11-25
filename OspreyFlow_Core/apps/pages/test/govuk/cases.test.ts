@@ -76,8 +76,9 @@ afterEach(async () => {
 
 const UNIT = "harbour-unit";
 
-/** The cases of the fixture's store, in an order no sort gives: not by name or by label either way (Untitled, Harbour, Quay), and not by
- * when they were made either way (September, August, November). The real store sends newest first; a page that sorted would show. */
+/** The cases of the fixture's store, in an order no sort gives: not by raw name either way ("", Wharf, Quay), not by label either way
+ * (Untitled, Wharf, Quay), and not by when they were made either way (September, August, November). The real store sends newest first;
+ * a page that sorted, on any of these, would show (each is planted at the real view: the slice's report). */
 const CASES: Case[] = [
   {
     id: "c-toll",
@@ -97,7 +98,7 @@ const CASES: Case[] = [
   },
   {
     id: "c-harbour",
-    name: "Harbour watch",
+    name: "Wharf watch",
     created_at: "2026-08-01T09:05:00Z",
     created_by: "acct-blake",
     owning_unit: UNIT,
@@ -516,7 +517,7 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
     const w = await world();
     const res = await getAs(w, pageOf("c-harbour"));
     expect(res.status).toBe(200);
-    expect(headings(mainOf(res.text))[0]).toEqual({ level: 1, text: "Harbour watch" });
+    expect(headings(mainOf(res.text))[0]).toEqual({ level: 1, text: "Wharf watch" });
     expect(inOrderProblems(mainText(res.text), caseWordsInOrder(harbour, w.reader))).toEqual([]);
     // The attachment the reader may not read is not sent, and so not drawn: two kinds under the first requirement, not three.
     expect(mainText(res.text)).not.toContain(CASES_WORDS.kinds.assessment);
@@ -638,7 +639,7 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
       expect(res.status, JSON.stringify(options)).toBe(502);
       expect(mainText(res.text)).toContain(CASES_WORDS.unreadableCase);
       expect(mainText(res.text)).not.toContain(CASES_WORDS.priority);
-      expect(mainText(res.text)).not.toContain("Harbour watch");
+      expect(mainText(res.text)).not.toContain("Wharf watch");
     }
     const ended = refusalWords(401, undefined, "");
     for (const options of [{ unknownBearer: true }, { brief_answer: { status: 401, body: { detail: "Not authenticated" } } }, { list_answer: { status: 401, body: { detail: "Not authenticated" } } }] as WorldOptions[]) {
