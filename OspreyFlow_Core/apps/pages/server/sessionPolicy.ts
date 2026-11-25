@@ -31,6 +31,15 @@ export interface SessionRecord {
   accessToken: string;
   refreshToken: string;
   idToken?: string;
+  /**
+   * Milliseconds since the epoch at which the access token ends, as the provider said (`expires_in`) when it was issued.
+   * Absent for a token whose end is not known: `accessToken.ts` then reads the token's own `exp`, and renews nothing it cannot date.
+   */
+  accessTokenExpiresAt?: number;
+  /** The identity provider's own identifier for this sign-in (`sid`): what its logout token names (slice PL9b). */
+  idpSid?: string;
+  /** How many times the access token has been renewed: a copy of the record with a lower number is out of date. */
+  renewals?: number;
   /** The synchroniser token: the anti-forgery token for this session and no other. */
   csrfToken: string;
   /** Milliseconds since the epoch. */
@@ -88,6 +97,8 @@ export function newRecord(provided: ProviderSession, now: number): SessionRecord
     accessToken: provided.accessToken,
     refreshToken: provided.refreshToken,
     ...(provided.idToken === undefined ? {} : { idToken: provided.idToken }),
+    ...(provided.accessTokenExpiresAt === undefined ? {} : { accessTokenExpiresAt: provided.accessTokenExpiresAt }),
+    ...(provided.providerSessionId === undefined ? {} : { idpSid: provided.providerSessionId }),
     csrfToken: randomToken(),
     createdAt: now,
     idpSessionExpiresAt: provided.idpSessionExpiresAt,

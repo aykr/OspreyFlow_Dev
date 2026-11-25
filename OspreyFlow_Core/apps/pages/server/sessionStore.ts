@@ -25,6 +25,20 @@ export const LOGIN_KEY_PREFIX = "pages-login:";
  */
 export const STAGED_KEY_PREFIX = "pages-staged:";
 
+/**
+ * A back-channel logout token's `jti` once it has been used (slice PL9b), `pages-jti:<sha-256 of the jti>`: set only if absent
+ * (`claim`), with a limit a little past the token's own life, so that the same token cannot end a session twice. Nothing else is
+ * kept under it: a logout finds the sessions it names by reading the sessions themselves, not by an index.
+ */
+export const LOGOUT_JTI_PREFIX = "pages-jti:";
+
+/**
+ * A sign-out's last hop, held between the sign-out and the browser's next request (slice PL9b): the provider's end-session
+ * address, which carries the person's ID token as the hint. One minute, single use, under its own prefix, and only in the pages
+ * process's own memory (like `STAGED_KEY_PREFIX`): `ValkeySessionStore` refuses it, so the token is never written to disk.
+ */
+export const LOGOUT_KEY_PREFIX = "pages-logout:";
+
 /** The most a stored session may hold. A session is a few tokens; a value past this is a defect. */
 export const MAX_VALUE_BYTES = 64 * 1024;
 
@@ -51,9 +65,16 @@ export interface SessionStore {
    * A single-use record (a started sign-in) is read only this way.
    */
   take(key: string): Promise<string | null>;
+  /** The live keys that begin with `prefix`, which must be one of this service's own. */
+  listKeys(prefix: string): Promise<string[]>;
+  /**
+   * Stores `value` under `key` for `ttlSeconds` only when there is no live key of that name, and says whether it did: of two
+   * callers at once with one key, exactly one gets `true`. How a single-use value (a logout token's `jti`) is used up.
+   */
+  claim(key: string, value: string, ttlSeconds: number): Promise<boolean>;
 }
 
-const PREFIXES = [SESSION_KEY_PREFIX, LOGIN_KEY_PREFIX, STAGED_KEY_PREFIX] as const;
+const PREFIXES = [SESSION_KEY_PREFIX, LOGIN_KEY_PREFIX, STAGED_KEY_PREFIX, LOGOUT_JTI_PREFIX, LOGOUT_KEY_PREFIX] as const;
 
 function guardKey(key: string): void {
   const ok = typeof key === "string" && PREFIXES.some((prefix) => key.startsWith(prefix) && key.length > prefix.length);
@@ -62,10 +83,19 @@ function guardKey(key: string): void {
   }
 }
 
-/** The Valkey store never carries a held folder: Valkey saves its keys to disk, and a folder holds recipes and mappings. */
+/**
+ * The Valkey store never carries a held folder (Valkey saves its keys to disk, and a folder holds recipes and mappings) nor a
+ * sign-out's last hop (it holds the person's ID token).
+ */
 function guardNotStaged(key: string): void {
-  if (typeof key === "string" && key.startsWith(STAGED_KEY_PREFIX)) {
-    throw new StoreRefusal("a held release folder is kept in the process's memory only: Valkey saves its keys to disk");
+  if (typeof key === "string" && (key.startsWith(STAGED_KEY_PREFIX) || key.startsWith(LOGOUT_KEY_PREFIX))) {
+    throw new StoreRefusal("a held release folder and a sign-out's last hop are kept in the process's memory only: Valkey saves its keys to disk");
+  }
+}
+
+function guardPrefix(prefix: string): void {
+  if (typeof prefix !== "string" || !PREFIXES.some((own) => prefix.startsWith(own))) {
+    throw new StoreRefusal(`the prefix is not under this service's prefixes ${PREFIXES.join(" or ")}`);
   }
 }
 
@@ -165,6 +195,21 @@ export class MemorySessionStore implements SessionStore {
     return entry?.value ?? null;
   }
 
+  async listKeys(prefix: string): Promise<string[]> {
+    guardPrefix(prefix);
+    return [...this.entries.keys()].filter((key) => key.startsWith(prefix) && this.live(key) !== undefined);
+  }
+
+  /** Checks and writes with no `await` between the two, so no other caller can claim the same key in between. */
+  async claim(key: string, value: string, ttlSeconds: number): Promise<boolean> {
+    guardKey(key);
+    guardTtl(ttlSeconds);
+    guardValue(key, value);
+    if (this.live(key) !== undefined) return false;
+    this.entries.set(key, { value, expiresAt: this.clock() + ttlSeconds * 1000 });
+    return true;
+  }
+
   /** For tests: how many entries the store holds, expired or not. It removes nothing, so it shows what a sweep has not yet done. */
   size(): number {
     return this.entries.size;
@@ -185,6 +230,10 @@ export class MemorySessionStore implements SessionStore {
 /** What the Valkey store needs of a client: `ioredis`'s own methods, as far as they are used. */
 export interface ValkeyClient {
   set(key: string, value: string, mode: "EX", seconds: number): Promise<"OK" | null>;
+  /** `SET key value EX seconds NX`: only when there is no such key; `null` when there is. */
+  set(key: string, value: string, mode: "EX", seconds: number, flag: "NX"): Promise<"OK" | null>;
+  /** `SCAN`, as `ioredis` has it. Optional only so that a test's double need not carry it; the store refuses a scan without it. */
+  scan?(cursor: string, match: "MATCH", pattern: string, count: "COUNT", n: number): Promise<[string, string[]]>;
   get(key: string): Promise<string | null>;
   expire(key: string, seconds: number): Promise<number>;
   del(...keys: string[]): Promise<number>;
@@ -227,5 +276,29 @@ export class ValkeySessionStore implements SessionStore {
     guardKey(key);
     guardNotStaged(key);
     return this.client.getdel(key);
+  }
+
+  /** `SCAN` with a glob made of the prefix alone, which holds no glob character (every prefix is this service's own). */
+  async listKeys(prefix: string): Promise<string[]> {
+    guardPrefix(prefix);
+    guardNotStaged(prefix);
+    const scan = this.client.scan?.bind(this.client);
+    if (!scan) throw new StoreRefusal("this store's client cannot scan");
+    const found = new Set<string>();
+    let cursor = "0";
+    do {
+      const [next, batch] = await scan(cursor, "MATCH", `${prefix}*`, "COUNT", 200);
+      for (const key of batch) found.add(key);
+      cursor = next;
+    } while (cursor !== "0");
+    return [...found];
+  }
+
+  async claim(key: string, value: string, ttlSeconds: number): Promise<boolean> {
+    guardKey(key);
+    guardNotStaged(key);
+    guardTtl(ttlSeconds);
+    guardValue(key, value);
+    return (await this.client.set(key, value, "EX", ttlSeconds, "NX")) === "OK";
   }
 }

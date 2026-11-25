@@ -33,6 +33,7 @@ import type { SessionEventReporter } from "../../server/sessionEvents.js";
 import { MemorySessionStore } from "../../server/sessionStore.js";
 import { captureOutput } from "../support/capture.js";
 import type { Captured } from "../support/capture.js";
+import { unusedFlowParts } from "../support/flowStubs.js";
 import { testClock } from "../support/clock.js";
 import { startFakeKeycloak } from "../support/fakeKeycloak.js";
 import type { FakeKeycloak } from "../support/fakeKeycloak.js";
@@ -213,6 +214,7 @@ describe("the provider's address is in no log line of the callback, the sign-out
         async complete() {
           throw make(`could not reach ${fake.issuer}/protocol/openid-connect/token`);
         },
+        ...unusedFlowParts,
       }));
       const started = await request(r.app).get("/session/sign-in");
       const res = await request(r.app).get("/session/callback?code=c&state=s").set("Cookie", loginCookieOf(started));

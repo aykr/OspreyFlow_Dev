@@ -374,6 +374,28 @@ PAGES_CLIENT_ID = "osprey-pages"
 #: client by `register_sign_in.ensure_identity`; never in the realm document.
 PAGES_CLIENT_SECRET_KEY = "OSPREY_PAGES_CLIENT_SECRET"
 PAGES_SESSION_SECRET_KEY = "OSPREY_PAGES_SESSION_SECRET"
+#: Where Keycloak sends the page service its back-channel logout token: the service's own route
+#: (`BACKCHANNEL_LOGOUT_PATH` in `apps/pages/server/oidc.ts`; `test_realm_pages_client` pins both).
+PAGES_BACKCHANNEL_LOGOUT_PATH = "/session/back-channel-logout"
+
+
+def pages_backchannel_logout_url() -> str:
+    """The address Keycloak posts its logout token to: **the page service's own, on the
+    deployment's internal network** (its compose service name, the chart's Service of the same name,
+    and the port it listens on, plain HTTP), never the public origin. Keycloak makes this call from
+    its own container, server to server; the `osprey` network has no route out and its proxy
+    answers there only to `id.<host>`, so the public name resolves to nothing Keycloak can reach
+    (round 3 of PL9b).
+
+    Reaching the route inside the network adds no trust: it takes only the provider's logout
+    token, verified in full (signature against the provider's keys, issuer, audience, the logout
+    event, no nonce, `sid` or `sub`, age, replay), and refuses anything else in plain words with
+    nothing ended."""
+    from harness import pages_service
+
+    return (
+        f"http://{pages_service.SERVICE}:{pages_service.PAGES_PORT}{PAGES_BACKCHANNEL_LOGOUT_PATH}"
+    )
 
 
 def pages_client(config: OspreyConfig) -> dict[str, Any]:
@@ -383,7 +405,13 @@ def pages_client(config: OspreyConfig) -> dict[str, Any]:
     registration from `deployment.env`, never in this document), and a refresh token kept on the
     server, which the Glass's own client does not have (`use.refresh.tokens` is on here alone).
 
-    Its one redirect is exact: `<origin>/session/callback`, the deployment's own origin. The same
+    Its one redirect is exact: `<origin>/session/callback`, the deployment's own origin. Sign-out
+    ends the person's session at the provider too (slice PL9b): the one registered return address
+    is `<origin>/` (matched exactly), from the one public origin the redirect above is: both are
+    the browser's. The provider's own logout reaches the service at its address on the internal
+    network (`pages_backchannel_logout_url`: Keycloak calls it from its own container) with a
+    logout token that names the session (`sid`). Front-channel logout is off: it is named for
+    Entra ID only (ADR-152 decision 4), which is a later part's. The same
     claim mappers as the Glass's client, and the **audience mapper for the Conduit**:
     `_audience_mapper`'s own docstring says every client whose tokens the Conduit accepts needs it,
     and the service forwards this client's access token as the person's bearer.
@@ -407,10 +435,14 @@ def pages_client(config: OspreyConfig) -> dict[str, Any]:
         "serviceAccountsEnabled": False,
         "redirectUris": [f"{origin}/session/callback"],
         "webOrigins": [origin],
+        "frontchannelLogout": False,
         "attributes": {
             "pkce.code.challenge.method": "S256",
             "post.logout.redirect.uris": f"{origin}/",
             "use.refresh.tokens": "true",
+            "backchannel.logout.url": pages_backchannel_logout_url(),
+            "backchannel.logout.session.required": "true",
+            "backchannel.logout.revoke.offline.tokens": "false",
         },
         "protocolMappers": [*_claim_mappers(), _audience_mapper()],
     }

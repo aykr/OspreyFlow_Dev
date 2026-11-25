@@ -16,6 +16,9 @@ export function isV1Path(rawPath: string): boolean {
   return rawPath === "/v1" || rawPath.startsWith("/v1/");
 }
 
+/** What a script is told when its session has ended: the forwarder's own words, and the renewal's when the provider will not renew. */
+export const SIGNED_OUT_WORDS = "You are not signed in, or your session has ended. Sign in again.";
+
 /**
  * A refusal on a `/v1` path, in the Conduit's own shape (`{"detail": "..."}`, which the Glass reads). Words
  * for a person, never a reason that names the service's insides.
