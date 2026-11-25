@@ -585,7 +585,12 @@ site, the deployment's own address file, the organisation's redirect address and
 the same strings by construction; the origin `https://host:443` is written without `:443` in every
 one, which is the form the service accepts and a browser sends. Nothing was measured against a
 real Keycloak for the `:443` form: it is never given one. The tests that would fail if it were
-broken are `test_keycloaks_issuer_the_realm_client_and_the_service_agree` (one case each),
+broken are `test_keycloaks_issuer_the_realm_client_and_the_service_agree` (the page service's
+own client, one case each), `test_the_glass_client_the_theme_and_the_organisation_agree_with_derive`
+(the Glass's realm client, the sign-in theme's `glass_origin` and the organisation's redirect and
+post-logout addresses, one case each, each shown red against main's raw-origin form of
+`page_addresses.client_origin` and `page_addresses.broker_identity` by
+`test_the_other_sign_in_addresses_are_red_for_main_s_raw_origin_form`),
 `test_no_other_module_computes_an_address` (every module under `harness/`) and the planted cases
 beside them.
 
@@ -601,7 +606,7 @@ and the real-Caddy test all read.
 | An address with more than an origin | A path, a query, a fragment or a user name is refused; so is an IP address or a bracketed (IPv6) host, outright, because the identity address needs a name a certificate can carry (the owner, 24 November). |
 | Trust | The proxy's own internal authority is not trusted (a `.localhost`, `.local`, `.internal` or `.home.arpa` name, or `localhost`, served without `network.tls`): refused. The organisation's own certificate with no `ca` is refused, because the service cannot tell which root to trust; with a `ca` the service is given it as `NODE_EXTRA_CA_CERTS`. |
 | The identity listener | Where the origin's port is not the port the proxy itself listens on for HTTPS (443, or 8443 with the organisation's certificate), the identity name is also listened on at the origin's port, inside the container. |
-| A port that is taken | An HTTPS origin on a port the front proxy publishes or serves as plain HTTP is refused: its plain-HTTP ports (80 and 8080, in every shape), the loopback doors it publishes (the graph store's, and the Conduit's when `network.expose_conduit` asks), and every other port it publishes except its own HTTPS port. The list comes from the one place that publishes them (`proxy_ports` in `OspreyFlow_Core/harness/site.py`; the cluster's load balancer's own list, 80 and 443, is `proxy_ports` in `OspreyFlow_Core/harness/cluster.py`, and the refusal holds there too), so a port added there is covered at once (the owner, 24 November; the cluster's rows 12 and 19 of the table of cases). |
+| A port that is taken | An HTTPS origin on a port the front proxy publishes or serves as plain HTTP is refused: its plain-HTTP ports (80 and 8080, in every shape), the loopback doors it publishes (the graph store's, and the Conduit's when `network.expose_conduit` asks), and every other port it publishes except its own HTTPS port. The list comes from the one place that publishes them (`proxy_ports` in `OspreyFlow_Core/harness/site.py`; the cluster's load balancer's own list, 80 and 443, is `proxy_ports` in `OspreyFlow_Core/harness/cluster.py`, and the refusal holds there too), so a port added there is covered at once (the owner, 24 November; the cluster's rows 12 and 19 of the table of cases). **The cluster's own reading of its published ports (PL7f round 9; case 16, "as small"):** the load balancer publishes 80 and 443 and no other port, whatever the origin names, so a cluster's HTTPS origin is derived on 443 (or written with no port) and on no other: any other port is refused, in words that name `pages.enabled` and the port and say the load balancer does not publish it, because nothing would answer there and people could not sign in. A compose shape's proxy publishes the origin's own port (an extra listener inside the container), so it is derived there. |
 | The shared key | With `network.access_key` the page service's routes sit inside the key's `route`; the identity alias and the issuer's discovery document, keys and token are on the key's open list. |
 
 **Where the real Caddy runs.** `tests/harness/test_page_addresses_caddy.py` runs

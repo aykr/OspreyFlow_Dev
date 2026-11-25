@@ -1879,14 +1879,15 @@ def test_the_clash_check_is_red_when_the_refusal_is_taken_out(case: str, brand: 
 @pytest.mark.parametrize("brand", BRANDS)
 def test_a_cluster_proxy_has_no_identity_listener_to_clash(brand: str) -> None:
     """The cluster's proxy is rendered with no alias and no doors, so it gets no second identity
-    address, whatever port the origin carries. (A port the load balancer's Caddy serves as plain
-    HTTP, 80 or 8080, is refused in the cluster too: PL7f round 4, the table's cluster rows 12 and
-    19; 9443 is not one of them.)"""
+    address, whatever the origin carries. (A cluster's HTTPS origin is derived on 443 alone: a port
+    the load balancer serves as plain HTTP, 80 or 8080, is refused in the cluster too, PL7f round 4,
+    the table's cluster rows 12 and 19, and any port it does not publish, 9443 for one, is refused
+    in round 9, the table's row `16-cluster-9443`: `test_page_addresses.py`.)"""
     from harness.site import render_caddyfile
     from schemas.deployment import OspreyConfig
 
     raw = ref.raw_config("cluster")
-    raw["network"]["public_origin"] = "https://osprey.example.org:9443"
+    raw["network"]["public_origin"] = "https://osprey.example.org:443"
     raw["appearance"] = {**raw.get("appearance", {}), "brand": brand}
     raw["pages"] = {"enabled": True}
     text = render_caddyfile(OspreyConfig.model_validate(raw), doors=False)
@@ -2632,7 +2633,7 @@ def _no_refusal_at_all(real: Callable[..., Any]) -> Callable[..., Any]:
     ("origin", "outcome"),
     [
         ("https://osprey.example.org", "rendered"),
-        ("https://osprey.example.org:9443", "rendered"),
+        ("https://osprey.example.org:9443", "refused"),
         ("https://osprey.example.org:443", "rendered"),
         ("https://10.1.2.3", "refused"),
     ],
@@ -2642,7 +2643,11 @@ def test_the_cluster_shape_holds_the_same_origin_rule(origin: str, outcome: str)
     on = _cluster_files(origin, pages=True)
     if outcome == "refused":
         assert isinstance(on, ValueError), "rendered a value the service refuses"
-        assert type(on).__name__ in ("PageServiceNeedsAnOrigin", "PageServiceNeedsTrust"), on
+        assert type(on).__name__ in (
+            "PageServiceNeedsAnOrigin",
+            "PageServiceNeedsTrust",
+            "PageServiceNeedsAnotherPort",
+        ), on
         return
     assert not isinstance(on, ValueError), on
     public, _issuer, verdict = _what_the_render_gave("cluster", on)

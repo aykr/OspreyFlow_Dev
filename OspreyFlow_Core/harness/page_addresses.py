@@ -23,9 +23,10 @@ every Caddyfile that follows loads in the proxy image's own Caddy
 **The order of the refusals** (the first that applies is the answer): the shape (the cloud platform
 has no page-service sign-in yet), the form of `network.public_origin` (more than an origin, an IP
 address or a bracketed host, a name the service cannot make an identity name from), plain HTTP, a
-port the front proxy already uses, the proxy's own authority, the organisation's own certificate
-with no `ca`. Each check is a function of its own that returns a `Refusal` or `None`, so a test can
-take one out and show what stands behind it (rule 15).
+port the front proxy already uses, a cluster's port its load balancer does not publish, the proxy's
+own authority, the organisation's own certificate with no `ca`. Each check is a function of its own
+that returns a `Refusal` or `None`, so a test can take one out and show what stands behind it
+(rule 15).
 
 **The table of cases** is `tests/fixtures/page_addresses_cases.json`, read by the Python tests, the
 node test and the real-Caddy test.
@@ -232,6 +233,14 @@ NEEDS_ANOTHER_PORT_ELSEWHERE = (
     "not be reached: give network.public_origin a different port, or leave pages.enabled off"
 )
 
+#: The cluster's HTTPS origin on a port its load balancer does not publish (PL7f round 9).
+NEEDS_A_PUBLISHED_PORT = (
+    "pages.enabled is on, but network.public_origin gives the identity address {identity} the port "
+    ":{port}, which the cluster's load balancer does not publish (it publishes {published}, and "
+    "the only HTTPS port among them is :443), so nothing would answer there and people could not "
+    "sign in: write network.public_origin with no port (or :443), or leave pages.enabled off"
+)
+
 #: What is wrong with the origin and what to write, for the two forms the owner named.
 MORE_THAN_AN_ORIGIN = (
     "carries a path, a query, a fragment or a user name",
@@ -253,8 +262,6 @@ _NUMBER_LAST = re.compile(r"[0-9]+|0[xX][0-9a-fA-F]*")
 #: The names Caddy signs itself, with its own internal authority, rather than ask a public one
 #: (certmagic's `SubjectIsInternal`, with an IP address, which no public authority signs for).
 _INTERNAL_SUFFIXES = (".localhost", ".local", ".internal", ".home.arpa")
-#: The cluster's load balancer's HTTPS port: the one published port an HTTPS origin may be on.
-_CLUSTER_HTTPS_PORT = 443
 
 
 # ---- the one normaliser: the origin, the identity name and the dashboards' name ---------------
@@ -445,7 +452,7 @@ def _taken_ports(config: OspreyConfig) -> dict[int, tuple[ProxyPort | None, str]
         from harness import cluster
 
         for published in cluster.proxy_ports(config):
-            if published["port"] != _CLUSTER_HTTPS_PORT:
+            if published["port"] != cluster.HTTPS_PUBLISHED:
                 taken.setdefault(published["port"], (None, "the load balancer's plain-HTTP port"))
     elif config.profile in (Profile.LOCAL_LITE, Profile.SMALL):
         for entry in proxy_ports(config):
@@ -483,6 +490,32 @@ def _port_taken(config: OspreyConfig) -> Refusal | None:
         else NEEDS_ANOTHER_PORT_ELSEWHERE
     )
     return Refusal("port_taken", template.format(identity=names.identity, port=names.port, use=use))
+
+
+def _not_published(config: OspreyConfig) -> Refusal | None:
+    """A cluster's HTTPS origin is on a port its load balancer publishes, and the only HTTPS port
+    it publishes is 443 (`harness.cluster.proxy_ports`, the one list; `cluster.HTTPS_PUBLISHED`):
+    an origin on any other port would be given an issuer nothing answers on, and sign-in could not
+    work (PL7f round 9; case 16 reads "as small (3 to 14)", and a compose shape's proxy publishes
+    the origin's port or the origin is refused). The ports the list names beside 443 are refused
+    as taken (`_port_taken`, which runs first and says why); a port it does not name is refused
+    here. The compose shapes publish the origin's own port (`harness.site.proxy_ports`)."""
+    from harness import cluster
+
+    names = _sites(config)
+    if config.profile is not Profile.CLUSTER or names.scheme != "https":
+        return None
+    published = sorted({entry["port"] for entry in cluster.proxy_ports(config)})
+    if names.port == cluster.HTTPS_PUBLISHED and names.port in published:
+        return None
+    return Refusal(
+        "port_taken",
+        NEEDS_A_PUBLISHED_PORT.format(
+            identity=names.identity,
+            port=names.port,
+            published=" and ".join(f":{port}" for port in published) or "no port",
+        ),
+    )
 
 
 def _caddy_signs_itself(host: str) -> bool:
@@ -529,7 +562,8 @@ def derive(config: OspreyConfig, *, with_sign_in: bool = True) -> PageAddresses 
     * The setting off: None, or the cutover's refusal where a GOV.UK deployment's tree is complete
       (ADR-152 Amendment 3, item 4: a deployment with neither front end).
     * On: a `PageAddresses`, or the first refusal of `_on_cloud_platform`, `_origin_problem`,
-      `_needs_https` (with sign-in), `_port_taken`, `_needs_trust` and `_needs_ca` (with sign-in).
+      `_needs_https` (with sign-in), `_port_taken`, `_not_published`, `_needs_trust` and
+      `_needs_ca` (with sign-in).
 
     `with_sign_in` is whether the deployment runs the identity provider the service signs in
     against: where it does, the service is given **all three** sign-in variables or it is refused,
@@ -546,6 +580,7 @@ def derive(config: OspreyConfig, *, with_sign_in: bool = True) -> PageAddresses 
         _origin_problem,
         *((_needs_https,) if with_sign_in else ()),
         _port_taken,
+        _not_published,
         *((_needs_trust, _needs_ca) if with_sign_in else ()),
     )
     for check in in_order:
