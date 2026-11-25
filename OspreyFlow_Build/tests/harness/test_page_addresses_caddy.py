@@ -27,12 +27,18 @@ skips). **This test runs the image the deployment uses** (`harness.site.PROXY_IM
 release's), so it is a second place (a diff for the owner adds this file to that job's command). The
 test server has no container tooling: there it is listed as not run, never as passed. **It does not
 skip:** if neither the image can be run nor a Caddy 2.11 binary (`OSPREY_CADDY_BINARY`) is given, it
-fails in words. The repository's Docker guard (`tests/local_docker_guard.py`) is kept satisfied
-as the other docker-calling tests keep it: Docker is reached only through `subprocess` (which the
-guard wraps, so on a machine that holds `no-local-stacks` the guard's own skip, in its own words,
-applies, and nothing else does), and nothing here starts a compose project, names a container,
-publishes a port, joins a network (`--network none`) or mounts anything writable: three read-only
-bind mounts of folders under `tmp_path`, and `--rm`.
+fails in words. The repository's Docker guard (`tests/local_docker_guard.py`) refuses every
+docker call under the owner's per-machine switch (`no-local-stacks`); the owner's ruling D234
+(24 November 2026) exempts **exactly one command, this test's**: `docker run --rm --network none`
+with three read-only mounts of folders under the temporary folder, the pinned image and
+`sh -c <script>` (the guard names this file and holds the whole shape, and the test's script is
+the guard's own constant). So this test makes **no other docker call**: it does not ask
+`docker image inspect` (the run itself says whether the image is there: `--network none` cannot
+pull it) and it does not hash the shared key with the image (Caddy's `validate` reads the hash as
+base64 and checks nothing more, measured on 25 November 2026, so a placeholder of a bcrypt's
+shape stands in: it is the Caddyfile that is validated, never a key). If the guard refuses the
+one command (the shape changed) the test fails in words, never skips. When 017-1 lands this test
+moves to the test server's container checks and the exemption comes out.
 
 **What this test walks and reads.** The one table file (through `page_addresses_fixtures.py`), the
 renderers it imports, and `OspreyFlow_Core/harness/site.py`'s `PROXY_IMAGE`. It writes only to
@@ -62,15 +68,16 @@ from tests.harness.page_addresses_fixtures import (
     config_of,
     render_of,
 )
+from tests.local_docker_guard import CADDY_SCRIPT
 
 #: A synthetic string, hashed by the image for the shared key's file; never a real key.
 SYNTHETIC_KEY = "a long shared demonstration key"
-#: One container validates every case: one `caddy validate` each, the exit code and what it said.
-SCRIPT = (
-    'for d in /cases/*; do n=$(basename "$d"); '
-    'out=$(caddy validate --config "$d/Caddyfile" --adapter caddyfile 2>&1); rc=$?; '
-    'echo "@@CASE $n $rc"; echo "$out"; done'
-)
+#: One container validates every case (the guard holds the script: it is part of the command it
+#: exempts, so the two cannot differ).
+SCRIPT = CADDY_SCRIPT
+#: What stands in for the shared key's hash: of a bcrypt's shape, the hash of nothing. Caddy's
+#: `validate` decodes it as base64 and goes no further (measured), and no key is ever written.
+PLACEHOLDER_HASH = "$2a$14$" + "a" * 53
 #: The rows where the round-9 clash is real: Caddy cannot load the file the render would write.
 CLASH_ROWS = [
     "9-own-certificate-8080",
@@ -83,6 +90,10 @@ CLASH_ROWS = [
 #: Refusals that are the owner's policy: the render's Caddyfile would load (measured), the
 #: deployment is refused because an HTTPS identity address belongs on no plain-HTTP port.
 POLICY_ROWS = ["19-acme-8080", "12-own-certificate-redirect-port"]
+
+
+#: Found once, at import: the test that empties `PATH` to plant "no docker" keeps openssl.
+OPENSSL = shutil.which("openssl") or "openssl"
 
 
 class Result:
@@ -100,7 +111,7 @@ def _own_certificate(folder: Path) -> None:
     folder.mkdir(parents=True)
     done = subprocess.run(
         [
-            "openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
+            OPENSSL, "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
             "-keyout", str(folder / "key.pem"), "-out", str(folder / "cert.pem"),
             "-subj", "/CN=osprey.example.org",
             "-addext", "subjectAltName=DNS:osprey.example.org,DNS:id.osprey.example.org",
@@ -121,33 +132,6 @@ def _parse(output: str) -> dict[str, Result]:
     return found
 
 
-def _image_is_here() -> str | None:
-    """None where the image can be run; the words where it cannot. Where the owner's per-machine
-    switch is held (`no-local-stacks`, 9 November 2026) the repository's Docker guard would skip
-    the first docker call, in the guard's own words, and the Caddyfiles would go unchecked without
-    a failure: so the switch is asked first, and this test fails in words instead of skipping."""
-    from tests.local_docker_guard import switch_path
-
-    switch = switch_path()
-    if switch.exists():
-        return (
-            f"the owner's switch {switch} is held, so the Docker guard (tests/local_docker_guard.py) "
-            "refuses every docker call a test makes and the image cannot be run here; the real "
-            "Caddy needs that decision of his (OSPREY_LEASE_DIR names the folder the guard reads "
-            "the switch from)"
-        )
-    try:
-        done = subprocess.run(
-            ["docker", "image", "inspect", PROXY_IMAGE],
-            capture_output=True, text=True, check=False, timeout=60,
-        )  # fmt: skip
-    except (FileNotFoundError, subprocess.TimeoutExpired) as error:
-        return f"docker could not be run ({error})"
-    if done.returncode != 0:
-        return f"docker has no image {PROXY_IMAGE} ({done.stderr.strip()[:200]})"
-    return None
-
-
 def _binary() -> str | None:
     """A Caddy 2.11 binary given by `OSPREY_CADDY_BINARY` (GitHub's job takes it from the image)."""
     given = os.environ.get("OSPREY_CADDY_BINARY")
@@ -157,29 +141,11 @@ def _binary() -> str | None:
     return given if version.stdout.startswith("v2.11") else None
 
 
-def _validate_all(files: dict[str, str], folder: Path) -> dict[str, Result]:
-    """Every file in `files` (name -> Caddyfile text) through `caddy validate`: in one container of
-    the image the deployment uses, or, where Docker cannot run it, by the binary given. Neither:
-    the test fails, in words (it is never skipped)."""
-    problem = _image_is_here()
-    binary = _binary() if problem else None
-    assert problem is None or binary is not None, (
-        f"the real Caddy cannot be run, so the Caddyfiles are unchecked: {problem}. Pull "
-        f"{PROXY_IMAGE} on a machine with Docker, or set OSPREY_CADDY_BINARY to a Caddy 2.11 binary. "
-        "This test does not skip."
-    )
-    cases, etc, certs = folder / "cases", folder / "etc", folder / "certs"
-    etc.mkdir(parents=True)
-    _own_certificate(certs)
-    for name, text in files.items():
-        (cases / name).mkdir(parents=True)
-        (cases / name / "Caddyfile").write_text(text, encoding="utf-8")
-    hasher = access_key.caddy_hasher() if problem is None else lambda key: _hash_with(binary, key)
-    (etc / access_key.ACCESS_KEY_FILE).write_text(
-        access_key.snippet("demo", hasher(SYNTHETIC_KEY), "synthetic-pass-for-validation"),
-        encoding="utf-8",
-    )
-    if problem is None:
+def _run_the_image(cases: Path, etc: Path, certs: Path) -> tuple[str | None, str]:
+    """(None, what the container said) where the image ran the cases; (the words, "") where it
+    could not: no docker, no image (the run cannot pull: `--network none`), or the guard's refusal.
+    The command is the one the Docker guard exempts, word for word."""
+    try:
         done = subprocess.run(
             [
                 "docker", "run", "--rm", "--network", "none",
@@ -190,8 +156,42 @@ def _validate_all(files: dict[str, str], folder: Path) -> dict[str, Result]:
             ],
             capture_output=True, text=True, check=False, timeout=600,
         )  # fmt: skip
-        assert done.returncode == 0, f"the container did not run the cases: {done.stderr}"
-        results = _parse(done.stdout)
+    except (FileNotFoundError, subprocess.TimeoutExpired) as error:
+        return f"docker could not be run ({error})", ""
+    except pytest.skip.Exception as refused:  # the Docker guard's refusal: never a skip here
+        return f"the Docker guard refused the call ({refused})", ""
+    if done.returncode != 0:
+        return (
+            f"docker could not run {PROXY_IMAGE} (exit {done.returncode}: "
+            f"{done.stderr.strip()[:300]})",
+            "",
+        )
+    return None, done.stdout
+
+
+def _validate_all(files: dict[str, str], folder: Path) -> dict[str, Result]:
+    """Every file in `files` (name -> Caddyfile text) through `caddy validate`: in one container of
+    the image the deployment uses, or, where Docker cannot run it, by the binary given. Neither:
+    the test fails, in words (it is never skipped)."""
+    cases, etc, certs = folder / "cases", folder / "etc", folder / "certs"
+    etc.mkdir(parents=True)
+    _own_certificate(certs)
+    for name, text in files.items():
+        (cases / name).mkdir(parents=True)
+        (cases / name / "Caddyfile").write_text(text, encoding="utf-8")
+    (etc / access_key.ACCESS_KEY_FILE).write_text(
+        access_key.snippet("demo", PLACEHOLDER_HASH, "synthetic-pass-for-validation"),
+        encoding="utf-8",
+    )
+    problem, said = _run_the_image(cases, etc, certs)
+    binary = _binary() if problem else None
+    assert problem is None or binary is not None, (
+        f"the real Caddy cannot be run, so the Caddyfiles are unchecked: {problem}. Pull "
+        f"{PROXY_IMAGE} on a machine with Docker, or set OSPREY_CADDY_BINARY to a Caddy 2.11 "
+        "binary. This test does not skip."
+    )
+    if problem is None:
+        results = _parse(said)
     else:
         assert binary is not None
         results = {}
@@ -212,15 +212,6 @@ def _validate_all(files: dict[str, str], folder: Path) -> dict[str, Result]:
             results[name] = Result(done.returncode, (done.stdout + done.stderr).strip())
     assert set(results) == set(files), "the container said nothing about some case"
     return results
-
-
-def _hash_with(binary: str | None, key: str) -> str:
-    assert binary is not None
-    done = subprocess.run(
-        [binary, "hash-password", "--algorithm", "bcrypt"],
-        input=key + "\n", capture_output=True, text=True, check=True,
-    )  # fmt: skip
-    return done.stdout.strip()
 
 
 def _caddyfile(row: dict[str, Any], brand: str) -> str:

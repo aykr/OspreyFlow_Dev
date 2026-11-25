@@ -204,7 +204,9 @@ def _with(command: list[str], old: str, *new: str) -> list[str]:
     return [*command[:at], *new, *command[at + 1 :]]
 
 
-def _mount(command: list[str], target: str, value: str) -> list[str]:
+def _mount(command: list[str], which: str, value: str) -> list[str]:
+    """`command` with the mount named `which` (cases, etc or certs) replaced by `value`."""
+    target = {"cases": "/cases", "etc": "/etc/caddy", "certs": "/certs"}[which]
     at = next(i for i, word in enumerate(command) if word.endswith(f":{target}:ro"))
     return [*command[:at], value, *command[at + 1 :]]
 
@@ -219,29 +221,79 @@ def test_the_one_command_is_exempt_for_the_one_test() -> None:
 def _refused() -> list[tuple[str, list[str], dict[str, object], str]]:
     good = caddy_command()
     tmp = tempfile.gettempdir()
+    image = local_docker_guard.CADDY_IMAGE
+    sock = "/var/run/docker.sock"
     return [
         ("a fourth mount", [*good[:-3], "-v", f"{tmp}/x:/data:ro", *good[-3:]], {}, ASKING),
-        ("a fourth mount, the docker socket", [*good[:-3], "-v", "/var/run/docker.sock:/s:ro", *good[-3:]], {}, ASKING),
+        (
+            "a fourth mount, the docker socket",
+            [*good[:-3], "-v", f"{sock}:/s:ro", *good[-3:]],
+            {},
+            ASKING,
+        ),
         ("a mount that is writable", _mount(good, "cases", f"{tmp}/c/cases:/cases:rw"), {}, ASKING),
         ("a mount with no mode", _mount(good, "certs", f"{tmp}/c/certs:/certs"), {}, ASKING),
-        ("the docker socket as a mount's source", _mount(good, "cases", "/var/run/docker.sock:/cases:ro"), {}, ASKING),
-        ("a mount from the home folder", _mount(good, "etc", f"{Path.home()}:/etc/caddy:ro"), {}, ASKING),
-        ("a mount from a folder that climbs out", _mount(good, "etc", f"{tmp}/../etc:/etc/caddy:ro"), {}, ASKING),
-        ("a mount of a different target", _mount(good, "certs", f"{tmp}/c/certs:/other:ro"), {}, ASKING),
+        (
+            "the docker socket as a mount's source",
+            _mount(good, "cases", f"{sock}:/cases:ro"),
+            {},
+            ASKING,
+        ),
+        (
+            "a mount from the home folder",
+            _mount(good, "etc", f"{Path.home()}:/etc/caddy:ro"),
+            {},
+            ASKING,
+        ),
+        (
+            "a mount from a folder that climbs out",
+            _mount(good, "etc", f"{tmp}/../etc:/etc/caddy:ro"),
+            {},
+            ASKING,
+        ),
+        (
+            "a mount of a different target",
+            _mount(good, "certs", f"{tmp}/c/certs:/other:ro"),
+            {},
+            ASKING,
+        ),
         ("the network host", _with(good, "none", "host"), {}, ASKING),
         ("the network bridge", _with(good, "none", "bridge"), {}, ASKING),
         ("no network named", [*good[:3], *good[5:]], {}, ASKING),
         ("the network written as one word", [*good[:3], "--network=host", *good[5:]], {}, ASKING),
         ("no --rm", _with(good, "--rm"), {}, ASKING),
-        ("another tag", _with(good, local_docker_guard.CADDY_IMAGE, "caddy:2.11.3-alpine"), {}, ASKING),
-        ("the latest tag", _with(good, local_docker_guard.CADDY_IMAGE, "caddy:latest"), {}, ASKING),
-        ("another image", _with(good, local_docker_guard.CADDY_IMAGE, "alpine"), {}, ASKING),
+        (
+            "another tag",
+            _with(good, image, "caddy:2.11.3-alpine"),
+            {},
+            ASKING,
+        ),
+        ("the latest tag", _with(good, image, "caddy:latest"), {}, ASKING),
+        ("another image", _with(good, image, "alpine"), {}, ASKING),
         ("a published port", _with(good, "--rm", "--rm", "-p", "80:80"), {}, ASKING),
         ("a privileged container", _with(good, "--rm", "--rm", "--privileged"), {}, ASKING),
         ("another script", [*good[:-1], "rm -rf /cases"], {}, ASKING),
         ("another program", [*good[:-3], "caddy", "validate", "--config", "/cases/x"], {}, ASKING),
-        ("another docker command", ["docker", "image", "inspect", local_docker_guard.CADDY_IMAGE], {}, ASKING),
-        ("the hash-password run", ["docker", "run", "--rm", "-i", local_docker_guard.CADDY_IMAGE, "caddy", "hash-password"], {}, ASKING),
+        (
+            "another docker command",
+            ["docker", "image", "inspect", image],
+            {},
+            ASKING,
+        ),
+        (
+            "the hash-password run",
+            [
+                "docker",
+                "run",
+                "--rm",
+                "-i",
+                image,
+                "caddy",
+                "hash-password",
+            ],
+            {},
+            ASKING,
+        ),
         ("docker by a full path", ["/usr/local/bin/docker", *good[1:]], {}, ASKING),
         ("a command string", " ".join(good), {}, ASKING),
         ("through a shell", ["sh", "-c", " ".join(good)], {}, ASKING),
@@ -253,7 +305,7 @@ def _refused() -> list[tuple[str, list[str], dict[str, object], str]]:
         ("a file that only starts with the name", good, {}, f"{CADDY_TEST}.bak::test_x (call)"),
         ("collection (no test running)", good, {}, ""),
         ("this test file asking", good, {}, "tests/test_local_docker_guard.py::test_x (call)"),
-    ]  # fmt: skip
+    ]
 
 
 @pytest.mark.parametrize(
@@ -263,6 +315,18 @@ def test_a_second_command_is_refused_while_the_exemption_is_in_place(
     name: str, args: object, kwargs: dict[str, object], asking: str
 ) -> None:
     assert not local_docker_guard.is_the_caddy_validation(args, kwargs, asking), name
+
+
+def test_the_exempt_image_is_the_image_the_deployment_runs() -> None:
+    """The guard names the image by its own constant; the test runs `PROXY_IMAGE`. If the proxy's
+    tag moves and the exemption does not, the Caddy test's one command is refused: fail here, in
+    words, first."""
+    from harness.site import PROXY_IMAGE
+
+    assert local_docker_guard.CADDY_IMAGE == PROXY_IMAGE, (
+        "harness.site.PROXY_IMAGE changed: move tests/local_docker_guard.py's CADDY_IMAGE with it "
+        "(the owner's exemption D234 names the pinned image)"
+    )
 
 
 def test_the_exemption_is_a_decision_with_a_comment_naming_the_issue_that_ends_it() -> None:
@@ -279,7 +343,8 @@ CADDY_INNER = {
         "    base = Path(tempfile.mkdtemp())\n"
         "    return ['docker', 'run', '--rm', '--network', network,\n"
         "            '-v', f'{base}/cases:/cases:ro', '-v', f'{base}/etc:/etc/caddy:ro',\n"
-        "            '-v', f'{base}/certs:/certs:{mode}', *extra, CADDY_IMAGE, 'sh', '-c', CADDY_SCRIPT]\n"
+        "            '-v', f'{base}/certs:/certs:{mode}', *extra,\n"
+        "            CADDY_IMAGE, 'sh', '-c', CADDY_SCRIPT]\n"
         "def test_the_exempt_command():\n"
         "    done = subprocess.run(cmd(), capture_output=True, text=True, check=False)\n"
         "    assert done.returncode == 0, done.stderr\n"
@@ -302,7 +367,8 @@ CADDY_INNER = {
         "    base = Path(tempfile.mkdtemp())\n"
         "    subprocess.run(['docker', 'run', '--rm', '--network', 'none',\n"
         "                    '-v', f'{base}/cases:/cases:ro', '-v', f'{base}/etc:/etc/caddy:ro',\n"
-        "                    '-v', f'{base}/certs:/certs:ro', CADDY_IMAGE, 'sh', '-c', CADDY_SCRIPT],\n"
+        "                    '-v', f'{base}/certs:/certs:ro',\n"
+        "                    CADDY_IMAGE, 'sh', '-c', CADDY_SCRIPT],\n"
         "                   check=False)\n"
     ),
 }
@@ -338,9 +404,14 @@ def test_the_one_command_reaches_the_real_docker_and_every_other_stays_refused(
         "PYTHONPATH": os.pathsep.join([str(BUILD), os.environ.get("PYTHONPATH", "")]),
     }
     done = subprocess.run(  # noqa: S603 - this interpreter, an inner pytest of our own
-        [sys.executable, "-m", "pytest", "-p", "no:cacheprovider", "-rs", "-q", "--no-header", str(suite)],
-        capture_output=True, text=True, env=env, cwd=suite, timeout=120, check=False,
-    )  # fmt: skip
+        [sys.executable, "-m", "pytest", "-p", "no:cacheprovider", "-rs", "-q", str(suite)],
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=suite,
+        timeout=120,
+        check=False,
+    )
     out = done.stdout + done.stderr
     assert "1 passed, 5 skipped" in out, out
     started = ran.read_text(encoding="utf-8").splitlines() if ran.exists() else []

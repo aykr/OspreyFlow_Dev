@@ -1,20 +1,59 @@
 # Slice PL7f, round 1: report
 
+## Round 2, the owner's ruling D234 (25 November 2026): the Docker exemption, and the Caddy test run
+
+**Done, option 1 as ruled.** `tests/local_docker_guard.py` exempts exactly one command, and `no-local-stacks` is untouched
+(still on this Mac; I did not rename it or move `OSPREY_LEASE_DIR`).
+
+* **The one command**, matched on its whole shape as `subprocess.run` hands it to `Popen` (`is_the_caddy_validation`):
+  `docker run --rm --network none -v <folder>:/cases:ro -v <folder>:/etc/caddy:ro -v <folder>:/certs:ro
+  caddy:2.11.4-alpine sh -c <script>`, asked by `tests/harness/test_page_addresses_caddy.py` (pytest's
+  `PYTEST_CURRENT_TEST` names the file, equal to the path, so `x/tests/...`, `....bak` and collection are refused). The script
+  is the guard's own constant (`CADDY_SCRIPT`), which the test imports, so the two cannot differ. Each folder must lie under
+  the system's temporary folder (so no mount can name the Docker socket, the home folder or `/`; the test's `tmp_path` does).
+  `shell`, `env`, `executable` and any extra positional argument are refused. The one exempt call is handed the real docker
+  (found on the `PATH` without the refusing shim's folder); every other call, the shim on the session's `PATH` included,
+  is refused as before.
+* **The comment beside the exemption** says it comes out when **017-1** lands and the test moves to the server's container
+  checks.
+* **Red first (rule 15).** Commit `bb6e830` (tests alone): collection fails, "no attribute `CADDY_IMAGE`". Then the
+  exemption matched **on the image alone** (scratch): **28 of the refusal cases fail** (a fourth mount, the docker socket as a
+  mount, a writable mount, no mode, another network, `--network=host`, no `--rm`, a published port, `--privileged`, another
+  script, another program, another docker command, the hash-password run, a full docker path, `shell`, `env`, `executable`,
+  another test, a same-named file elsewhere, collection) plus the end-to-end case. Then the real match: **65 passed** in
+  `test_local_docker_guard.py`: 33 refused shapes in the argument-list form the wrapper receives (each with a fourth mount
+  and each with `--network` other than `none`, among them), the exempt shape allowed for the one test, the image equal to
+  `harness.site.PROXY_IMAGE`, the comment naming 017-1, and one end-to-end run through `subprocess.run` and the session's
+  own wrapper (the stand-in docker records one call, from the Caddy-named file; four others in the same file and the same
+  command from another file are skipped in words and start nothing).
+* **What the Caddy test changed** (an acceptance file, changed for this ruling alone): it no longer asks the switch or runs
+  `docker image inspect`, and it no longer hashes the shared key with a second container, since neither is the one exempt
+  command. Caddy's `validate` reads the hash as base64 and goes no further (measured: `x` is refused, a bcrypt-shaped
+  string loads), so a placeholder of that shape (`PLACEHOLDER_HASH`, the hash of nothing, no key) stands in. The run itself
+  says whether the image is there (`--network none` cannot pull it). Its fail-in-words behaviour where neither docker nor a
+  binary can run is as it was, and a guard refusal is caught and failed in words (never a skip): shown, with the exemption
+  scratched out, as 42 errors saying "the Docker guard refused the call", and the exemption put back.
+* **The Caddy test passes on `caddy:2.11.4-alpine` with the switch held:** 43 passed in about 4 seconds, every derived
+  Caddyfile valid under both brands, the six round-9 clashes refused by the real Caddy, the two policy rows loaded (as in
+  section 4). **The gate:** the six check files plus the guard tests 1212 passed, 1 skipped; `npm test --workspace apps/pages`
+  862 passed; `ruff check .`, `design-check`, `colour_drift_check`, `test-file-coverage-check` (1286 files, no drift),
+  `schemas-check`, `citation-check`, the keycloak theme tests and the guide tests clean.
+* **Main taken in** (commit `a6282e0`, nothing but main): the guide's version row is 2.43 beside main's 2.42, the generated
+  TypeScript, the PDFs and the manifest were made again from their sources, not hand-merged.
+
 ## Round 2 (the conductor, 24 November 2026)
 
 1. **The Caddy test did not run in this session's gate.** The conductor's message says the switch was lifted
    (`no-local-stacks` renamed `no-local-stacks.off`), but on this Mac, at the time of the last run, `~/.ospreyflow/` holds
-   `no-local-stacks` (empty, dated 9 November) and no `.off` file, so the guard still refuses and the test failed in its own
-   words (42 errors in the Caddy file; everything else green). The image `caddy:2.11.4-alpine` is present. I did not point
-   `OSPREY_LEASE_DIR` elsewhere to get round the switch (that is the owner's decision), and I did not rename his file. An
-   earlier line here that said "43 passed" was a run made by hand with `OSPREY_LEASE_DIR` on an empty folder (section 1); it
-   is not a gate result. When the switch file is gone, the file needs no change.
+   `no-local-stacks` (empty, dated 9 November) and no `.off` file, so the guard still refused and the test failed in its own
+   words (42 errors in the Caddy file; everything else green). **Resolved by D234, above.** I did not point
+   `OSPREY_LEASE_DIR` elsewhere to get round the switch (that is the owner's decision), and I did not rename his file.
 2. The override variable is renamed `OSPREY_CADDY_BINARY` (test, messages, docstring, this report, the README).
    `make test-file-coverage-check`: "1279 test file(s), 0 allowlisted, no new drift." The round-1 diff that wired the test
    as live-service (an `--ignore` in `ci.yml` and a Makefile hunk) is **withdrawn**; `PL7f_CI_YML.diff` keeps only the
    GitHub step that runs the test in the proxy job. Nothing else changed.
 
-## 1. The decision that is the owner's (found building, not in the table)
+## 1. The decision that was the owner's (found building; ruled D234, option 1; see the top of this file)
 
 **On this Mac the real-Caddy test cannot run in the gate.** The owner's per-machine switch of 9 November 2026
 (`~/.ospreyflow/no-local-stacks`, held here) makes the repository's Docker guard (`tests/local_docker_guard.py`) skip
