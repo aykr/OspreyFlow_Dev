@@ -17,6 +17,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -169,3 +170,322 @@ def test_the_guard_puts_back_what_it_changed(
     finally:
         local_docker_guard.uninstall()
         subprocess.Popen, os.environ["PATH"] = popen, path  # type: ignore[misc]
+
+
+# --- The one exempt command (the owner's ruling D234, 24 November 2026) -------------------------
+#
+# The Caddy test of PL7f (`tests/harness/test_page_addresses_caddy.py`) runs the proxy's own image
+# once to validate every Caddyfile. Under the switch the guard refused that call too, so the real
+# Caddy ran on no merge here. The owner exempted exactly that one command, matched on its whole
+# shape as `subprocess.run` hands it to `Popen`, and nothing else: another image, a fourth mount, a
+# mount that is not read-only, another network, no `--rm`, another test asking, another docker
+# command in the same test, each stays refused. (Rule 15: the refusals are shown red with the
+# exemption matched on the image alone, which is how they were first run.)
+
+CADDY_TEST = "tests/harness/test_page_addresses_caddy.py"
+ASKING = f"{CADDY_TEST}::test_the_real_caddy_loads_every_derived_case[x] (setup)"
+
+
+def caddy_command(tmp: Path | str = "") -> list[str]:
+    """The command as the Caddy test's `subprocess.run` hands it over (the same words)."""
+    base = Path(tmp) if tmp else Path(tempfile.gettempdir()) / "pytest-of-someone" / "caddy0"
+    return [
+        "docker", "run", "--rm", "--network", "none",
+        "-v", f"{base}/cases:/cases:ro",
+        "-v", f"{base}/etc:/etc/caddy:ro",
+        "-v", f"{base}/certs:/certs:ro",
+        local_docker_guard.CADDY_IMAGE, "sh", "-c", local_docker_guard.CADDY_SCRIPT,
+    ]  # fmt: skip
+
+
+def _with(command: list[str], old: str, *new: str) -> list[str]:
+    """`command` with the word `old` replaced by `new` (none: removed)."""
+    at = command.index(old)
+    return [*command[:at], *new, *command[at + 1 :]]
+
+
+def _mount(command: list[str], which: str, value: str) -> list[str]:
+    """`command` with the mount named `which` (cases, etc or certs) replaced by `value`."""
+    target = {"cases": "/cases", "etc": "/etc/caddy", "certs": "/certs"}[which]
+    at = next(i for i, word in enumerate(command) if word.endswith(f":{target}:ro"))
+    return [*command[:at], value, *command[at + 1 :]]
+
+
+def test_the_one_command_is_exempt_for_the_one_test() -> None:
+    assert local_docker_guard.is_the_caddy_validation(caddy_command(), {}, ASKING)
+    assert local_docker_guard.is_the_caddy_validation(
+        caddy_command(), {"capture_output": True}, f"{CADDY_TEST}::test_x (call)"
+    )
+
+
+def _refused() -> list[tuple[str, list[str], dict[str, object], str]]:
+    good = caddy_command()
+    tmp = tempfile.gettempdir()
+    image = local_docker_guard.CADDY_IMAGE
+    sock = "/var/run/docker.sock"
+    return [
+        # A real fourth mount sits among the `-v` flags, before the image (`good[-4:]` is the
+        # image, `sh`, `-c` and the script); after the image Docker would read it as the command.
+        ("a fourth mount", [*good[:-4], "-v", f"{tmp}/x:/data:ro", *good[-4:]], {}, ASKING),
+        (
+            "a fourth mount, the docker socket",
+            [*good[:-4], "-v", f"{sock}:/s:ro", *good[-4:]],
+            {},
+            ASKING,
+        ),
+        ("a mount that is writable", _mount(good, "cases", f"{tmp}/c/cases:/cases:rw"), {}, ASKING),
+        ("a mount with no mode", _mount(good, "certs", f"{tmp}/c/certs:/certs"), {}, ASKING),
+        (
+            "the docker socket as a mount's source",
+            _mount(good, "cases", f"{sock}:/cases:ro"),
+            {},
+            ASKING,
+        ),
+        (
+            "a mount from the home folder",
+            _mount(good, "etc", f"{Path.home()}:/etc/caddy:ro"),
+            {},
+            ASKING,
+        ),
+        (
+            "a mount from a folder that climbs out",
+            _mount(good, "etc", f"{tmp}/../etc:/etc/caddy:ro"),
+            {},
+            ASKING,
+        ),
+        (
+            "a mount of a different target",
+            _mount(good, "certs", f"{tmp}/c/certs:/other:ro"),
+            {},
+            ASKING,
+        ),
+        ("the network host", _with(good, "none", "host"), {}, ASKING),
+        ("the network bridge", _with(good, "none", "bridge"), {}, ASKING),
+        ("no network named", [*good[:3], *good[5:]], {}, ASKING),
+        ("the network written as one word", [*good[:3], "--network=host", *good[5:]], {}, ASKING),
+        ("no --rm", _with(good, "--rm"), {}, ASKING),
+        (
+            "another tag",
+            _with(good, image, "caddy:2.11.3-alpine"),
+            {},
+            ASKING,
+        ),
+        ("the latest tag", _with(good, image, "caddy:latest"), {}, ASKING),
+        ("another image", _with(good, image, "alpine"), {}, ASKING),
+        ("a published port", _with(good, "--rm", "--rm", "-p", "80:80"), {}, ASKING),
+        ("a privileged container", _with(good, "--rm", "--rm", "--privileged"), {}, ASKING),
+        ("another script", [*good[:-1], "rm -rf /cases"], {}, ASKING),
+        ("another program", [*good[:-3], "caddy", "validate", "--config", "/cases/x"], {}, ASKING),
+        (
+            "another docker command",
+            ["docker", "image", "inspect", image],
+            {},
+            ASKING,
+        ),
+        (
+            "the hash-password run",
+            [
+                "docker",
+                "run",
+                "--rm",
+                "-i",
+                image,
+                "caddy",
+                "hash-password",
+            ],
+            {},
+            ASKING,
+        ),
+        ("docker by a full path", ["/usr/local/bin/docker", *good[1:]], {}, ASKING),
+        ("a command string", " ".join(good), {}, ASKING),
+        ("through a shell", ["sh", "-c", " ".join(good)], {}, ASKING),
+        ("with a shell", good, {"shell": True}, ASKING),
+        ("with an environment", good, {"env": {"DOCKER_HOST": "tcp://elsewhere:2375"}}, ASKING),
+        ("with another executable", good, {"executable": "/bin/sh"}, ASKING),
+        ("another test asking", good, {}, "tests/harness/test_other.py::test_x (call)"),
+        ("a test of the same name elsewhere", good, {}, f"other/{CADDY_TEST}::test_x (call)"),
+        ("a file that only starts with the name", good, {}, f"{CADDY_TEST}.bak::test_x (call)"),
+        ("collection (no test running)", good, {}, ""),
+        ("this test file asking", good, {}, "tests/test_local_docker_guard.py::test_x (call)"),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("name", "args", "kwargs", "asking"), _refused(), ids=[r[0] for r in _refused()]
+)
+def test_a_second_command_is_refused_while_the_exemption_is_in_place(
+    name: str, args: object, kwargs: dict[str, object], asking: str
+) -> None:
+    assert not local_docker_guard.is_the_caddy_validation(args, kwargs, asking), name
+
+
+def test_the_exempt_image_is_the_image_the_deployment_runs() -> None:
+    """The guard names the image by its own constant; the test runs `PROXY_IMAGE`. If the proxy's
+    tag moves and the exemption does not, the Caddy test's one command is refused: fail here, in
+    words, first."""
+    from harness.site import PROXY_IMAGE
+
+    assert local_docker_guard.CADDY_IMAGE == PROXY_IMAGE, (
+        "harness.site.PROXY_IMAGE changed: move tests/local_docker_guard.py's CADDY_IMAGE with it "
+        "(the owner's exemption D234 names the pinned image)"
+    )
+
+
+def test_the_exemption_is_a_decision_with_a_comment_naming_the_issue_that_ends_it() -> None:
+    text = (BUILD / "tests" / "local_docker_guard.py").read_text(encoding="utf-8")
+    assert "017-1" in text, "the exemption must say it comes out when 017-1 lands"
+
+
+CADDY_INNER = {
+    CADDY_TEST: (
+        "import subprocess, tempfile\n"
+        "from pathlib import Path\n"
+        "from tests.local_docker_guard import CADDY_IMAGE, CADDY_SCRIPT\n"
+        "def cmd(extra=(), network='none', mode='ro'):\n"
+        "    base = Path(tempfile.mkdtemp())\n"
+        "    return ['docker', 'run', '--rm', '--network', network,\n"
+        "            '-v', f'{base}/cases:/cases:ro', '-v', f'{base}/etc:/etc/caddy:ro',\n"
+        "            '-v', f'{base}/certs:/certs:{mode}', *extra,\n"
+        "            CADDY_IMAGE, 'sh', '-c', CADDY_SCRIPT]\n"
+        "def test_the_exempt_command():\n"
+        "    done = subprocess.run(cmd(), capture_output=True, text=True, check=False)\n"
+        "    assert done.returncode == 0, done.stderr\n"
+        "def test_a_fourth_mount():\n"
+        "    command = cmd()\n"
+        "    extra = ['-v', f'{tempfile.mkdtemp()}:/x:ro']\n"
+        "    subprocess.run([*command[:-4], *extra, *command[-4:]], check=False)\n"
+        "def test_another_network():\n"
+        "    subprocess.run(cmd(network='host'), check=False)\n"
+        "def test_a_writable_mount():\n"
+        "    subprocess.run(cmd(mode='rw'), check=False)\n"
+        "def test_another_command():\n"
+        "    subprocess.run(['docker', 'image', 'inspect', CADDY_IMAGE], check=False)\n"
+    ),
+    "test_other.py": (
+        "import subprocess, tempfile\n"
+        "from pathlib import Path\n"
+        "from tests.local_docker_guard import CADDY_IMAGE, CADDY_SCRIPT\n"
+        "def test_the_same_command_from_another_test():\n"
+        "    base = Path(tempfile.mkdtemp())\n"
+        "    subprocess.run(['docker', 'run', '--rm', '--network', 'none',\n"
+        "                    '-v', f'{base}/cases:/cases:ro', '-v', f'{base}/etc:/etc/caddy:ro',\n"
+        "                    '-v', f'{base}/certs:/certs:ro',\n"
+        "                    CADDY_IMAGE, 'sh', '-c', CADDY_SCRIPT],\n"
+        "                   check=False)\n"
+    ),
+}
+
+
+def _caddy_suite(tmp_path: Path) -> tuple[Path, dict[str, str], Path]:
+    """An inner suite holding the Caddy test's file name, under the switch, with a stand-in `docker`
+    as the only real one: (the suite, the environment, the file the stand-in records into)."""
+    lease = tmp_path / "lease"
+    lease.mkdir()
+    (lease / "no-local-stacks").touch()
+    stand_in = tmp_path / "bin"
+    stand_in.mkdir()
+    ran = tmp_path / "docker-was-started"
+    (stand_in / "docker").write_text(f'#!/bin/sh\necho "$@" >> {ran}\nexit 0\n', encoding="utf-8")
+    (stand_in / "docker").chmod(0o755)
+    suite = tmp_path / "suite"
+    (suite / "tests" / "harness").mkdir(parents=True)
+    (suite / "conftest.py").write_text(
+        "from tests.conftest import pytest_configure, pytest_plugins  # noqa: F401\n",
+        encoding="utf-8",
+    )
+    # The real settings' own paths: an xdist worker is a fresh process, it imports what `-c` names.
+    core = BUILD.parent / "OspreyFlow_Core"
+    (suite / "pytest.ini").write_text(
+        f"[pytest]\npythonpath = {BUILD} {core} {core}/packages {core}/cli\n", encoding="utf-8"
+    )
+    for name, body in CADDY_INNER.items():
+        (suite / name).write_text(body, encoding="utf-8")
+    env = {
+        **os.environ,
+        "OSPREY_LEASE_DIR": str(lease),
+        "PATH": f"{stand_in}{os.pathsep}/usr/bin{os.pathsep}/bin",
+        "PYTHONPATH": os.pathsep.join([str(BUILD), os.environ.get("PYTHONPATH", "")]),
+    }
+    return suite, env, ran
+
+
+def _run_inner(suite: Path, env: dict[str, str], *args: str) -> str:
+    done = subprocess.run(  # noqa: S603 - this interpreter, an inner pytest of our own
+        [sys.executable, "-m", "pytest", "-p", "no:cacheprovider", "-rs", "-q", *args, str(suite)],
+        capture_output=True,
+        text=True,
+        env=env,
+        cwd=suite,
+        timeout=120,
+        check=False,
+    )
+    return done.stdout + done.stderr
+
+
+def test_the_one_command_reaches_the_real_docker_and_every_other_stays_refused(
+    tmp_path: Path,
+) -> None:
+    """End to end, through `subprocess.run` and the session's own wrapper: the Caddy test's one
+    command starts the docker found on the real path (the stand-in records it; the refusing shim
+    on the session's `PATH` does not), and the others are skipped in words and start nothing."""
+    suite, env, ran = _caddy_suite(tmp_path)
+    out = _run_inner(suite, env)
+    assert "1 passed, 5 skipped" in out, out
+    started = ran.read_text(encoding="utf-8").splitlines() if ran.exists() else []
+    assert len(started) == 1 and started[0].startswith("run --rm --network none -v "), started
+    assert "caddy:2.11.4-alpine sh -c" in started[0], started
+
+
+def test_the_one_command_holds_under_the_merge_gates_own_run(tmp_path: Path) -> None:
+    """The merge gate runs `make test` as `pytest -c <tree>/OspreyFlow_Build/pytest.ini -n auto
+    --dist loadgroup` from a temporary copy of the tree, with `PYTEST_DEBUG_TEMPROOT` set to a
+    temporary base of its own beside it (PL7f round 10: under xdist every worker's plugin put a
+    second refusing `docker` in front of the controller's, and the one exempt call, handed "the
+    docker on the `PATH` without this process's shim", found the controller's shim and was refused
+    in all 40 of the Caddy test's cases). The same inner suite, run as the gate runs it: the one
+    command still reaches the real docker, once, and the others are still refused."""
+    suite, env, ran = _caddy_suite(tmp_path)
+    temproot = tmp_path / "suite-pytest"
+    temproot.mkdir()
+    out = _run_inner(
+        suite,
+        {**env, "PYTEST_DEBUG_TEMPROOT": str(temproot)},
+        "-c",
+        str(suite / "pytest.ini"),
+        "-n",
+        "2",
+        "--dist",
+        "loadgroup",
+    )
+    assert "1 passed, 5 skipped" in out, out
+    started = ran.read_text(encoding="utf-8").splitlines() if ran.exists() else []
+    assert len(started) == 1 and started[0].startswith("run --rm --network none -v "), (
+        started,
+        out,
+    )
+
+
+def test_a_refusing_shim_left_by_a_parent_session_is_never_handed_out(tmp_path: Path) -> None:
+    """The shape xdist makes at the call site: `PATH` leads with the controller's shim, then the
+    worker's own. The real docker is the one after both; the controller's shim is not it."""
+    switch = tmp_path / "no-local-stacks"
+    switch.touch()
+    controller = tmp_path / "osprey-no-docker-controller"
+    worker = tmp_path / "osprey-no-docker-worker"
+    real = tmp_path / "real"
+    for folder in (controller, worker, real):
+        folder.mkdir()
+    local_docker_guard.refusing_docker(controller, switch)
+    local_docker_guard.refusing_docker(worker, switch)
+    (real / "docker").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    (real / "docker").chmod(0o755)
+    path = os.pathsep.join([str(worker), str(controller), str(real), "/usr/bin", "/bin"])
+    old = os.environ["PATH"]
+    os.environ["PATH"] = path
+    try:
+        assert local_docker_guard.the_real_docker(worker) == str(real / "docker")
+        os.environ["PATH"] = os.pathsep.join([str(worker), str(controller), "/usr/bin", "/bin"])
+        found = local_docker_guard.the_real_docker(worker)
+        assert found is None or "osprey-no-docker-" not in found, found
+    finally:
+        os.environ["PATH"] = old

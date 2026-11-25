@@ -18,7 +18,9 @@
 #             page is built (decision 12)
 #   route     EMPTY until the function has its GOV.UK page: a route enters `tree-govuk`'s route list only
 #             with its slice's scenario passing on that tree (I8). A row with a route has a scenario
-#   status    planned | owner to rule | parity exception
+#   status    planned | owner to rule | parity exception | built
+#             `built`: the Default tree's page for the function is built and its scenario passes (the owner's ruling of
+#             24 November 2026); its GOV.UK page is a later build, so its route stays empty.
 #
 # Checked by the developer repository's `tests/glass_trees/test_functions_yaml.py`.
 functions:
@@ -79,9 +81,9 @@ functions:
     name: "Studio: dataset map"
     where: "does not exist (no file; grep -ri \"dataset map\" apps/workspace/src/ finds only \"dataset maps\" in a ModelTab sentence)"
     slice: "IS3"
-    scenario: "DM1, DM2, DM3, DM4, DM5, DM6, DM7, DM8, DM9, DM10, DM11, DM12, DM13, DM14"
+    scenario: "DM1, DM2, DM3, DM4, DM5, DM6, DM7, DM8, DM9, DM10, DM11, DM12, DM13, DM14, DM15, DM16, DM17, DM18, DM19, DM20, DM21, DM22, DM23, DM24"
     route: ""
-    status: "planned"
+    status: "built"
   - id: studio-pipeline-canvas
     name: "Studio: pipeline editor canvas"
     where: "apps/workspace/src/ingest/dag/PipelineCanvas.tsx (read-only, :1–4), pipelineLayout.ts, pipelineGraphEdit.ts"
@@ -287,12 +289,15 @@ functions:
     route: ""
     status: "planned"
   # Split from the old `reports` row by the owner's ruling of 24 November 2026: the figures are slice GR3's. C8, C11 and C12 (spec/08) are proposed, not owner-ruled.
+  # Slice GR3a built the alert monitoring figures (scenario AM) at `/reports`, the GOV.UK tree's second page, and the row names that route as every page's row does
+  # (`test/govuk/help.test.ts`, HP9). The row is still the whole of the Reports and Figures views, trends, packs, published and data feeds: the page is the alert
+  # monitoring figures alone, and the rest of the row's function is the later slices' (see "What the page does that the owner may want to rule on", scenario AM).
   - id: reports-figures
     name: "Reports: Reports and Figures views, trends, packs, published and data feeds"
     where: "apps/workspace/src/reports/ (includes reportsTestKit.ts 145)"
     slice: "GR3"
-    scenario: ""
-    route: ""
+    scenario: "AM1, AM2, AM3, AM4, AM5, AM6, AM7, AM8, AM9, AM10, AM11"
+    route: "/reports"
     status: "planned"
   # The other half of the old `reports` row (the owner, 24 November 2026): the dashboards are later, and no slice has them yet.
   - id: reports-dashboards
@@ -314,11 +319,13 @@ functions:
     route: "/alert-queue"
     status: "planned"
   # The plan has not yet named a build for this row. C9 and C11 (spec/08) are proposed, not owner-ruled.
+  # Only the People list has a scenario so far (slice AD3a: AP1 to AP11, a read-only GOV.UK page at /admin/people). The row's route stays
+  # empty: the function is complete only when every section has its page, and the page is in `tree-govuk/routes.yaml` as the first of them.
   - id: admin
     name: "Admin: every section in `W/admin/sections.json` (people, roles, dashboard identities, datasets, connections, operations, system, models, maps, grading scheme, audit, demo packs; 2 still \"coming\")"
     where: "apps/workspace/src/admin/ except needsYou (6,326), plus apps/workspace/src/models/ (458)"
     slice: "R7"
-    scenario: ""
+    scenario: "AP1, AP2, AP3, AP4, AP5, AP6, AP7, AP8, AP9, AP10, AP11"
     route: ""
     status: "planned"
   # The plan has not yet named a build for this row; the inventory counts it inside the Admin row.

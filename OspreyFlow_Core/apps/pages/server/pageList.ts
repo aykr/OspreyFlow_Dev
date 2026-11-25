@@ -6,15 +6,18 @@
  *
  * It is the one table of both trees' pages (ADR-152 decision 7; slice GR2a): each module names the tree or trees that serve it
  * (`trees`, the Default tree's alone when left out), and the service mounts the ones that name the tree it was started with
- * (`OSPREY_PAGES_TREE`). Help (slice GR2a) is the first page of the GOV.UK tree, and has no Default twin yet.
- * The alert queue (slice RM1a) is the second, and also has none. `tree-govuk/routes.yaml` lists the paths of the pages that name `govuk`,
+ * (`OSPREY_PAGES_TREE`). Help (slice GR2a) is the first page of the GOV.UK tree, and has no Default twin yet; the Admin People list
+ * (slice AD3a) is the second, the first section of the `admin` row; the alert monitoring figures (slice GR3a) are its third; the alert
+ * queue (slice RM1a) is its fourth, and also has no Default twin. `tree-govuk/routes.yaml` lists the paths of the pages that name `govuk`,
  * and `test/govuk/help.test.ts` and `test/govuk/alert-queue.test.ts` hold the two in step.
  */
 import type { PageModule } from "./pages.js";
+import { adminPeople } from "./adminPeople.js";
+import { alertMonitoring } from "./alertMonitoring.js";
 import { studioDatasetMap } from "./datasetMap.js";
 import { alertQueue } from "./alertQueue.js";
 import { help } from "./help.js";
 import { studioModel } from "./model.js";
 import { studioFrame, studioReleases } from "./studio.js";
 
-export const PAGES: readonly PageModule[] = [studioFrame, studioReleases, studioDatasetMap, studioModel, help, alertQueue];
+export const PAGES: readonly PageModule[] = [studioFrame, studioReleases, studioDatasetMap, studioModel, help, adminPeople, alertMonitoring, alertQueue];

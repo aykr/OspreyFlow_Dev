@@ -41,6 +41,7 @@ import type * as Real from "@ospreyflow/glass-shared";
 
 import { createApp } from "../../server/app.js";
 import { loadConfig } from "../../server/config.js";
+import { alertMonitoring } from "../../server/alertMonitoring.js";
 import { help } from "../../server/help.js";
 import { PAGES } from "../../server/pageList.js";
 import type { PageModule } from "../../server/pages.js";
@@ -460,13 +461,16 @@ describe("OSPREY_PAGES_TREE decides which tree serves every route, `/` included"
     expect(readers).toEqual(["config.ts"]);
     expect(loadConfig({ OSPREY_PAGES_SESSION_SECRET: generateSecret(48) }).tree).toBe("default");
     expect(loadConfig({ OSPREY_PAGES_SESSION_SECRET: generateSecret(48), OSPREY_PAGES_TREE: "govuk" }).tree).toBe("govuk");
-    // The table: Help is the govuk tree's alone, the alert queue (slice RM1a) is the govuk tree's alone, and every page that was there
-    // before them is the Default tree's alone.
+    // The table: Help (and the Admin People list, slice AD3a) are the govuk tree's alone, and every page that was there before them is the Default tree's alone.
     expect(help.trees).toEqual(["govuk"]);
     expect(PAGES).toContain(help);
+    // Slice GR3a's alert monitoring page is the tree's third, and the Default tree's twin of it is not built.
+    expect(alertMonitoring.trees).toEqual(["govuk"]);
+    expect(PAGES).toContain(alertMonitoring);
+    // Slice RM1a's alert queue is the tree's fourth, and the Default tree has no twin of it either.
     for (const page of PAGES) {
       if (page.id === "alerts-rules-watches") expect(page.trees, page.id).toEqual(["govuk"]);
-      else if (page !== help) expect(page.trees ?? ["default"], page.id).toEqual(["default"]);
+      else if (page !== help && page !== alertMonitoring && page.path !== "/admin/people") expect(page.trees ?? ["default"], page.id).toEqual(["default"]);
     }
   });
 
@@ -522,6 +526,9 @@ function listedRoutes(text: string): string[] {
   return lines.slice(1).map((l) => /^\s+-\s+"?(\/[^"\s]*)"?\s*$/.exec(l)?.[1] ?? `NOT A ROUTE: ${l}`);
 }
 
+/** A row whose function is not complete: its pages are in the list, and its own `route` stays empty until every section has one (slice AD3a: `admin`). */
+const INCOMPLETE_ROWS: ReadonlySet<string> = new Set(["admin"]);
+
 function routeListProblems(listText: string, pages: readonly PageModule[], functionsText: string): string[] {
   const found: string[] = [];
   const listed = listedRoutes(listText);
@@ -531,7 +538,8 @@ function routeListProblems(listText: string, pages: readonly PageModule[], funct
   if (new Set(listed).size !== listed.length) found.push("a route is listed twice");
   for (const page of pages.filter((p) => (p.trees ?? ["default"]).includes("govuk"))) {
     const row = new RegExp(`- id: ${page.id}\\n(?:    .*\\n)*?    route: "([^"]*)"`).exec(functionsText);
-    if (row?.[1] !== page.path) found.push(`the row ${page.id} of FUNCTIONS.yaml has route ${JSON.stringify(row?.[1])}, not ${page.path}`);
+    const wanted = INCOMPLETE_ROWS.has(page.id) ? "" : page.path;
+    if (row?.[1] !== wanted) found.push(`the row ${page.id} of FUNCTIONS.yaml has route ${JSON.stringify(row?.[1])}, not ${JSON.stringify(wanted)}`);
   }
   return found;
 }
@@ -542,14 +550,16 @@ describe("the route list", () => {
 
   it("HP9: is the paths the govuk tree has pages for, and the rows of FUNCTIONS.yaml that name them carry the same route", () => {
     expect(routeListProblems(listText, PAGES, functionsText)).toEqual([]);
-    expect(listedRoutes(listText)).toEqual(["/help", "/alert-queue"]);
+    expect(listedRoutes(listText)).toEqual(["/help", "/admin/people", "/reports", "/alert-queue"]);
   });
 
   it("HP9: the route table registers each page under its own id and path, once: the list is one route a page", () => {
     const govukPages = PAGES.filter((p) => (p.trees ?? ["default"]).includes("govuk"));
     expect(govukPages.map((p) => [p.id, p.path, [...p.methods]])).toEqual([
       ["help", "/help", ["GET"]],
-      ["alerts-rules-watches", "/alert-queue", ["GET"]], // the alert queue (slice RM1a), the second page of the tree
+      ["admin", "/admin/people", ["GET"]],
+      ["reports-figures", "/reports", ["GET"]],
+      ["alerts-rules-watches", "/alert-queue", ["GET"]], // the alert queue (slice RM1a), the fourth page of the tree
     ]);
   });
 });
@@ -642,6 +652,10 @@ describe("each check above is red against the real page or file with one thing c
     const moved = functionsText.replace(/(- id: help\n(?:    .*\n)*?    route: )"\/help"/, '$1"/helps"');
     expect(moved).not.toBe(functionsText);
     expect(routeListProblems(listText, PAGES, moved).join("\n")).toMatch(/row help of FUNCTIONS.yaml has route "\/helps"/);
+    // The Admin People list's row is incomplete: a route given to it while its other sections have no page is a fault.
+    const routedEarly = functionsText.replace(/(- id: admin\n(?:    .*\n)*?    route: )""/, '$1"/admin/people"');
+    expect(routedEarly).not.toBe(functionsText);
+    expect(routeListProblems(listText, PAGES, routedEarly).join("\n")).toMatch(/row admin of FUNCTIONS.yaml has route "\/admin\/people", not ""/);
     const unclaimed: PageModule = { ...help, id: "welcome", path: "/welcome", trees: ["govuk"] };
     expect(routeListProblems(listText, [...PAGES, unclaimed], functionsText).join("\n")).toMatch(/\/welcome is served and not listed/);
   });

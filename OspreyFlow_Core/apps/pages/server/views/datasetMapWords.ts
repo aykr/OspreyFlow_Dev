@@ -4,10 +4,11 @@
  * stages. Nothing here is a page or a call: a word, or a function from what the Conduit answered to the table's rows, so each
  * is a test's to read.
  *
- * What the table never says: a column for the order pipelines run in, a hint about it, or a line between two pipelines. That
- * column is IS6's, and it is drawn only once the order is stored (the owner's ruling of 21 November 2026); a page that
- * invented one now would show a person something nothing backs. `tests/glass_trees/test_dataset_map_scenario.py` fails on
- * those words in this file and in the template.
+ * The order pipelines run in (slice IS6a; the owner's rulings of 24 November 2026): a "Runs after" column is drawn only once an
+ * order is stored (the owner's ruling of 21 November 2026: never an empty column, and nothing the order does not back), an
+ * undeployed pipeline in it is said "not deployed", and a plain form sets the order. The page never says what the order should
+ * be, and draws no line between two pipelines. `tests/glass_trees/test_dataset_map_scenario.py` fails on such words here and in
+ * the template.
  *
  * Why the stage and status words are written out again here: they are the Studio's own (`ingest/dag/PipelineCanvas.tsx`'s
  * `KIND_NAMES` and `ingest/studio/vocabulary.ts`'s `STATUS_WORDS`, in the workspace, which a server file cannot import). The
@@ -18,7 +19,8 @@
  * (about twenty lines) because this table needs the order and not the drawing; `test/server/datasetMapLayout.test.ts` runs both
  * on the same graphs.
  */
-import { refusalWords } from "./studioWords.js";
+import { whenWords } from "./modelWords.js";
+import { isDeployed, refusalWords } from "./studioWords.js";
 import type { Pipeline } from "./studioWords.js";
 
 /** The Studio's words for a stage kind (`PipelineCanvas.tsx`, `KIND_NAMES`). A kind this build does not know is shown as stored. */
@@ -54,7 +56,30 @@ export const DATASET_MAP_WORDS = {
   intro: "Every pipeline that loads this dataset maps into its domain model, which is on 1 Model.",
   caption: (datasetName: string) => `Pipelines loading ${datasetName}`,
   columns: ["Pipeline", "Status", "Version", "Stages"] as const,
+  /** The same columns and one more: drawn only when an order is stored. */
+  columnsWithOrder: ["Pipeline", "Status", "Version", "Stages", "Runs after"] as const,
   sorted: "Sorted by pipeline name.",
+  /** What a pipeline that is not deployed is called wherever the order names it. */
+  notDeployed: "not deployed",
+  runsAfterNothing: "Nothing",
+  orderHeading: "Run order",
+  orderIntro:
+    "Choose, for each pipeline, the pipelines it runs after. The order is stored with the dataset, and saving it runs nothing. A pipeline that is not deployed can be in the order; it is not run until it is deployed.",
+  orderLine: (version: number, by: string | null, when: string | null) =>
+    `Run order version ${version}${by === null ? "" : `, saved by ${by}`}${when === null ? "" : ` on ${when}`}.`,
+  legend: (name: string) => `${name} runs after`,
+  save: "Save the run order",
+  saved: (version: number) => `The run order is saved as version ${version}.`,
+  /** A read of the stored order that did not work: said, never drawn as an order that was never stored. */
+  orderUnreadable:
+    "The run order of this dataset could not be read just now, so it is not shown and cannot be changed. Try again in a few minutes.",
+  saveFailed: "The run order could not be saved just now. Nothing has changed. Try again in a few minutes.",
+  notUnderstood: "That request was not understood. Nothing has changed.",
+  otherDataset: "That form was for another dataset. Nothing has changed. Open the dataset map again.",
+  /** The Conduit's own words for a refusal of an order, when it gave them; these are for when it did not. */
+  refusedOrder: (status: number) => `The run order was refused (${status}). Nothing has changed.`,
+  /** Said before the Conduit's own words when the order moved on since the page was read: what was ticked is kept. */
+  movedOn: "The run order was changed by someone else since you read it, so nothing was saved. It is shown as it is now, with your choices ticked.",
   empty: "No pipeline loads this dataset yet.",
   unreadable: "The pipelines of this dataset could not be read just now. Try again in a few minutes.",
   /**
@@ -111,10 +136,16 @@ export function stageWords(graph: Pipeline["pipeline"]): string | null {
 // --------------------------------------------------------------------------------------------------- the rows
 
 export interface MapRow {
+  /** The pipeline's identifier, which the order form carries and the page never shows. */
+  id: string;
   name: string;
   status: string;
   version: string;
   stages: string;
+  /** Whether the pipeline is deployed (the Studio's own rule: published, or flagged and still deployed). */
+  deployed: boolean;
+  /** What it runs after, in words; drawn only when an order is stored (`withOrder`). */
+  runsAfter: string;
 }
 
 const byName = (a: Pipeline, b: Pipeline): number =>
@@ -131,9 +162,127 @@ export function mapRows(registry: readonly Pipeline[], datasetId: string): MapRo
     .filter((p) => p.dataset_id === datasetId && p.status !== "superseded")
     .sort(byName)
     .map((p) => ({
+      id: String(p.recipe_id ?? ""),
+      deployed: isDeployed(p),
+      runsAfter: "",
       name: p.label && p.label.trim() !== "" ? p.label : DATASET_MAP_WORDS.unnamed,
       status: p.status === undefined ? DATASET_MAP_WORDS.notRecorded : (STATUS_WORDS[p.status] ?? p.status),
       version: typeof p.version === "number" ? `v${p.version}` : DATASET_MAP_WORDS.notRecorded,
       stages: stageWords(p.pipeline) ?? DATASET_MAP_WORDS.notRecorded,
     }));
+}
+
+// ------------------------------------------------------------------------------------------------ the stored order
+
+/** The stored order as the Conduit answered it: its number, who saved it and when, and the links the reader may see. */
+export interface StoredOrder {
+  version: number;
+  savedBy: string | null;
+  savedAt: string | null;
+  /** Each pipeline that runs after another, with the pipelines it runs after (by identifier). */
+  links: Map<string, string[]>;
+}
+
+/** The order read from the Conduit's answer, or `undefined` when the answer is not one (a failing service is never "none stored"). */
+export function readOrder(body: unknown): StoredOrder | undefined {
+  const said = body as { version?: unknown; saved_by?: unknown; saved_at?: unknown; entries?: unknown } | null | undefined;
+  if (typeof said !== "object" || said === null) return undefined;
+  if (typeof said.version !== "number" || !Number.isInteger(said.version) || said.version < 0 || !Array.isArray(said.entries)) return undefined;
+  const links = new Map<string, string[]>();
+  for (const entry of said.entries as unknown[]) {
+    const e = entry as { pipeline_id?: unknown; runs_after?: unknown } | null;
+    if (typeof e !== "object" || e === null || typeof e.pipeline_id !== "string" || !Array.isArray(e.runs_after)) return undefined;
+    if (!e.runs_after.every((q) => typeof q === "string")) return undefined;
+    links.set(e.pipeline_id, e.runs_after as string[]);
+  }
+  return {
+    version: said.version,
+    savedBy: typeof said.saved_by === "string" ? said.saved_by : null,
+    savedAt: typeof said.saved_at === "string" ? said.saved_at : null,
+    links,
+  };
+}
+
+/** A pipeline as the order names it: its name, and "not deployed" in words when it is not. */
+function named(row: MapRow): string {
+  return row.deployed ? row.name : `${row.name} (${DATASET_MAP_WORDS.notDeployed})`;
+}
+
+/**
+ * Whether the "Runs after" column is drawn: only when an order is stored and says something about a pipeline in the table. An
+ * order saved with no link, or one whose links all name something this table does not hold, draws no column (never an empty one).
+ */
+export function drawsOrder(rows: readonly MapRow[], order: StoredOrder | undefined): boolean {
+  if (order === undefined || order.version < 1) return false;
+  const ids = new Set(rows.map((r) => r.id));
+  return [...order.links].some(([pipeline, after]) => ids.has(pipeline) && after.some((q) => ids.has(q) && q !== pipeline));
+}
+
+/** The rows with what each runs after, in words, sorted by name; only the pipelines the table holds are named, and none is counted. */
+export function withOrder(rows: readonly MapRow[], order: StoredOrder): MapRow[] {
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  return rows.map((row) => {
+    const after = (order.links.get(row.id) ?? [])
+      .map((id) => byId.get(id))
+      .filter((r): r is MapRow => r !== undefined && r.id !== row.id)
+      .sort((a, b) => a.name.localeCompare(b.name, "en-GB", { numeric: true, sensitivity: "base" }) || a.id.localeCompare(b.id, "en"));
+    return { ...row, runsAfter: after.length === 0 ? DATASET_MAP_WORDS.runsAfterNothing : after.map(named).join(", ") };
+  });
+}
+
+/** The line that says which version of the order is shown, who saved it and when; empty when none is stored. */
+export function orderLine(order: StoredOrder | undefined): string {
+  if (order === undefined || order.version < 1) return "";
+  return DATASET_MAP_WORDS.orderLine(order.version, order.savedBy, order.savedAt === null ? null : whenWords(order.savedAt));
+}
+
+// ------------------------------------------------------------------------------------------------ the form
+
+/** One tick box of the form: pipeline `id` runs after `after`. Its value is what the form sends back: both identifiers, encoded. */
+export interface Choice {
+  id: string;
+  label: string;
+  value: string;
+  checked: boolean;
+}
+
+export interface Fieldset {
+  legend: string;
+  choices: Choice[];
+}
+
+/** The separator of a tick box's value: `encodeURIComponent` never leaves one in an identifier. */
+const SEP = "|";
+export const linkValue = (pipeline: string, after: string): string => `${encodeURIComponent(pipeline)}${SEP}${encodeURIComponent(after)}`;
+
+/** A tick box's value as the pair it names, or `undefined` for anything the page's own form would not send. */
+export function parseLink(value: string): [string, string] | undefined {
+  const parts = value.split(SEP);
+  if (parts.length !== 2 || parts[0] === "" || parts[1] === "") return undefined;
+  try {
+    return [decodeURIComponent(parts[0] as string), decodeURIComponent(parts[1] as string)];
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The form's fieldsets: for each pipeline, a tick box for every other pipeline, ticked as the stored order says, or as the person
+ * typed when `typed` is given (a refused save is drawn again with what was ticked).
+ */
+export function fieldsets(rows: readonly MapRow[], order: StoredOrder | undefined, typed: ReadonlySet<string> | undefined): Fieldset[] {
+  return rows.map((row) => ({
+    legend: DATASET_MAP_WORDS.legend(row.name),
+    choices: rows
+      .filter((other) => other.id !== row.id)
+      .map((other) => {
+        const value = linkValue(row.id, other.id);
+        return {
+          id: `link-${encodeURIComponent(row.id)}-${encodeURIComponent(other.id)}`,
+          label: named(other),
+          value,
+          checked: typed !== undefined ? typed.has(value) : (order?.links.get(row.id) ?? []).includes(other.id),
+        };
+      }),
+  }));
 }

@@ -265,13 +265,15 @@ def function_problems(data: dict[str, Any]) -> list[str]:
 
 
 def route_problems(data: dict[str, Any]) -> list[str]:
-    # The tree's pages: Help (slice GR2a) and the alert queue (slice RM1a, `/alert-queue`), each in the list and each carried by a row.
-    pages = ["/alert-queue", "/help"]
     routed = sorted(row["route"] for row in data["functions"] if row.get("route"))
-    if sorted(data["routes"]) != pages:
-        return [f"the route list is {data['routes']!r}: the tree has two pages, /help and /alert-queue"]
-    if routed != pages:
-        return [f"the rows that have a route are {routed!r}, not just /help and /alert-queue"]
+    # The tree's second page, the Admin People list (slice AD3a), is the first section of the `admin` row, whose own route stays empty
+    # while the function is incomplete: it is in the list, and no row carries it (`test_govuk_admin_people_scenario.py` holds that).
+    # Slice GR3a added the alert monitoring page (`/reports`), the tree's third: its row, `reports-figures`, carries the route.
+    # Slice RM1a added the alert queue (`/alert-queue`), the fourth: its row, `alerts-rules-watches`, carries the route.
+    if data["routes"] != ["/help", "/admin/people", "/reports", "/alert-queue"]:
+        return [f"the route list is {data['routes']!r}: the tree has four pages, /help, /admin/people, /reports and /alert-queue"]
+    if routed != ["/alert-queue", "/help", "/reports"]:
+        return [f"the rows that have a route are {routed!r}, not just /help, /reports and /alert-queue"]
     return []
 
 
@@ -403,8 +405,8 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
     ("the old combined top bar row back", _row("functions", "top-bar-home", id="top-bar-home-help"), function_problems, "owner ruled it split"),
     ("reports not split", _row("functions", "reports-figures", id="reports"), function_problems, "owner ruled it split"),
     ("the dashboards row given a slice", _row("functions", "reports-dashboards", slice="GR3"), function_problems, "must be later"),
-    ("a route in the list the code has no page for", lambda d: d["routes"].append("/welcome"), route_problems, "two pages"),
-    ("a row routed with the list left short", _row("functions", "top-bar-home", route="/"), route_problems, "not just /help and /alert-queue"),
+    ("a route in the list the code has no page for", lambda d: d["routes"].append("/welcome"), route_problems, "four pages"),
+    ("a row routed with the list left short", _row("functions", "top-bar-home", route="/"), route_problems, "not just /help"),
     ("no register row", _drop("register", "govuk-frontend"), register_problems, "not one"),
     ("a licence that is not MIT", _register_row(licence="GPL-3.0-only"), register_problems, "not MIT"),
     ("the identity condition left out of the row", _register_row(note="A package.", ships="Not shipped."), register_problems, "does not say"),

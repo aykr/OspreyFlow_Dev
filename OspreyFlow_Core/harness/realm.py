@@ -41,6 +41,7 @@ from __future__ import annotations
 import secrets
 from typing import Any
 
+from harness import page_addresses
 from schemas.deployment import OspreyConfig
 
 #: The Conduit's own confidential client.
@@ -286,7 +287,7 @@ def _glass_client(config: OspreyConfig) -> dict[str, Any]:
     field at all; Keycloak stores it as `attributes["post.logout.redirect.uris"]`, alongside the
     PKCE attribute already here.
     """
-    origin = config.network.public_origin
+    origin = page_addresses.client_origin(config)
     redirect_uri = f"{origin}/"
     return {
         "clientId": GLASS_CLIENT_ID,
@@ -420,8 +421,20 @@ def pages_client(config: OspreyConfig) -> dict[str, Any]:
     Keycloak's container, so a new client there would change a file an existing deployment holds
     and restart its identity provider. It is registered through the admin API instead
     (`register_sign_in.ensure_identity`), as Superset's is, when `deployment.env` holds its
-    secret."""
-    origin = config.network.public_origin
+    secret.
+
+    **The origin is `harness.page_addresses`'s**: `derive`'s `public_origin` where the page service
+    is on (the string the service builds its callback from and sends the provider, matched
+    exactly), and `page_addresses.client_origin` where it is off (the origin as written, as it was
+    before PL7f), so with the service on the two can never differ (PL7f round 2: a default port
+    written, or a different letter case, would have registered an address the service never
+    sends) and with it off nothing changes (round 4)."""
+    derived = page_addresses.derive(config)
+    origin = (
+        derived.public_origin
+        if isinstance(derived, page_addresses.PageAddresses)
+        else page_addresses.client_origin(config)
+    )
     return {
         "clientId": PAGES_CLIENT_ID,
         "name": "Pages (server-rendered tree)",
@@ -605,10 +618,7 @@ def organisation_redirect_uris(
     redirect URI Keycloak sends to the organisation's provider, and the post-logout redirect URI,
     both at the deployment's identity address (`id.<host>`). Measured against Keycloak 26.0 in
     `tests/harness/test_organisation_sign_in.py`."""
-    from urllib.parse import urlsplit
-
-    origin = urlsplit(config.network.public_origin)
-    identity = f"{origin.scheme}://id.{origin.netloc}"
+    identity = page_addresses.broker_identity(config)
     alias = config.governance.organisation_sign_in or ""
     endpoint = f"{identity}/realms/{realm_name}/broker/{alias}/endpoint"
     return endpoint, f"{endpoint}/logout_response"

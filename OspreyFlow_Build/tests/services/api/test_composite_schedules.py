@@ -592,6 +592,11 @@ NOT_BY_THE_ROUTE = {
     # rejected[its-kind]`. The dry run writes nothing.
     "/v1/datasets/{dataset_id}/merges",
     "/v1/datasets/{dataset_id}/merges/dry-run",
+    # IS6a (ADR-141 Amendment 2): the stored order the dataset's pipelines run in. It writes one
+    # row of the order, loads nothing and runs nothing, and its entries are the pipelines the
+    # saver sees that are the path's dataset's own (a composite has none, so its order can only
+    # be empty): `test_dataset_run_order.py`.
+    "/v1/datasets/{dataset_id}/run-order",
 }
 _WRITES = {"POST", "PUT", "PATCH", "DELETE"}
 

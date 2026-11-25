@@ -236,10 +236,10 @@ def names_of(config: OspreyConfig) -> list[str]:
     the dashboards are on."""
     from harness.site import sites
 
-    host = sites(config).host
-    found = [host, f"id.{host}"]
+    names = sites(config)
+    found = [names.host, names.identity_host]
     if config.reporting.superset:
-        found.append(f"bi.{host}")
+        found.append(names.dashboards_host)
     return found
 
 

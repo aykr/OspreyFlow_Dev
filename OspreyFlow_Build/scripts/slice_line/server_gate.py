@@ -30,9 +30,9 @@ NOTE_RUN_ID = re.compile(r"^- Run id: `([0-9a-f]{16})`\s*$", re.M)
 FETCH_SECONDS = 120
 
 
-def counting() -> bool:
+def counting(switch: str = SWITCH) -> bool:
     """The owner's switch: the exact word `on` in a regular file of his; anything else is off."""
-    f = c.DATA / SWITCH
+    f = c.DATA / switch
     try:
         if f.is_symlink() or not f.is_file():
             return False
@@ -371,6 +371,90 @@ def remainder(e: dict, tree: Path, mk: Path, records: list[str] | tuple = ()) ->
         targets.append(["make", "test"])
         mac.append("test")
     return {"targets": targets, "taken": taken, "mac": mac, "records": list(records)}
+
+
+# ------------------------------------------------------------------ 017, item 1: the build account's container checks
+
+#: The owner's own switch for them, apart from server_counts (off as built), and his file naming the backup repository
+#: (one line: its URL or path). The Mac reads the build account's results only from that repository, fetched into a
+#: cache of the line's own (never the main checkout, never over SSH into the build account: the owner, 24 November).
+BUILD_SWITCH = "build_counts"
+BUILD_BACKUP = "build_backup"
+BUILD_CACHE = "build-backup.git"
+BUILD_BRANCH = "build-results"
+BUILD_RUNNER = "bc-1"
+#: The only targets a build-account result may stand for (build_server/runner.py's TARGETS): a name outside them in
+#: its passed_targets is never taken, whatever the result says.
+BUILD_TARGETS = ("opentofu-check", "chart-check", "cp-policy-check", "trivy", "trivy-image-ingest", "trivy-image-api",
+                 "trivy-image-workspace", "trivy-image-harness", "trivy-image-ner", "trivy-image-worker",
+                 "trivy-image-report-sync", "trivy-image-superset", "trivy-image-laurium", "harness-a11y")
+
+
+def build_backup() -> str | None:
+    """The backup repository the owner's file names; None when it is absent, a link, or not one line."""
+    f = c.DATA / BUILD_BACKUP
+    try:
+        if f.is_symlink() or not f.is_file():
+            return None
+        lines = [x.strip() for x in f.read_text().splitlines() if x.strip()]
+    except OSError:
+        return None
+    return lines[0] if len(lines) == 1 and not lines[0].startswith("-") else None
+
+
+def build_git(args: list[str], timeout: int = FETCH_SECONDS) -> subprocess.CompletedProcess | None:
+    try:
+        return subprocess.run(["git", "--git-dir", str(c.DATA / BUILD_CACHE), *args], capture_output=True, text=True,
+                              timeout=timeout)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+
+def build_result(slice_id: str, tip: str) -> tuple[dict | None, str | None]:
+    """(the build account's result for this slice at this tip, why not) as the backup repository holds it now:
+    fetched into the cache, read from refs/heads/build-results, and checked to be the runner's own shape for exactly
+    this slice and tip."""
+    url = build_backup()
+    if not url:
+        return None, f"no backup repository named (the owner's file {BUILD_BACKUP})"
+    cache = c.DATA / BUILD_CACHE
+    if not cache.is_dir():
+        p = subprocess.run(["git", "init", "-q", "--bare", str(cache)], capture_output=True, text=True)
+        if p.returncode != 0:
+            return None, "the backup's cache could not be made"
+    p = build_git(["fetch", "-q", "--no-tags", "--", url, f"+refs/heads/{BUILD_BRANCH}:refs/heads/{BUILD_BRANCH}"])
+    if not p or p.returncode != 0:
+        return None, "the backup repository could not be fetched"
+    p = build_git(["show", f"refs/heads/{BUILD_BRANCH}:results/{slice_id}/{tip}.json"], 30)
+    if not p or p.returncode != 0:
+        return None, "the build account has no result for this slice at this tip"
+    try:
+        b = json.loads(p.stdout)
+    except ValueError:
+        return None, "the build account's result is not JSON"
+    if not isinstance(b, dict) or b.get("runner") != BUILD_RUNNER or not RUN_ID.match(str(b.get("id"))) or \
+            (b.get("slice"), b.get("tip")) != (slice_id, tip):
+        return None, "the build account's result is not its runner's own for this slice at this tip"
+    return b, None
+
+
+def build_part(slice_id: str, tip: str, base: str, tree: str) -> dict:
+    """What the build account's container checks take from the Mac at this merge: counted only with the owner's switch
+    on, for the same candidate as the Mac's own (the same main tip, or main moved by records commits only; the same
+    slice tip; the same candidate tree), a finished pass, and then only BUILD_TARGETS it names as run and passed."""
+    if not counting(BUILD_SWITCH):
+        return {"counted": False, "why": f"the owner's switch ({BUILD_SWITCH}) is off"}
+    b, why = build_result(slice_id, tip)
+    rid = (b or {}).get("id")
+    if not why:
+        why = same_candidate(b, base, tip, tree)
+    if not why and (b.get("state") != "done" or b.get("verdict") != "pass"):
+        why = f"the build account's run is not a finished pass ({b.get('state')}, {b.get('verdict')})"
+    taken = [t for t in (b or {}).get("passed_targets") or [] if t in BUILD_TARGETS] if not why else []
+    if not why and not taken:
+        why = "the build account's result names no container check it ran and passed"
+    out = {"counted": not why, "run_id": rid, "taken": taken}
+    return {**out, "why": why} if why else out
 
 
 # ------------------------------------------------------------------ item 3: the stack

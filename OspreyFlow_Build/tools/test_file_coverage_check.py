@@ -75,6 +75,21 @@ while `sustained-load-exit-test`, the job that actually does, was never added to
 hand-maintained job-name tuple below and would otherwise have been caught missing. Fixed by
 stripping full-line comments before token-scanning (`_strip_comment_lines`); `sustained-load-exit-
 test` added to the hand-maintained tuple in the same change.
+
+**A test that starts its own private database is not a live-service test (slice AD1d; the owner's
+ruling (c), 25 November 2026).** `asyncpg` alone says "needs a shared PostgreSQL", and a test that runs
+`initdb` and `pg_ctl` in a temporary folder (`tests/private_postgres.py`, the one shared helper, which
+finds `initdb`, picks a free port the port guard does not reserve, and removes everything at the end)
+needs no shared service at all, so listing it in the `test` job's ignore list and a live-service job
+would be wrong the other way. A file that imports `asyncpg` **and** the helper (a real import of the
+module `tests.private_postgres`, read from the file's `import` statements: a docstring, comment or
+string naming it is not an import), and has no other live-service marker, no `OSPREY_TEST_*` read and no
+`PostgresConfig.from_env()` call, is therefore not live-service. Nothing else is: no comment, name or
+flag a file can write opts it out, and no import is ever written to miss this check (a name taken at run
+time, such as `importlib.import_module("asyncpg")`, is the shape the owner refused, 25 November 2026).
+The check cannot see what a file does with a connection it opens; it holds that importing the helper
+is the one way a file gets a private database, and the helper's own test
+(`tests/test_test_file_coverage_private_database.py`) holds that it starts one and removes it.
 """
 
 from __future__ import annotations
@@ -119,6 +134,13 @@ LIVE_SERVICE_MARKERS: frozenset[str] = frozenset(
         "GRAPH_PORT_ADAPTERS",
     }
 )
+
+#: The one helper that starts a private, throwaway PostgreSQL (`tests/private_postgres.py`), by the
+#: dotted module name a real `import` statement gives it. A file importing `asyncpg` and this module,
+#: and nothing else live, is not live-service (`is_live_service_file`). Never matched in text.
+PRIVATE_DATABASE_HELPER = "tests.private_postgres"
+#: The one marker the helper answers for: the driver. Any other marker stays live-service.
+PRIVATE_DATABASE_MARKERS: frozenset[str] = frozenset({"asyncpg"})
 
 #: `PostgresConfig` is not import-sufficient like the markers above — found live, not assumed:
 #: `test_auth.py`/`test_websocket_auth.py` both import it only to build an inert `ApiConfig` with
@@ -282,6 +304,25 @@ def _imported_names(source: str) -> set[str]:
     return names
 
 
+def _imported_modules(source: str) -> set[str]:
+    """Every module a file really imports, by its dotted name: `import a.b` gives `a.b`;
+    `from a.b import c` gives `a.b` and `a.b.c` (`c` may be a module). A relative import
+    (`from . import x`) names no absolute module and is left out. Read from `import` statements
+    by `ast.parse`, so a docstring, comment or string is never an import."""
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return set()
+    modules: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            modules.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            modules.add(node.module)
+            modules.update(f"{node.module}.{alias.name}" for alias in node.names)
+    return modules
+
+
 def _has_from_env_call(source: str, names: frozenset[str]) -> bool:
     """True if the source calls `<name>.from_env(...)` for any `name` in `names`, via a real
     `ast.Call` node, not a substring match."""
@@ -360,11 +401,15 @@ def _reads_live_service_env(source: str) -> bool:
 
 
 def is_live_service_file(source: str) -> bool:
-    if _imported_names(source) & LIVE_SERVICE_MARKERS:
+    markers = _imported_names(source) & LIVE_SERVICE_MARKERS
+    if _reads_live_service_env(source) or _has_from_env_call(source, CALL_REQUIRED_MARKERS):
         return True
-    if _reads_live_service_env(source):
-        return True
-    return _has_from_env_call(source, CALL_REQUIRED_MARKERS)
+    if not markers:
+        return False
+    # A private database: the driver, the helper that starts one, and nothing else live.
+    return not (
+        markers <= PRIVATE_DATABASE_MARKERS and PRIVATE_DATABASE_HELPER in _imported_modules(source)
+    )
 
 
 def find_misclassified(

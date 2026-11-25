@@ -241,6 +241,15 @@ M = [
  (E, '    if retest and retest.get("earlier"):', '    if False:', "already_red_on_this_main_is_left_out"),
  (E, '"tree": d.get("tree"), "main": d.get("main"),', '"tree": d.get("tree"),', "which_main_each_run_was_on"),
  (E, '    stack           the members up to and including this one, in merge order', '    stack           the members', "docstring_names_every_field"),
+ # 017, item 1 (the owner, 25 November 2026): the build checks, sent with the early warning
+ ('early_warning.py', '            built = send_checks(a.slice, branch, tip)', '            built = "not sent"', 'test_build_send and (build_checks_are_sent)'),
+ ('early_warning.py', '    if not BUILD_SETTING.is_file():\n        return "not sent (no build setting)"', '    if False:\n        return "not sent (no build setting)"', 'test_build_send and (without_the_build_setting)'),
+ ('early_warning.py', 'ssh(bs, ["checks", slice_id], stdin=fh, timeout=900)', 'ssh(bs, ["checks"], stdin=fh, timeout=900)', 'test_build_send and (build_checks_are_sent)'),
+ ('early_warning.py', 'data.get("reason") == "bundle-prerequisites"):\n                break', 'data.get("reason") == "bundle-prerequisites") or True:\n                break', 'test_build_send and (lost_it)'),
+ ('early_warning.py', '        c.write_json(BUILD_HELD, {"main": data["holds_main"], "at": c.now()})', '        pass', 'test_build_send and (build_checks_are_sent)'),
+ ('early_warning.py', 'make_bundle(branch, b, full, BUILD_HELD)', 'make_bundle(branch, b, True, BUILD_HELD)', 'test_build_send and (lost_it)'),
+ ('early_warning.py', '        return f"refused by the build account ({data.get(\'reason\')})"', '        return "sent"', 'test_build_send and (busy)'),
+ ('early_warning.py', '    return f"no answer from the build account (ssh exit {code})"', '    return "sent"', 'test_build_send and (down)'),
 ]
 bad = 0
 for f, old, new, test in M:

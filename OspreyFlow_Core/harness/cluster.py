@@ -305,14 +305,27 @@ class _Pins:
         return f"{image}@{digest}"
 
 
-def _proxy_ports(config: OspreyConfig) -> list[dict[str, int]]:
-    """The load balancer answers on the address's port, and reaches the port Caddy listens on: 80
-    and 443 for HTTPS; on plain HTTP, Caddy runs unprivileged on `PROXY_HTTP_PORT`."""
+#: The load balancer's two published ports with HTTPS: 80, which Caddy serves as plain HTTP (its
+#: redirect to HTTPS), and 443. **The cluster publishes no other HTTPS port**, whatever port the
+#: public origin names: the Glass and the identity address are reached on 443 or not at all.
+PLAIN_HTTP_PUBLISHED = 80
+HTTPS_PUBLISHED = 443
+
+
+def proxy_ports(config: OspreyConfig) -> list[dict[str, int]]:
+    """The ports the load balancer publishes, and the port Caddy listens on behind each: 80 and 443
+    for HTTPS (whatever port the address names: a cluster origin on another port reaches nothing
+    here); on plain HTTP, the address's own port to Caddy's unprivileged `PROXY_HTTP_PORT`. The one
+    place that lists the cluster's published ports: `harness.page_addresses` derives a page-service
+    origin only on the HTTPS one and refuses any other (PL7f rounds 4 and 9)."""
     from harness.site import PROXY_HTTP_PORT, sites
 
     names = sites(config)
     if names.scheme == "https":
-        return [{"port": 80, "target": 80}, {"port": 443, "target": 443}]
+        return [
+            {"port": PLAIN_HTTP_PUBLISHED, "target": PLAIN_HTTP_PUBLISHED},
+            {"port": HTTPS_PUBLISHED, "target": HTTPS_PUBLISHED},
+        ]
     return [{"port": names.port, "target": PROXY_HTTP_PORT}]
 
 
@@ -552,7 +565,7 @@ def render_cluster(
         workload["kind"] = "StatefulSet" if name in STATEFUL else "Deployment"
         workload["replicas"] = counts.get(name, 1)
         if name == "proxy":
-            workload["ports"] = _proxy_ports(config)
+            workload["ports"] = proxy_ports(config)
         elif name in PORTS:
             workload["ports"] = [{"port": port, "target": port} for port in PORTS[name]]
         if name in CLAIMS:

@@ -3,6 +3,64 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 25 November 2026, about 19:50 UTC: "take your recommended routes" (the owner, in chat)
+
+**PL4h: option (a)** (D225 item 3's structural round): every test in the two copy files that walks or parses gets an explicit, explained timeout, the plant tests included; nothing cached, nothing moved out of `sourceFiles`; the plant stands. Round 4 on `slices/PL4h_ROUND4_TABLE.md`. **AD1c: round 11 on the conductor's table** (already ruled at about 16:20). Both wait for the owner's add-round lines.
+
+## 25 November 2026, about 16:25 UTC: GR1a as an away round (the owner, in chat)
+
+**GR1a runs as an away round on the server now**, on every proposal (a) of its draft (`slices/drafts_2026-11-25/GR1a.md`) and the owner's exception to start before GG2b. **The conductor does not start GR1 in the line:** it enters through its away branch, like GR4a, after the owner fetches it (its round 1 merges `away/GR1a`).
+
+## 25 November 2026, about 16:20 UTC: AD1c round 11; SE7c, GG2a and the drafts (the owner, in chat)
+
+**AD1c: yes, Superset's metadata database counts under "each database the render makes"**: it is on the same server, made by the deployment's own code. **Round 11 on the conductor's table:** one census of every database the deployment makes on that server, each closed the same way, so a new one cannot be missed; plus tests for the EXECUTE revoke's refusal words and for silence on a healthy run. His third add-round line today.
+**Away rounds:** GR4a started (round 1 merges `away/GR4a`); **SE7c**, a security part for `away/access-fix` (his word extends D247's exception to it; its round 1 merges it; never accepted narrower; judged by the verifier, the server and the full gate); **GG2a**'s row and round-1 brief (round 1 merges `away/GG2a`; its merge waits for his Mac's own measurement, the 18 November ruling); **the drafts of `drafts/2026-11-25`** copied into `slices/drafts_2026-11-25/` for his rulings tonight; the away copy-tests job never started, PL4h covers it. **PL8a's merge need not wait for 19:30.**
+
+## 25 November 2026, about 16:10 UTC: I21's rename approved; apply_53 tonight (the owner, in chat)
+
+**`approved: ADR152_I21_ROW 2b32bafb`.** **apply_53 stopped at 14:19 on the early warning's suite** (`test_lists.py::test_the_lists_match_this_repository`, failing on main since PL7f merged: its new `test_page_addresses_caddy.py` is not in the early warning's lists; not 53's fault). The demo-server session is fixing the lists; **the owner retries apply_53 tonight once that is on main. The conductor keeps moving old tables aside until then.**
+
+## 25 November 2026, about 13:55 UTC: GR4a's away round and its four questions (the owner, in chat)
+
+**GR4a's away round is done** (its table green; its report in `away/GR4a_AWAY_REPORT.md` on the branch); the owner fetched it as the local branch `away/GR4a`. **His answers:** (1) keep `/packs/trends?case=…&pack=…`; (2) keep the one shared withheld sentence, never a placeholder (rule 3); (3) rename I21's test in the decision log (the conductor proposes the diff, `ADR152_I21_ROW`, for his approval); (4) confirmed: an Editor sees the working pack, everyone else the newest published version. **GR4a starts as D247 says (round 1 merges `away/GR4a`) first thing at 19:30, not before:** apply_53 is running and the Mac goes offline at 14:30.
+
+## 25 November 2026, about 13:30 UTC: AD1c's PUBLIC defaults, option (a) (the owner, in chat)
+
+**AD1c (a), one more round closing both:** each database the render makes takes CONNECT and TEMPORARY from PUBLIC and grants CONNECT to its own role(s) alone (`litellm` to the gateway's role and the reader); EXECUTE on functions taken from PUBLIC in `litellm`; planted faults refused by the database itself; on a managed server a revoke the login may not make is said in words and never stops the gateway; **and the reader's verifier command run in the pinned image on the server's container checks** (patch 52). Amendment 15 decision 1 stands as written. **Point 2, amended about 13:40 UTC:** do not wait on the server's container checks (patch 52's server half is installed tonight); **use D234's pattern**: exempt in `tests/local_docker_guard.py` exactly this test's one command (`docker run --rm --network none`, the pinned `postgres:16.4` image), named by the test, a planted second command refused; it moves to the server's checks when 52 is live and the exemption comes out. **Planted faults for every revoke.**
+
+## 25 November 2026, about 12:40 UTC: GR3b's three questions; hand-back 53; GG2a's cut-off (the owner, in chat)
+
+**GR3b:** (a) **one part per route**: the report route first (GR3b), then AD3b and RM1b as each page's next part; (b) **GR3a merges first**; (c) **the drift check** (goldens against what the route answers now) **runs in `make test` on every merge**; **regenerating the goldens is a separate target a builder runs on purpose, never automatic.** GR3b is cut after GR3a merges.
+**The two line faults** (`round_table` returning a part's oldest table; the board showing a past-dated `resume.tsv` line as waiting) **are line-fix's hand-back 53**, which the owner applies tonight; **the conductor keeps its workaround** (superseded tables moved to `slices/aside/`) until then.
+**GG2a's cut-off moves to 13:30** (the owner back at about 13:30): its away round runs only if PL7f has merged by then.
+
+## 25 November 2026, about 12:25 UTC: every database role's password as a client-made verifier (the owner, in chat)
+
+**Option (a): a small part of its own (AD1e):** a client-made SCRAM-SHA-256 verifier for **every role the render's database steps set** (the gateway's `litellm`, Keycloak's, and any other), so no plaintext password is ever in SQL text sent to PostgreSQL; **shown red first with `log_statement = 'all'`**, using AD1c's approach. **A security finding: never accepted narrower.** **It starts after AD1c merges.**
+
+## 25 November 2026, about 11:45 UTC: GR3a back for I15's test (the owner, in chat)
+
+**GR3a: sent back for the I15 test under its exact name** (`test_the_dashboard_page_answers_a_reader_without_read_reports_as_a_missing_report`); **an access rule is not accepted narrower**, even on the standing line. One row, no round beyond that one.
+
+## 25 November 2026, about 08:10 UTC: PL8a round 13; apply_52 tonight (the owner, in chat)
+
+**PL8a:** one more round on its structural table (his third add-round line today), the table renamed ROUND13 (round 12's builder was shown round 10's table by the line's `round_table` fault, so it did row 1 only). The stale `PL8a accept 2026-11-24` line deleted by the owner. **apply_52 (line-fix 52) is not applied in this gap: the conductor keeps merging; the owner applies it tonight.**
+
+## 25 November 2026, morning: PL8a's structural round, PL7f's reserve, ruling 6 withdrawn (the owner, in chat, about 07:45 UTC)
+
+1. **PL8a: option (a), one structural round 12** (D225 item 3): Home forgets the stored size; a size is written only when it is the size the analyst's own action asked for, never a clamped value; one test over every panel action × bound × starting state. Its add-round line is in.
+2. **PL7f: two add-round lines are in resume.tsv in reserve**, so it has rounds to spare before GG2a's 13:00 cut-off; **the conductor uses them only if a verifier finds more** at its rounds limit.
+3. **Ruling 6 (PL11b) is withdrawn:** the licence register is for what the code gate cannot see, and `make licence-check` already covers Sigma, graphology and MapLibre. **The conductor's correction to GG2a's item 4 and case 9 stands.**
+
+## 25 November 2026: the away rounds, AD1c, GR4a, GG2a and the licence register (the owner, in chat, about 06:30 UTC)
+
+1. **PL8a:** the add-round line for today; round 11 on its table.
+2. **Away rounds (D246; GR4a and GG2a only): one exception to the 23 November rule.** A builder's round 1 may merge a branch `away/<ID>` that the owner fetches from server-backup into this checkout. **No other branch, and no other part.** The owner fetches it on his return.
+3. **AD1c, option (c):** a small part (AD1d) teaches `test-file-coverage-check` that a test starting its own private database (`initdb` in a temporary folder) is not live-service, red first. **Then AD1c imports `asyncpg` plainly; no import is ever written to miss a check.**
+4. **GR4a:** 1(a) read-only first; 2(a) the pack's snapshots with their counted-on date; 3(a) whoever may read the pack now, and 404 otherwise (the same as a pack that does not exist); 4(a) "Trends shown together" at `/packs/{pack_id}/trends`; 5 a new spec/08 scenario first. **ADR-152 decision 10's citation is corrected with GR4a's spec changes.**
+5. **GG2a:** proposals 1(a) to 6(a) (a module of its own served only by the perf harness; the workspace's CI gate, §5's own numbers measured on the owner's Mac on his return; the fixture moved to `glass-shared`; the newest Sigma 4.x at least 14 days old, pinned exactly, with its register rows; stop and bring the figures if CI misses; the register's missing rows a separate part). **It runs as an away round only if PL7f has merged by 13:00.**
+6. **The licence register:** a small part (PL11b) adds the missing rows (`sigma`, `@sigma/*`, `graphology`, `maplibre-gl`), before RL2. **Held, not cut (the conductor, 25 November 2026, about 06:35 UTC): the finding behind it was the conductor's error.** `spec/LICENCE_REGISTER.yaml` is only for what the code gate does not see (weights, map data, fonts, base images: its header and `spec/00` §7); the drawing libraries are code and pass `make licence-check`'s Node half (`license-checker` over the installed packages) against §7's allowlist (MIT, BSD-3-Clause). The owner was told and asked to confirm the ruling is withdrawn. GG2a's item 4 and case 9 were corrected the same way.
+
 ## 25 November 2026: GR3a's structural fix, (A)+(B) (the owner, in chat, about 05:30 UTC)
 
 **GR3a was stopped under D225 item 3** (rounds 4, 5 and 6 found the same kind: the page drifting from what the real route sends, hidden by a hand-written fixture). **(A), GR3a's round 7:** a strict reader (a body missing a field the generated `MonitoringFigures`/`ReportFigures` types require is the page's "could not be read" answer, never a zero; a test case per required field, made from the type's own field list); a field census (a test walks every field of the generated type and fails unless the page draws it or spec/08 names it as left out); the fixture's team view counts `mine` and `older_than_week` from its world. **(B), a new part GR3b:** every GOV.UK page's fixture Conduit answers from the real route (a Python test runs the real routes in-process over the same synthetic worlds, stores at the conformance fakes, and writes golden JSON the page tests serve; a test fails when a golden drifts from the route). Its brief is drafted for the owner's rulings.

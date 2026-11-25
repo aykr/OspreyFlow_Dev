@@ -436,8 +436,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     else:
         print("The load balancer has no address yet (`kubectl get service proxy`); point at it:")
     print(
-        f"  {names.host}, id.{names.host}"
-        + (f", bi.{names.host}" if config.reporting.superset else "")
+        f"  {names.host}, {names.identity_host}"
+        + (f", {names.dashboards_host}" if config.reporting.superset else "")
     )
     if done.first_admin_code:
         print(f"\nThe first administrator is admin. Their one-time code: {done.first_admin_code}")

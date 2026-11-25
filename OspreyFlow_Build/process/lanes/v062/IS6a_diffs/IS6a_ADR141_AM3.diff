@@ -1,0 +1,72 @@
+diff --git a/OspreyFlow_Build/spec/06_DECISIONS.md b/OspreyFlow_Build/spec/06_DECISIONS.md
+--- a/OspreyFlow_Build/spec/06_DECISIONS.md
++++ b/OspreyFlow_Build/spec/06_DECISIONS.md
+@@ -42083,3 +42083,68 @@
+ allowlist); the fonts test applied to the theme folder's list (a face not in either list); the default build's output holds no GDS Transport
+ file and no GOV.UK token or font once the move has landed, and holds them when the identity is on; the re-recorded baseline differs from the old only
+ in GOV.UK files; and a deployment with the GOV.UK brand and the switch off refuses to start.
++
++### ADR-141, Amendment 3 (24 November 2026) — the dataset's run order, stored: "runs after" links, versioned, edited on the dataset map, carried in a release; the cover for a scheduled load is deferred to the owner with options — Proposed, for the owner's approval
++
++Status: proposed. It records the owner's rulings of 24 November 2026 on the IS6 draft ("My rulings on the drafts"), items 1 to 6 and
++the deferral in item 4, as slice IS6a carries them out (the first slice of the whole-dataset load: the stored order only, with no run
++machinery, no scheduler file and no cover). ADR-141 and its Amendments 1 and 2 are unchanged except where this says so; it carries out
++Amendment 2 point 6 and says what point 5 still lacks.
++
++**Decisions.**
++
++1. **The right** (ruling 1): the existing right to edit pipelines (`edit_pipelines`), within the dataset, as the other dataset routes
++   scope it. It reads and it saves: there is no lesser right to read the dataset map, whose pipelines are read through that same right.
++2. **Where it is edited** (ruling 2): on the dataset map page (`/studio/dataset-map`), by a plain form that needs no script. The "Runs
++   after" column is drawn only when an order is stored; with none the page is as IS3 left it (the owner's ruling of 21 November 2026).
++3. **What the order is stored as**: "runs after" links, `{pipeline: [the pipelines it runs after]}`, not a list. Amendment 2 point 2 says
++   a failure stops only what depends on it, directly or through another, and "the rest carry on": that is a graph. A list has no cycle
++   to refuse; links do.
++4. **A cycle among the pipelines the saver can see is refused on save** (ruling 3), 422 `run_order_cycle`, in words naming the
++   pipelines in it by the name the Studio shows (a pipeline in a strongly connected component of two or more, or one that runs after
++   itself; one that only runs after a cycle is not named). **A cycle that closes only through a pipeline hidden from the saver is
++   stored, and the saver is told nothing of it**: no refusal, no other wording, count or timing, because refusing it would tell them
++   that a hidden pipeline and a path through it exist (access rule 3); the save's answer is the one they would have had with no such
++   path. **A stored order whose links make a cycle is not run**: it is refused at the run, in words to whoever runs it or can see every
++   pipeline in it, never to a person who cannot see one of them; the part that runs the order owns that rule and its test (no code runs
++   an order yet). *This is the owner's ruling of 25 November 2026, option (a), and amends his ruling 3 of 24 November for that case
++   only.*
++5. **An undeployed pipeline may be in the order** (ruling 3). The page shows it "not deployed"; the run's report, in the later slice,
++   says "not run: not deployed".
++6. **Versioned** (ruling 6): a number per save (the first is 1; none stored is 0), kept with who saved it and when, every version kept
++   (table `dataset_run_orders`, key `dataset_id`, `version`). **The expected number is required on save** (`expected_version`, 0 for
++   none stored; a body without it is 422), and an order that has moved on is refused 409 `run_order_refused`, in words, with nothing
++   changed, as the domain model's draft is: never a silent overwrite. On Postgres the check and the write are one transaction under
++   the dataset's advisory lock, with the key behind it.
++7. **A reader sees only what they may see** (rules 3, 4 and 7). The order is read through the reader's own listing of the dataset's
++   pipelines; a link naming a pipeline they may not see is not shown, a pipeline left with no link is not shown, and nothing counts what
++   was left out. A save names only pipelines the saver may see in this dataset; another unit's, another dataset's, one placed in none,
++   a previous version and one that does not exist are refused in one set of words, with no identifier echoed. A save replaces the links
++   among what the saver sees and keeps every stored link that names a pipeline they cannot see. A person without the right, and one
++   whose cases do not read the dataset, are answered as for a dataset that does not exist (403 for the right, 404 for the dataset, as
++   the model's routes answer them).
++8. **The release carries it** (ruling 6; Amendment 2 point 6). A release export writes `run-order.yaml` (role `run_order`, named by
++   `spec.run_order` in the manifest, absent when none of the carried pipelines runs after another): the links among the pipelines the
++   bundle carries, by their ids in the bundle, with the number it was exported from, and no person or time. A link to a pipeline the
++   bundle does not carry (one not deployed, or marked above the exporter's view) is left out and never named. An import writes the order
++   as a new version of the receiving dataset's order, its pipelines being the drafts the import makes, joined to the links already
++   there; a cycle in a bundle's order refuses the import in words naming its pipelines; nothing is deployed. A bundle written before
++   this amendment has no such file and reads as having no order.
++9. **Not in this amendment**: the cover under which a scheduled whole-dataset load keeps running when its owner is away (Amendment 2
++   point 5, the L08 cover) is not decided here and comes to the owner with options before its own slice (ruling 4); the job file's
++   schema is decided with the scheduler slice (ruling 5); the suggestion of an order from the types (ADR-140 Amendment 22 item 8)
++   is not built, and a model-derived suggestion, when it is, stays inferred and is not stored as the order (rule 5); no pipeline is run
++   and `POST /v1/runs` is unchanged.
++10. **Spec**: `09_INGEST_STUDIO.md` section 1.2 and `08_ACCEPTANCE_SCENARIOS.md` Scenario DM say it (DM2, DM11 to DM14 changed, DM15 to
++    DM24 new); the dataset map's `FUNCTIONS.yaml` row is built (ruling 7).
++
++**Tests that would fail** (rule 12; each shown red against a planted fault in the shape the code sees, rule 15):
++`tests/services/api/test_dataset_run_order.py` (a stale number saved; a number the route read for itself; a save with none; a cycle
++saved, a diamond refused, a bystander named; a pipeline that is not the saver's named, or refused in words that tell reasons apart; a
++reader or a saver without the right, or a stranger, told anything; a hidden pipeline named, counted or implied; a save that loses links
++the saver cannot see; a cycle that closes through a hidden pipeline refused, or answered differently from a save with no such path, or a cycle among visible pipelines not refused or naming a hidden one; two saves of one number both landing);
++`tests/services/api/test_studio_release_routes.py` and `tests/ingest/test_release_bundle.py` (the order exported, imported as a new
++version joined to the existing one, a link to a pipeline not carried never named, a cycle refused, an order that moved under the
++import not overwritten); `tests/services/api/test_route_rights.py` (each route names `edit_pipelines`);
++`apps/pages/test/default/dataset-map.test.ts` (DM2, DM11 to DM24) and `tests/glass_trees/test_dataset_map_scenario.py` (the scenario,
++the spec and the page's words in step).

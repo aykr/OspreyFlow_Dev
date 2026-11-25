@@ -29,7 +29,16 @@
  *    `expected_version` (a whole number of 1 or more; FastAPI's own 422, `detail` a list), and a body with a field the schema does
  *    not have is refused (`extra=forbid`); then the store's own refusals, 409 `{"error": "model_refused", "detail": words}`: no
  *    draft to save, a draft someone else opened (the words name who holds it and none of its content) and a version the draft is
- *    no longer (the store's words, "read it again"). The creator check runs before the version check, as the store's does.
+ *    no longer (the store's words, "read it again"). The creator check runs before the version check, as the store's does;
+ *  - a dataset's run order (`/v1/datasets/{id}/run-order`, slice IS6a), in the order the real routes run: the right
+ *    `edit_pipelines` first (403 `{"detail": "Missing right: ..."}`), then the dataset (404, the same for one the person's cases do not
+ *    read and one that does not exist), then the body: `expected_version` is a whole number of 0 or more (FastAPI's 422, `detail` a
+ *    list; a string, a decimal or a flag is not one), `entries` a list, a field the schema does not have refused, a pipeline given
+ *    twice refused; then the store's own refusals: a pipeline that is not one of the person's own pipelines of this dataset (or is a
+ *    previous version) is 422 `run_order_refused` in one set of words whatever the reason, a cycle among the links is 422
+ *    `run_order_cycle` naming the pipelines in it by label, and a number that is not the stored one is 409 `run_order_refused`
+ *    (the store's words, "read it again"). A read shows only the links among the pipelines the person may see, and no entry left
+ *    with none (the real `view_of`).
  */
 import { createServer } from "node:http";
 import type { IncomingHttpHeaders, IncomingMessage, Server, ServerResponse } from "node:http";
@@ -74,6 +83,11 @@ export interface Person {
   casesDenied?: string[];
   /** `"none"`: the registry answers every recipe the person holds, whatever the case's datasets (a fault the page must survive). */
   registryScope?: "case" | "none";
+  /**
+   * `"none"`: the run-order read answers every link it holds, whoever may see its pipelines (a fault the page must survive: it
+   * keeps its own filter and names nothing the table does not hold; slice IS6a). The real route answers the reader's own.
+   */
+  orderScope?: "reader" | "none";
   /** Published pipelines the export left out as marked above what the person may view. */
   leftOut?: number;
   /**
@@ -104,6 +118,44 @@ export interface FakeModel {
   reverted_from: number | null;
   /** The draft's revision: changes on every save and is never one a draft had before (`TargetModel.revision`). */
   revision: string;
+}
+
+/** A dataset's stored run order: the saved version, who and when, and every link, whoever may see it (`StoredRunOrder`). */
+export interface FakeOrder {
+  version: number;
+  saved_by: string;
+  saved_at: string;
+  runs_after: Record<string, string[]>;
+}
+
+/** The words the real store gives (`services/api/dataset_run_order.py`), copied so a change there is a change here. */
+export const ORDER_WORDS = {
+  stale: (meant: number, now: number, by: string, saved: string) =>
+    now === 0
+      ? `you meant version ${meant} of the run order, but none has been saved (it is now version 0): read it again before changing it`
+      : `you meant version ${meant} of the run order, but it is now version ${now}, saved by ${by} on ${saved}: read it again before changing it`,
+  notThisDatasets:
+    "This order names a pipeline that is not one of this dataset's pipelines. Reload the page and set the order again.",
+  cycle: (labels: string[]) =>
+    `This order cannot be saved: each of these pipelines would run after itself, directly or through the others: ${labels.map((l) => `“${l}”`).join(", ")}. Remove one of the links between them.`,
+};
+
+/** Every pipeline that is in a cycle of the links (a component of two or more, or one that links to itself). */
+export function inACycle(links: Record<string, string[]>): Set<string> {
+  const nodes = new Set<string>(Object.keys(links));
+  for (const after of Object.values(links)) for (const q of after) nodes.add(q);
+  const reach = (from: string): Set<string> => {
+    const seen = new Set<string>();
+    const todo = [...(links[from] ?? [])];
+    while (todo.length > 0) {
+      const next = todo.pop() as string;
+      if (seen.has(next)) continue;
+      seen.add(next);
+      todo.push(...(links[next] ?? []));
+    }
+    return seen;
+  };
+  return new Set([...nodes].filter((n) => reach(n).has(n)));
 }
 
 /** A dataset's live version and open draft, either of which may be none. */
@@ -167,6 +219,10 @@ export interface FakeConduit {
   nextModelRefusal: string | undefined;
   /** A model route's next answer is a 409 that is not the store's (`error` is another code): words the page must not show. */
   nextOtherConflict: string | undefined;
+  /** Each dataset's stored run order (slice IS6a), which the run-order routes read and change: a test seeds it and reads it back. */
+  orders: Map<string, FakeOrder>;
+  /** The next save of a run order answers 500, once (a failing store). */
+  failNextOrderSave: boolean;
   people: Map<string, Person>;
   stop(): Promise<void>;
 }
@@ -206,6 +262,8 @@ export async function fakeConduit(people: Person[]): Promise<FakeConduit> {
     models: new Map(),
     nextModelRefusal: undefined,
     nextOtherConflict: undefined,
+    orders: new Map(),
+    failNextOrderSave: false,
     people: new Map(people.map((p) => [p.token, p])),
     stop: () => new Promise((resolve) => server.close(() => resolve())),
   };
@@ -494,6 +552,95 @@ export async function fakeConduit(people: Person[]): Promise<FakeConduit> {
       }
       state.draft = { ...draft, revision: freshRevision(), packs: content.packs as Record<string, number>, extensions: content.extensions as Record<string, unknown>[], reference_lists: content.reference_lists as string[] };
       return json(res, 200, state.draft);
+    }
+    found = /^\/v1\/datasets\/([^/]+)\/run-order$/.exec(path);
+    if (found && (method === "GET" || method === "PUT")) {
+      // The route's own dependencies, in the order the real app runs them: the right, then the dataset, then the body.
+      if (!has("edit_pipelines")) return json(res, 403, { detail: "Missing right: edit_pipelines" });
+      const dataset = decodeURIComponent(found[1] as string);
+      if (!visibleDataset(dataset)) return json(res, 404, { detail: "Not Found" });
+      // The pipelines the person may see in this dataset, as `StudioRecipeStore.list_all` and `pipelines_of` give them.
+      const mine = new Map<string, { label: string; deployed: boolean }>();
+      for (const r of person.pipelines ?? []) {
+        if (r["dataset_id"] !== dataset || r["status"] === "superseded") continue;
+        mine.set(String(r["recipe_id"]), { label: String(r["label"] ?? ""), deployed: r["status"] === "published" });
+      }
+      const stored = fake.orders.get(dataset);
+      const view = (order: FakeOrder | undefined): unknown => {
+        const entries: { pipeline_id: string; runs_after: string[] }[] = [];
+        for (const [pipeline, after] of Object.entries(order?.runs_after ?? {}).sort(([a], [b]) => (a < b ? -1 : 1))) {
+          const everything = person.orderScope === "none";
+          if (!everything && !mine.has(pipeline)) continue;
+          const kept = [...new Set(everything ? after : after.filter((q) => mine.has(q)))];
+          if (kept.length > 0) entries.push({ pipeline_id: pipeline, runs_after: kept });
+        }
+        return order === undefined
+          ? { dataset_id: dataset, version: 0, saved_by: null, saved_at: null, entries: [] }
+          : { dataset_id: dataset, version: order.version, saved_by: order.saved_by, saved_at: order.saved_at, entries };
+      };
+      if (method === "GET") return json(res, 200, view(stored));
+      if (fake.failNextOrderSave) {
+        fake.failNextOrderSave = false;
+        return json(res, 500, { detail: "Internal Server Error" });
+      }
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(body);
+      } catch {
+        return json(res, 422, { detail: [{ type: "json_invalid", loc: ["body"], msg: "JSON decode error" }] });
+      }
+      if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+        return json(res, 422, { detail: [{ type: "model_attributes_type", loc: ["body"], msg: "Input should be a valid dictionary" }] });
+      }
+      const given = parsed as Record<string, unknown>;
+      const problems: unknown[] = [];
+      for (const key of Object.keys(given)) {
+        if (key !== "expected_version" && key !== "entries") problems.push({ type: "extra_forbidden", loc: ["body", key], msg: "Extra inputs are not permitted" });
+      }
+      const number = given["expected_version"];
+      if (number === undefined) problems.push({ type: "missing", loc: ["body", "expected_version"], msg: "Field required" });
+      else if (typeof number !== "number" || !Number.isInteger(number) || number < 0) {
+        problems.push({ type: "greater_than_equal", loc: ["body", "expected_version"], msg: "Input should be a valid integer, greater than or equal to 0" });
+      }
+      const entries = given["entries"];
+      const links: Record<string, string[]> = {};
+      if (!Array.isArray(entries)) problems.push({ type: "list_type", loc: ["body", "entries"], msg: "Input should be a valid list" });
+      else {
+        for (const [i, entry] of entries.entries()) {
+          const e = entry as { pipeline_id?: unknown; runs_after?: unknown } | null;
+          const after = e?.runs_after ?? [];
+          if (typeof e !== "object" || e === null || typeof e.pipeline_id !== "string" || e.pipeline_id === "" || !Array.isArray(after) || after.some((q) => typeof q !== "string")) {
+            problems.push({ type: "value_error", loc: ["body", "entries", i], msg: "Not an entry" });
+            continue;
+          }
+          if (e.pipeline_id in links) problems.push({ type: "value_error", loc: ["body", "entries"], msg: "Value error, entries: each pipeline is given once" });
+          links[e.pipeline_id] = [...new Set(after as string[])];
+        }
+      }
+      if (problems.length > 0) return json(res, 422, { detail: problems });
+      // The store's own refusals: a name the person may not use (one set of words for every reason), then a cycle among what they see.
+      const named = Object.entries(links).flatMap(([p, after]) => [p, ...after]);
+      if (named.some((p) => !mine.has(p))) return json(res, 422, { error: "run_order_refused", detail: ORDER_WORDS.notThisDatasets });
+      const nonEmpty = Object.fromEntries(Object.entries(links).filter(([, after]) => after.length > 0));
+      const cycle = inACycle(nonEmpty);
+      if (cycle.size > 0) {
+        const labels = [...new Set([...cycle].map((p) => mine.get(p)?.label ?? ""))].sort((a, b) => a.localeCompare(b));
+        return json(res, 422, { error: "run_order_cycle", detail: ORDER_WORDS.cycle(labels) });
+      }
+      const now = stored?.version ?? 0;
+      if (number !== now) {
+        return json(res, 409, { error: "run_order_refused", detail: ORDER_WORDS.stale(number as number, now, stored?.saved_by ?? "", stored === undefined ? "" : openedWords(stored.saved_at)) });
+      }
+      // What the person cannot see stays: a stored link naming a pipeline they may not see is kept as it was.
+      const kept: Record<string, string[]> = {};
+      for (const [p, after] of Object.entries(stored?.runs_after ?? {})) {
+        const unseen = after.filter((q) => !mine.has(p) || !mine.has(q));
+        if (unseen.length > 0) kept[p] = unseen;
+      }
+      for (const [p, after] of Object.entries(nonEmpty)) kept[p] = [...new Set([...after, ...(kept[p] ?? [])])];
+      const saved: FakeOrder = { version: now + 1, saved_by: person.id ?? "analyst-1", saved_at: new Date().toISOString(), runs_after: kept };
+      fake.orders.set(dataset, saved);
+      return json(res, 200, view(saved));
     }
     return json(res, 404, { detail: "Not Found" });
   };

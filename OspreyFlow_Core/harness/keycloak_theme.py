@@ -23,6 +23,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import TypedDict
 
+from harness import page_addresses
 from harness.realm import ACCOUNT_EXISTS_MESSAGE, LOGIN_THEME_NAME, REALM_DISPLAY_NAME
 from harness.render import REPO_ROOT, make_shared_folder, write_shared
 from harness.theme_script import read_theme_script
@@ -394,7 +395,7 @@ def login_theme_options(config: OspreyConfig) -> LoginThemeOptions:
     return {
         "reset_by_email": config.mail is not None,
         "appearance": config.appearance,
-        "glass_origin": config.network.public_origin,
+        "glass_origin": page_addresses.client_origin(config),
     }
 
 

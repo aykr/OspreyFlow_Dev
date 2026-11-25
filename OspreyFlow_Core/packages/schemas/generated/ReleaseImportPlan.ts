@@ -3,7 +3,7 @@
 export type DryRun = boolean;
 export type Name = string;
 export type Version = string;
-export type Role = "domain_model" | "pipeline" | "reference_list" | "list_rows";
+export type Role = "domain_model" | "pipeline" | "reference_list" | "list_rows" | "run_order";
 export type Name1 = string;
 export type Action = "new_draft" | "replaces_draft";
 export type Items = ReleaseImportItem[];

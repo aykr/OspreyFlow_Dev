@@ -1,0 +1,56 @@
+diff --git a/OspreyFlow_Build/spec/06_DECISIONS.md b/OspreyFlow_Build/spec/06_DECISIONS.md
+index ed48d36..70d05f7 100644
+--- a/OspreyFlow_Build/spec/06_DECISIONS.md
++++ b/OspreyFlow_Build/spec/06_DECISIONS.md
+@@ -42083,3 +42083,39 @@ Tests that would fail (rule 12; each shown red against a planted fault in the sh
+ allowlist); the fonts test applied to the theme folder's list (a face not in either list); the default build's output holds no GDS Transport
+ file and no GOV.UK token or font once the move has landed, and holds them when the identity is on; the re-recorded baseline differs from the old only
+ in GOV.UK files; and a deployment with the GOV.UK brand and the switch off refuses to start.
++
++### ADR-152, Amendment 5 (24 November 2026) — the page service's addresses are derived in one place; an IP or bracketed origin, and an HTTPS origin on a port the front proxy already uses, are refused; the real Caddy validates the front proxy's Caddyfile on every merge — Proposed for the owner's approval
++
++Status: **Proposed**, for the owner's approval by this diff. The table of cases it rests on was approved by the owner on 24 November 2026, in chat,
++with three changes ("case 14 refuses IP and bracketed origins outright; add a case for an HTTPS origin on the proxy's plain-HTTP port, refused;
++case 12 covers every port the proxy publishes"), and the build it describes is slice PL7f. It amends decisions 4 and 7 and Amendment 3 of this
++record only where they are named below, and leaves the cloud-platform shape's refusal (PL7e lifts it) and the page service's own start-up checks
++(`apps/pages/server/config.ts`, not weakened) as they are.
++
++1. **One place.** `derive` in `OspreyFlow_Core/harness/page_addresses.py` is the only code that computes the page service's issuer, public origin (its
++   default port removed), identity alias, identity listener's port, trust variable and three sign-in variables. It returns them, or a refusal in plain
++   words that names `pages.enabled` and the cause. The page-service render module, the front proxy's module (the Caddyfile and the ports it publishes),
++   the compose renderer and the cloud-platform renderer read what it returns and compute none of it. Nothing in the Caddyfile, the compose file or
++   the chart names a port, a host or an alias that `derive` did not return. (Nine rounds of PL7a2b went on one fault in many forms: each of these was
++   worked out where it was used, and each round found a place where two of them disagreed.)
++2. **What is refused, in order.** The cloud-platform shape; an origin with a path, a query, a fragment or a user name; an IP address or a bracketed
++   (IPv6) host, **outright, because the identity address `id.<host>` needs a name a certificate can carry**; a host that is not a plain ASCII DNS
++   name; plain HTTP; **an HTTPS origin on a port the front proxy already uses**: its plain-HTTP ports (80 and 8080, in every shape), the loopback
++   doors it publishes (the graph store's, and the Conduit's when `network.expose_conduit` asks) and every other port it publishes but its own HTTPS
++   port, the list taken from the one place that publishes them (`proxy_ports` in `OspreyFlow_Core/harness/site.py`), so a port added there is covered
++   at once; the front proxy's own internal authority; the organisation's own certificate with no `ca`. An explicit default port (`https://host:443`)
++   is **not** refused: it is left off the origin, as the service's own check (`raw !== new URL(raw).origin`) requires.
++3. **The table.** The cases are the rows of `OspreyFlow_Build/tests/fixtures/page_addresses_cases.json`, read by three tests: the pure Python test
++   (`test_page_addresses.py`), the node test that calls the page service's own `loadConfig` (so `publicOrigin()`, `oidcSettings()` and
++   `addressSetting`, not a stand-in) on every derived value, and the real-Caddy test.
++4. **The real Caddy.** Every case's rendered Caddyfile is run through `caddy validate`, from the proxy image the deployment uses
++   (`caddy:2.11.4-alpine`, with no network and read-only mounts), in a test that does not skip: where neither the image nor a Caddy 2.11 binary can be
++   run it fails in words. The Mac's gate runs it on every merge; GitHub's `access-key-proxy-test` job is a second place (the release's gate); the test
++   server has no container tooling and lists it as not run. The pure model of the port clash stays as the fast check, never alone.
++
++Tests that would fail (rule 12; each shown red against a planted fault in the shape `derive` returns, rule 15): the table's every row against
++`derive`; each refused row against the render, in the same words and by the same kind of error; each derived row against the rendered service
++environment, the proxy's alias, the Caddyfile's identity site and every port it names; the page service's real `loadConfig` on each derived
++environment; a scan that fails if any module but `page_addresses.py` names the service's address variables or holds a rule of address; a planted origin
++with its default port, a missing listener, a wrong alias, a missing trust variable, an issuer on another realm and a refusal returned as a value; the
++round-9 Caddyfile (an HTTPS identity site on the port the catch-all serves as plain HTTP), which the real Caddy refuses.
+diff --git a/OspreyFlow_Build/spec/ADR_RESERVATIONS.md b/OspreyFlow_Build/spec/ADR_RESERVATIONS.md
+index 8371462..6a58f00 100644
+--- a/OspreyFlow_Build/spec/ADR_RESERVATIONS.md
++++ b/OspreyFlow_Build/spec/ADR_RESERVATIONS.md
+@@ -130,6 +130,7 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
+ | ADR-014 Amendment 2 | The revisit trigger is met: `maplibre-gl` 6.x on Sigma 3, through the binding already in the tree (the owner, 18 November 2026; slice GG6) | slice-GG6 | 2026-11-18 | written |
+ | ADR-152 Amendment 3 | The page service in a deployment is a setting, `pages.enabled`, off by default and turned on per deployment by the owner; while it is off no deployment's rendered output changes (the owner's ruling of 21 Nov on PL7a2; reference render first, slice PL7a2a) | v062 conductor | 2026-11-21 | written |
+ | ADR-152 Amendment 4 | A theme's override block, fonts entry and sign-in theme live in the theme's own folder (`OspreyFlow_Core/packages/themes/<name>/`); the shared design package names no theme; the React GOV.UK look is not moved (F7); the Default baseline is re-recorded once, in PL12d, with a diff of GOV.UK files only (the owner's rulings of 21 Nov on PL12; slice PL12a) | v062 conductor | 2026-11-21 | written |
++| ADR-152 Amendment 5 | The page service's addresses are derived in one place (`OspreyFlow_Core/harness/page_addresses.py`); an IP or bracketed origin, and an HTTPS origin on a port the front proxy already uses, are refused; the real Caddy validates the front proxy's Caddyfile on every merge (the owner's rulings of 23 and 24 Nov on PL7f; slice PL7f) | v062 PL7f | 2026-11-24 | written |
+ 
+ ## Baseline
+ 
