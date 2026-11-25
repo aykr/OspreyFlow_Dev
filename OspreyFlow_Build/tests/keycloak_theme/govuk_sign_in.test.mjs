@@ -50,7 +50,7 @@ test("without a brand the saved choice and the button are as before", () => {
 });
 
 test("the GOV.UK header, skip link and footer are added in reading order", () => {
-  const win = page({ brand: "govuk", settings: SETTINGS });
+  const win = page({ brand: "govuk", settings: { ...SETTINGS, govukIdentity: true } });
   // A link's name as a screen reader gets it here: its text, or the label on its logo.
   const nameOf = (a) => a.textContent.trim() || a.querySelector("[aria-label]")?.getAttribute("aria-label") || "";
   const links = [...win.document.querySelectorAll("a[href]")].map((a) => [nameOf(a), a.getAttribute("href")]);
@@ -182,7 +182,7 @@ test("off gov.uk the footer keeps its words and links and drops everything of th
 });
 
 test("on gov.uk the footer is as it was, Crown and all", () => {
-  const win = page({ brand: "govuk", settings: SETTINGS, url: "https://id.prison-intelligence.service.gov.uk/realms/osprey/" });
+  const win = page({ brand: "govuk", settings: { ...SETTINGS, govukIdentity: true }, url: "https://id.prison-intelligence.service.gov.uk/realms/osprey/" });
   const footer = win.document.querySelector(".govuk-footer");
   assert.ok(footer.querySelector(".govuk-footer__crown"));
   assert.ok(/Crown copyright/.test(footer.textContent));
@@ -192,7 +192,7 @@ test("on gov.uk the footer is as it was, Crown and all", () => {
 // ADR-132 Amendment 8 (the owner, 13 November 2026): off gov.uk the sign-in page's header has no crown,
 // as its footer has none (Amendment 7); the GOV.UK word mark stays. On gov.uk it is as it was.
 test("off gov.uk the header draws no crown, the word mark kept", () => {
-  const win = page({ brand: "govuk", settings: SETTINGS });
+  const win = page({ brand: "govuk", settings: { ...SETTINGS, govukIdentity: true } });
   const logo = win.document.querySelector(".govuk-header__logotype");
   assert.ok(logo);
   assert.equal(logo.querySelector("g"), null);
@@ -201,6 +201,23 @@ test("off gov.uk the header draws no crown, the word mark kept", () => {
 });
 
 test("on gov.uk the header draws the crown", () => {
-  const win = page({ brand: "govuk", settings: SETTINGS, url: "https://id.prison-intelligence.service.gov.uk/realms/osprey/" });
+  const win = page({ brand: "govuk", settings: { ...SETTINGS, govukIdentity: true }, url: "https://id.prison-intelligence.service.gov.uk/realms/osprey/" });
   assert.ok(win.document.querySelector(".govuk-header__logotype g"));
 });
+
+// ADR-152 decision 14, invariant I9 (the owner's ruling of 23 November 2026, answer A): the switch is the only thing that turns
+// the GOV.UK identity on, so a settings object with no `govukIdentity` key (one written before the switch existed) is OFF.
+// It draws no logotype and no crown anywhere, on a gov.uk address too.
+for (const url of ["https://id.prison-intelligence.service.gov.uk/realms/osprey/", "http://id.govuk.ospreyflow.localhost:8081/realms/osprey/"]) {
+  test(`a settings object with no govukIdentity key draws no crown and no GOV.UK identity (${new URL(url).hostname})`, () => {
+    assert.ok(!("govukIdentity" in SETTINGS));
+    const win = page({ brand: "govuk", settings: { ...SETTINGS, organisation: "Ministry of Examples" }, url });
+    const doc = win.document;
+    assert.equal(doc.querySelector(".govuk-header__logotype"), null);
+    assert.equal(doc.querySelector(".govuk-header svg"), null);
+    assert.equal(doc.querySelector(".govuk-footer__crown"), null);
+    assert.equal(doc.querySelector(".govuk-footer__licence-logo"), null);
+    assert.ok(!/Crown copyright|Open Government Licence/.test(doc.body.textContent));
+    assert.ok(doc.querySelector(".govuk-header").textContent.includes("Ministry of Examples"));
+  });
+}

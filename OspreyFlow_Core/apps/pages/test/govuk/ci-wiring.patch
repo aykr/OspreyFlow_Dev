@@ -1,9 +1,25 @@
 --- a/.github/workflows/ci.yml
 +++ b/.github/workflows/ci.yml
-@@ -1296,6 +1296,21 @@
+@@ -1296,6 +1296,37 @@
        - run: npx playwright test --config map-verify/playwright.config.ts -g "contrast floor"
          working-directory: OspreyFlow_Core/apps/workspace
 
++  # ADR-152 invariant I9 and the owner's ruling of 21 November 2026 (slice PL7c): the GOV.UK identity (the crown, the GOV.UK
++  # logotype, GDS Transport) in a real browser, with the switch off and on, on and off a gov.uk address
++  # (`apps/pages/test/govuk/identity.spec.ts`). Playwright against a page assembled from the real stylesheets the build writes,
++  # served by the browser's own request interception, so it needs no server, port, stack or Python. A separate job, as the
++  # pages' keyboard runner's is.
++  govuk-identity:
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++      - uses: actions/setup-node@v4
++        with: { node-version: "22" }
++      - run: npm ci
++      - run: npx playwright install --with-deps chromium
++        working-directory: OspreyFlow_Core/apps/pages
++      - run: npm run test:govuk --workspace apps/pages
++
 +  # ADR-152 decisions 6 and 12 and `CLAUDE.md` rule 13 (slices IS5a and GR2a): the server-rendered pages' own keyboard runners, one
 +  # folder per tree. Playwright against the real pages server started inside each case (a free port, the in-memory store, the assets
 +  # built to a scratch folder), so it needs no Valkey, no stack and no Python. `npm run test:keyboard` runs the Default tree's

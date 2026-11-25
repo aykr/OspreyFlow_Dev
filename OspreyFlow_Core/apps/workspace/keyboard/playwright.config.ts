@@ -14,7 +14,7 @@ export default defineConfig({
   testMatch: /.*\.spec\.ts$/,
   timeout: 60_000,
   webServer: {
-    command: `node scripts/sync_govuk_assets.mjs && npx vite --port ${PORT} --strictPort`,
+    command: `OSPREY_GOVUK_IDENTITY=1 node scripts/sync_govuk_assets.mjs && npx vite --port ${PORT} --strictPort`,
     port: PORT,
     reuseExistingServer: process.env.OSPREY_REUSE_SERVER === "1",
     cwd: "..",

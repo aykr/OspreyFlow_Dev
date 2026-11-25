@@ -440,7 +440,7 @@ def render_login_theme(
     if not govuk:
         return files
     assert appearance is not None
-    settings = {
+    settings: dict[str, object] = {
         "serviceName": appearance.service_name,
         "organisation": appearance.organisation,
         "phase": appearance.phase,
@@ -449,6 +449,9 @@ def render_login_theme(
     if appearance.banner_text is not None:
         # ADR-132 Amendment 7; absent when unset, so the theme is byte for byte as it was.
         settings["bannerText"] = appearance.banner_text
+    # ADR-152 decision 14, invariant I9: written as true or false every time under the GOV.UK brand,
+    # never left out: the sign-in script reads settings with no key as from before the switch.
+    settings["govukIdentity"] = bool(appearance.govuk_identity)
     files[THEME_PROPERTIES] = _PROPERTIES.replace(
         "js/osprey-sign-in.js", "js/osprey-sign-in.js js/govuk-chrome.js"
     )
@@ -456,8 +459,24 @@ def render_login_theme(
     files[THEME_STYLESHEET] = (
         f'@import url("{GOVUK_STYLESHEET_URL}");\n' + files[THEME_STYLESHEET] + _GOVUK_RULES
     )
+    # The typeface needs the address as well as the switch (GDS Transport's licence: ADR-152
+    # Amendment 2 item 3), and the address is the browser's, so the script decides it;
+    # `harness/govuk_chrome.js` and `isGovUkHost` agree.
+    identity = (
+        'document.documentElement.setAttribute("data-govuk-identity", "on");\n'
+        "(function () {\n"
+        '  var host = window.location.hostname.toLowerCase().replace(/\\.$/, "");\n'
+        '  if (host === "gov.uk" || host.slice(-7) === ".gov.uk") {\n'
+        '    document.documentElement.setAttribute("data-govuk-typeface", "on");\n'
+        "  }\n"
+        "})();\n"
+        if appearance.govuk_identity
+        else ""
+    )
     files[THEME_SCRIPT] = (
-        'document.documentElement.setAttribute("data-brand", "govuk");\n' + files[THEME_SCRIPT]
+        'document.documentElement.setAttribute("data-brand", "govuk");\n'
+        + identity
+        + files[THEME_SCRIPT]
     )
     files[GOVUK_CHROME_SCRIPT] = (
         f"window.OSPREY_GOVUK = {json.dumps(settings)};\n" + read_govuk_chrome_script()

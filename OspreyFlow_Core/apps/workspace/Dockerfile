@@ -53,6 +53,18 @@ COPY packages/glass-shared/src ./packages/glass-shared/src
 # planted one.
 ENV VITE_API_BASE_URL=""
 
+# **The GOV.UK identity switch (ADR-152 decision 14, invariant I9; the owner's ruling of 21 November 2026).**
+# GDS Transport is licensed for services on GOV.UK domains only, so the default image holds none of it: the build's
+# sync step (`scripts/sync_govuk_assets.mjs`) copies the face's files into the bundle only when this is `1` or
+# `true`. The renderer passes `--build-arg OSPREY_GOVUK_IDENTITY=1` for a deployment whose `appearance.govuk_identity`
+# is on, and for no other (`harness/render.py`); the default is empty, so an image built with no argument is the
+# default image. An `ARG` here, unlike `VITE_API_BASE_URL` above, is meant to be passed: the one value it takes
+# changes which files the bundle holds, never an address. It lives in this builder stage only; the runtime stage
+# below copies the built folder and nothing else. `tests/glass_trees/test_default_build_holds_no_gds_transport.py`
+# reads this and runs the step both ways.
+ARG OSPREY_GOVUK_IDENTITY=
+ENV OSPREY_GOVUK_IDENTITY=$OSPREY_GOVUK_IDENTITY
+
 RUN npm run build --workspace apps/workspace
 
 FROM nginx:1.30-alpine

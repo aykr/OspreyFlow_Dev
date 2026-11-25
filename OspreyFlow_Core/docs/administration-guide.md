@@ -46,10 +46,11 @@ fullest account, with what holds each constraint today and what is "coming".
 <!-- document-control:begin -->
 ## Document control
 
-**Version 2.41** · 2026-11-22 · For OspreyFlow v0.6.1 · Issued
+**Version 2.42** · 2026-11-23 · For OspreyFlow v0.6.1 · Issued
 
 | Version | Date | What changed |
 | --- | --- | --- |
+| 2.42 | 2026-11-23 | Appendix A: `appearance.govuk_identity` (the GOV.UK identity switch, off by default, ADR-152 decision 14), from the schema. PDF made again. |
 | 2.41 | 2026-11-22 | §8 and §10's reference: the `models.provider.kind` and `models.providers.kind` rows say the organisation's own gateway is offered on every profile and Bedrock on the cloud platform only (ADR-135 Amendment 14), and the `ospreyflow models` row names its four answers (yes, no, lost after a restore, unknown while the Conduit does not answer). Version set at merge (slice AD1a), after main's 2.29. |
 | 2.40 | 2026-11-22 | §8 and §10: adding a model engine from Admin › Models (ADR-135 Amendment 14: a provider chosen from a list, a typed model name, the key and each name proved by one call before *Add*); a model key is write-only, managed in Admin › Models, kept by the model gateway alone, and `ospreyflow models` says "unknown" while the deployment is stopped, never reading `deployment.env`; prefer the hidden prompt, since `export` lands in shell history (the owner's key review, 15 November 2026). Version set at merge (slice AD1a), after main's 2.29. |
 | 2.39 | 2026-11-22 | "How OspreyFlow is built": the lead-in to the tiers and ports no longer says everything between the tiers crosses one of four ports. It says what crosses the four ports, that three narrower ports sit beside them, and that the relational store, the working-set store and the search index are not behind a port (DC1c round 7). The passage *Why OspreyFlow is built this way* is unchanged. PDF made again. |
@@ -3557,6 +3558,7 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `appearance.organisation` | str or none | none | The organisation in the GOV.UK footer and the page title. |
 | `appearance.phase` | `alpha` \| `beta` \| `live` \| `none` | `none` | The phase banner shows at alpha or beta. |
 | `appearance.banner_text` | str or none | none | The banner's own words, in place of "This is a new service.", in the Glass and on the sign-in page: after the phase's tag at alpha or beta, alone at live or none. One line of at most 200 characters. |
+| `appearance.govuk_identity` | bool | false | The GOV.UK identity switch: whether, under `brand: govuk`, the page shows the crown, the GOV.UK logotype and the GOV.UK typeface (GDS Transport, which is licensed for services on GOV.UK domains only). Off, the header carries the organisation's name and the type is the fallback stack; a build holds no GDS Transport file. true or false, nothing else. It means nothing under `ospreyflow`. The crown still shows only on a gov.uk address. |
 | `pages` | section | — | Whether the deployment runs the page service (the server-rendered pages): off, and turned on for one deployment at a time by the owner. |
 | `pages.enabled` | bool | false | Whether this deployment runs the page service, the server-rendered pages. true or false, nothing else: it is turned on for one deployment at a time, by the owner, in that deployment's own file. |
 | `grading` | section | — | The scheme every drawn node and link is graded in (ADR-143 decision 11); changed only by `ospreyflow grading change`. |
