@@ -9,3 +9,4 @@ routes:
   - /help
   - /admin/people
   - /cases
+  - /cases/boards

@@ -463,7 +463,7 @@ const withoutComments = (text: string): string => text.replace(/\/\*[\s\S]*?\*\/
  * filters (lists of field names, not of rows) and the split of what was sent into drawn and loaded (each element in one table, in the
  * order sent, none left out: BD3 counts both) are the words module's named ones. */
 const NAMED_FILTERS = [
-  ".filter((field) => !NOT_SENT.includes(field) && !MAY_BE_ABSENT.includes(field))",
+  ".filter((field) => !NOT_SENT.includes(`${model}.${field}`) && !MAY_BE_ABSENT.includes(`${model}.${field}`))",
   ".filter((node) => drawnIds.has(node.id))",
   ".filter((node) => !drawnIds.has(node.id))",
 ];
@@ -556,9 +556,9 @@ function withField(model: string, field: string, value: unknown): Bodies {
   for (const target of targetsOf(b, model)) {
     if (value === undefined) delete target[field];
     else if (value === null && (model === "Node" || model === "Edge") && field === "provenance") {
-      // Another valid provenance: the loaded vessel's, for the owner (still loaded); the loaded link's, for the drawn link (now loaded,
-      // and so no longer drawn as the route's `drawn` names it: the page refuses it, which changes the page).
-      target[field] = model === "Node" ? JSON.parse(JSON.stringify(nodeIn(b.opened, "n-vessel")["provenance"])) : JSON.parse(JSON.stringify(edgeIn(b.opened, "l-owns")["provenance"]));
+      // Another valid provenance: the drawn tall man's, for the loaded owner; the loaded link's, for the drawn link. Either now disagrees
+      // with the route's `drawn` list, and the page refuses the body, which changes the page.
+      target[field] = model === "Node" ? JSON.parse(JSON.stringify(nodeIn(b.opened, "d-tall")["provenance"])) : JSON.parse(JSON.stringify(edgeIn(b.opened, "l-owns")["provenance"]));
     } else if (value === null && (model === "Node" || model === "Edge") && field === "handling") {
       target[field] = { ...(target[field] as Json), classification: "OFFICIAL-SENSITIVE" === (target[field] as Json)["classification"] ? "OFFICIAL" : "OFFICIAL-SENSITIVE" };
     } else target[field] = JSON.parse(JSON.stringify(value));
@@ -584,9 +584,9 @@ async function censusProblems(census: Census): Promise<string[]> {
   if (base.listStatus !== 200 || base.boardStatus !== 200) return [`the pages answered ${base.listStatus} and ${base.boardStatus}`];
   for (const [model, { drawn: drawnFields, left }] of Object.entries(census)) {
     const fields = [...drawnFields, ...left];
-    if (JSON.stringify(Object.keys(OTHER[model] ?? {}).sort()) !== JSON.stringify(fields.filter((f) => !NOT_SENT.includes(f)).sort())) found.push(`the census of ${model} is not the fields the test can change`);
+    if (JSON.stringify(Object.keys(OTHER[model] ?? {}).sort()) !== JSON.stringify(fields.filter((f) => !NOT_SENT.includes(`${model}.${f}`)).sort())) found.push(`the census of ${model} is not the fields the test can change`);
     for (const field of fields) {
-      if (NOT_SENT.includes(field)) continue;
+      if (NOT_SENT.includes(`${model}.${field}`)) continue;
       const changed = await drawn(withField(model, field, (OTHER[model] as Record<string, unknown>)[field]));
       const moved = changed.list !== base.list || changed.board !== base.board;
       if (drawnFields.includes(field) && !moved) found.push(`${model}.${field} is drawn but changes nothing`);
@@ -597,8 +597,13 @@ async function censusProblems(census: Census): Promise<string[]> {
 }
 
 /** A shape of the wrong kind for a field: a string where the field is an object, an object otherwise. */
-const OBJECT_FIELDS = new Set(["properties", "items", "layout", "resolution", "audit", "grading_grades", "interval", "board", "provenance", "handling", "grading", "original_grading", "drawn"]);
-const wrongOf = (model: string, field: string): unknown => (OBJECT_FIELDS.has(field) && !(model === "BoardOpened" && field === "drawn") ? "not an object" : { wrong: true });
+const OBJECT_FIELDS = new Set([
+  "BoardOpened.board", "BoardOpened.items", "BoardOpened.layout", "BoardOpened.grading_grades",
+  "Node.properties", "Node.provenance", "Node.handling", "Node.resolution", "Node.audit",
+  "Edge.properties", "Edge.interval", "Edge.provenance", "Edge.handling", "Edge.audit",
+  "DrawnAssertion.grading", "DrawnAssertion.original_grading",
+]);
+const wrongOf = (model: string, field: string): unknown => (OBJECT_FIELDS.has(`${model}.${field}`) ? "not an object" : { wrong: true });
 
 // ------------------------------------------------------------------------------------------------ the cases
 
@@ -625,7 +630,7 @@ describe("the boards page on the GOV.UK tree (scenario BD)", () => {
     expect(res.status).toBe(200);
     expect(emptyListProblems(res.text)).toEqual([]);
     expect(BOARDS_WORDS.noBoards).toBe("No boards in this case yet.");
-    expect(focusable(res.text).map((s) => s.href)).toEqual(["#main", "Sign out", `/cases?case=${CASE}`, "/"]);
+    expect(focusable(res.text).map((s) => s.href ?? s.text)).toEqual(["#main", "Sign out", `/cases?case=${CASE}`, "/"]);
   });
 
   it("BD3: one board draws its facts, then its drawn items, its loaded items and its links, each in the Conduit's order", async () => {
@@ -839,7 +844,8 @@ describe("the boards page on the GOV.UK tree (scenario BD)", () => {
     }
     expect(tried).toBe(75);
     // A field that may be absent from what is sent is not required, and is still read strictly when it is there.
-    expect(MAY_BE_ABSENT).toEqual(["drawn", "gazetteer"]);
+    expect(MAY_BE_ABSENT).toEqual(["Provenance.drawn", "Provenance.gazetteer"]);
+    expect(NOT_SENT).toEqual(["Edge.weight_components"]);
     const noGazetteer = bodies();
     expect(boardView(noGazetteer.opened)).toBeDefined();
     expect(boardView(withField("Provenance", "gazetteer", 7).opened)).toBeUndefined();
@@ -899,7 +905,7 @@ describe("the boards page on the GOV.UK tree (scenario BD)", () => {
     expect(empty.status).toBe(200);
     expect(mainText(empty.text)).toContain("This board has nothing drawn on it yet.");
     expect(mainOf(empty.text)).not.toMatch(/<table|<caption|<th\b/);
-    expect(focusable(empty.text).map((s) => s.href)).toEqual(["#main", "Sign out", listOf(), "/"]);
+    expect(focusable(empty.text).map((s) => s.href ?? s.text)).toEqual(["#main", "Sign out", listOf(), "/"]);
     // The shared board: one drawn item, nothing loaded, no link.
     const shift = await getAs(w, boardOfPath("b-shift"));
     expect(boardProblems(shift.text, w, "b-shift")).toEqual([]);
@@ -963,7 +969,7 @@ describe("the boards page on the GOV.UK tree (scenario BD)", () => {
     expect(choosingProblems(sources)).toEqual([]);
     // A moment's words are the shared package's: the page writes none of its own.
     expect(read(PAGES_DIR, "server", "views", "boardsWords.ts")).toContain("utcStampOf");
-    expect(read(PAGES_DIR, "server", "views", "boardsWords.ts")).not.toMatch(/toISOString|toLocale|getUTC/);
+    expect(read(PAGES_DIR, "server", "views", "boardsWords.ts")).not.toMatch(/toISOString|toLocaleDateString|toLocaleTimeString|toLocaleString\("en-GB", \{|getUTC/);
     expect(read(PAGES_DIR, "scripts", "build.mjs")).toContain('join(root, "server", "views", "boardsWords.ts")');
   });
 

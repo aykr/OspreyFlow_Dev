@@ -398,8 +398,8 @@ def census_problems(data: dict[str, Any]) -> list[str]:
             found.append(f"the model {model} is not in its source")
             continue
         fields, excluded = parsed
-        all_excluded |= excluded
-        all_popped |= popped_fields(source, model) & set(fields)
+        all_excluded |= {f"{model}.{field}" for field in excluded}
+        all_popped |= {f"{model}.{field}" for field in popped_fields(source, model) & set(fields)}
         if model not in census:
             found.append(f"the page's census has no line for {model}")
             continue
@@ -657,7 +657,7 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
     ),
     (
         "a field never on the wire read as required",
-        _replace("words", 'export const NOT_SENT: readonly string[] = ["weight_components"]', "export const NOT_SENT: readonly string[] = []"),
+        _replace("words", 'export const NOT_SENT: readonly string[] = ["Edge.weight_components"]', "export const NOT_SENT: readonly string[] = []"),
         census_problems,
         "never on the wire",
     ),
@@ -669,7 +669,7 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
     ),
     (
         "a field that may be absent read as required",
-        _replace("words", 'export const MAY_BE_ABSENT: readonly string[] = ["drawn", "gazetteer"]', 'export const MAY_BE_ABSENT: readonly string[] = ["gazetteer"]'),
+        _replace("words", 'export const MAY_BE_ABSENT: readonly string[] = ["Provenance.drawn", "Provenance.gazetteer"]', 'export const MAY_BE_ABSENT: readonly string[] = ["Provenance.gazetteer"]'),
         census_problems,
         "MAY_BE_ABSENT",
     ),
