@@ -68,18 +68,35 @@ def raw_of(shape: str, origin: str) -> dict[str, Any]:
     return raw
 
 
+#: The release version the capture renders under. The version is not an address, but the
+#: cluster's chart values hold the Glass settings on one line with the host, so a version that
+#: depends on where the capture runs (a tag, `dev-<commit>`, or the VERSION file in a tree taken
+#: out of git) would make the in-process run and the run against the reference's tree differ for a
+#: reason that has nothing to do with the sign-in addresses.
+PINNED_VERSION = "v0.0.0-pinned"
+
+
 def capture() -> dict[str, Any]:
     """For each shape and origin: the address fields of `sites`, the Glass's sign-in client, the
     page service's sign-in client (registered through the admin API on every deployment whose
     `deployment.env` holds its secret, the setting on or off), the organisation's redirect addresses, the sign-in page's Glass origin, and every line of every
     rendered file that holds the deployment's host (compose, env file, Caddyfile, realm, runbook,
     Glass settings, chart values), in either case."""
+    from unittest import mock
+
     from harness import keycloak_theme, realm
     from harness.render import render
     from harness.site import sites
 
     from schemas.deployment import OspreyConfig
 
+    with mock.patch("harness.release.checkout_version", lambda *_: PINNED_VERSION):
+        return _capture(OspreyConfig, keycloak_theme, realm, render, sites)
+
+
+def _capture(
+    OspreyConfig: Any, keycloak_theme: Any, realm: Any, render: Any, sites: Any  # noqa: N803
+) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for shape, origins in ORIGINS.items():
         for origin in origins:
