@@ -5,10 +5,13 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   copyTexts,
+  discWalkCount,
+  GUARD_TEST_TIMEOUT_MS,
+  plantedLinkClients,
   movedClients,
   MOVED_FOLDERS,
   plantedCopy,
@@ -25,6 +28,9 @@ import {
 // pays one walk, and says so in its own timeout: the planted fault of PL4h makes a walk take 6 s, as a loaded server can,
 // so that test is given 30 s, for this test alone and never for the suite or the config.
 const ONE_FRESH_WALK_MS = 30_000;
+
+// Every test below that walks a folder of the disc afresh (`walkOnDisc`, or `sourceFiles` of a folder the hook did not walk)
+// pays that walk, and says so in its own timeout (never one raised for the suite or the config).
 
 describe("the copy guards' kit shares one walk and one parse and changes what is read in nothing", () => {
   it("walks the same files as a fresh walk of each root on disc finds", () => {
@@ -94,6 +100,32 @@ describe("the copy guards' kit shares one walk and one parse and changes what is
     } finally {
       planted.remove();
     }
+  });
+
+  it("lists a plant's copy from the shared walk: no walk of the copy, and the very files of the shared package re-rooted", () => {
+    sourceFiles();
+    const before = discWalkCount();
+    const planted = plantedLinkClients('export const PLANTED = { note: "a placeholder value" };');
+    try {
+      const listed = sourceFiles([planted.root]);
+      expect(discWalkCount(), "a plant walked the disc").toBe(before);
+      const shared = sourceFiles().filter((path) => path.startsWith(SHARED_SRC));
+      expect(listed.map((path) => relative(planted.root, path)).sort()).toEqual(
+        shared.map((path) => relative(SHARED_SRC, path)).sort(),
+      );
+      // Every listed file is really there, and the plant is in each of the link clients.
+      expect(listed.length).toBeGreaterThan(50);
+      expect(planted.files.every((file) => listed.includes(join(planted.root, file)))).toBe(true);
+    } finally {
+      planted.remove();
+    }
+  });
+
+  it("gives the guards' tests an explicit limit, set by the kit and explained there", (context) => {
+    expect(GUARD_TEST_TIMEOUT_MS).toBeGreaterThan(5_000);
+    expect(vi.getConfig().testTimeout).toBe(GUARD_TEST_TIMEOUT_MS);
+    // This test was collected under it: its own task carries the limit, not vitest's 5 s.
+    expect(context.task.timeout).toBe(GUARD_TEST_TIMEOUT_MS);
   });
 
   it("forgets a plant's copy when it is removed, so a later walk of that folder is a new one", () => {

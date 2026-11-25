@@ -41,11 +41,22 @@ export function walkedOnce(walk: (roots?: readonly string[]) => string[]): (root
 /** The files under `roots` (by default both), skipping tests, test kits and generated types: the walk, made once for
  * each list of roots (`walkedOnce`). */
 export const sourceFiles = walkedOnce(function sourceFiles(roots: readonly string[] = ROOTS): string[] {
-  return roots.flatMap((root) => filesUnder(root));
+  return roots.flatMap((root) => discWalk(root));
 });
 
 /** A fresh walk of `dir` on disc, never the shared one: for the tests that hold the shared one to what the disc says. */
 export function walkOnDisc(dir: string): string[] {
+  return discWalk(dir);
+}
+
+/** The walks of a folder on disc made so far in this file (PL4h): the walk of the real roots and each `walkOnDisc`. A test
+ * of the kit reads it before and after a plant, and holds that a plant lists its copy from the shared walk, not from the disc. */
+let discWalks = 0;
+export function discWalkCount(): number {
+  return discWalks;
+}
+function discWalk(dir: string): string[] {
+  discWalks += 1;
   return filesUnder(dir);
 }
 
@@ -168,7 +179,7 @@ export function movedClients(): string[] {
 function copySharedPackage(): { root: string; remove: () => void } {
   const root = mkdtempSync(join(tmpdir(), "copy-guard-"));
   cpSync(SHARED_SRC, root, { recursive: true });
-  walks.set(root, filesUnder(root));
+  walks.set(root, discWalk(root));
   return {
     root,
     remove: () => {
