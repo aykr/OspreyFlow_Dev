@@ -303,3 +303,27 @@ Where each place that writes the public origin now reads: `site.sites`, `realm._
 
 **Also found and fixed:** `test_realm_pages_client.py::test_the_other_shapes_refuse_the_service` still named the refusals that
 round 1 moved out of `pages_service`; it was outside the checks list and failed since then. It calls `page_addresses.require`.
+
+## Round 9 (the owner's reserve add-round; the scout's table `PL7f_ROUND9_TABLE.md`, two rows)
+
+**Row 1: a cluster HTTPS origin on a port the load balancer does not publish.** `harness.cluster.proxy_ports` lists 80 and
+443 for any HTTPS origin; the cluster publishes **no HTTPS port but 443**, so every other port is refused. `derive` has a new
+check of its own, `_not_published` (after `_port_taken`), which reads that list (and `cluster.HTTPS_PUBLISHED`, now a named
+constant there beside `PLAIN_HTTP_PUBLISHED`; page_addresses' own `_CLUSTER_HTTPS_PORT` is gone) and refuses in words naming
+`pages.enabled`, the port and "does not publish". Ports the list names beside 443 (80) are still refused as taken, with their
+own words. Red first (commit `8282e65`): row `16-cluster-9443` becomes a refusal (key `port_taken`); it failed
+`test_derive_returns_what_the_table_says` and the render-refusal test; new tests: a refusal on 9443 and 8444, red with
+`_not_published` taken out, 443 still derived (and refused if the list stops naming it). Row 16's reading is "small's
+rule, on the cluster's own list"; no other row of the approved table changed. `test_pages_setting.py`: the two cluster tests
+that took 9443 as derived now take 443 / assert the refusal. Spec 05 section 2.8 says it.
+
+**Row 2: the Glass client, the theme and the organisation's address.** The code was already `derive`'s (no code change); the
+gap was a test. `test_the_glass_client_the_theme_and_the_organisation_agree_with_derive` (every derived row: the Glass's
+redirect, web origin and post-logout address, the theme's `glass_origin`, the organisation's redirect and post-logout
+addresses, compared as they are against `derive`), and `test_the_other_sign_in_addresses_are_red_for_main_s_raw_origin_form`
+(main's raw-origin form planted in `client_origin` and in `broker_identity`, cases 7 and 14: red, naming the place). Spec 05
+section 2.8 names both tests.
+
+**Checks:** the three acceptance files, `test_pages_setting.py`, `test_reference_render.py`, `test_cloud_platform_render.py`,
+`test_doc_citations_check.py` (1219 passed, 1 skipped, as before); the Caddy test ran the image `caddy:2.11.4-alpine` (41
+passed, none skipped); `npm test --workspace apps/pages` (861); ruff; design-check; colour-drift; the theme tests.
