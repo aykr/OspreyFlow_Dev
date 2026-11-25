@@ -376,12 +376,9 @@ CADDY_INNER = {
 }
 
 
-def test_the_one_command_reaches_the_real_docker_and_every_other_stays_refused(
-    tmp_path: Path,
-) -> None:
-    """End to end, through `subprocess.run` and the session's own wrapper: the Caddy test's one
-    command starts the docker found on the real path (the stand-in records it; the refusing shim
-    on the session's `PATH` does not), and the others are skipped in words and start nothing."""
+def _caddy_suite(tmp_path: Path) -> tuple[Path, dict[str, str], Path]:
+    """An inner suite holding the Caddy test's file name, under the switch, with a stand-in `docker`
+    as the only real one: (the suite, the environment, the file the stand-in records into)."""
     lease = tmp_path / "lease"
     lease.mkdir()
     (lease / "no-local-stacks").touch()
@@ -405,8 +402,12 @@ def test_the_one_command_reaches_the_real_docker_and_every_other_stays_refused(
         "PATH": f"{stand_in}{os.pathsep}/usr/bin{os.pathsep}/bin",
         "PYTHONPATH": os.pathsep.join([str(BUILD), os.environ.get("PYTHONPATH", "")]),
     }
+    return suite, env, ran
+
+
+def _run_inner(suite: Path, env: dict[str, str], *args: str) -> str:
     done = subprocess.run(  # noqa: S603 - this interpreter, an inner pytest of our own
-        [sys.executable, "-m", "pytest", "-p", "no:cacheprovider", "-rs", "-q", str(suite)],
+        [sys.executable, "-m", "pytest", "-p", "no:cacheprovider", "-rs", "-q", *args, str(suite)],
         capture_output=True,
         text=True,
         env=env,
@@ -414,8 +415,73 @@ def test_the_one_command_reaches_the_real_docker_and_every_other_stays_refused(
         timeout=120,
         check=False,
     )
-    out = done.stdout + done.stderr
+    return done.stdout + done.stderr
+
+
+def test_the_one_command_reaches_the_real_docker_and_every_other_stays_refused(
+    tmp_path: Path,
+) -> None:
+    """End to end, through `subprocess.run` and the session's own wrapper: the Caddy test's one
+    command starts the docker found on the real path (the stand-in records it; the refusing shim
+    on the session's `PATH` does not), and the others are skipped in words and start nothing."""
+    suite, env, ran = _caddy_suite(tmp_path)
+    out = _run_inner(suite, env)
     assert "1 passed, 5 skipped" in out, out
     started = ran.read_text(encoding="utf-8").splitlines() if ran.exists() else []
     assert len(started) == 1 and started[0].startswith("run --rm --network none -v "), started
     assert "caddy:2.11.4-alpine sh -c" in started[0], started
+
+
+def test_the_one_command_holds_under_the_merge_gates_own_run(tmp_path: Path) -> None:
+    """The merge gate runs `make test` as `pytest -c <tree>/OspreyFlow_Build/pytest.ini -n auto
+    --dist loadgroup` from a temporary copy of the tree, with `PYTEST_DEBUG_TEMPROOT` set to a
+    temporary base of its own beside it (PL7f round 10: under xdist every worker's plugin put a
+    second refusing `docker` in front of the controller's, and the one exempt call, handed "the
+    docker on the `PATH` without this process's shim", found the controller's shim and was refused
+    in all 40 of the Caddy test's cases). The same inner suite, run as the gate runs it: the one
+    command still reaches the real docker, once, and the others are still refused."""
+    suite, env, ran = _caddy_suite(tmp_path)
+    temproot = tmp_path / "suite-pytest"
+    temproot.mkdir()
+    out = _run_inner(
+        suite,
+        {**env, "PYTEST_DEBUG_TEMPROOT": str(temproot)},
+        "-c",
+        str(suite / "pytest.ini"),
+        "-n",
+        "2",
+        "--dist",
+        "loadgroup",
+    )
+    assert "1 passed, 5 skipped" in out, out
+    started = ran.read_text(encoding="utf-8").splitlines() if ran.exists() else []
+    assert len(started) == 1 and started[0].startswith("run --rm --network none -v "), (
+        started,
+        out,
+    )
+
+
+def test_a_refusing_shim_left_by_a_parent_session_is_never_handed_out(tmp_path: Path) -> None:
+    """The shape xdist makes at the call site: `PATH` leads with the controller's shim, then the
+    worker's own. The real docker is the one after both; the controller's shim is not it."""
+    switch = tmp_path / "no-local-stacks"
+    switch.touch()
+    controller = tmp_path / "osprey-no-docker-controller"
+    worker = tmp_path / "osprey-no-docker-worker"
+    real = tmp_path / "real"
+    for folder in (controller, worker, real):
+        folder.mkdir()
+    local_docker_guard.refusing_docker(controller, switch)
+    local_docker_guard.refusing_docker(worker, switch)
+    (real / "docker").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    (real / "docker").chmod(0o755)
+    path = os.pathsep.join([str(worker), str(controller), str(real), "/usr/bin", "/bin"])
+    old = os.environ["PATH"]
+    os.environ["PATH"] = path
+    try:
+        assert local_docker_guard.the_real_docker(worker) == str(real / "docker")
+        os.environ["PATH"] = os.pathsep.join([str(worker), str(controller), "/usr/bin", "/bin"])
+        found = local_docker_guard.the_real_docker(worker)
+        assert found is None or "osprey-no-docker-" not in found, found
+    finally:
+        os.environ["PATH"] = old
