@@ -168,7 +168,8 @@ def guarded_popen(
 # reason). Under xdist (`make test`, the merge gate) each worker's plugin puts a second refusing
 # `docker` in front of the one its controller put on the `PATH` the worker inherited, so the lookup
 # of the real docker leaves out every folder made with `SHIM_PREFIX`, not only its own (PL7f round
-# 10; `test_the_one_command_holds_under_the_merge_gates_own_run`). Every other docker call stays refused under the switch, the refusing `docker` on the
+# 10; `test_the_one_command_holds_under_the_merge_gates_own_run`). Every other docker call stays
+# refused under the switch, the refusing `docker` on the
 # session's `PATH` included: the one exempt call is handed the real docker (found on the `PATH`
 # without the shim's folder), and nothing else is.
 #
