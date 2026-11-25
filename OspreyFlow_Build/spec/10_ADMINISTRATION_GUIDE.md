@@ -3214,7 +3214,7 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `cloud_platform.claims.client_id` | str | required | The Glass's own app registration (application id) |
 | `cloud_platform.claims.api_client_id` | str | required | This API's app registration (application id): the token's audience |
 | `cloud_platform.claims.superset_client_id` | str or none | none | Superset's own app registration (application id), when reporting.superset is on: people sign in to Superset with it, and its delegated token reads the Conduit's GET /v1/me and /v1/me/rights alone |
-| `cloud_platform.claims.pages_client_id` | str or none | none | The pages service's own app registration (application id), when the pages service is on: people sign in to it with it, and its delegated token is the person on every route their rights allow, as the Glass's |
+| `cloud_platform.claims.pages_client_id` | str or none | none | The pages service's own app registration (application id). The page service is not for use yet; this is what people will sign in to it with, and its delegated token will be the person on every route their rights allow, as the Glass's |
 | `cloud_platform.claims.api_id_uri` | str or none | none | The API's application id URI, which the Glass's scope names |
 | `cloud_platform.claims.token_version` | `2.0` \| `1.0` | `2.0` | The access token version the API's registration is issued (accessTokenAcceptedVersion): the issuer and audience the Conduit checks follow it |
 | `cloud_platform.claims.scope` | str | `access_as_user` | The delegated scope the Glass asks the API for |
@@ -3312,7 +3312,7 @@ Made from the deployment's own schema. Settings marked *section* hold the settin
 | `appearance.phase` | `alpha` \| `beta` \| `live` \| `none` | `none` | The phase banner shows at alpha or beta. |
 | `appearance.banner_text` | str or none | none | The banner's own words, in place of "This is a new service.", in the Glass and on the sign-in page: after the phase's tag at alpha or beta, alone at live or none. One line of at most 200 characters. |
 | `appearance.govuk_identity` | bool | false | The GOV.UK identity switch: whether, under `brand: govuk`, the page shows the crown, the GOV.UK logotype and the GOV.UK typeface (GDS Transport, which is licensed for services on GOV.UK domains only). Off, the header carries the organisation's name and the type is the fallback stack; a build holds no GDS Transport file. true or false, nothing else. It means nothing under `ospreyflow`. The crown still shows only on a gov.uk address. |
-| `pages` | section | — | Whether the deployment runs the page service (the server-rendered pages): off, and turned on for one deployment at a time by the owner. |
+| `pages` | section | — | The page service (the server-rendered pages): the setting exists and is off; it is not for use yet. |
 | `pages.enabled` | bool | false | Whether this deployment runs the page service, the server-rendered pages. The setting exists and is off; it is not for use yet, and nothing is switched on by it for a deployment you run. true or false, nothing else. |
 | `grading` | section | — | The scheme every drawn node and link is graded in (ADR-143 decision 11); changed only by `ospreyflow grading change`. |
 | `grading.scheme` | str | `5x5x5` | The scheme drawn items are graded in: 5x5x5; 3x5x2, whose handling code (P or C) is part of the grade and never merged with the marking; or the path of a scheme file (.yaml, beside this file unless absolute) naming its own scheme and each part's grades. |

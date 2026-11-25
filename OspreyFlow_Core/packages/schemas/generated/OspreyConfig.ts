@@ -222,7 +222,7 @@ export type ApiClientId = string;
  */
 export type SupersetClientId = string | null;
 /**
- * The pages service's own app registration (application id), when the pages service is on: people sign in to it with it, and its delegated token is the person on every route their rights allow, as the Glass's (ADR-152 decision 11)
+ * The pages service's own app registration (application id). The page service is not for use yet; this is what people will sign in to it with, and its delegated token will be the person on every route their rights allow, as the Glass's (ADR-152 decision 11)
  */
 export type PagesClientId = string | null;
 /**

@@ -16,7 +16,7 @@ update. Work not yet in a release is listed under *Unreleased*.
   the page service, the server-rendered pages; it is `false` unless the owner sets it, and nothing else turns it on
   (not a profile, a brand or a release). The renderers read it: while it is off, or not written, every deployment's
   rendered files are exactly what they were, in every shape and under each brand, and a value that is not `true` or
-  `false` is refused in words. Where the setting is turned on in a test or a trial, the page service's addresses (its
+  `false` is refused in words. In a test, the page service's addresses (its
   issuer, public origin, sign-in and trust, and the front proxy's alias and listener for it) are worked out in one
   place, and a setting that could not sign anyone in is refused in words rather than rendered: plain HTTP, a
   certificate from the front proxy's own authority or an own certificate with no `ca`, an IP address or bracketed

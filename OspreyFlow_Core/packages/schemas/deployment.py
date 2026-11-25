@@ -1163,9 +1163,9 @@ class EntraSignInConfig(BaseModel):
     pages_client_id: str | None = Field(
         default=None,
         pattern=_ENTRA_ID,
-        description="The pages service's own app registration (application id), when the pages "
-        "service is on: people sign in to it with it, and its delegated token is the person on "
-        "every route their rights allow, as the Glass's (ADR-152 decision 11)",
+        description="The pages service's own app registration (application id). The page service "
+        "is not for use yet; this is what people will sign in to it with, and its delegated token "
+        "will be the person on every route their rights allow, as the Glass's (ADR-152 decision 11)",
     )
     api_id_uri: str | None = Field(
         default=None,
