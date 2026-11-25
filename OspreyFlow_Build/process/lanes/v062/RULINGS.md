@@ -3,6 +3,10 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 25 November 2026: GR3a's structural fix, (A)+(B) (the owner, in chat, about 05:30 UTC)
+
+**GR3a was stopped under D225 item 3** (rounds 4, 5 and 6 found the same kind: the page drifting from what the real route sends, hidden by a hand-written fixture). **(A), GR3a's round 7:** a strict reader (a body missing a field the generated `MonitoringFigures`/`ReportFigures` types require is the page's "could not be read" answer, never a zero; a test case per required field, made from the type's own field list); a field census (a test walks every field of the generated type and fails unless the page draws it or spec/08 names it as left out); the fixture's team view counts `mine` and `older_than_week` from its world. **(B), a new part GR3b:** every GOV.UK page's fixture Conduit answers from the real route (a Python test runs the real routes in-process over the same synthetic worlds, stores at the conformance fakes, and writes golden JSON the page tests serve; a test fails when a golden drifts from the route). Its brief is drafted for the owner's rulings.
+
 ## 25 November 2026: IS6a's cycle through a hidden pipeline (the owner, in chat, about 05:00 UTC)
 
 **Option (a).** The save refuses, naming them, every cycle among pipelines the saver can see; **a cycle that closes only through a pipeline hidden from the saver is stored, and refused at the run**, in words to whoever runs it or can see every pipeline in it. **This amends the owner's IS6 ruling 3 (24 November, "a cycle is refused on save, naming its pipelines") for that case only; access rule 3 stays whole:** the saver is never told, by refusal, wording, count or timing, that a hidden pipeline or a path through one exists. **Finding 2 (the import plan's pipeline count) is fixed in the same round.**
