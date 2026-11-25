@@ -408,7 +408,7 @@ in the table (the timeline seven tenths of the window; the column leaving the ca
 height) are computed by the store from the live window at each resize, never from the page's markup, which cannot
 follow a window that is resized after it is written; a bound a page passes can only lower them. Every write of a
 size goes through one function in the store that holds it to them, Home (which asks for the default, 340 or 130) and a
-pointer drag included. A kept size above today's limit is brought down when it is read and at the next key press. A size still at its default (340px, 130px) that a small window cannot hold is shown at the window's limit and is not stored, so that a reload in a roomy window opens at the default again; only a size the analyst chose is stored.
+pointer drag included. A kept size above today's limit is brought down when it is read and at the next key press. A size still at its default (340px, 130px) that a small window cannot hold is shown at the window's limit and is not stored, so that a reload in a roomy window opens at the default again; only a size the analyst chose is stored. Home is a reset: it stores the default (340px, 130px), which the sash draws held to the window's limit and the page's bound, and never stores the limit or the bound in its place, so a later page with no bound, or a reload in a roomy window, opens at the default.
 
 ### 2.0 The top bar (ADR-065; rebuilt by ADR-097 step 1)
 

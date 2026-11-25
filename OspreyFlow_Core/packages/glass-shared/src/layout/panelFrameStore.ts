@@ -34,7 +34,7 @@
 // `maxPx` and never lifted), then writes. The `layoutSizes` setters are not called from anywhere else (a test reads this
 // file and fails on any other call), and `SIZE_WRITERS` below lists the entry points that reach the writer: a test
 // walks each against three viewports and fails if `actions` has a key that is neither listed there nor known to write
-// no size. Home asks the writer for the default, so it is held to the limit like any other size.
+// no size. Home asks the writer for the default, which it stores as the default (a reset, never the bound) and the window shows held to the limit.
 //
 // With no script, nothing in this folder runs: every panel is in its normal state with no controls (the markup a page
 // writes carries none).
@@ -373,7 +373,8 @@ export function createPanelFrameStore(options: PanelFrameStoreOptions = {}): Pan
     shownSize({ ...kept, limits }, axis, { maxPx });
 
   /**
-   * One size, held between its minimum and its limit (`"default"`: the size a reset gives, held to the limit too).
+   * One size, held between its minimum and its limit (`"default"`: the size a reset gives, stored as the default and
+   * shown held to the limit, never stored as the limit).
    *
    * A column or timeline still at its default, with no other size kept, is not a size the analyst chose: when only the
    * window's limit brings it down it is shown lower (`shownSizes`) and nothing is written, so a reload in a roomy window
@@ -385,13 +386,21 @@ export function createPanelFrameStore(options: PanelFrameStoreOptions = {}): Pan
   const apply = (target: SizeTarget, request: number | "default", limits: Limits, maxPx?: number, fitting = false): void => {
     const kept = getLayoutSizes();
     if (target.axis === "side-width") {
-      const to = request === "default" ? DEFAULT_SIDE_WIDTH : request;
-      const next = clamp(to, MIN_SIDE_WIDTH, lowered(limits.sideWidth, MIN_SIDE_WIDTH, maxPx));
+      // A reset asks for the default itself: what the sash shows is that default held to the limit and the page's bound
+      // (`shownSize`), and what is stored is the default, so a bound is never kept as if the analyst chose it (round 12).
+      if (request === "default") {
+        if (kept.sideWidth !== DEFAULT_SIDE_WIDTH) sizeStore.setSideWidth(DEFAULT_SIDE_WIDTH);
+        return;
+      }
+      const next = clamp(request, MIN_SIDE_WIDTH, lowered(limits.sideWidth, MIN_SIDE_WIDTH, maxPx));
       if (kept.sideWidth === DEFAULT_SIDE_WIDTH && (fitting || next === heldBy(kept, "side-width", limits, maxPx))) return;
       sizeStore.setSideWidth(next);
     } else if (target.axis === "timeline-height") {
-      const to = request === "default" ? DEFAULT_TIMELINE_HEIGHT : request;
-      const next = clamp(to, MIN_TIMELINE_HEIGHT, lowered(limits.timelineHeight, MIN_TIMELINE_HEIGHT, maxPx));
+      if (request === "default") {
+        if (kept.timelineHeight !== DEFAULT_TIMELINE_HEIGHT) sizeStore.setTimelineHeight(DEFAULT_TIMELINE_HEIGHT);
+        return;
+      }
+      const next = clamp(request, MIN_TIMELINE_HEIGHT, lowered(limits.timelineHeight, MIN_TIMELINE_HEIGHT, maxPx));
       if (kept.timelineHeight === DEFAULT_TIMELINE_HEIGHT && (fitting || next === heldBy(kept, "timeline-height", limits, maxPx))) return;
       sizeStore.setTimelineHeight(next);
     } else if (request === "default") {
