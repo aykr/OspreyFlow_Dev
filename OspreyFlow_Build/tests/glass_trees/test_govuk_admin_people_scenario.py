@@ -274,9 +274,10 @@ def function_problems(data: dict[str, Any]) -> list[str]:
 
 
 def route_problems(data: dict[str, Any]) -> list[str]:
-    if data["routes"] != ["/help", PATH]:
+    # The tree's third page, the cases page (slice GR1a), is listed after it (`test_govuk_cases_scenario.py` holds that).
+    if data["routes"] != ["/help", PATH, "/cases"]:
         return [
-            f"the route list is {data['routes']!r}: the tree has two pages, /help and {PATH}"
+            f"the route list is {data['routes']!r}: the tree has three pages, /help, {PATH} and /cases"
         ]
     return []
 
@@ -513,13 +514,13 @@ PLANTS: list[
         "a route in the list the code has no page for",
         lambda d: d["routes"].append("/welcome"),
         route_problems,
-        "two pages",
+        "three pages",
     ),
     (
         "the People path left out of the list",
         lambda d: d["routes"].remove(PATH),
         route_problems,
-        "two pages",
+        "three pages",
     ),
     (
         "the page at another path",
