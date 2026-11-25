@@ -1,10 +1,26 @@
-# Slice GR4a · GR4 · Trends shown together: a pack's saved trends on one GOV.UK page, read-only (DRAFT for the owner's rulings at about 12:30, 25 November 2026; no row)
+# Slice GR4a · GR4 · Trends shown together: a pack's saved trends on one GOV.UK page, read-only (ruled by the owner, 25 November 2026)
 
-**Status: a draft.** No row in `slices.tsv` and not started until the owner rules on the questions below. Written for
-an away round on the server's build account (the owner's plan for 25 November): its own branch, a commit at least
-every 15 minutes, nothing merged or pushed to the dev repository. On return it enters the line as the conductor's
-report of the same day describes (a normal part started from main whose round 1 merges the away branch in, on the
-owner's word).
+**Status: ruled; an away round (D246).** It runs on the server's build account while the owner is away: **on the
+branch `away/GR4a`, a commit at least every 15 minutes, nothing merged or pushed to the dev repository.** On the
+owner's return he fetches `away/GR4a` from server-backup into this checkout; the conductor then starts GR4a from main
+as any part, and **its round 1 merges `away/GR4a` in** (the owner's one exception to the 23 November rule, for D246's
+away rounds only), so the Stop hook, the verifier and the merge judge it as any part's work.
+
+## The owner's rulings (25 November 2026), which replace the questions below
+
+1. **Read-only first:** one pack's trend items, in the pack's stored order, each as its figures drawn (plain SVG with
+   classes and a table of the same figures), withheld items said as withheld (I21). Arranging is GR4b.
+2. **The pack's own snapshots, with their counted-on date**, as the pack shows them; no live trend read.
+3. **Whoever may read the pack now** (`record_assessment` for a working pack, `read_reports` for a published one);
+   anyone else gets the same 404, words and status, as a pack that does not exist.
+4. **"Trends shown together", at `/packs/{pack_id}/trends`** in the GOV.UK tree. No code, route or word reuses the
+   drawing board's names.
+5. **A new spec/08 scenario first** (TS), red first, from these rulings. **With the spec changes, correct ADR-152
+   decision 10's citation** (`app.py:19494` is the trend preview route's right; a pack item names a trend at
+   `packages/schemas/packs.py:128`, added through `app.py:19762`), with the decision log's own checks green.
+6. **The page reads with the strict reader and the field census** the owner ruled for GR3a (a body missing a required
+   field is "could not be read", never a zero; every field of the generated types drawn or named as left out), and its
+   fixture models the real pack routes' shapes and refusals (rule 15).
 
 ## What exists today (a read-only scout, 25 November 2026)
 
@@ -39,7 +55,7 @@ owner's word).
 - **No acceptance scenario** for a GOV.UK trends page, packs page or board exists in `spec/08` (only C12, the
   Glass's). A missing scenario is the first item (the owner's rule for IS2 and the GR parts).
 
-## Questions for the owner (my proposal first in each)
+## The questions as put to the owner (ruled above: each (a), the proposal, was chosen)
 
 1. **Scope of the first slice.** (a) **Read-only:** one pack's trend items, in the pack's stored order, each as its
    figures drawn (plain SVG with classes and a table of the same figures, as GR3a), withheld items said as withheld
@@ -55,7 +71,7 @@ owner's word).
    `/packs/{pack_id}/trends` in the GOV.UK tree; (b) your words.
 5. **The scenario:** a new `spec/08` scenario (say **TS**) written first, red first, from your answers.
 
-## The table of cases (for the owner's rulings; each red first, planted faults at the real call site: rule 15)
+## The table of cases (each red first, planted faults at the real call site: rule 15)
 
 | # | Case | Expected |
 | --- | --- | --- |

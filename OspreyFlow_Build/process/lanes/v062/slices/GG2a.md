@@ -1,8 +1,28 @@
-# Slice GG2a · GG2 · The budget page: Sigma 4 in the page service, measured against spec/02 §5 at 50,000 nodes and 250,000 links, before any graph module is built (DRAFT for the owner's rulings at about 12:30, 25 November 2026; no row)
+# Slice GG2a · GG2 · The budget page: Sigma 4 in the page service, measured against spec/02 §5 at 50,000 nodes and 250,000 links, before any graph module is built (ruled by the owner, 25 November 2026)
 
-**Status: a draft.** No row and not started until the owner rules. An away round on the server's build account
-**only if PL7f has merged by 13:00** (the owner's plan for 25 November); its own branch, a commit at least every 15
-minutes, nothing merged or pushed to the dev repository. **The budget itself is measured on the owner's Mac when he
+**Status: ruled (the owner, 25 November 2026: proposals 1(a) to 6(a) below); an away round (D246) only if PL7f has
+merged by 13:00.** On the server's build account: **on the branch `away/GG2a`, a commit at least every 15 minutes,
+nothing merged or pushed to the dev repository.** On the owner's return he fetches `away/GG2a` from server-backup; the
+conductor starts GG2a from main and **its round 1 merges `away/GG2a` in** (the owner's one exception, D246's away
+rounds only).
+
+**The owner's rulings, in short:** a module of its own under `apps/pages/modules/graph/`, served only by the perf
+harness, in no tree's route list and never in a production render; the workspace's CI gate unchanged in
+`apps/pages/test/perf/graph.spec.ts`, red first on a never-matching readiness selector, three runs recorded, and
+**§5's own numbers measured on the owner's Mac on his return and brought to him**; the workspace's fixture generator
+moved to `packages/glass-shared` and used by both; the newest Sigma 4.x at least 14 days old, pinned exactly, with the
+graphology it needs, `ALLOWED_DRAWING` gaining only what the module imports, for its bundle alone; **if CI misses the
+gate, stop and bring the figures** (never a loosened gate). **On the server, no figure is a measurement of the owner's
+Mac:** each is recorded with the machine it ran on.
+
+**A correction by the conductor (25 November 2026, after the rulings): no licence register row is needed.** The
+draft said the register lacked rows for `sigma`, `@sigma/*`, `graphology` and `maplibre-gl`. That was wrong:
+`spec/LICENCE_REGISTER.yaml` is only for "what the code gate does not see: model weights, map data, fonts and base
+images" (its header; `spec/00` §7). JavaScript packages are code, and `make licence-check`'s Node half
+(`tools/licence_check.mjs`) reads each installed package's declared licence (`license-checker`) against §7's allowlist (MIT and
+BSD-3-Clause allowed outright). So ruled item 4's "register rows for both" and case 9 below are replaced by: **Sigma
+4 and its graphology pass `make licence-check` (`license-checker` over the installed packages)**, and their licences are named in `spec/02`'s library
+table beside Sigma 3's. The owner was told, and his ruling 6 (PL11b) is held until he confirms it is withdrawn. **The budget itself is measured on the owner's Mac when he
 is back** (his ruling of 18 November, `RULINGS.md` line 386: "GG2's scope and the I12 thresholds [deferred] until
 GG2a (the budget page) has measured Sigma 4 on the owner's Mac; the numbers go to the owner then").
 
@@ -31,11 +51,11 @@ GG2a (the budget page) has measured Sigma 4 on the owner's Mac; the numbers go t
   workspace, not a page-service module; it is the risk this slice measures first.
 - **Not anywhere today:** Sigma 4 (every package pins `sigma` and `@sigma/*` at `^3.0.0`); `apps/pages/test/perf/`;
   any graph route in the page service. `apps/pages/scripts/assets.mjs` lines 31 to 33 refuse every drawing import
-  (`ALLOWED_DRAWING = []`, `DRAWING = /^(sigma|@sigma\/.+|maplibre-gl)(\/|$)/`). **The licence register
-  (`spec/LICENCE_REGISTER.yaml`) has no row for `sigma`, `graphology` or `maplibre-gl` at all**, though the workspace
-  ships them: a gap of its own, for the owner (`make licence-check` reads the lock, not the register, it seems).
+  (`ALLOWED_DRAWING = []`, `DRAWING = /^(sigma|@sigma\/.+|maplibre-gl)(\/|$)/`). ~~The licence register has no row
+  for `sigma`, `graphology` or `maplibre-gl`~~ (**withdrawn: the register is not for code**; the drawing libraries
+  pass `make licence-check`'s Node half (`license-checker` over the installed packages), against `spec/00` §7's allowlist: see the correction at the top).
 
-## Questions for the owner (my proposal first in each)
+## The questions as put to the owner (ruled above: each (a), the proposal, was chosen)
 
 1. **What the page is.** (a) **A module of its own under `apps/pages/modules/graph/`** (ADR-152: interactive modules
    are kept once for both trees) that draws the perf fixture with Sigma 4, served only by the perf harness, **in
@@ -69,7 +89,7 @@ GG2a (the budget page) has measured Sigma 4 on the owner's Mac; the numbers go t
 | 6 | The page service's bundles | `sigma` allowed in the module's bundle alone; a planted Sigma import in any other page is refused (`bundleRules.test.ts`) |
 | 7 | No React | `no_react_check.mjs` green with the module in |
 | 8 | Not served in production | no tree's route list names it; a render of every profile has no path to it (if question 1 is (a)) |
-| 9 | The licence | the register's rows for Sigma 4 and graphology; `make licence-check` green, and red with the row removed |
+| 9 | The licence | Sigma 4 and graphology pass `make licence-check` (`license-checker` over the installed packages) (the code gate; no register row: see the correction above); `spec/02`'s library table names their licences |
 
 ## Checks (to be frozen at the start)
 
