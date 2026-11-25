@@ -17,9 +17,11 @@ not.
 from __future__ import annotations
 
 import os
+import socket
 import sys
 from pathlib import Path
 
+import _socket
 import pytest
 
 from tools.layout import REPO as REPO_ROOT
@@ -195,6 +197,55 @@ def test_the_helper_stops_and_removes_what_it_started_whatever_the_test_did(
             raise RuntimeError("the test failed")
     assert isinstance(seen["pid"], int) and not _alive(seen["pid"])
     assert isinstance(seen["folder"], Path) and not seen["folder"].exists()
+
+
+def _bare_binds(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Puts `socket.socket.bind` back to the system's own, so the port guard's replacement (which already
+    steers every bind to port 0 off a reserved port, and so would hide the helper's own check) is out of the
+    way. In CI the guard is off and this changes nothing."""
+    monkeypatch.setattr(socket.socket, "bind", _socket.socket.bind)
+
+
+def test_the_helper_never_takes_a_port_the_guard_reserves(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Every port the system could hand out is reserved, so the helper has none it may take and must say so.
+    Without its own reserved-port check it would return the system's first choice and this test would fail."""
+    from tests import port_guard, private_postgres
+
+    _bare_binds(monkeypatch)
+    monkeypatch.setattr(port_guard, "reserved_ports", lambda: set(range(1, 65536)))
+    with pytest.raises(RuntimeError, match="no loopback port"):
+        private_postgres._free_port()
+
+
+def test_the_helper_never_takes_a_live_deployments_port(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The same for `LIVE_PORTS` (the owner's deployment, the demo, the proxy), with nothing else reserved."""
+    from tests import port_guard, private_postgres
+
+    _bare_binds(monkeypatch)
+    monkeypatch.setattr(port_guard, "reserved_ports", lambda: set())
+    monkeypatch.setattr(port_guard, "LIVE_PORTS", dict.fromkeys(range(1, 65536), "every port"))
+    with pytest.raises(RuntimeError, match="no loopback port"):
+        private_postgres._free_port()
+
+
+def test_the_helper_starts_nothing_when_every_port_is_reserved(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`running_postgres` itself refuses rather than listening on a reserved port, and leaves nothing behind."""
+    from tests import port_guard, private_postgres
+
+    if not private_postgres.bin_dirs():
+        pytest.skip("no initdb on this machine: install PostgreSQL to run this test")
+    _bare_binds(monkeypatch)
+    monkeypatch.setattr(port_guard, "reserved_ports", lambda: set(range(1, 65536)))
+    with pytest.raises(RuntimeError, match="no loopback port"):
+        with private_postgres.running_postgres(tmp_path):
+            pytest.fail("a private database was started on a reserved port")
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_with_no_initdb_the_helper_skips_in_words_naming_initdb(
