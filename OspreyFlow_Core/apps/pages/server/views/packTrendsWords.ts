@@ -49,8 +49,10 @@ export const PACK_TRENDS_WORDS = {
   sum: (field: string): string => `Sum of ${field}`,
   total: "Total",
   noSeries: "No series",
-  chart: (title: string, bars: number, unit: string, from: string, to: string, most: string): string =>
-    `${title}: one bar for each of ${formatNumber(bars)} ${unit}, from ${from} to ${to}; the tallest bar is ${most}.`,
+  chart: (title: string, bars: number, unit: string, from: string, to: string, most: string | undefined, below: boolean): string =>
+    `${title}: one bar for each of ${formatNumber(bars)} ${unit}, from ${from} to ${to}; ` +
+    (most === undefined ? "no bar has any height, as no total is above zero" : `the tallest bar is ${most}`) +
+    (below ? "; a period whose total is below zero has no height, and the table gives every figure." : "."),
   weeks: "weeks",
   months: "months",
   unreadable: "The trends could not be read just now. Nothing is shown, and nothing has changed. Try again in a few minutes.",
@@ -204,7 +206,10 @@ function trendView(figures: TrendFigures, marking: string): TrendView {
   const value = (period: string, series: string): number =>
     result.points.reduce((sum, p) => (periodKey(p.period_start) === period && (bySeries ? (p.series ?? "") === series : true) ? sum + p.value : sum), 0);
   const totals = periods.map((period) => columns.reduce((sum, series) => sum + value(period, series), 0));
+  // A bar has no height below zero (a sum of a signed property can total less: `TrendPoint.value` has no lower bound), as the workspace's
+  // chart draws it; the table gives the figure, and the text alternative says so rather than a tallest bar the table does not hold.
   const most = totals.reduce((a, b) => Math.max(a, b), 0);
+  const below = totals.some((total) => total < 0);
   const measure = result.measure === "sum" ? PACK_TRENDS_WORDS.sum(definition.measure_field ?? "the chosen property") : PACK_TRENDS_WORDS.count;
   const first = formatDay(periods[0] ?? figures.window_start);
   const last = formatDay(periods[periods.length - 1] ?? figures.as_of);
@@ -215,11 +220,11 @@ function trendView(figures: TrendFigures, marking: string): TrendView {
     marking: PACK_TRENDS_WORDS.marking(marking),
     sentence: trendSentence(figures),
     chart: {
-      label: PACK_TRENDS_WORDS.chart(definition.title, periods.length, result.interval === "month" ? PACK_TRENDS_WORDS.months : PACK_TRENDS_WORDS.weeks, first, last, formatNumber(most)),
+      label: PACK_TRENDS_WORDS.chart(definition.title, periods.length, result.interval === "month" ? PACK_TRENDS_WORDS.months : PACK_TRENDS_WORDS.weeks, first, last, most > 0 || !below ? formatNumber(most) : undefined, below),
       width: Math.max(1, periods.length) * SLOT,
       height: TALLEST,
       bars: totals.map((total, i) => {
-        const height = most === 0 ? 0 : Math.round((total / most) * TALLEST * 100) / 100;
+        const height = most === 0 || total <= 0 ? 0 : Math.round((total / most) * TALLEST * 100) / 100;
         return { x: i * SLOT + (SLOT - BAR) / 2, y: Math.round((TALLEST - height) * 100) / 100, width: BAR, height };
       }),
     },
