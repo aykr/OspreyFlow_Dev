@@ -3,6 +3,10 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 25 November 2026: IS6a's cycle through a hidden pipeline (the owner, in chat, about 05:00 UTC)
+
+**Option (a).** The save refuses, naming them, every cycle among pipelines the saver can see; **a cycle that closes only through a pipeline hidden from the saver is stored, and refused at the run**, in words to whoever runs it or can see every pipeline in it. **This amends the owner's IS6 ruling 3 (24 November, "a cycle is refused on save, naming its pipelines") for that case only; access rule 3 stays whole:** the saver is never told, by refusal, wording, count or timing, that a hidden pipeline or a path through one exists. **Finding 2 (the import plan's pipeline count) is fixed in the same round.**
+
 ## 24 November 2026, night: PL7f's Docker exemption (D234) and AD1c's read-only role (the owner, in chat, about 23:50 to 23:55 UTC)
 
 **PL7f (D234), option 1 of its report:** exempt in `tests/local_docker_guard.py` exactly the Caddy test's one command (`docker run --rm --network none`, the pinned `caddy:2.11.4-alpine` image, the three read-only mounts), named by the test; every other docker call stays refused under `no-local-stacks`, and a planted fault shows a second command refused. Sent back to its builder for that change; the conductor adds the scan-map row for `tests/harness/test_page_addresses.py` from the folders its report lists. **When 017-1 lands, this test moves to the server's container checks and the exemption comes out.** (The conductor's correction: PL7f's round-2 brief had said the switch was lifted; it is still on.)

@@ -52,3 +52,15 @@ The new and changed tests; the existing `apps/pages` vitest files; `tests/glass_
 ## Out of scope
 
 **Any run of a dataset's pipelines, any change to `POST /v1/runs`, `external_runs.py` or `pipeline.py`; the scheduler job file and its schema; the L08 cover; any suggestion of an order (rule 5: a model-derived suggestion stays inferred and is not stored as the order; the suggestion is not in this slice);** `apps/workspace`; the protected files. **A finding that names an access rule, a key, a credential or a security rule is stopped and reported, never accepted narrower.**
+
+## Round 4 (the owner's ruling of 25 November 2026, in chat, on the round-3 verifier's two faults)
+
+**Finding 1, the cycle through a hidden pipeline: the owner chose (a).** Your round-3 design stands, now on his word.
+1. **The save refuses, naming them, every cycle among the pipelines the saver can see** (as `refuse_a_cycle` does).
+2. **A cycle that closes only through a pipeline hidden from the saver is stored**, and the saver is told nothing of it: no refusal, no different wording, count or timing (access rule 3 stays whole). Prove both, red first: a planted change that runs the cycle check over the merged links (stored hidden ones included) and refuses must turn a test red, because it tells the saver a hidden path exists; and a cycle among visible pipelines is still refused, naming them.
+3. **"Refused at the run, in words to whoever runs it or can see every pipeline in it":** this part stores the order only, and no code runs it yet (the scheduler is a later part, by the owner's IS6 ruling 5). **Do not build a run.** Write the rule into `spec/09_INGEST_STUDIO.md` §1.2 beside the save's: a stored order whose links make a cycle is not run, said in words to whoever runs it or can see every pipeline in it, never to someone who cannot see one of them; the part that runs the order owns it, with a test. Say in your report that you wrote it.
+4. **This amends his IS6 ruling 3 for that case only.** Correct any sentence (spec/09 §1.2, the brief's text you quote, a docstring) that still says every cycle is refused on save.
+
+**Finding 2, the import plan's count:** the words for a bundle's run order count the pipelines it relates, not `len(links)`. Alpha ← Beta ← Gamma says "the run order among 3 of its pipelines". Red first with that chain.
+
+Nothing else this round.
