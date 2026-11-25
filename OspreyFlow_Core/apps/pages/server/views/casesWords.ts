@@ -8,7 +8,7 @@
  *
  * **The strict reader.** A body is read field by field against the route's model: `InvestigationListing` (`services/api/app.py`),
  * `Investigation` (`services/api/investigations.py`) and `CaseBrief`, `BriefRequirement` and `BriefAttachment`
- * (`services/api/case_brief.py`). Every field the route sends must be there, of its type (`REQUIRED`); a body missing one, or with one of
+ * (`services/api/case_brief.py`). Every field the route sends (`REQUIRED`) must be there, of its type; a body missing one, or with one of
  * another shape, is not a view (`undefined`), said as "could not be read", never as a zero, an empty list or an empty brief (rule 2).
  * **The field census.** `CENSUS` names, for each model, the fields the page draws and the fields it leaves out; Scenario CS's "Left out,
  * by field name" sentence names the same, and `tests/glass_trees/test_govuk_cases_scenario.py` holds both to the models' own fields.
@@ -114,8 +114,9 @@ const isTexts = (value: unknown): value is string[] => Array.isArray(value) && (
 const isPacks = (value: unknown): value is DomainPack[] => isTexts(value) && value.every((pack) => PACKS.includes(pack));
 const isLevel = (value: unknown): value is Level => LEVELS.some((level) => level === value);
 
-/** Every field of `model` is in `body`: a missing one is a body the page does not draw from. */
-const whole = (body: Record<string, unknown>, model: Model): boolean => REQUIRED[model].every((field) => field in body);
+// No separate presence check: each field is checked for its type below, and `undefined` is no field's type (`answered_at` is a time or
+// `null`), so a missing field is refused by the same check as a wrong one. A presence check beside it was planted out and nothing went
+// red: it could not fail on its own, so it is not here (rule 15). `test/govuk/cases.test.ts` CS10 removes each field of `REQUIRED` in turn.
 
 /** The address of a case's page: one page with the case in its query (a page's path is a plain path: `pages.ts`). */
 export const caseHref = (id: string): string => `/cases?case=${encodeURIComponent(id)}`;
@@ -124,7 +125,7 @@ export const caseHref = (id: string): string => `/cases?case=${encodeURIComponen
 function listingOf(row: unknown):
   | { id: string; name: string; level: Level; created_at: string; domains: DomainPack[]; tab_hidden: boolean; datasets: string[] }
   | undefined {
-  if (!isObject(row) || !whole(row, "InvestigationListing")) return undefined;
+  if (!isObject(row)) return undefined;
   const { id, name, level, created_at, created_by, domains, tab_hidden, datasets, dataset_ids } = row;
   if (!isText(id) || !isText(name) || !isLevel(level) || !isText(created_at) || !isText(created_by)) return undefined;
   if (!isPacks(domains) || typeof tab_hidden !== "boolean" || !isTexts(datasets) || !isTexts(dataset_ids)) return undefined;
@@ -163,14 +164,14 @@ export function listView(body: unknown): ListView | undefined {
 }
 
 function attachmentOf(body: unknown): Kind | undefined {
-  if (!isObject(body) || !whole(body, "BriefAttachment")) return undefined;
+  if (!isObject(body)) return undefined;
   const { kind, id, title } = body;
   if (!KINDS.some((known) => known === kind) || !isText(id) || !isText(title)) return undefined;
   return kind as Kind;
 }
 
 function requirementOf(body: unknown): RequirementRow | undefined {
-  if (!isObject(body) || !whole(body, "BriefRequirement")) return undefined;
+  if (!isObject(body)) return undefined;
   const { id, text, status, answered_at, attachments } = body;
   if (!isText(id) || !isText(text) || !STATUSES.some((known) => known === status)) return undefined;
   if (!(answered_at === null || isText(answered_at)) || !Array.isArray(attachments)) return undefined;
@@ -189,7 +190,7 @@ function requirementOf(body: unknown): RequirementRow | undefined {
 }
 
 function briefOf(body: unknown): BriefView | undefined {
-  if (!isObject(body) || !whole(body, "CaseBrief")) return undefined;
+  if (!isObject(body)) return undefined;
   const { priority, requirements } = body;
   if (!isText(priority) || !Array.isArray(requirements)) return undefined;
   const rows: RequirementRow[] = [];
@@ -208,7 +209,7 @@ function briefOf(body: unknown): BriefView | undefined {
  * case (it is never drawn without its level).
  */
 export function caseView(caseId: string, investigation: unknown, brief: unknown, list: unknown): CaseView | undefined {
-  if (!isObject(investigation) || !whole(investigation, "Investigation")) return undefined;
+  if (!isObject(investigation)) return undefined;
   const { id, name, created_at, created_by, owning_unit, domains } = investigation;
   if (!isText(id) || !isText(name) || !isText(created_at) || !isText(created_by) || !isText(owning_unit) || !isPacks(domains)) return undefined;
   const listings = listingsOf(list);
