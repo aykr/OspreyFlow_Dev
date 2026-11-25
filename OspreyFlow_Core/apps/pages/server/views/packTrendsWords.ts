@@ -37,7 +37,6 @@ export const PACK_TRENDS_WORDS = {
   pack: (title: string): string => `Pack: ${title}`,
   working: "The working pack, as it stands now.",
   published: (version: number, day: string): string => `Published version ${formatNumber(version)}, on ${day}.`,
-  highest: (marking: string): string => `Highest marking shown: ${marking}`,
   withheld: WITHHELD_ITEMS_SENTENCE,
   noTrends: "This pack has no trends to show you.",
   period: (from: string, to: string): string => `From ${from} to ${to}`,
@@ -80,7 +79,6 @@ export interface PackTrendsView {
   kind: "trends";
   pack: string;
   standing: string;
-  highest: string | undefined;
   withheld: boolean;
   trends: TrendView[];
 }
@@ -249,8 +247,10 @@ function view(body: Fields, title: string, standing: string): PackTrendsView | u
     const figures = item["trend"] as TrendFigures;
     trends.push(trendView(figures, item.marking));
   }
-  const highest = isText(body["marking"]) ? PACK_TRENDS_WORDS.highest(body["marking"]) : undefined;
-  return { kind: "trends", pack: PACK_TRENDS_WORDS.pack(title), standing, highest, withheld: body["withheld"], trends };
+  // The pack's own marking (`body["marking"]`) is read (it must be text or null) and not drawn: it is the highest of every kind of item the
+  // reader may see, and this page draws the trends alone, so naming it could name a marking higher than anything on the page. Each trend
+  // says its own.
+  return { kind: "trends", pack: PACK_TRENDS_WORDS.pack(title), standing, withheld: body["withheld"], trends };
 }
 
 /** `GET /v1/investigations/{id}/packs/{pack_id}`'s `PackDraft`, or `undefined` when it is not one (said as "could not be read"). */

@@ -484,6 +484,8 @@ const LEFT_OUT = [
   "ReportPack.created_at",
   "ReportPack.updated_at",
   "ReportPack.versions",
+  "PackDraft.marking",
+  "PublishedPack.marking",
   "PublishedPack.pack_id",
   "PublishedPack.investigation_id",
   "PublishedPack.published_by",
@@ -533,14 +535,12 @@ const DRAWN: Record<string, Change> = {
   "PackDraft.pack": { change: (b) => void (at(b, "pack")["title"] = "Another pack") },
   "PackDraft.items": { change: (b) => void (b["items"] as unknown[]).reverse() },
   "PackDraft.withheld": { change: (b) => void (b["withheld"] = true) },
-  "PackDraft.marking": { change: (b) => void (b["marking"] = "SECRET") },
   "ReportPack.title": { change: (b) => void (at(b, "pack")["title"] = "Another pack") },
   "PublishedPack.title": { change: (b) => void (b["title"] = "Another pack") },
   "PublishedPack.version": { change: (b) => void (b["version"] = 3) },
   "PublishedPack.published_at": { change: (b) => void (b["published_at"] = "2026-11-09T15:00:00Z") },
   "PublishedPack.items": { change: (b) => void (b["items"] as unknown[]).reverse() },
   "PublishedPack.withheld": { change: (b) => void (b["withheld"] = true) },
-  "PublishedPack.marking": { change: (b) => void (b["marking"] = "SECRET") },
   "PackItem.kind": { change: (b) => void (at(b, "items", 0)["kind"] = "note") },
   "PackItem.marking": { change: (b) => void (at(b, "items", 0)["marking"] = "SECRET") },
   "PackItem.trend": { change: (b) => void (at(b, "items", 0)["trend"] = figures({ title: "Another trend", points: [] })) },
@@ -603,6 +603,15 @@ async function censusProblems(render: Render, named: Set<string> = leftOut()): P
   return found;
 }
 
+/** The page names no marking of its own over the trends it draws: only each trend's own, "Marking: X", is said. */
+function markingProblems(html: string): string[] {
+  const text = textOf(mainOf(html));
+  const found: string[] = [];
+  if (/highest marking/i.test(text)) found.push("the page says a highest marking");
+  if (/\bSECRET\b/.test(text)) found.push("the page names a marking (SECRET) that no trend it draws carries");
+  return found;
+}
+
 // ------------------------------------------------------------------------------------------------ the page
 
 describe("trends shown together (the govuk tree)", () => {
@@ -645,11 +654,12 @@ describe("trends shown together (the govuk tree)", () => {
     expect(byseries.table?.rows[0]).toEqual({ head: "5 October 2026", cells: ["1", "2", "3"] });
     expect(byseries.table?.rows[2]).toEqual({ head: "19 October 2026", cells: ["0", "4", "4"] });
     expect(sameFiguresProblems(byseries)).toEqual([]);
-    // The working pack is said as such, and its highest marking.
+    // The working pack is said as such. No marking is said for the page as a whole: each trend says its own (the pack's is the highest of
+    // every kind of item, which this page does not draw).
     const top = textOf(mainOf(res.text));
     expect(top).toContain("Pack: Estuary movements");
     expect(top).toContain("The working pack, as it stands now.");
-    expect(top).toContain("Highest marking shown: OFFICIAL-SENSITIVE");
+    expect(top).not.toMatch(/highest marking/i);
   });
 
   it("TS2: a middle item the reader can no longer read is said once as withheld, with no figure, title, count or place, and never as an empty chart (I21)", async () => {
@@ -735,6 +745,31 @@ describe("trends shown together (the govuk tree)", () => {
     const mixed = await trendsPage(await world({ packs: [pack({ items: [{ item: NOTE }, { item: HARBOUR }] })] }));
     expect(trendsOf(mixed.text).map((t) => t.title)).toEqual(["Harbour meetings"]);
     expect(textOf(mainOf(mixed.text))).not.toContain("A note that is not a trend.");
+  });
+
+  it("TS3: no marking is said that the page does not draw: an item that is not a trend, marked higher than every trend, is not named by the page's marking", async () => {
+    // The Conduit's marking for the pack is the highest of every item the reader may see, notes and assessments included; the page draws
+    // the trends alone, so it must not put that marking in its own words. Each trend says its own (HARBOUR is OFFICIAL).
+    const secret = packItem({ id: "item-secret-note", kind: "note", note: "A note that is not a trend.", marking: "SECRET" });
+    for (const [label, items] of [
+      ["a note above the trend", [{ item: secret }, { item: HARBOUR }]],
+      ["a note and no trend", [{ item: secret }]],
+    ] as const) {
+      const w = await world({ packs: [pack({ items: [...items] })] });
+      const sent = await fetch(`${w.conduit.url}/v1/investigations/${CASE}/packs/pack-estuary`, { headers: { Authorization: `Bearer ${w.token}` } });
+      expect(((await sent.json()) as Body)["marking"], `${label}: the Conduit's marking is the note's`).toBe("SECRET");
+      const res = await trendsPage(w);
+      expect(res.status).toBe(200);
+      expect(markingProblems(res.text), label).toEqual([]);
+    }
+    const published = pack({ items: [], published: { version: 1, published_at: "2026-11-03T15:00:00Z", published_by: "someone-synthetic", items: [{ item: secret }, { item: HARBOUR }] } });
+    expect(markingProblems((await trendsPage(await world({ packs: [published], rights: [READ_REPORTS] }))).text)).toEqual([]);
+    // Planted into the real page: the Conduit's pack marking said as "highest marking shown", and said bare, are each found.
+    const page = (await trendsPage(await world({ packs: [pack({ items: [{ item: secret }, { item: HARBOUR }] })] }))).text;
+    const anchor = "<p>The working pack, as it stands now.</p>";
+    expect(page.includes(anchor), "the plant's anchor is in the page").toBe(true);
+    expect(markingProblems(page.replace(anchor, `${anchor}<p>Highest marking shown: SECRET</p>`))).toEqual(["the page says a highest marking", "the page names a marking (SECRET) that no trend it draws carries"]);
+    expect(markingProblems(page.replace(anchor, `${anchor}<p>Marked SECRET</p>`))).toEqual(["the page names a marking (SECRET) that no trend it draws carries"]);
   });
 
   it("TS4: a reader with neither right, or with the reports right for a pack never published, gets the page of a path nothing serves", async () => {
@@ -884,10 +919,32 @@ describe("trends shown together (the govuk tree)", () => {
       expect(Object.keys(call.headers).filter((name) => !allowed.has(name))).toEqual([]);
       expect(call.url).not.toMatch(/trends|\?/);
     }
-    // An identifier that is not a plain name is sent as one segment: it cannot change the route.
+    // An identifier that is not a plain name is never sent: the Conduit decodes `%2F` to `/` before it routes (Starlette matches the decoded
+    // path), so `pack-estuary%2Fpublished` would reach another real pack route, and `..` would be folded away by a client. Such an address is
+    // the page of a path nothing serves, and asks nothing.
     const odd = await world();
-    await getAs(odd, address(CASE, "../../trends/x"));
-    expect(calls(odd.conduit)).toEqual([`GET /v1/investigations/${CASE}/packs/..%2F..%2Ftrends%2Fx`]);
+    for (const [caseId, packId] of [
+      [CASE, "../../trends/x"],
+      [CASE, "pack-estuary/published"],
+      [CASE, "pack-estuary/history"],
+      [CASE, "pack-estuary/order"],
+      [CASE, ".."],
+      [CASE, "."],
+      [CASE, "pack estuary"],
+      [CASE, "pack-estuary%2Fpublished"],
+      [CASE, "pack-estuary?x=1"],
+      [`${CASE}/packs/pack-estuary`, "x"],
+      ["..", "pack-estuary"],
+    ] as const) {
+      const res = await getAs(odd, address(caseId, packId));
+      expect(res.status, `${caseId} ${packId}`).toBe(404);
+      expect(res.text, `${caseId} ${packId}`).not.toContain("Harbour meetings");
+    }
+    expect(calls(odd.conduit)).toEqual([]);
+    // A plain name, ULIDs and dotted or underscored names included, is sent as it is, once.
+    const plain = await world({ packs: [pack({ id: "01J9ZX3K.pack_2-a" })] });
+    expect((await getAs(plain, address(CASE, "01J9ZX3K.pack_2-a"))).status).toBe(200);
+    expect(calls(plain.conduit)).toEqual([`GET /v1/investigations/${CASE}/packs/01J9ZX3K.pack_2-a`]);
     const bare = await world();
     const unsigned = await request(bare.app).get(address());
     expect(unsigned.status).toBe(302);
@@ -1128,6 +1185,11 @@ describe("each check above is red against the real page, file or fixture with on
     expect(await ask(P, { method: "DELETE" })).toEqual({ status: 405, body: { detail: "Method Not Allowed" } });
     expect(await ask(`${P}/order`, { method: "PUT" })).toEqual({ status: 403, body: { detail: "Editor access to this investigation is required" } });
     expect(await ask(`/v1/investigations/${CASE}/trends/trend-harbour/figures`)).toEqual({ status: 404, body: { detail: "Not Found" } });
+    // The router matches the decoded path, as Starlette does: an encoded slash is a slash, so it reaches the route it spells (rule 15).
+    expect(await ask(`/v1/investigations/${CASE}/packs/pack-estuary%2Fpublished`, { token: "reports-only" })).toEqual({ status: 404, body: { detail: "this pack has no publication" } });
+    expect(await ask(`/v1/investigations/${CASE}/packs/pack-estuary%2Fpublished`)).toEqual({ status: 403, body: { detail: { error: "right_required", right: READ_REPORTS } } });
+    expect(await ask(`/v1/investigations/${CASE}/packs/pack-estuary%2Fhistory`, { method: "GET" })).toEqual(await ask(`${P}/history`));
+    expect(await ask(`/v1/investigations/${CASE}/packs/pack-estuary%2Ftrends%2Fx`)).toEqual({ status: 404, body: { detail: "Not Found" } });
     // The router answers before the bearer: a method a path does not serve is 405 for anyone.
     expect((await ask(P, { method: "PATCH", token: null })).status).toBe(405);
     // Withheld is decided from the world, as the store's query does: a yes or no, the rest in order.

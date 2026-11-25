@@ -184,7 +184,8 @@ export async function packsConduit(options: PacksConduitOptions): Promise<PacksC
       res.end(JSON.stringify(body));
     };
     const method = req.method ?? "";
-    const segments = (url.split("?")[0] ?? "").split("/").filter((s) => s !== "").map((s) => decodeURIComponent(s));
+    // Decoded, then split, as the real Conduit routes it (uvicorn decodes the path; Starlette matches the decoded path): `%2F` is a `/`.
+    const segments = decodeURIComponent(url.split("?")[0] ?? "").split("/").filter((s) => s !== "");
     const found = match(segments);
     // The router: a path it has not, then a method the path does not serve, for anyone.
     if (!found) return send(404, { detail: "Not Found" });
