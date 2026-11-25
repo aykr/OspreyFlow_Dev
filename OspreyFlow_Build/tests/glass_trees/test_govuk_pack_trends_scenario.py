@@ -262,6 +262,15 @@ def census_problems(data: dict[str, Any]) -> list[str]:
             found.append(f"{key}: the generated {type_name} has no field {field}")
     if len(set(named)) != len(named):
         found.append("a field is named as left out twice")
+    # Core stands alone, so the page test cannot read this scenario: it holds its own list, and the two are the same list.
+    held = re.search(r"const LEFT_OUT = \[([^\]]*)\]", data["page_test"])
+    in_test = re.findall(r'"([A-Za-z]+\.[a-z_]+)"', held.group(1)) if held else []
+    if not in_test:
+        found.append(f"{PAGE_TEST_NAME} holds no LEFT_OUT list of the fields the scenario names as left out")
+    elif sorted(in_test) != sorted(named):
+        only_test = sorted(set(in_test) - set(named))
+        only_spec = sorted(set(named) - set(in_test))
+        found.append(f"the page test's LEFT_OUT list and the scenario's sentence differ: only in the test {only_test}, only in the scenario {only_spec}")
     return found
 
 
@@ -475,6 +484,9 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
     ("words a source does not hold", _in_section('`services/api/packs.py` "ORDER BY position"', '`services/api/packs.py` "ORDER BY title"'), citation_problems, "does not hold"),
     ("a field left out that the type no longer has", _field_gone("PackItem", "added_by"), census_problems, "no field added_by"),
     ("a left-out field of a type the census does not walk", _in_section("`ReportPack.id`", "`PackVersionSummary.version`"), census_problems, "not a type the census walks"),
+    ("a field left out in the scenario but not in the page test's list", _in_section("`ReportPack.id`, ", ""), census_problems, "LEFT_OUT list and the scenario's sentence differ"),
+    ("a field left out in the page test's list but not in the scenario", _replace("page_test", "const LEFT_OUT = [", 'const LEFT_OUT = ["ReportPack.title", '), census_problems, "only in the test"),
+    ("the page test holding no list", _replace("page_test", "const LEFT_OUT = [", "const SOMETHING_ELSE = ["), census_problems, "holds no LEFT_OUT"),
     ("a left-out field named twice", _in_section("`ReportPack.investigation_id`", "`ReportPack.id`"), census_problems, "twice"),
     ("the row without its scenario", _row(ROW, scenario=""), function_problems, "scenario"),
     ("the row routed while incomplete", _row(ROW, route=PATH), function_problems, "stays empty"),
