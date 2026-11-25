@@ -192,6 +192,8 @@ def census_of(words: str) -> dict[str, tuple[list[str], list[str]]]:
 def left_out_sentence(section: str) -> dict[str, list[str]]:
     """`{model: [field, ...]}` from the scenario's "Left out, by field name" paragraph: each `Of `Model`:` part, its backticked fields."""
     para = next((p for p in section.split("\n\n") if p.startswith("**Left out, by field name.**")), "")
+    # The clause after the last model ("Every other field ...") names what is drawn, not what is left out.
+    para = para.split("Every other field")[0]
     out: dict[str, list[str]] = {}
     for part in re.split(r"(?=Of `)", para):
         head = re.match(r"Of `(\w+)`: (.*)", part, flags=re.DOTALL)
@@ -264,7 +266,7 @@ def prose_problems(data: dict[str, Any]) -> list[str]:
         ("what it leaves out", "**Left out, by field name.**"),
         ("the refusal", "**the same 404 page, words and status, as a path nothing serves**"),
         ("the brief's refusal", "gets the very same 404 page"),
-        ("the closed tab", '"You closed this case\'s tab"'),
+        ("the closed tab", 'with the words "You closed this case\'s tab" after its name'),
         ("read-only", "read-only"),
         ("the Default tree", "answers `/cases` as a path nothing serves"),
         ("the filtering rule", "filters nothing after the answer comes"),
@@ -489,7 +491,12 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
         "the refusal",
     ),
     ("scripts off left out", _in_section("**Works with scripts off.**", "**Works.**"), prose_problems, "scripts off"),
-    ("the closed tab's words left out", _in_section("\"You closed this case's tab\"", "a mark"), prose_problems, "the closed tab"),
+    (
+        "the closed tab's words left out",
+        _in_section('with the words "You closed this case\'s tab" after its name', "marked"),
+        prose_problems,
+        "the closed tab",
+    ),
     (
         "words a source does not hold",
         _in_section('.py` "this account has closed the case\'s tab"', '.py` "this account has hidden the case"'),
