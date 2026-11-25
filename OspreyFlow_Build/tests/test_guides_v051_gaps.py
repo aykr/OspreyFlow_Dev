@@ -53,7 +53,8 @@ def test_user_guide_2_says_a_refresh_keeps_you_signed_in_and_where_you_were() ->
 def test_user_guide_3_says_the_govuk_top_is_slim_and_the_banner_one_row() -> None:
     frame, banner = code("brand/BrandFrame.tsx"), code("shell/ContextBanner.tsx")
     assert '<div ref={above} className={claims === 0 ? "brand-chrome brand-chrome--compact" : "brand-chrome"}>' in frame
-    assert "<GovukHeader withPlaces hostname={hostname} /> <PhaseBanner" in frame
+    assert ("<GovukHeader withPlaces hostname={hostname} identity={appearance.govukIdentity} "
+            "{...governmentHeaderNames(appearance.organisation, appearance.serviceName)} /> <PhaseBanner") in frame
     claimers = sorted(p.relative_to(SRC).as_posix() for p in SRC.rglob("*.tsx")
                       if "test" not in p.name and "useFullFooter();" in p.read_text(encoding="utf-8"))  # fmt: skip
     assert claimers == ["auth/SignInScreen.tsx", "home/HomePage.tsx"], "the screens that keep the full GOV.UK top"

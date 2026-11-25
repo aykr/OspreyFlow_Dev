@@ -28,7 +28,7 @@
  *
  * WHAT COMES BACK. The status; the body streamed through, never buffered; `Content-Type`, `Content-Disposition` and
  * `X-Guide-Version` and no other header, and never a `Location`. A Conduit 401, 403, 413, 422 and the like pass through
- * unchanged, body included; a Conduit 401 does not end the session here (renewal is `accessTokenFor`'s, PL9).
+ * unchanged, body included; a Conduit 401 does not end the session here (renewal is `accessTokenFor`'s, PL9b: a token the provider will not renew ends the session there, and the forwarder answers 401).
  * A Conduit that cannot be reached is 502; one that is silent for `OSPREY_PAGES_UPSTREAM_TIMEOUT_SECONDS` is 504.
  * Silent means no byte either way on the connection, so a slow upload or a long read is never cut for its length.
  *
@@ -60,18 +60,18 @@ import { pipeline } from "node:stream";
 
 import type { NextFunction, Request, RequestHandler, Response } from "express";
 
-import { accessTokenFor } from "./accessToken.js";
+import { SessionEnded, accessTokenFor } from "./accessToken.js";
 import { BodyStalled, DEFAULT_BODY_STALL_MS, untilStalled } from "./bodyStall.js";
 import type { ForwardSettings } from "./config.js";
 import { CSRF_REFUSED, csrfDeferred, formKind, tokensMatch } from "./csrf.js";
 import { MultipartRefusal, boundaryOf, readMultipart } from "./multipart.js";
 import type { FileSink } from "./multipart.js";
-import { isV1Path, rawPathOf, refuseJson } from "./v1.js";
+import { SIGNED_OUT_WORDS, isV1Path, rawPathOf, refuseJson } from "./v1.js";
 
 const SAFE_WORDS = {
   notFound: "That address is not served here.",
   method: "That method is not carried here.",
-  signedOut: "You are not signed in, or your session has ended. Sign in again.",
+  signedOut: SIGNED_OUT_WORDS,
   fileTooLarge: "That file is larger than the upload limit.",
   bodyTooLarge: "That request is larger than the limit.",
   notAFileRoute:
@@ -310,7 +310,12 @@ export function forwarder(deps: ForwarderDeps): RequestHandler {
     let token: string | undefined;
     try {
       token = await accessTokenFor(auth);
-    } catch {
+    } catch (error) {
+      // The provider would not renew the token and the session is already ended (`accessToken.ts`): the person is told so.
+      if (error instanceof SessionEnded) {
+        refuseJson(res, 401, SAFE_WORDS.signedOut);
+        return;
+      }
       log("pages: forward: the person's access could not be prepared (502)");
       refuseJson(res, 502, SAFE_WORDS.access);
       return;

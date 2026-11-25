@@ -1257,6 +1257,16 @@ dependencies of `apps/pages`: the build reads them for the faces `packages/desig
 (ADR-152 Amendment 2 point 2), and serves the font files from the service's own address. No GDS Transport and no
 `govuk-frontend` file is among them (that is the GOV.UK tree's). `make licence-check`'s Node half passes with them, offline.
 
+**ADR-152 addition (24 November 2026; slice GR2a, the owner's ruling of the same day) — `govuk-frontend` in the register.**
+`govuk-frontend` is already on the allowlist above (the ADR-132 addition) and a dependency of `apps/workspace`; the GOV.UK tree
+of `pages` (`apps/pages/tree-govuk`) will use its macros and styles, and it is not a dependency of `apps/pages` until a page does.
+It now has a row in the register (`spec/LICENCE_REGISTER.yaml`, row P1, kind `package`: the gate holds it to the manifest it
+names), and the condition the allowlist cannot carry is written beside it:
+
+| Package | Version | Licence, and the evidence |
+| --- | --- | --- |
+| `govuk-frontend` | 6.6.0 | MIT, in its `package.json` and its LICENSE.txt ("MIT, Crown Copyright (GDS)"); the licence covers the package's code. **The crown, the GOV.UK logotype and GDS Transport are used only under the identity switch (`appearance.govuk_identity`, ADR-152 decision 14) on gov.uk addresses**, never otherwise: they are the Crown's marks and a typeface restricted to services on GOV.UK domains (register row F3) |
+
 **The Glass's sign-in library, named (20 November 2026; slice LR1).** `oidc-client-ts` has been a run-time
 dependency of `apps/workspace` since the sign-in was built, and `apps/workspace/src/auth/userManager.ts` has said
 since then that this section is its allowlist for what it relies on rather than hand-rolls; this section had no

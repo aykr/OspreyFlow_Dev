@@ -155,12 +155,19 @@ describe("the deployment's appearance", () => {
       serviceName: "Prison Intelligence",
       organisation: "Ministry of Examples",
       phase: "beta",
+      govukIdentity: false,
     });
   });
 
   it("is the OspreyFlow brand where there is no deployment file", async () => {
     await loadDeploymentSettings(answering(404, "not found"));
-    expect(deploymentAppearance()).toEqual({ brand: "ospreyflow", serviceName: null, organisation: null, phase: "none" });
+    expect(deploymentAppearance()).toEqual({
+      brand: "ospreyflow",
+      serviceName: null,
+      organisation: null,
+      phase: "none",
+      govukIdentity: false,
+    });
   });
 });
 

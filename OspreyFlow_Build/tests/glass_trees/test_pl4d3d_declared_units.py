@@ -1075,6 +1075,9 @@ def start_gated_build(app: Path, directory: Path, gate: Path, role: str, preload
         **os.environ,
         "PL4D3F_GATE": str(gate),
         "PL4D3F_ROLE": role,
+        # The step the two builds collide in copies the GOV.UK fonts and images, which only a build with the GOV.UK identity
+        # switch on makes (PL7c: a default build copies none, so it has nothing to collide over).
+        "OSPREY_GOVUK_IDENTITY": "1",
         "NODE_OPTIONS": f"{os.environ.get('NODE_OPTIONS', '')} --require={preload}".strip(),
     }
     with log.open("wb") as out:

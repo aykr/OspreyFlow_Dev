@@ -7,7 +7,14 @@ import "../../../packages/design/primitives.css";
 import { App } from "./App";
 import { answerTheWindowThatAsked } from "./auth/callbackFrame";
 import { deploymentAppearance, loadDeploymentSettings } from "./auth/oidcConfig";
-import { applyBrand, brandFromUrl, loadBrandStylesheet, applyTheme, readStoredTheme } from "@ospreyflow/glass-shared";
+import {
+  applyBrand,
+  brandFromUrl,
+  identityFromUrl,
+  loadBrandStylesheet,
+  applyTheme,
+  readStoredTheme,
+} from "@ospreyflow/glass-shared";
 import { BrandFrame } from "./brand/BrandFrame";
 
 // The saved light or dark choice is on the page before anything is drawn (ADR-070).
@@ -27,14 +34,16 @@ if (!onlyCarryingAnAnswer) void loadDeploymentSettings().then(async () => {
   // is ever shown on a GOV.UK deployment. `?brand=` chooses one in a development build only.
   const appearance = deploymentAppearance();
   const brand = brandFromUrl(window.location.search, import.meta.env.DEV) ?? appearance.brand;
-  applyBrand(brand);
+  // ADR-152 decision 14: the GOV.UK identity switch, with the brand, before React draws anything.
+  const govukIdentity = identityFromUrl(window.location.search, import.meta.env.DEV) ?? appearance.govukIdentity;
+  applyBrand(brand, govukIdentity);
   applyTheme(readStoredTheme());
   // The GOV.UK stylesheet, awaited so the header is never drawn unstyled; never fetched otherwise.
   await loadBrandStylesheet(brand);
   createRoot(container).render(
     <StrictMode>
       {/* The frame also sets the page title, "<service> – GOV.UK" under GOV.UK (ADR-132 Am. 5). */}
-      <BrandFrame appearance={{ ...appearance, brand }}>
+      <BrandFrame appearance={{ ...appearance, brand, govukIdentity }}>
         <App />
       </BrandFrame>
     </StrictMode>,

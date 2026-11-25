@@ -6,8 +6,9 @@ has its GOV.UK route in the GOV.UK tree's route list, less the rows that a line 
 writes it. This file is the state's authority (the ADR's I6 case); the renderer will call the same function.
 
 The route list is `apps/pages/tree-govuk/routes.yaml`, a `routes:` list of paths. The ADR names the list
-("`tree-govuk`'s route list, I6's list") but not its file, and the tree does not exist yet, so the list is
-absent today. Absent means partial: a missing list can never be read as "every row is routed".
+("`tree-govuk`'s route list, I6's list") but not its file. The tree was created by slice GR2a with one page
+(Help, `/help`), so the list exists today; a list that is absent still means partial: a missing list can never
+be read as "every row is routed".
 
 Which test fails if the invariant is broken (rule 12):
 
@@ -174,12 +175,12 @@ def parity_problems(tmp_path: Path) -> list[str]:
 
 
 def test_the_real_tree_is_partial() -> None:
-    """Today `FUNCTIONS.yaml` has 47 rows, every route empty, and there is no GOV.UK tree."""
-    assert len(real_rows()) == 47
+    """Today `FUNCTIONS.yaml` has 49 rows and the GOV.UK tree has one page, Help (slice GR2a): one route in the list."""
+    assert len(real_rows()) == 49
     assert tree_parity.govuk_tree_state() == PARTIAL
-    assert not tree_parity.ROUTE_LIST.exists(), (
-        "a route list exists: this case must be rewritten with it"
-    )
+    assert tree_parity.ROUTE_LIST.is_file(), "the GOV.UK tree's route list is gone"
+    assert tree_parity._routes(tree_parity.ROUTE_LIST) == ["/help"]
+    assert [row["id"] for row in real_rows() if row["route"]] == ["help"]
 
 
 def real_defaults_problems() -> list[str]:
@@ -198,7 +199,7 @@ def real_defaults_problems() -> list[str]:
 def test_the_defaults_point_at_the_real_files() -> None:
     """The real call is partial whatever it reads (every absent file means partial), so say where it reads."""
     assert real_defaults_problems() == []
-    assert len(tree_parity._mappings(tree_parity.FUNCTIONS, "functions") or []) == 47
+    assert len(tree_parity._mappings(tree_parity.FUNCTIONS, "functions") or []) == 49
     assert tree_parity._mappings(tree_parity.EXCEPTIONS, "exceptions"), (
         "the real exception lines did not load"
     )

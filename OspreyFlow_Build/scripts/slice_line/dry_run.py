@@ -254,9 +254,18 @@ def prove(spec: dict, slot: int | str | None = None, tip: str | None = None, log
                     if blob.returncode == 0:
                         (tree / f).parent.mkdir(parents=True, exist_ok=True)
                         (tree / f).write_bytes(blob.stdout)
+            plant = c.plant_text(spec.get("id") or "") if spec.get("id") else ""
+            if plant:  # a test-only part (item 2): its planted fault, applied to main, must be fair and apply
+                why = ms.plant_unfair(plant, files) or ms.apply_plant(tree, plant)
+                if why:
+                    problems.append(f"the planted fault ({c.PLANTS_REL}/{spec['id']}.patch) does not stand: {why}")
             code, out, _ = run_marked(spec["acceptance"], tree, env, log)
             if code == 0:
-                problems.append("the acceptance command passes on main: it was never red")
+                problems.append("the acceptance command passes on main" + (" with its planted fault" if plant else "")
+                                + ": it was never red")
+            elif plant and tip and ms.not_assertion_red(out):
+                problems.append(f"the acceptance is red with its planted fault, but not on an assertion "
+                                f"({ms.not_assertion_red(out)})")
             elif malformed(out):
                 problems.append(f"the acceptance command is red on main for a malformed command ({malformed(out)}), "
                                 "not for the slice's missing work:\n" + tail(out))

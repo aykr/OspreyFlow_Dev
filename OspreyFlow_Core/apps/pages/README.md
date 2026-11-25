@@ -22,6 +22,22 @@ browser files. No React, anywhere (`scripts/no_react_check.mjs`).
 4. If it needs a script, write `modules/<name>.ts` and name it in the `scripts` block: a `script` element of type `module` whose `src` is `asset('modules/<name>.ts')`. Never inline code, never a `style` attribute.
 5. Add the module to `PAGES` in `server/pageList.ts`; the session check, the anti-forgery check and the headers are applied to it, and a path or id claimed twice is refused at start-up.
 
+## The two trees and the switch (slice GR2a; ADR-152 decisions 6 and 7)
+
+The service serves one tree for the whole deployment: `OSPREY_PAGES_TREE=default` (also when the setting is left out) or `govuk`;
+any other value is refused at start in words. It is read in one place, `server/config.ts`. **The switch decides which tree serves
+every route, `/` included: no path was added for Home**, the layout, the error page and Home are drawn in the chosen tree's
+templates (`tree-default/` or `tree-govuk/`). The pages of both trees are in the one table, `server/pageList.ts`: a `PageModule`
+names its `trees` (the Default tree's alone when it names none), and a route a tree has no page for is not registered, so it answers
+as a path nothing serves. A GOV.UK page may exist before its Default twin (the owner, 24 November 2026). `tree-govuk/routes.yaml`
+lists the GOV.UK tree's paths (the state `scripts/tree_parity.py` derives), and `test/govuk/help.test.ts` holds it to the table.
+
+The first GOV.UK page is Help (`server/help.ts`, `tree-govuk/help.njk`, scenario HP). Its words are the shared package's
+(`packages/glass-shared/src/help/roles.ts`): `server/views/helpWords.ts` imports them, `tsc` checks it against
+`server/types/glassShared.d.ts`, and `apps/pages/scripts/build.mjs` bundles it with the package's source so the compiled service imports no
+workspace package. The GOV.UK tree's tests are in `test/govuk/` (vitest here, and `keyboard/` and `scripts-off/` for Playwright with
+`test/govuk/playwright.config.ts`); `npm run test:keyboard` runs the Default tree's walk (`keyboard/`) and then this one.
+
 ## Building and serving the assets
 
 `npm run build --workspace apps/pages` compiles the server, copies the templates and `FUNCTIONS.yaml` into `dist/`, and runs
@@ -39,6 +55,19 @@ partial every Studio page extends (`tree-default/studio/frame.njk`: the dataset 
 Needs-you reminder, the five places as links); a page fills its `place` block. Their words and plain helpers are
 `server/views/studioWords.ts`, their routes `server/studio.ts`.
 
+- **Renewal and sign-out** (slice PL9b, `server/accessToken.ts`, `server/providerSessions.ts`, `server/oidc.ts`):
+  `accessTokenFor` renews the access token with the refresh token held on the server when it has 60 seconds or fewer left, makes one
+  exchange at a time for a session (the other calls wait for it, and a copy of the session read before it is brought up to date), and
+  updates the session. The live-update WebSocket's upgrade (`server/stream.ts`, handled outside Express) asks the same renewal through the app's
+  `streamTokenFor` before it opens the Conduit's socket, so a reconnect after the token's end carries a renewed token; a provider
+  that will not renew ends the session and the browser's socket is closed 1008 in the sign-in's words. The provider's refusal ends the session: a page is sent to sign in again, a `/v1` call is answered 401. A
+  provider that cannot be reached is not an ended session while the token still held is good; a request that may have been received
+  is never presented again. Sign-out ends the pages session, then the person's at the provider: the answer to the form post is a
+  same-origin address with an opaque single-use name (a redirect after a form post is held to `form-action 'self'`), and the ID
+  token is only in the one navigation after it. The provider's own logout reaches `POST /session/back-channel-logout` with a signed
+  logout token (signature, issuer, audience, the logout event, no nonce, `sub` or `sid`, issued within two minutes, a `jti` used
+  once); anything that fails a check ends nothing and is answered `400 Refused`. Keycloak posts it from its own container, so the realm client registers the service's own address on the deployment's internal network (`http://pages:8090/session/back-channel-logout`: the compose service name and port, the chart's Service of the same name), never the public origin and never through the proxy; the route takes only the provider's token, verified in full, so being reachable there adds no trust. Single flight and the sign-out hop live in this
+  process's memory, so a second pages process would not share them.
 - **Calls to the Conduit** are the person's own: `server/conduit.ts` sends the bearer from `accessTokenFor` to the forwarder's
   address and builds every header itself. The Conduit authorises each route; the page's checks of a right are words only.
 - **A release folder** read from a form is held by `server/staging.ts` in the pages process's own memory, under a random token

@@ -71,6 +71,8 @@ STAND_IN_GATE = """def _stand_in_gate(t, b, l, targets=None):
     if os.environ.get('TEST_GATE_SEES'):
         have = [n for n in ('.venv', 'node_modules') if (t / 'OspreyFlow_Core' / n).exists()]
         Path(os.environ['TEST_GATE_SEES']).write_text(' '.join(have) or 'clean')
+    if os.environ.get('TEST_GATE_RUN'):  # a gate command run through the merge's own run() (its stall limit)
+        return run(['sh', '-c', os.environ['TEST_GATE_RUN']], t, l)
     if os.environ.get('TEST_GATE_SLEEP'):  # a gate that runs a while and writes nothing meanwhile (merge progress)
         import time as _t
         _t.sleep(float(os.environ['TEST_GATE_SLEEP']))

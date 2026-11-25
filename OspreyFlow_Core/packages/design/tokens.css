@@ -186,11 +186,22 @@
   /* A 3px yellow outline with a 2px dark inner shadow, the Design System's focus state. */
   --focus:#ffdd00; --focus-ink:#0b0c0c; --focus-width:3px; --focus-offset:0;
 
-  --ui:"GDS Transport",arial,sans-serif;
+  /* The fallback stack: GOV.UK Frontend's own when the typeface is not included (ADR-152 decision 14). The typeface
+     is the next block's, and only with the identity switch on. */
+  --ui:arial,sans-serif;
   --r-control:0; --r-panel:0; --r-overlay:0;
   /* GOV.UK tags are square too (ADR-132). */
   --r-chip:0;
 }
+
+/* The GOV.UK typeface, only with the GOV.UK identity switch on **and** on a gov.uk address (`appearance.govuk_identity`,
+   ADR-152 decision 14, invariant I9; GDS Transport is licensed for services on GOV.UK domains only: Amendment 2
+   item 3, `fonts.json` `only_when` and `only_on`). `data-govuk-typeface="on"` is set on <html> only under this brand,
+   only with the switch on and only on such an address (`applyBrand`; the sign-in theme's script says the same). A build
+   with the switch off holds no GDS Transport file at all. `--govuk-typeface` is the same face for GOV.UK Frontend's own
+   stylesheet, whose font stacks a build with the switch on writes as `var(--govuk-typeface,)arial,sans-serif`
+   (`apps/workspace/scripts/sync_govuk_assets.mjs`): defined only here, so off gov.uk those stacks fall back to arial too. */
+[data-brand="govuk"][data-govuk-typeface="on"] { --ui:"GDS Transport",arial,sans-serif; --govuk-typeface:"GDS Transport",; }
 
 /* GOV.UK type on the GOV.UK brand's pages (ADR-132, the owner's ruling 3; DESIGN.md §11): the
    welcome, start and Admin pages take GOV.UK's scale, 19px body. The workspace keeps the 13px base

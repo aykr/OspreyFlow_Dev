@@ -14,6 +14,7 @@
  */
 import type { Request, Response } from "express";
 
+import { SessionEnded } from "./accessToken.js";
 import { ConduitUnreachable, conduitFor, v1 } from "./conduit.js";
 import type { Conduit } from "./conduit.js";
 import type { ForwardSettings } from "./config.js";
@@ -190,7 +191,9 @@ export async function loadFrame(
   let conduit: Conduit;
   try {
     conduit = await conduitFor(st.forward, auth, st.log);
-  } catch {
+  } catch (error) {
+    // The provider would not renew the token and the session is ended: the app answers with the sign-in redirect (`app.ts`).
+    if (error instanceof SessionEnded) throw error;
     st.log("pages: studio: the person's access could not be prepared (502)");
     unavailable(res, 502);
     return "sent";

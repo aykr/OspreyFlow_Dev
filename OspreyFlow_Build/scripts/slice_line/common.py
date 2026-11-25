@@ -9,6 +9,7 @@ import contextlib
 import csv
 import fcntl
 import io
+import hashlib
 import json
 import os
 import re
@@ -243,6 +244,29 @@ def frozen_matches(frozen: dict, row: dict) -> bool:
     return all((frozen.get(k) or "") == (row.get(k) or "") for k in FROZEN_KEYS)
 
 
+#: A test-only part's planted fault (the owner, 24 November 2026, "cut my paperwork", item 2, with his answers): a
+#: patch the conductor writes as a record, plants/<ID>.patch, committed on main. Its hash is frozen with the acceptance
+#: when the part starts (frozen.json "plant"), so a change to it is a refreeze, the owner's word. The line applies it to
+#: the base with the acceptance files (the merge's red before; the dry run): green without it, red with it on an
+#: assertion. It never reaches the merge result.
+PLANTS_REL = f"{V062_REL}/plants"
+
+
+def plant_text(slice_id: str, ref: str = "main") -> str:
+    """The part's planted fault as `ref` holds it, or '' when it has none."""
+    p = subprocess.run(["git", "show", f"{ref}:{PLANTS_REL}/{slice_id}.patch"], cwd=REPO, capture_output=True, text=True)
+    return p.stdout if p.returncode == 0 else ""
+
+
+def plant_hash(text: str) -> str:
+    return hashlib.sha256(text.encode()).hexdigest() if text else ""
+
+
+def plant_matches(slice_id: str, frozen: dict) -> bool:
+    """Main's planted fault for the part is the one frozen (none, when none was)."""
+    return (frozen.get("plant") or "") == plant_hash(plant_text(slice_id))
+
+
 def refreeze(slice_id: str, by: str) -> dict:
     """Take the slice's frozen columns from main's backlog file, keeping the previous ones in the record's history."""
     f = rec_dir(slice_id) / "frozen.json"
@@ -250,8 +274,9 @@ def refreeze(slice_id: str, by: str) -> dict:
     if not frozen:
         raise SystemExit(f"{slice_id} has not started.")
     row = slice_row(slice_id)
-    frozen.setdefault("history", []).append({k: frozen.get(k) for k in (*FROZEN_KEYS, "frozen_at")})
+    frozen.setdefault("history", []).append({k: frozen.get(k) for k in (*FROZEN_KEYS, "plant", "frozen_at")})
     frozen.update({k: row[k] for k in FROZEN_KEYS})
+    frozen["plant"] = plant_hash(plant_text(slice_id))
     frozen["frozen_at"] = now()
     frozen["refrozen_by"] = by
     write_json(f, frozen)

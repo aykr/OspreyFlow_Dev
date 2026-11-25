@@ -17,6 +17,10 @@ export interface ProviderSession {
   accessToken: string;
   refreshToken: string;
   idToken?: string;
+  /** Milliseconds since the epoch at which the access token ends, from the provider's `expires_in`. */
+  accessTokenExpiresAt?: number;
+  /** The provider's own identifier for this sign-in (`sid`), which its logout token names. */
+  providerSessionId?: string;
   /** Milliseconds since the epoch at which the provider's own session ends. */
   idpSessionExpiresAt: number;
 }
@@ -26,9 +30,17 @@ export interface ProviderSession {
  * about the person's access is known to have changed, and the words say so.
  */
 export class IdentityProviderUnavailable extends Error {
-  constructor(message: string) {
+  /**
+   * True only when the request provably never reached the provider (a refused connection, a name that does not resolve, a
+   * gateway's 503): it can be asked again with the same refresh token. False when it may have been received (a time-out, a
+   * reset, a 500): a rotating provider may already have spent the token, and a second presentation would revoke the session.
+   */
+  readonly notDelivered: boolean;
+
+  constructor(message: string, options: { notDelivered?: boolean } = {}) {
     super(message);
     this.name = "IdentityProviderUnavailable";
+    this.notDelivered = options.notDelivered ?? false;
   }
 }
 
@@ -82,6 +94,58 @@ export interface PendingLogin {
   verifier: string;
 }
 
+/** What a refresh grant gives back, in the service's own terms. Tokens: never logged, never in an error. */
+export interface RenewedTokens {
+  accessToken: string;
+  /** Milliseconds since the epoch; absent when neither `expires_in` nor the token's own `exp` says. */
+  accessTokenExpiresAt?: number;
+  /** Absent when the provider did not rotate it: the one held stays. */
+  refreshToken?: string;
+  idToken?: string;
+  /** Milliseconds since the epoch at which the provider's own session now ends, when it says. */
+  idpSessionExpiresAt?: number;
+}
+
+/**
+ * Why a logout token was refused, as a word of ours from a closed list: what the service's own log says, and nothing of the
+ * token. The answer to the provider is the same plain refusal for every one of them.
+ */
+export const LOGOUT_REFUSAL_REASONS = [
+  "malformed",
+  "signature",
+  "issuer",
+  "audience",
+  "event",
+  "nonce",
+  "subject",
+  "age",
+  "jti",
+  "replay",
+] as const;
+
+export type LogoutRefusalReason = (typeof LOGOUT_REFUSAL_REASONS)[number];
+
+/** A logout token that failed a check. Nothing is ended for it. */
+export class LogoutTokenRefused extends Error {
+  readonly reason: LogoutRefusalReason;
+
+  constructor(reason: LogoutRefusalReason) {
+    super(`the logout token was refused: ${reason}`);
+    this.name = "LogoutTokenRefused";
+    this.reason = reason;
+  }
+}
+
+/** What a verified logout token names. */
+export interface LogoutClaims {
+  /** The provider session it ends, when it names one. */
+  sid?: string;
+  /** The person it ends every session of, when it names one. */
+  sub?: string;
+  /** Its unique identifier: used once. */
+  jti: string;
+}
+
 export interface CodeFlowProvider {
   /** The address to send the person to, and what the callback will need. Throws `IdentityProviderUnavailable`. */
   begin(): Promise<{ authorizationUrl: string; pending: PendingLogin }>;
@@ -90,6 +154,24 @@ export interface CodeFlowProvider {
    * `IdentityProviderRefused` or `IdentityProviderUnavailable`; the provider's own words are in neither.
    */
   complete(callback: { query: string }, pending: PendingLogin): Promise<ProviderSession>;
+  /**
+   * Exchanges a refresh token for new tokens (slice PL9b). Throws `IdentityProviderRefused` when the provider said no or
+   * answered something that is not a token response, and `IdentityProviderUnavailable` (with `notDelivered` as it is) when it
+   * could not be reached or failed. The provider's own words are in neither.
+   */
+  refresh(refreshToken: string): Promise<RenewedTokens>;
+  /**
+   * The provider's end-session address for a person leaving, with the ID token as the hint when there is one, the client and
+   * the registered return address (slice PL9b), or `undefined` when the provider names none. Throws `IdentityProviderUnavailable`.
+   */
+  endSessionUrl(idToken: string | undefined): Promise<string | undefined>;
+  /**
+   * Checks a back-channel logout token against everything the OpenID Connect Back-Channel Logout specification asks of one
+   * (signature against the provider's keys, issuer, audience, the logout event, no nonce, `sub` or `sid`, a short age, a `jti`),
+   * and says what it names. Throws `LogoutTokenRefused` for any failed check and `IdentityProviderUnavailable` when the
+   * provider's keys cannot be had. Whether the `jti` has been used before is the caller's to check.
+   */
+  verifyLogoutToken(token: string): Promise<LogoutClaims>;
 }
 
 export interface IdentityProvider {

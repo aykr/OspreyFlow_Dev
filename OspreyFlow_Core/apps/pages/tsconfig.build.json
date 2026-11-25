@@ -1,5 +1,17 @@
 {
   "extends": "./tsconfig.json",
-  "compilerOptions": { "noEmit": false, "outDir": "dist", "rootDir": ".", "sourceMap": false },
-  "include": ["server/**/*.ts"]
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "dist",
+    "rootDir": ".",
+    "sourceMap": false,
+    "paths": {
+      "@ospreyflow/glass-shared": [
+        "./server/types/glassShared.d.ts"
+      ]
+    }
+  },
+  "include": [
+    "server/**/*.ts"
+  ]
 }

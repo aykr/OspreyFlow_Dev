@@ -26,6 +26,12 @@ a `conditional` row with no owner ruling; a `restricted` row that is not conditi
 `unconfirmed` row that states a licence or does not say what must be read; a name that is both held
 for the owner and registered.
 
+**A `package` row** (slice GR2a) is a code package that the package halves of the gate already read for its licence, and
+whose use carries a condition worth writing down. The code names nothing the way it names an image or a weight, so the
+row is held to the manifest instead: each file of its `named_in` must hold `"<name>": "<version>"`, the version being the
+last word of the row's `pin`, so a version the manifest moves to and the row does not follow is a violation. A `package`
+row is exempt from "names something no code names", and only from that.
+
 **What it does not fail on, and the release refuses** (`release_refusal`): an `unconfirmed` row, and
 a name in `HELD_FOR_OWNER`. The gate allows them so that `make ci` stays green while the owner
 decides; a release is refused while any is left, as it is while a live test is owed.
@@ -65,7 +71,7 @@ REGISTER_PATH = BUILD / "spec" / "LICENCE_REGISTER.yaml"
 #: The four tests a row can have passed (the owner's ruling 1, 21 November 2026).
 TESTS = ("osi-software", "osi-weights", "open-data", "restricted")
 STATUSES = ("confirmed", "unconfirmed", "conditional")
-KINDS = ("weight", "map-data", "font", "image")
+KINDS = ("weight", "map-data", "font", "image", "package")
 #: Columns every row carries (an `unconfirmed` row carries `licence` and `where_read` as null).
 #: Optional: `note`, `owner_ruling`, `must_read`, `os_packages` (required of an image).
 COLUMNS = (
@@ -92,6 +98,10 @@ TESTS_BY_KIND = {
     "image": ("osi-software", "restricted"),
     "font": ("osi-software", "restricted"),
     "map-data": ("open-data", "restricted"),
+    # A code package whose licence needs a condition written beside it (slice GR2a: `govuk-frontend`, MIT, whose crown,
+    # logotype and GDS Transport are used only under the identity switch on gov.uk addresses). `make licence-check`'s
+    # package halves already read the licence it declares; the row records the condition and is held to the manifest.
+    "package": ("osi-software", "restricted"),
 }
 #: The one map-data row that is a tool, not data: the map build's own planetiler, which passes as
 #: software. By name, so no dataset borrows the exception.
@@ -600,9 +610,30 @@ def _row_violations(
     for named_in in listed:
         if not (core / named_in).exists():
             out.append(f"{label}: named_in {named_in!r} is not a file")
+    if row.get("kind") == "package":
+        out += _package_violations(row, label, listed, core)
     key = (str(row.get("kind")), str(row.get("name")), str(row.get("pin")))
     for file in sorted((code_files or {}).get(key, set()) - set(listed)):
         out.append(f"{label}: named_in leaves out {file!r}, which names it in the code")
+    return out
+
+
+def _package_violations(
+    row: dict[str, Any], label: str, listed: list[str], core: Path
+) -> list[str]:
+    """A `package` row is held to the manifests it names, each pinning it at the row's version."""
+    name, pin = str(row.get("name") or ""), str(row.get("pin") or "")
+    version = pin.rsplit(" ", 1)[-1] if " " in pin else ""
+    if not name or not version:
+        return [f"{label}: a package row's pin is the name and the version, as 'name 1.2.3'"]
+    if not listed:
+        return [f"{label}: a package row names no manifest in named_in to hold its pin to"]
+    wanted = re.compile(rf'"{re.escape(name)}"\s*:\s*"{re.escape(version)}"')
+    out: list[str] = []
+    for named_in in listed:
+        path = core / named_in
+        if path.is_file() and not wanted.search(path.read_text(encoding="utf-8")):
+            out.append(f"{label}: pin differs — {named_in} does not pin {name!r} at {version!r}")
     return out
 
 
@@ -656,7 +687,7 @@ def find_register_violations(
             out.append(f"{kind} {name!r}: the register's pin {register_pin!r} is one no code names")
 
     for (kind, name), listed in sorted(by_register.items()):
-        if (kind, name) not in by_code:
+        if (kind, name) not in by_code and kind != "package":
             out.append(
                 f"the register row {listed[0].get('id')} {name!r} ({kind}) names something "
                 "no code names"

@@ -26,9 +26,7 @@ from tools.layout import REPO as REPO_ROOT
 
 from schemas.deployment import AppearanceConfig, OspreyConfig
 
-TOKENS = (REPO_ROOT / "packages" / "design" / "tokens.css").read_text(
-    encoding="utf-8"
-)
+TOKENS = (REPO_ROOT / "packages" / "design" / "tokens.css").read_text(encoding="utf-8")
 GLASS = "http://govuk.ospreyflow.localhost:8081"
 GOVUK = AppearanceConfig(brand="govuk", service_name="Prison Intelligence", phase="beta")
 
@@ -59,12 +57,16 @@ def test_under_govuk_the_header_names_the_service_and_the_chrome_script_is_loade
     assert "js/govuk-chrome.js" in theme[THEME_PROPERTIES]
     settings = theme[GOVUK_CHROME_SCRIPT].split("\n", 1)[0]
     assert settings.startswith("window.OSPREY_GOVUK = ")
-    assert json.loads(settings.removeprefix("window.OSPREY_GOVUK = ").rstrip(";")) == {
-        "serviceName": "Prison Intelligence",
-        "organisation": None,
-        "phase": "beta",
-        "glassOrigin": GLASS,
-    }
+    assert (
+        json.loads(settings.removeprefix("window.OSPREY_GOVUK = ").rstrip(";"))
+        == {
+            "serviceName": "Prison Intelligence",
+            "organisation": None,
+            "phase": "beta",
+            "glassOrigin": GLASS,
+            "govukIdentity": False,  # ADR-152 decision 14: written in words every time, so off is never a missing key
+        }
+    )
     messages = theme[THEME_MESSAGES]
     assert "loginTitleHtml=Prison Intelligence\n" in messages
     assert "osprey-wordmark" not in messages

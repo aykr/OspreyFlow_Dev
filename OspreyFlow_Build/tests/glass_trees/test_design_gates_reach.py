@@ -23,11 +23,12 @@ lived. The roots the gates are really configured with are not lost by that:
 `test_each_gate_s_roots_hold_the_three_files` shows the three files are inside the real roots of all
 three, by name, and the plants are written in the real files' own folder layout.
 
-**The pages roots (slice IS5a0).** `apps/pages/tree-default`, `apps/pages/modules` and `apps/pages/server/views` hold the
-Default tree's templates and the client modules. The same four gates read them, and so does the copy walker of
+**The pages roots (slices IS5a0 and GR2a).** `apps/pages/tree-default`, `apps/pages/tree-govuk`, `apps/pages/modules` and
+`apps/pages/server/views` hold the Default tree's templates, the GOV.UK tree's, and the client modules. The same four gates read them, and so does the copy walker of
 `tests/test_copy_says_no_client.py`: `test_each_gate_names_the_pages_roots` holds each gate's own list to the names
 `tools.layout.PAGES_COPY_ROOTS` gives, so a gate that drops one is red; `tests/glass_trees/test_pages_foundation.py`
-holds that each gate reads a violation planted under each root.
+holds that each gate reads a violation planted under each root, `tree-govuk` among them (a colour outside the tokens, an inline
+side stripe, a branch word and a banned word, each flagged by the gate that owns it).
 
 This file walks no part of the repository by `git ls-files`: it reads
 `OspreyFlow_Core/packages/design/` only (copied, never written).
@@ -121,11 +122,16 @@ def test_the_no_branches_check_reads_packages_design(
     assert f"packages/design/{PLANT}:2:" in capsys.readouterr().out
 
 
-PAGES_ROOTS = ("apps/pages/tree-default", "apps/pages/modules", "apps/pages/server/views")
+PAGES_ROOTS = (
+    "apps/pages/tree-default",
+    "apps/pages/tree-govuk",
+    "apps/pages/modules",
+    "apps/pages/server/views",
+)
 
 
 def test_each_gate_names_the_pages_roots() -> None:
-    """A gate's reach cannot fall below the roots now named: each gate's own list holds all three, by name."""
+    """A gate's reach cannot fall below the roots now named: each gate's own list holds every root, by name."""
     from tools import colour_drift_check, layout
 
     from tests.test_copy_says_no_client import PAGES_COPY_ROOTS
@@ -141,3 +147,106 @@ def test_each_gate_names_the_pages_roots() -> None:
     for gate, roots in named.items():
         assert set(PAGES_ROOTS) <= roots, f"{gate} does not read {sorted(set(PAGES_ROOTS) - roots)}"
 
+
+
+# --- the GOV.UK tree (slice GR2a): a violation planted in a file of `tree-govuk` is flagged by the gate that owns it ------
+#
+# Each plant is a template written into a temporary copy of the real `apps/pages/tree-govuk`, and the gate is given the roots *it
+# is itself configured with* (its own `SCANNED` or `PAGES_ROOTS`, moved under the copy), so a gate whose list left `tree-govuk`
+# out reads nothing of the plant and the case is red. Nothing is written into the real folder (`make test` runs on several
+# workers). The plants have the shape a template of that tree really has: a page that extends the tree's layout.
+
+GOVUK_ROOT = "apps/pages/tree-govuk"
+PLANTED_TEMPLATE = "zz_planted_gate_reach.njk"
+
+
+@pytest.fixture
+def govuk_core(tmp_path: Path) -> Path:
+    """A temporary `OspreyFlow_Core` holding a copy of the real `tree-govuk` and the other pages roots, empty."""
+    core = tmp_path / "OspreyFlow_Core"
+    for root in PAGES_ROOTS:
+        (core / root).mkdir(parents=True)
+    shutil.copytree(CORE / GOVUK_ROOT, core / GOVUK_ROOT, dirs_exist_ok=True)
+    return core
+
+
+def _page(body: str) -> str:
+    return '{% extends "layout.njk" %}\n{% block content %}\n' + body + "{% endblock %}\n"
+
+
+def _moved(path: Path, core: Path) -> Path:
+    return core / Path(path).relative_to(CORE)
+
+
+def test_the_govuk_tree_is_in_the_real_copy_the_plants_are_written_in(govuk_core: Path) -> None:
+    assert (govuk_core / GOVUK_ROOT / "layout.njk").is_file()
+    assert (CORE / GOVUK_ROOT / "layout.njk").is_file()
+
+
+def test_a_banned_word_in_the_govuk_tree_is_flagged_by_the_words_check(
+    govuk_core: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    roots = tuple(_moved(p, govuk_core) for p in ui_words_check.PAGES_ROOTS)
+    monkeypatch.setattr(ui_words_check, "PAGES_ROOTS", roots)
+    for name in ("GLASS_SRC", "DESIGN_PACKAGE", "SHARED_SRC"):
+        monkeypatch.setattr(ui_words_check, name, govuk_core / "none")
+    assert ui_words_check.main() == 0, "the real tree-govuk is not clean"
+    capsys.readouterr()
+    (govuk_core / GOVUK_ROOT / PLANTED_TEMPLATE).write_text(
+        _page("<h1>Review the target model</h1>\n"), encoding="utf-8"
+    )
+    assert ui_words_check.main() == 1
+    assert f"{GOVUK_ROOT}/{PLANTED_TEMPLATE}:" in capsys.readouterr().out
+
+
+def test_a_colour_outside_the_tokens_in_the_govuk_tree_is_flagged_by_the_colour_check(
+    govuk_core: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tools import colour_drift_check
+
+    scanned = tuple(
+        (_moved(root, govuk_core), exempt) for root, exempt in colour_drift_check.SCANNED
+    )
+    monkeypatch.setattr(colour_drift_check, "SCANNED", scanned)
+    monkeypatch.setattr(colour_drift_check, "CORE", govuk_core)
+    pages_roots = tuple(_moved(p, govuk_core) for p in colour_drift_check.PAGES_ROOTS)
+    monkeypatch.setattr(colour_drift_check, "PAGES_ROOTS", pages_roots)
+    assert colour_drift_check.main() == 0, "the real tree-govuk is not clean"
+    capsys.readouterr()
+    (govuk_core / GOVUK_ROOT / PLANTED_TEMPLATE).write_text(
+        _page('<svg><path fill="#ff00aa" d="M0 0"/></svg>\n'), encoding="utf-8"
+    )
+    assert colour_drift_check.main() == 1
+    out = capsys.readouterr()
+    assert f"{GOVUK_ROOT}/{PLANTED_TEMPLATE}:" in out.out + out.err
+
+
+def test_a_branch_word_in_the_govuk_tree_is_flagged_by_the_no_branches_check(
+    govuk_core: Path,
+) -> None:
+    scanned = no_branches_check.SCANNED
+    assert no_branches_check.findings(no_branches_check.tree_files(govuk_core, scanned)) == []
+    (govuk_core / GOVUK_ROOT / PLANTED_TEMPLATE).write_text(
+        _page('<a href="/v1/investigations/{{ id }}/branch-by-filter">Branch</a>\n'),
+        encoding="utf-8",
+    )
+    found = no_branches_check.findings(no_branches_check.tree_files(govuk_core, scanned))
+    assert [f[0] for f in found] == [f"{GOVUK_ROOT}/{PLANTED_TEMPLATE}"], found
+
+
+def test_an_inline_style_in_the_govuk_tree_is_flagged_by_the_design_detector(
+    govuk_core: Path,
+) -> None:
+    roots = [_moved(Path(p), govuk_core) for p in design_check.SCANNED]
+    roots = [r for r in roots if r.exists()]
+    clean = design_check.unexcused(design_check.detect(roots))
+    assert clean == [], "the real tree-govuk is not clean"
+    stripe = (
+        '<div class="card" style="border-left: 4px solid red; border-radius: 8px; '
+        'padding: 8px 12px; background: var(--surface-raised)">A status</div>\n'
+    )
+    (govuk_core / GOVUK_ROOT / PLANTED_TEMPLATE).write_text(_page(stripe), encoding="utf-8")
+    found = design_check.unexcused(design_check.detect(roots))
+    assert [(Path(f["file"]).name, f["antipattern"]) for f in found] == [
+        (PLANTED_TEMPLATE, "side-tab")
+    ], found
