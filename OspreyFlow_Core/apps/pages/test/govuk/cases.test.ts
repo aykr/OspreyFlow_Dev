@@ -553,7 +553,7 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
       expect(refusalProblems(res, unknown), id).toEqual([]);
       expect(calls(w.conduit), id).toEqual([`GET /v1/investigations/${id}`]);
     }
-    for (const query of ["?case=", "?case=c-harbour&case=c-ferry", "?case=c-harbour&case=", "?case=.", "?case=..", "?case=%2E%2E"]) {
+    for (const query of ["?case=", "?case=c-harbour&case=c-ferry", "?case=c-harbour&case=", "?case=.", "?case=..", "?case=%2E%2E", "?case=c-harbour%2Fbrief", "?case=c-harbour%2Fviews"]) {
       w.conduit.calls.splice(0);
       const res = await getAs(w, `${PATH}${query}`);
       expect(refusalProblems(res, unknown), query).toEqual([]);

@@ -21,6 +21,7 @@ This file holds the document, the page test, the `drawing-boards` row, the route
   as left out, a name for no field, the page's never-sent or
   may-be-absent lists not the models' own                            -> `test_the_field_census_is_the_models_fields`
 * a closed field's values not the models' own                        -> `test_the_page_allows_exactly_the_models_values`
+* the checked fields not the scenario's "Checked, not drawn" sentence -> `test_the_field_census_is_the_models_fields`
 
 The models are read from their source by `ast` (the classes' annotated fields; `exclude=True` for a field never on the wire; and the keys a
 `model_serializer` pops when unset, for a field that may be absent), so a field added to a route's model fails this test until the page
@@ -32,7 +33,8 @@ in-memory copy of what it read; it never writes into the repository. The files, 
 `apps/pages/FUNCTIONS.yaml`, `apps/pages/tree-govuk/routes.yaml`, `apps/pages/test/govuk/boards.test.ts`,
 `apps/pages/test/govuk/keyboard/boards.spec.ts`, `apps/pages/test/govuk/scripts-off/boards.spec.ts`,
 `apps/pages/server/{boards,pageList,pages,conduit}.ts`, `apps/pages/server/views/{boardsWords,notFoundWords}.ts`,
-`services/api/{app,boards}.py`, `services/api/working_set/models.py`, `packages/schemas/{boards,domain}.py`,
+`services/api/{app,boards}.py`, `services/api/working_set/models.py`, `packages/schemas/{boards,domain}.py`, `packages/ontology/handling.py`,
+`apps/workspace/src/workingset/ViewOverCapDialog.tsx`,
 `apps/workspace/src/boards/{BoardsPlace,BoardEditor}.tsx`.
 
 Every planted fault is the real inputs with one thing changed (rule 15), run through the same `problems` the real inputs go through,
@@ -75,6 +77,10 @@ VALUES: dict[str, tuple[str, Path, str]] = {
     "STARTS": ("BoardStart", BOARDS, "literal"),
     "STATES": ("ProvenanceState", DOMAIN, "enum"),
     "OPTIONS": ("LimitOption", WORKING_SET, "literal"),
+    # A field's own `Literal` (`Class.field`), not an alias: found missing by the review of 25 November.
+    "BASES": ("Edge.basis", DOMAIN, "field"),
+    "CAP_KINDS": ("LimitExceeded.cap_kind", WORKING_SET, "field"),
+    "CLASSES": ("DrawnAssertion.provenance_class", DOMAIN, "field"),
 }
 
 SECTION = "## Scenario BD"
@@ -97,6 +103,7 @@ MODELS: dict[str, Path] = {
     "DrawnAssertion": DOMAIN,
     "Grading": DOMAIN,
     "Handling": DOMAIN,
+    "LimitExceeded": WORKING_SET,
 }
 
 #: What each behaviour of the page is, by id: a behaviour with no scenario is one nobody will build or test.
@@ -187,7 +194,7 @@ def model_fields(source: str, name: str) -> tuple[list[str], set[str]] | None:
     return None
 
 
-CENSUS_LINE = re.compile(r"^\s*(\w+): \{ drawn: \[([^\]]*)\], left: \[([^\]]*)\] \},?$", re.MULTILINE)
+CENSUS_LINE = re.compile(r"^\s*(\w+): \{ drawn: \[([^\]]*)\], checked: \[([^\]]*)\], left: \[([^\]]*)\] \},?$", re.MULTILINE)
 NOT_SENT = re.compile(r"export const NOT_SENT[^=]*= \[([^\]]*)\]")
 
 
@@ -195,12 +202,25 @@ def names(listed: str) -> list[str]:
     return re.findall(r'"([^"]+)"', listed)
 
 
-def census_of(words: str) -> dict[str, tuple[list[str], list[str]]]:
-    """`{model: (drawn, left out)}` as the page's words module declares them (`CENSUS` in `boardsWords.ts`)."""
+def census_of(words: str) -> dict[str, tuple[list[str], list[str], list[str]]]:
+    """`{model: (drawn, checked, left out)}` as the page's words module declares them (`CENSUS` in `boardsWords.ts`)."""
     block = re.search(r"export const CENSUS = \{(.*?)\n\} as const;", words, flags=re.DOTALL)
     if block is None:
         return {}
-    return {m.group(1): (names(m.group(2)), names(m.group(3))) for m in CENSUS_LINE.finditer(block.group(1))}
+    return {m.group(1): (names(m.group(2)), names(m.group(3)), names(m.group(4))) for m in CENSUS_LINE.finditer(block.group(1))}
+
+
+def checked_sentence(section: str) -> dict[str, list[str]]:
+    """`{model: [field, ...]}` from the scenario's "Checked, not drawn" paragraph: each `of `Model`, `field` (why)` clause."""
+    para = next((p for p in section.split("\n\n") if p.startswith("**Checked, not drawn, by field name.**")), "")
+    body = para.split(":", 1)[1] if ":" in para else ""
+    body = re.sub(r"\([^)]*\)", "", body)
+    out: dict[str, list[str]] = {}
+    for clause in body.split(";"):
+        head = re.match(r"\s*of `(\w+)`, (.*)", clause, flags=re.DOTALL)
+        if head:
+            out[head.group(1)] = re.findall(r"`(\w+)`", head.group(2))
+    return out
 
 
 def left_out_sentence(section: str) -> dict[str, list[str]]:
@@ -382,6 +402,7 @@ def census_problems(data: dict[str, Any]) -> list[str]:
     found: list[str] = []
     census = census_of(data["words"])
     sentence = left_out_sentence(section_of(data["spec_08"]))
+    checks = checked_sentence(section_of(data["spec_08"]))
     not_sent_block = NOT_SENT.search(data["words"])
     not_sent = set(names(not_sent_block.group(1))) if not_sent_block else None
     absent_block = MAY_BE_ABSENT.search(data["words"])
@@ -403,13 +424,15 @@ def census_problems(data: dict[str, Any]) -> list[str]:
         if model not in census:
             found.append(f"the page's census has no line for {model}")
             continue
-        drawn, left = census[model]
-        for field in sorted(set(fields) - set(drawn) - set(left)):
-            found.append(f"{model}.{field} is neither drawn by the page nor named as left out")
-        for field in sorted((set(drawn) | set(left)) - set(fields)):
+        drawn, checked, left = census[model]
+        for field in sorted(set(fields) - set(drawn) - set(checked) - set(left)):
+            found.append(f"{model}.{field} is neither drawn nor checked by the page nor named as left out")
+        for field in sorted((set(drawn) | set(checked) | set(left)) - set(fields)):
             found.append(f"the census names {model}.{field}, which the model does not have")
-        for field in sorted(set(drawn) & set(left)):
-            found.append(f"the census has {model}.{field} both drawn and left out")
+        for field in sorted((set(drawn) & set(left)) | (set(drawn) & set(checked)) | (set(checked) & set(left))):
+            found.append(f"the census has {model}.{field} in two of its lists")
+        if sorted(checks.get(model, [])) != sorted(checked):
+            found.append(f"the scenario's checked sentence names {checks.get(model, [])} of {model}, the page checks {checked}")
         if sorted(sentence.get(model, [])) != sorted(left):
             found.append(
                 f"the scenario's left-out sentence names {sentence.get(model, [])} of {model}, the page leaves out {left}"
@@ -418,9 +441,23 @@ def census_problems(data: dict[str, Any]) -> list[str]:
         found.append(f"NOT_SENT is {sorted(not_sent)}, but the fields never on the wire are {sorted(all_excluded)}")
     if may_be_absent is not None and may_be_absent != all_popped:
         found.append(f"MAY_BE_ABSENT is {sorted(may_be_absent)}, but the fields a model leaves out when unset are {sorted(all_popped)}")
-    for model in sorted(set(sentence) - set(data["models"])):
-        found.append(f"the scenario's left-out sentence names {model}, which the page does not read")
+    for model in sorted((set(sentence) | set(checks)) - set(data["models"])):
+        found.append(f"the scenario's census sentences name {model}, which the page does not read")
     return found
+
+
+def field_literal(source: str, name: str) -> list[str] | None:
+    """The values of the `Literal` in the annotation of `Class.field` (`name`), in order, from `source` (`None` is not one)."""
+    cls, field = name.split(".")
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.ClassDef) and node.name == cls:
+            for item in node.body:
+                if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name) and item.target.id == field:
+                    for sub_node in ast.walk(item.annotation):
+                        if isinstance(sub_node, ast.Subscript) and isinstance(sub_node.value, ast.Name) and sub_node.value.id == "Literal":
+                            items = sub_node.slice.elts if isinstance(sub_node.slice, ast.Tuple) else [sub_node.slice]
+                            return [e.value for e in items if isinstance(e, ast.Constant)]
+    return None
 
 
 def model_values(source: str, name: str, how: str) -> list[str] | None:
@@ -448,7 +485,8 @@ def values_problems(data: dict[str, Any]) -> list[str]:
         if page is None:
             found.append(f"boardsWords.ts declares no {listed} list")
             continue
-        model = model_values(data["value_sources"][path], name, how)
+        source = data["value_sources"][path]
+        model = field_literal(source, name) if how == "field" else model_values(source, name, how)
         if model is None:
             found.append(f"{name} is not in {path.name}")
         elif sorted(names(page.group(1))) != sorted(model):
@@ -577,6 +615,21 @@ def _source(path: Path, old: str, new: str) -> Callable[[dict[str, Any]], None]:
     return plant
 
 
+def _in_class(path: Path, cls: str, old: str, new: str) -> Callable[[dict[str, Any]], None]:
+    """A change in the class `cls`'s own body: the same annotation is written in other classes of the file (`domain.py` has three
+    `basis` fields), and a change to the first one in the file would plant in another model (found when this plant first passed)."""
+
+    def plant(data: dict[str, Any]) -> None:
+        source = data["value_sources"][path]
+        start = source.index(f"class {cls}(")
+        end = source.find("\nclass ", start + 1)
+        body = source[start : end if end != -1 else len(source)]
+        assert old in body, f"the plant's anchor {old!r} is not in {cls}"
+        data["value_sources"][path] = source[:start] + body.replace(old, new, 1) + source[start + len(body) :]
+
+    return plant
+
+
 PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, Any]], list[str]], str]] = [
     ("a scenario row removed", _without_row("BD6"), scenario_problems, "no scenario BD6"),
     ("a page test case with no scenario row", _without_row("BD17"), scenario_problems, "titled BD17"),
@@ -651,9 +704,9 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
     ),
     (
         "a field both drawn and left out",
-        _replace("words", 'Grading: { drawn: ["scheme", "source", "intelligence", "handling"], left: [] }', 'Grading: { drawn: ["scheme", "source", "intelligence", "handling"], left: ["scheme"] }'),
+        _replace("words", 'Grading: { drawn: ["scheme", "source", "intelligence", "handling"], checked: [], left: [] }', 'Grading: { drawn: ["scheme", "source", "intelligence", "handling"], checked: [], left: ["scheme"] }'),
         census_problems,
-        "both drawn and left out",
+        "in two of its lists",
     ),
     (
         "a field never on the wire read as required",
@@ -690,6 +743,30 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
         _source(DOMAIN, '    UNRESOLVED = "unresolved"\n', '    UNRESOLVED = "unresolved"\n    WITHDRAWN = "withdrawn"\n'),
         values_problems,
         "ProvenanceState holds",
+    ),
+    (
+        "a checked field dropped from the scenario's sentence",
+        _in_section("of `Edge`, `id` (named once, and as drawn when it carries an assertion); ", ""),
+        census_problems,
+        "checked sentence names",
+    ),
+    (
+        "a field added to the cap's refusal",
+        _model("LimitExceeded", "    would_be: int\n", "    would_be: int\n    hint: str = \"\"\n"),
+        census_problems,
+        "LimitExceeded.hint is neither drawn",
+    ),
+    (
+        "a basis added to the model's links",
+        _in_class(DOMAIN, "Edge", 'basis: Literal["direct", "probabilistic"] | None = None', 'basis: Literal["direct", "probabilistic", "asserted"] | None = None'),
+        values_problems,
+        "Edge.basis holds",
+    ),
+    (
+        "a cap kind added to the model",
+        _source(WORKING_SET, 'cap_kind: Literal["nodes", "edges", "pairs"]', 'cap_kind: Literal["nodes", "edges", "pairs", "hops"]'),
+        values_problems,
+        "LimitExceeded.cap_kind holds",
     ),
     (
         "a cap option dropped from the page",

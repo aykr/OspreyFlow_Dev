@@ -62,8 +62,9 @@ async function casesGet(req: Request, res: Response): Promise<void> {
   const oneCase = wanted !== undefined;
   // A case named once, as a plain value: anything else is a page that is not there, and nothing is asked.
   // `.` and `..` are refused too: `v1` encodes each segment, but a dot segment is one the address's own parser folds away, so it would
-  // ask another route than the case's.
-  if (oneCase && (typeof wanted !== "string" || wanted === "" || wanted === "." || wanted === "..")) return notFound(res);
+  // ask another route than the case's. A value holding a slash too: `v1` sends it as `%2F`, which the Conduit's server decodes before it
+  // routes, so `c-harbour/brief` would ask another route (found by GG4a's review, 25 November 2026).
+  if (oneCase && (typeof wanted !== "string" || wanted === "" || wanted === "." || wanted === ".." || wanted.includes("/"))) return notFound(res);
   const title = oneCase ? CASES_WORDS.about : CASES_WORDS.listTitle;
   const unreadable = (status = 502): void => void res.status(status).render("cases", context(title, { kind: oneCase ? "unreadable-case" : "unreadable-list" }));
   const ended = (): void => void res.status(401).render("cases", context(title, { kind: "ended" }, { ended: refusalWords(401, undefined, "") }));

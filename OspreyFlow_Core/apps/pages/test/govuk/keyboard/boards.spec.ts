@@ -2,7 +2,7 @@
 // BD14). The page is read-only and its only actions are links, so the cases that prove it are the tab order through each page (every
 // stop a native one, in the page's own order, the skip link first, the tables with no stop of their own) and that each link does what it
 // says when activated by Enter: a board's name opens it, the way back returns to the case's boards and then to the case, Home is Home
-// (the case's own link to its boards is `cases.spec.ts` CK2's). No `page.mouse`, no `.click()`. The service is started in the case for the `govuk` tree against a fixture
+// (the case's own link to its boards, followed here too, is also `cases.spec.ts` CK2's). No `page.mouse`, no `.click()`. The service is started in the case for the `govuk` tree against a fixture
 // Conduit that refuses what the real routes refuse.
 import { expect, test } from "@playwright/test";
 
@@ -47,6 +47,11 @@ test.describe("the boards page with scripts", () => {
       await page.getByRole("link", { name: "Back to this case" }).focus();
       await page.keyboard.press("Enter");
       await expect(page).toHaveURL(new RegExp(`^${base}/cases\\?case=k-harbour$`));
+      await expect(page.getByRole("heading", { level: 1 })).toHaveText("Harbour watch");
+      // And from the case's page, its link to its boards brings the reader back to them.
+      await page.getByRole("link", { name: "Drawing boards in this case" }).focus();
+      await page.keyboard.press("Enter");
+      await expect(page.getByRole("heading", { level: 1 })).toHaveText("Drawing boards in this case");
     });
   });
 
@@ -55,8 +60,8 @@ test.describe("the boards page with scripts", () => {
       await openBoards(page, base, "/cases/boards?case=k-harbour&board=k-quay");
       await expect(page.getByRole("banner")).toHaveCount(1);
       await expect(page.getByRole("main")).toHaveCount(1);
-      const drawn = page.getByRole("table", { name: "Drawn on this board" });
-      await expect(drawn.getByRole("columnheader")).toHaveText(["Item", "Type", "Marking", "Grading", "Source"]);
+      const drawn = page.getByRole("table", { name: "Drawn items on this board" });
+      await expect(drawn.getByRole("columnheader")).toHaveText(["Item", "Type", "Marking", "Grading", "Source note"]);
       await expect(drawn.getByRole("rowheader")).toHaveText([/^Tall man\s*Drawn, not loaded$/]);
       const loaded = page.getByRole("table", { name: "Loaded items on this board" });
       await expect(loaded.getByRole("rowheader")).toHaveText([/^Evening Tide\s*A dataset this case reads: a live reference, not editable here$/]);

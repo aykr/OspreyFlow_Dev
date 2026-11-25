@@ -165,7 +165,8 @@ export async function casesConduit(options: CasesConduitOptions): Promise<CasesC
       if (c) return send(c.status, c.body);
       otherwise();
     };
-    const path = url.split("?")[0] ?? "";
+    // The path as the router sees it: decoded first (a `%2F` is a slash), as uvicorn gives it to Starlette (slice GG4a's review).
+    const path = decodeURIComponent(url.split("?")[0] ?? "");
     const method = req.method ?? "";
     // The router answers first, as FastAPI's does.
     if (/^\/v1\/investigations\/[^/]+\/.+$/.test(path) && !/^\/v1\/investigations\/[^/]+\/brief$/.test(path)) {
@@ -173,7 +174,7 @@ export async function casesConduit(options: CasesConduitOptions): Promise<CasesC
     }
     const match = /^\/v1\/investigations(?:\/([^/]+)(\/brief)?)?$/.exec(path);
     if (!match) return send(404, { detail: "Not Found" });
-    const id = match[1] === undefined ? undefined : decodeURIComponent(match[1]);
+    const id = match[1];
     const route = id === undefined ? "list" : match[2] === undefined ? "case" : "brief";
     const methods: Record<string, string[]> = { list: ["GET", "POST"], case: ["GET", "PATCH", "DELETE"], brief: ["GET"] };
     if (!(methods[route] as string[]).includes(method)) return send(405, { detail: "Method Not Allowed" });

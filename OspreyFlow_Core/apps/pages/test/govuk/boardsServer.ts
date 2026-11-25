@@ -2,12 +2,17 @@
  * The pages server started for the GOV.UK tree against the boards page's fixture Conduit (`boardsConduit.ts`), for the boards page's
  * keyboard and scripts-off specs (slice GG4a; scenario BD14 and BD15). One synthetic case with two boards: one with a drawn item, a loaded
  * one and a drawn link between them, and one with nothing on it. The signed-in person made both, holds a level on the case and the right
- * to investigate.
+ * to investigate. The case's own routes are the cases page's fixture's (`casesConduit.ts`), so the way back to the case lands on its real
+ * page: one address in front of both fixtures sends each request to the one that models its route, unchanged.
  */
+import { request as forward, createServer } from "node:http";
+import type { AddressInfo } from "node:net";
+
 import type { Page } from "@playwright/test";
 
 import type { Assets } from "./helpServer.js";
 import { boardsConduit } from "./boardsConduit.js";
+import { casesConduit } from "./casesConduit.js";
 import type { Board, Item, Link } from "./boardsConduit.js";
 import { MemorySessionStore } from "../../server/sessionStore.js";
 import { main } from "../../server/start.js";
@@ -53,13 +58,28 @@ export async function withBoards(assets: Assets, run: (base: string) => Promise<
     items: ITEMS,
     links: LINKS,
   });
+  const cases = await casesConduit({
+    readers: [{ token, unit: UNIT, rights: ["investigate"], levels: { [CASE]: "author" } }],
+    cases: [{ id: CASE, name: "Harbour watch", created_at: "2026-10-02T09:05:00Z", created_by: ME, owning_unit: UNIT, domains: [], datasets: [], brief: { priority: "", requirements: [] } }],
+  });
+  // Each request to whichever fixture models its route: the boards' routes to the boards fixture, every other to the cases fixture.
+  const front = createServer((req, res) => {
+    const target = new URL(/^\/v1\/investigations\/[^/]+\/boards(?:\/|$|\?)/.test(req.url ?? "") ? conduit.url : cases.url);
+    const onward = forward({ host: target.hostname, port: target.port, path: req.url, method: req.method, headers: req.headers }, (answer) => {
+      res.writeHead(answer.statusCode ?? 502, answer.headers);
+      answer.pipe(res);
+    });
+    req.pipe(onward);
+  });
+  await new Promise<void>((resolve) => front.listen(0, "127.0.0.1", resolve));
+  const frontUrl = `http://127.0.0.1:${(front.address() as AddressInfo).port}`;
   const io = { log: () => undefined, error: () => undefined, exit: () => undefined };
   const running: Running | undefined = await main(
     {
       OSPREY_PAGES_PORT: "0",
       OSPREY_PAGES_SESSION_SECRET: generateSecret(48),
       OSPREY_PAGES_TREE: "govuk",
-      OSPREY_PAGES_CONDUIT_URL: conduit.url,
+      OSPREY_PAGES_CONDUIT_URL: frontUrl,
       OSPREY_PAGES_PUBLIC_ORIGIN: "https://osprey.test",
     },
     io,
@@ -79,6 +99,8 @@ export async function withBoards(assets: Assets, run: (base: string) => Promise<
     await run(`http://127.0.0.1:${running.port}`);
   } finally {
     await running.stop();
+    await new Promise<void>((resolve) => front.close(() => resolve()));
+    await cases.stop();
     await conduit.stop();
   }
 }
