@@ -26,7 +26,7 @@ const walks = new Map<string, readonly string[]>();
 
 /** `walk` made once for each list of roots: the first call walks, every later call returns a copy of the list it found.
  * Only the roots' own listing is kept: what a test writes into a folder after its first walk is not listed again. */
-function walkedOnce(walk: (roots?: readonly string[]) => string[]): (roots?: readonly string[]) => string[] {
+export function walkedOnce(walk: (roots?: readonly string[]) => string[]): (roots?: readonly string[]) => string[] {
   return (roots = ROOTS) => {
     const key = roots.join("\0");
     let found = walks.get(key);
@@ -49,13 +49,18 @@ export function walkOnDisc(dir: string): string[] {
   return filesUnder(dir);
 }
 
-// The one walk of the two real roots, and the one reading and parsing of every file in them, are paid here, in a hook of
-// their own, not inside whichever test runs first. Its timeout is explicit and explained (never raised for the suite
-// or the config): the walk and the parse read and parse two folders of a few hundred files (1.5 to 2 s alone), and a
-// loaded server has made the same work take 5.4 to 7 s, so a minute is far past the slowest figure seen and still
-// ends a walk that hangs. Every test after it reads the walk and the parsed texts from memory.
+// The one walk of the two real roots is paid here, in a hook of its own, not inside whichever test runs first. Its
+// timeout is explicit and explained (never raised for the suite or the config): the walk itself is a few milliseconds
+// (a few hundred files listed), but the planted fault of this slice makes it take 6 s, as a loaded server can, so the hook
+// has ten times that and still ends a walk that hangs. Every test after it reads the walk from memory.
+//
+// The parse is not paid here: the guards that read texts through `copyTexts` pay it once, in their first test, and share it
+// (`parsed` below); a guard with its own parser (`copyWords.test.ts`) never reads it, and a file that imports only the
+// kit's paths (`auth/resolvedPrincipal.test.ts`) would pay a full parse for nothing. Measured alone, parsing the 479 files
+// takes 0.6 s and the largest test of the two guards 0.5 s, so a server three and a half times slower (1.5 to 2 s a file
+// alone, 5.4 to 7 s under load) takes under 2.5 s for any one test, inside vitest's 5 s: no test needs a longer timeout.
 beforeAll(() => {
-  for (const path of sourceFiles()) copyTexts(path, readFileSync(path, "utf-8"));
+  sourceFiles();
 }, 60_000);
 
 /** The path as the guards print it: relative to its own root, the shared package's marked. */

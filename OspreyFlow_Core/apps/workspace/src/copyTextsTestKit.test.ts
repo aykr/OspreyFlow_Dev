@@ -7,15 +7,30 @@ import { join, relative } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-import { copyTexts, movedClients, MOVED_FOLDERS, plantedCopy, ROOTS, SHARED_SRC, sourceFiles, SRC, walkOnDisc } from "./copyTextsTestKit";
+import {
+  copyTexts,
+  movedClients,
+  MOVED_FOLDERS,
+  plantedCopy,
+  ROOTS,
+  SHARED_SRC,
+  sourceFiles,
+  SRC,
+  walkedOnce,
+  walkOnDisc,
+} from "./copyTextsTestKit";
+
+// Which tests walk afresh, and why: the kit's hook walks the two real roots once, so a test that asks for `sourceFiles()`
+// or `movedClients()` reads that walk and pays none. A test that must walk a folder the hook did not (a temporary one)
+// pays one walk, and says so in its own timeout: the planted fault of PL4h makes a walk take 6 s, as a loaded server can,
+// so that test is given 30 s, for this test alone and never for the suite or the config.
+const ONE_FRESH_WALK_MS = 30_000;
 
 describe("the copy guards' kit shares one walk and one parse and changes what is read in nothing", () => {
   it("walks the same files as a fresh walk of each root on disc finds", () => {
-    for (const root of ROOTS) {
-      const fresh = walkOnDisc(root);
-      expect(fresh.length, root).toBeGreaterThan(50);
-      expect(sourceFiles([root])).toEqual(fresh);
-    }
+    for (const root of ROOTS) expect(walkOnDisc(root).length, root).toBeGreaterThan(50);
+    // The shared walk of both roots is the roots' own fresh walks, one after the other (no walk of one root alone: it
+    // would be a second walk, with its own key).
     expect(sourceFiles()).toEqual(ROOTS.flatMap((root) => walkOnDisc(root)));
   });
 
@@ -32,6 +47,20 @@ describe("the copy guards' kit shares one walk and one parse and changes what is
     expect(walked.filter((path) => /\.(test|spec)\.|TestKit\.ts$|\/generated\/|\/node_modules\//.test(path))).toEqual([]);
   });
 
+  it("asks the walk once for each list of roots, however many times it is read", () => {
+    let calls = 0;
+    const walk = walkedOnce((roots = []) => {
+      calls += 1;
+      return roots.map((root) => `${root}/a.ts`);
+    });
+    expect(walk(["/kit-count/one"])).toEqual(["/kit-count/one/a.ts"]);
+    expect(walk(["/kit-count/one"])).toEqual(["/kit-count/one/a.ts"]);
+    expect(walk(["/kit-count/one"])).toEqual(["/kit-count/one/a.ts"]);
+    expect(calls).toBe(1);
+    expect(walk(["/kit-count/two"])).toEqual(["/kit-count/two/a.ts"]);
+    expect(calls).toBe(2);
+  });
+
   it("walks a list of roots once: a file added after the first walk is not listed again, a fresh walk lists it", () => {
     const root = mkdtempSync(join(tmpdir(), "copy-kit-"));
     try {
@@ -43,7 +72,7 @@ describe("the copy guards' kit shares one walk and one parse and changes what is
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
-  });
+  }, ONE_FRESH_WALK_MS);
 
   it("hands each caller its own list, so one test cannot change what another walks", () => {
     const first = sourceFiles();
@@ -77,7 +106,7 @@ describe("the copy guards' kit shares one walk and one parse and changes what is
     } finally {
       rmSync(planted.root, { recursive: true, force: true });
     }
-  });
+  }, ONE_FRESH_WALK_MS);
 
   it("parses what each source says, not what an earlier source said, and a .tsx apart from a .ts", () => {
     const one = copyTexts("a.ts", 'export const a = "first words";');
@@ -88,5 +117,14 @@ describe("the copy guards' kit shares one walk and one parse and changes what is
     const jsx = "export const View = () => <span>shown text</span>;";
     expect(copyTexts("View.tsx", jsx).map((text) => text.words)).toContain("shown text");
     expect(copyTexts("View.ts", jsx).map((text) => text.words)).not.toContain("shown text");
+  });
+
+  it("parses a source once: the same source read again is the very same result, not a new parse", () => {
+    const source = 'export const once = "read only once";';
+    const first = copyTexts("once.ts", source);
+    // `toBe` is identity: a second parse would be an equal array, but not this one.
+    expect(copyTexts("once.ts", source)).toBe(first);
+    expect(copyTexts("elsewhere/once.ts", source)).toBe(first);
+    expect(copyTexts("once.ts", `${source}\nexport const more = "a changed source";`)).not.toBe(first);
   });
 });
