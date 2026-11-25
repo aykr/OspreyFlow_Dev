@@ -62,7 +62,21 @@ export const STUB_CONFORMS_TO_THE_PACKAGE: [
   Conforms<typeof Real.periodsOf, typeof Stub.periodsOf>,
   Conforms<typeof Real.trendSentence, typeof Stub.trendSentence>,
   Conforms<Stub.TrendFigures, Parameters<typeof Real.trendSentence>[0]>,
-] = [true, true, true, true, true, true, true];
+  // The other way, part by part (an `Omit` over these types keeps only their index signature, and would compare nothing): the stub is
+  // no narrower than the package's type anywhere the page reads, so a widened field in the schema fails here too.
+  Conforms<RealFigures["result"], Stub.TrendFigures["result"]>,
+  Conforms<RealFigures["as_of"], Stub.TrendFigures["as_of"]>,
+  Conforms<RealFigures["window_start"], Stub.TrendFigures["window_start"]>,
+  Conforms<RealFigures["marking"], Stub.TrendFigures["marking"]>,
+  Conforms<RealFigures["definition"]["title"], Stub.TrendFigures["definition"]["title"]>,
+  Conforms<RealFigures["definition"]["source"], Stub.TrendFigures["definition"]["source"]>,
+  Conforms<RealFigures["definition"]["measure"], Stub.TrendFigures["definition"]["measure"]>,
+  Conforms<RealFigures["definition"]["measure_field"], Stub.TrendFigures["definition"]["measure_field"]>,
+  Conforms<RealFigures["definition"]["interval"], Stub.TrendFigures["definition"]["interval"]>,
+  Conforms<RealFigures["definition"]["weeks"], Stub.TrendFigures["definition"]["weeks"]>,
+  Conforms<RealFigures["definition"]["group_by"], Stub.TrendFigures["definition"]["group_by"]>,
+] = [true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true, true];
+type RealFigures = Parameters<typeof Real.trendSentence>[0];
 
 const PAGES_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const CORE = join(PAGES_DIR, "..", "..");
