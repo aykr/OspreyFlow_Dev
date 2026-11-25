@@ -13,7 +13,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   copyTexts,
-  GUARD_TEST_TIMEOUT_MS,
   LINK_CLIENTS,
   movedClients,
   plantedCopy,
@@ -40,16 +39,13 @@ export function clientWords(name: string, source: string): { line: number; words
     .map(({ line, words }) => ({ line, words }));
 }
 
-/** Vitest's own limit for a test that declares none: the config here sets no `testTimeout`. */
-const VITEST_DEFAULT_TIMEOUT_MS = 5_000;
-
 describe("the Glass's copy names no client and no setting still to be confirmed", () => {
   it("in every string, template and line of JSX text a person can be shown", () => {
     const hits = sourceFiles().flatMap((path) =>
       clientWords(path, readFileSync(path, "utf-8")).map((hit) => `${shown(path)}:${hit.line}: ${hit.words}`),
     );
     expect(hits).toEqual([]);
-  }, GUARD_TEST_TIMEOUT_MS);
+  });
 
   it("reads the Conduit clients that moved to packages/glass-shared/src (rule 15)", () => {
     const walked = sourceFiles();
@@ -66,7 +62,7 @@ describe("the Glass's copy names no client and no setting still to be confirmed"
     } finally {
       planted.remove();
     }
-  }, GUARD_TEST_TIMEOUT_MS);
+  });
 
   it("reads the report, export, alert and pattern clients that moved (PL4d3a), and finds a word planted in each (rule 15)", () => {
     const walked = sourceFiles();
@@ -80,7 +76,7 @@ describe("the Glass's copy names no client and no setting still to be confirmed"
     } finally {
       planted.remove();
     }
-  }, GUARD_TEST_TIMEOUT_MS);
+  });
 
   it("reads the link, inspector, question, reader, views and analytics clients that moved (PL4d3b), and finds a word planted in each (rule 15)", () => {
     const walked = sourceFiles();
@@ -94,7 +90,7 @@ describe("the Glass's copy names no client and no setting still to be confirmed"
     } finally {
       planted.remove();
     }
-  }, GUARD_TEST_TIMEOUT_MS);
+  });
 
   it("reads the assessment, boards, connections, explore, map, metrics, ownership, search, site, strength and watches clients that moved (PL4d3c), and finds a word planted in each (rule 15)", () => {
     const walked = sourceFiles();
@@ -108,7 +104,7 @@ describe("the Glass's copy names no client and no setting still to be confirmed"
     } finally {
       planted.remove();
     }
-  }, GUARD_TEST_TIMEOUT_MS);
+  });
 
   it("reads the cases, moment, needs-you, dataset, pack and external-orchestration files that moved (PL4d3d), and finds a word planted in each (rule 15)", () => {
     const walked = sourceFiles();
@@ -122,7 +118,7 @@ describe("the Glass's copy names no client and no setting still to be confirmed"
     } finally {
       planted.remove();
     }
-  }, GUARD_TEST_TIMEOUT_MS);
+  });
 
   it("reads the roles', admin, Home, rule-group and entity-picture files that moved (PL4d3e), and finds a word planted in each (rule 15)", () => {
     const walked = sourceFiles();
@@ -136,7 +132,7 @@ describe("the Glass's copy names no client and no setting still to be confirmed"
     } finally {
       planted.remove();
     }
-  }, GUARD_TEST_TIMEOUT_MS);
+  });
 
   it("is found in each shape the copy took before this change (rule 15)", () => {
     const planted = [
@@ -166,22 +162,5 @@ describe("the Glass's copy names no client and no setting still to be confirmed"
       'const composition: string = "client_parity";',
     ].join("\n");
     expect(clientWords("Clean.ts", clean)).toEqual([]);
-  });
-
-  // The limit is each test's own, never the file's or the suite's (PL4h round 5): a test that walks, reads or parses files
-  // carries `GUARD_TEST_TIMEOUT_MS` as its own argument (its reason is the kit's), and a test that reads no file keeps vitest's
-  // own 5 s. Read from the sibling tests' own tasks, so taking one test's limit out, or giving a no-file test one, fails here.
-  it("gives each test that reads files its own explicit limit, and a test that reads no file vitest's own", (context) => {
-    const readsNoFile = [
-    "is found in each shape the copy took before this change (rule 15)",
-    "leaves alone what is not copy: names, keys, imports and comments",
-    ];
-    const siblings = context.task.suite?.tasks ?? [];
-    expect(siblings.length).toBeGreaterThan(8);
-    for (const task of siblings) {
-      if (task.type !== "test") continue;
-      const expected = readsNoFile.includes(task.name) || task === context.task ? VITEST_DEFAULT_TIMEOUT_MS : GUARD_TEST_TIMEOUT_MS;
-      expect(task.timeout, task.name).toBe(expected);
-    }
   });
 });

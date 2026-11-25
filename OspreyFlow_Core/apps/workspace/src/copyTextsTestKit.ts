@@ -9,7 +9,6 @@ import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 
 import ts from "typescript";
-import { beforeAll } from "vitest";
 
 export const SRC = join(__dirname);
 /** The shared package's source, where the plain modules that left the workspace live (slices PL4c to PL4d2):
@@ -18,74 +17,10 @@ export const SHARED_SRC = join(__dirname, "..", "..", "..", "packages", "glass-s
 /** The roots the guards walk: the one list every copy guard and its reach test use. */
 export const ROOTS: readonly string[] = [SRC, SHARED_SRC];
 
-/** The walks made so far, by the roots walked (PL4h). Each guard file used to walk and read the whole source again in
- * every test (seven calls a file, 1.5 to 2 s alone and 5.4 to 7 s under a loaded server, past vitest's 5 s): a list of
- * roots is now walked once per file and its list shared. Nothing is kept across test files: each vitest file has its
- * own module, so each pays the walk once, in the hook below. */
-const walks = new Map<string, readonly string[]>();
-
-/** `walk` made once for each list of roots: the first call walks, every later call returns a copy of the list it found.
- * Only the roots' own listing is kept: what a test writes into a folder after its first walk is not listed again. */
-export function walkedOnce(walk: (roots?: readonly string[]) => string[]): (roots?: readonly string[]) => string[] {
-  return (roots = ROOTS) => {
-    const key = roots.join("\0");
-    let found = walks.get(key);
-    if (!found) {
-      found = walk(roots);
-      walks.set(key, found);
-    }
-    return [...found];
-  };
+/** The files under `roots` (by default both), skipping tests, test kits and generated types. */
+export function sourceFiles(roots: readonly string[] = ROOTS): string[] {
+  return roots.flatMap((root) => filesUnder(root));
 }
-
-/** The files under `roots` (by default both), skipping tests, test kits and generated types: the walk, made once for
- * each list of roots (`walkedOnce`). */
-export const sourceFiles = walkedOnce(function sourceFiles(roots: readonly string[] = ROOTS): string[] {
-  return roots.flatMap((root) => discWalk(root));
-});
-
-/** A fresh walk of `dir` on disc, never the shared one: for the tests that hold the shared one to what the disc says. */
-export function walkOnDisc(dir: string): string[] {
-  return discWalk(dir);
-}
-
-/** The walks of a folder on disc made so far in this file (PL4h): the walk of the real roots and each `walkOnDisc`. A test
- * of the kit reads it before and after a plant, and holds that a plant lists its copy from the shared walk, not from the disc. */
-let discWalks = 0;
-export function discWalkCount(): number {
-  return discWalks;
-}
-function discWalk(dir: string): string[] {
-  discWalks += 1;
-  return filesUnder(dir);
-}
-
-// The one walk of the two real roots is paid here, in a hook of its own, not inside whichever test runs first. Its
-// timeout is explicit and explained (never raised for the suite or the config): the walk itself is a few milliseconds
-// (a few hundred files listed), but the planted fault of this slice makes it take 6 s, as a loaded server can, so the hook
-// has ten times that and still ends a walk that hangs. Every test after it reads the walk from memory: a plant's copy
-// too, whose list is the shared package's files of this walk re-rooted (`copySharedPackage`), never a walk of its own.
-//
-// The parse is not paid here: the guards that read texts through `copyTexts` pay it once, in their first test, and share it
-// (`parsed` below); a guard with its own parser (`copyWords.test.ts`) never reads it, and a file that imports only the
-// kit's paths (`auth/resolvedPrincipal.test.ts`) would pay a full parse for nothing.
-beforeAll(() => {
-  sourceFiles();
-}, 60_000);
-
-/** The time a guard's test that walks, reads or parses files may take: 30 s. A test passes it as its own third argument
- * (`it(name, fn, GUARD_TEST_TIMEOUT_MS)`), so the limit is seen where it applies; this module never sets it for a file, the
- * suite or the config (PL4h round 5: an import-time `vi.setConfig` once gave every test of every importing file 30 s, a test
- * that reads no file and `auth/resolvedPrincipal.test.ts` included). A test that reads no file keeps vitest's own 5 s.
- *
- * Why 30 s: what is left in a guard's test after the one walk is reading and parsing files, which the guards' own code does
- * (`copyWords.test.ts` reads and parses every file again in its first test, and the plants' copies in the rest: its parser is
- * its own, so the kit cannot share it). Measured on this slice's own machine, 12 cores: the largest test, reading and parsing
- * the 479 files of both roots, takes 0.65 to 0.75 s alone; with 36 busy loops running beside it (three to a core) it took 2.3
- * to 2.9 s, about four times as long, so vitest's 5 s leaves under a factor of two there; and a server's own load is not known
- * from here (the owner saw 1.5 to 2 s alone and 5.4 to 7 s loaded for a file's walks, before this change). So the limit is
- * stated, ten times the loaded figure measured, and ends a test that hangs. */
-export const GUARD_TEST_TIMEOUT_MS = 30_000;
 
 /** The path as the guards print it: relative to its own root, the shared package's marked. */
 export function shown(path: string): string {
@@ -180,98 +115,79 @@ export const ADMIN_CLIENTS: readonly string[] = Object.entries(ADMIN_STEMS).flat
 /** The Conduit clients and the notice that live in the shared package: every file there under the folders the
  * clients came from, found on disc rather than named, so a client added later is walked and checked too. */
 export function movedClients(): string[] {
-  // From the walk of both roots every test already shares, not a walk of the shared package alone (a second list of roots
-  // would be a second walk, PL4h): the shared package's files are the ones of that walk under `SHARED_SRC`.
-  return sourceFiles()
-    .filter((path) => path.startsWith(SHARED_SRC))
-    .filter((path) => MOVED_FOLDERS.test(path));
-}
-
-/** A temporary copy of the shared package, its list entered in `walks` without a walk: the copy is the package's source
- * as `cpSync` finds it, so what the walk would list there is the shared walk's files under `SHARED_SRC`, re-rooted at the
- * copy. A plant's own `sourceFiles([root])` reads that list from memory (PL4h); a cleanup forgets it. */
-function copySharedPackage(): { root: string; remove: () => void } {
-  const root = mkdtempSync(join(tmpdir(), "copy-guard-"));
-  cpSync(SHARED_SRC, root, { recursive: true });
-  walks.set(
-    root,
-    sourceFiles()
-      .filter((path) => path.startsWith(SHARED_SRC))
-      .map((path) => join(root, relative(SHARED_SRC, path))),
-  );
-  return {
-    root,
-    remove: () => {
-      walks.delete(root);
-      rmSync(root, { recursive: true, force: true });
-    },
-  };
+  return sourceFiles([SHARED_SRC]).filter((path) => MOVED_FOLDERS.test(path));
 }
 
 /** A copy of the shared package in a temporary folder, with `line` appended to its file named `basename`; returns the
  * folder, that file's path relative to it, and a cleanup. For the guards' plants (rule 15): the plant sits in a real
  * moved client, and the guard's own walk and test are run over the copy. */
 export function plantedCopy(basename: string, line: string): { root: string; file: string; remove: () => void } {
-  const { root, remove } = copySharedPackage();
+  const root = mkdtempSync(join(tmpdir(), "copy-guard-"));
+  cpSync(SHARED_SRC, root, { recursive: true });
   const target = sourceFiles([root]).find((path) => path.endsWith(`/${basename}`));
   if (!target) throw new Error(`no ${basename} in the shared package`);
   writeFileSync(target, `${readFileSync(target, "utf-8")}\n${line}\n`);
-  return { root, file: relative(root, target), remove };
+  return { root, file: relative(root, target), remove: () => rmSync(root, { recursive: true, force: true }) };
 }
 
 /** A copy of the shared package with `line` appended to each of the twelve report clients; returns the folder, the files'
  * paths relative to it (in `REPORT_CLIENTS`' order), and a cleanup. The report guards' plants (rule 15): one in each. */
 export function plantedReportClients(line: string): { root: string; files: string[]; remove: () => void } {
-  const { root, remove } = copySharedPackage();
+  const root = mkdtempSync(join(tmpdir(), "copy-guard-"));
+  cpSync(SHARED_SRC, root, { recursive: true });
   for (const file of REPORT_CLIENTS) {
     const target = join(root, file);
     writeFileSync(target, `${readFileSync(target, "utf-8")}\n${line}\n`);
   }
-  return { root, files: [...REPORT_CLIENTS], remove };
+  return { root, files: [...REPORT_CLIENTS], remove: () => rmSync(root, { recursive: true, force: true }) };
 }
 
 /** A copy of the shared package with `line` appended to each of the sixteen link clients; returns the folder, the files'
  * paths relative to it (in `LINK_CLIENTS`' order), and a cleanup. The link guards' plants (rule 15): one in each. */
 export function plantedLinkClients(line: string): { root: string; files: string[]; remove: () => void } {
-  const { root, remove } = copySharedPackage();
+  const root = mkdtempSync(join(tmpdir(), "copy-guard-"));
+  cpSync(SHARED_SRC, root, { recursive: true });
   for (const file of LINK_CLIENTS) {
     const target = join(root, file);
     writeFileSync(target, `${readFileSync(target, "utf-8")}\n${line}\n`);
   }
-  return { root, files: [...LINK_CLIENTS], remove };
+  return { root, files: [...LINK_CLIENTS], remove: () => rmSync(root, { recursive: true, force: true }) };
 }
 
 /** A copy of the shared package with `line` appended to each of the twelve plain clients; returns the folder, the files'
  * paths relative to it (in `PLAIN_CLIENTS`' order), and a cleanup. The plain guards' plants (rule 15): one in each. */
 export function plantedPlainClients(line: string): { root: string; files: string[]; remove: () => void } {
-  const { root, remove } = copySharedPackage();
+  const root = mkdtempSync(join(tmpdir(), "copy-guard-"));
+  cpSync(SHARED_SRC, root, { recursive: true });
   for (const file of PLAIN_CLIENTS) {
     const target = join(root, file);
     writeFileSync(target, `${readFileSync(target, "utf-8")}\n${line}\n`);
   }
-  return { root, files: [...PLAIN_CLIENTS], remove };
+  return { root, files: [...PLAIN_CLIENTS], remove: () => rmSync(root, { recursive: true, force: true }) };
 }
 
 /** A copy of the shared package with `line` appended to each of the seven case files; returns the folder, the files'
  * paths relative to it (in `CASE_CLIENTS`' order), and a cleanup. The case guards' plants (rule 15): one in each. */
 export function plantedCaseClients(line: string): { root: string; files: string[]; remove: () => void } {
-  const { root, remove } = copySharedPackage();
+  const root = mkdtempSync(join(tmpdir(), "copy-guard-"));
+  cpSync(SHARED_SRC, root, { recursive: true });
   for (const file of CASE_CLIENTS) {
     const target = join(root, file);
     writeFileSync(target, `${readFileSync(target, "utf-8")}\n${line}\n`);
   }
-  return { root, files: [...CASE_CLIENTS], remove };
+  return { root, files: [...CASE_CLIENTS], remove: () => rmSync(root, { recursive: true, force: true }) };
 }
 
 /** A copy of the shared package with `line` appended to each of the six admin and home files; returns the folder, the files'
  * paths relative to it (in `ADMIN_CLIENTS`' order), and a cleanup. The guards' plants (rule 15): one in each. */
 export function plantedAdminClients(line: string): { root: string; files: string[]; remove: () => void } {
-  const { root, remove } = copySharedPackage();
+  const root = mkdtempSync(join(tmpdir(), "copy-guard-"));
+  cpSync(SHARED_SRC, root, { recursive: true });
   for (const file of ADMIN_CLIENTS) {
     const target = join(root, file);
     writeFileSync(target, `${readFileSync(target, "utf-8")}\n${line}\n`);
   }
-  return { root, files: [...ADMIN_CLIENTS], remove };
+  return { root, files: [...ADMIN_CLIENTS], remove: () => rmSync(root, { recursive: true, force: true }) };
 }
 
 function filesUnder(dir: string): string[] {
@@ -286,22 +202,8 @@ function filesUnder(dir: string): string[] {
 
 export type CopyText = { line: number; words: string; raw: string };
 
-const parsed = new Map<string, CopyText[]>();
-
-/** Each piece of copy in `source`: its line, its words without name-like tokens, and its raw text. Parsed once for each
- * source and kind of file (`.tsx` or not) and shared (PL4h): the guards' plants copy a package whose files are mostly
- * the very text already parsed, and the name does not change the reading but for the kind of file. */
+/** Each piece of copy in `source`: its line, its words without name-like tokens, and its raw text. */
 export function copyTexts(name: string, source: string): CopyText[] {
-  const key = `${name.endsWith(".tsx") ? "tsx" : "ts"}\0${source}`;
-  let found = parsed.get(key);
-  if (!found) {
-    found = parseCopyTexts(name, source);
-    parsed.set(key, found);
-  }
-  return found;
-}
-
-function parseCopyTexts(name: string, source: string): CopyText[] {
   const tree = ts.createSourceFile(
     name,
     source,
