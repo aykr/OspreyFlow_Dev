@@ -167,9 +167,11 @@ def running_postgres(folder: Path) -> Iterator[PrivatePostgres]:
 
     work = folder / "private_postgres"
     data_dir = work / "data"
+    # Made before the `try`: if the folder is already there, something else owns it (another instance
+    # running in it, say) and this call refuses without stopping or removing anything.
+    work.mkdir(parents=True, exist_ok=False)
     started = False
     try:
-        work.mkdir(parents=True, exist_ok=False)
         made = _run(
             initdb,
             "-D", str(data_dir),
