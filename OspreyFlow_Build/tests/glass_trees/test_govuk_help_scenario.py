@@ -405,7 +405,7 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
     ("the old combined top bar row back", _row("functions", "top-bar-home", id="top-bar-home-help"), function_problems, "owner ruled it split"),
     ("reports not split", _row("functions", "reports-figures", id="reports"), function_problems, "owner ruled it split"),
     ("the dashboards row given a slice", _row("functions", "reports-dashboards", slice="GR3"), function_problems, "must be later"),
-    ("a route in the list the code has no page for", lambda d: d["routes"].append("/welcome"), route_problems, "three pages"),
+    ("a route in the list the code has no page for", lambda d: d["routes"].append("/welcome"), route_problems, "four pages"),
     ("a row routed with the list left short", _row("functions", "top-bar-home", route="/"), route_problems, "not just /help"),
     ("no register row", _drop("register", "govuk-frontend"), register_problems, "not one"),
     ("a licence that is not MIT", _register_row(licence="GPL-3.0-only"), register_problems, "not MIT"),

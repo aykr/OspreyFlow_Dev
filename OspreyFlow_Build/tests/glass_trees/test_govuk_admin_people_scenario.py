@@ -515,13 +515,13 @@ PLANTS: list[
         "a route in the list the code has no page for",
         lambda d: d["routes"].append("/welcome"),
         route_problems,
-        "three pages",
+        "four pages",
     ),
     (
         "the People path left out of the list",
         lambda d: d["routes"].remove(PATH),
         route_problems,
-        "three pages",
+        "four pages",
     ),
     (
         "the page at another path",
