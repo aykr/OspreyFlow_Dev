@@ -224,10 +224,12 @@ def _refused() -> list[tuple[str, list[str], dict[str, object], str]]:
     image = local_docker_guard.CADDY_IMAGE
     sock = "/var/run/docker.sock"
     return [
-        ("a fourth mount", [*good[:-3], "-v", f"{tmp}/x:/data:ro", *good[-3:]], {}, ASKING),
+        # A real fourth mount sits among the `-v` flags, before the image (`good[-4:]` is the
+        # image, `sh`, `-c` and the script); after the image Docker would read it as the command.
+        ("a fourth mount", [*good[:-4], "-v", f"{tmp}/x:/data:ro", *good[-4:]], {}, ASKING),
         (
             "a fourth mount, the docker socket",
-            [*good[:-3], "-v", f"{sock}:/s:ro", *good[-3:]],
+            [*good[:-4], "-v", f"{sock}:/s:ro", *good[-4:]],
             {},
             ASKING,
         ),
@@ -351,7 +353,7 @@ CADDY_INNER = {
         "def test_a_fourth_mount():\n"
         "    command = cmd()\n"
         "    extra = ['-v', f'{tempfile.mkdtemp()}:/x:ro']\n"
-        "    subprocess.run([*command[:-3], *extra, *command[-3:]], check=False)\n"
+        "    subprocess.run([*command[:-4], *extra, *command[-4:]], check=False)\n"
         "def test_another_network():\n"
         "    subprocess.run(cmd(network='host'), check=False)\n"
         "def test_a_writable_mount():\n"
