@@ -649,6 +649,45 @@ describe("trends shown together (the govuk tree)", () => {
     expect(mainOf(all.text)).not.toMatch(/<svg\b|<table\b/);
   });
 
+  it("test_trends_shown_together_show_a_trend_its_viewer_can_no_longer_read_as_withheld_not_as_missing_data", async () => {
+    // I21 (ADR-152), by the name the decision log gives it. The page says the trends it holds back are withheld, once, in the shared words,
+    // above the trends; and never draws an empty chart (an svg with no bar), an empty table or a placeholder in a withheld item's place.
+    const withheldPageProblems = (html: string, trendsShown: number): string[] => {
+      const main = mainOf(html);
+      const found: string[] = [];
+      const said = textOf(main).split(WITHHELD_ITEMS_SENTENCE).length - 1;
+      if (said !== 1) found.push(`the withheld sentence is said ${said} times, not once`);
+      const charts = [...main.matchAll(/<svg\b[\s\S]*?<\/svg>/g)].map((m) => m[0]);
+      if (charts.length !== trendsShown) found.push(`${charts.length} charts for ${trendsShown} trends shown`);
+      if (charts.some((c) => !/<rect\b/.test(c))) found.push("a chart with no bar: an empty chart");
+      const tables = [...main.matchAll(/<table\b[\s\S]*?<\/table>/g)].map((m) => m[0]);
+      if (tables.length !== trendsShown) found.push(`${tables.length} tables for ${trendsShown} trends shown`);
+      if (tables.some((t) => !/<td\b/.test(t))) found.push("a table with no figure: an empty table");
+      if (main.indexOf(WITHHELD_ITEMS_SENTENCE) > main.indexOf('class="pack-trend"')) found.push("the withheld sentence is not above the trends");
+      if (/Ferry crossings/.test(main)) found.push("the withheld trend's title is drawn");
+      return found;
+    };
+    const w = await world({ hide: ["item-ferry"] });
+    const page = (await trendsPage(w)).text;
+    expect(withheldPageProblems(page, 2)).toEqual([]);
+    // The same, for a published version: its withheld item is said the same way.
+    const version = await trendsPage(await world({ packs: [pack({ items: [], published: { version: 1, published_at: "2026-11-03T15:00:00Z", published_by: "someone-synthetic", items: [{ item: HARBOUR }, { item: FERRY }, { item: TOLL }] } })], rights: [READ_REPORTS], hide: ["item-ferry"] }));
+    expect(version.status).toBe(200);
+    expect(withheldPageProblems(version.text, 2)).toEqual([]);
+    // Planted into the real page: a page that drops the sentence, one that draws an empty chart in the withheld one's place, one that stands a
+    // placeholder or a second sentence among the trends, and one that draws the withheld trend's figures.
+    const plant = (pattern: RegExp, by: string): string => {
+      expect(pattern.test(page), `the plant's anchor ${String(pattern)} is in the page`).toBe(true);
+      return page.replace(pattern, by);
+    };
+    const sentence = /<p class="pack-trends__withheld">[^<]*<\/p>/;
+    expect(withheldPageProblems(plant(sentence, ""), 2)).toContain("the withheld sentence is said 0 times, not once");
+    expect(withheldPageProblems(plant(/<section class="pack-trend"/, '<svg class="pack-trend__chart"></svg><section class="pack-trend"'), 2).join()).toContain("an empty chart");
+    expect(withheldPageProblems(plant(/<section class="pack-trend"/, `<p>${WITHHELD_ITEMS_SENTENCE}</p><section class="pack-trend"`), 2).join()).toContain("said 2 times");
+    expect(withheldPageProblems(plant(/<section class="pack-trend"/, '<table><caption>x</caption></table><section class="pack-trend"'), 2).join()).toContain("an empty table");
+    expect(withheldPageProblems(plant(sentence, "").replace("</main>", `<p>${WITHHELD_ITEMS_SENTENCE}</p></main>`), 2).join()).toContain("not above the trends");
+  });
+
   it("TS3: a pack with no trend item says so, links back, and draws no chart, no table and nothing of its other items", async () => {
     const others = [
       { item: NOTE },
