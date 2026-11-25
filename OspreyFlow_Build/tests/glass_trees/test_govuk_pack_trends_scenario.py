@@ -396,6 +396,17 @@ def _replace(key: str, old: str, new: str) -> Callable[[dict[str, Any]], None]:
     return plant
 
 
+def _in_section(old: str, new: str) -> Callable[[dict[str, Any]], None]:
+    """A change inside THIS scenario's section: an earlier scenario (AP) holds some of the same sentences, which a plain replace would hit."""
+
+    def plant(data: dict[str, Any]) -> None:
+        section = section_of(data["spec_08"])
+        assert old in section, f"the plant's anchor {old!r} is not in the TS section"
+        data["spec_08"] = data["spec_08"].replace(section, section.replace(old, new, 1), 1)
+
+    return plant
+
+
 def _replace_all(key: str, old: str, new: str) -> Callable[[dict[str, Any]], None]:
     def plant(data: dict[str, Any]) -> None:
         assert old in data[key], f"the plant's anchor {old!r} is not in {key}"
@@ -442,15 +453,15 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
     ("a page test case with no scenario row", _without_row("TS15"), scenario_problems, "titled TS15"),
     ("a row run on the other tree", _tree_of_row("TS3", "Default"), scenario_problems, "TS3 runs on"),
     ("a case retitled so the page test names no TS4", _replace("page_test", 'it("TS4: ', 'it("TS44: '), scenario_problems, "titled TS4"),
-    ("the refusal sentence left out", _replace("spec_08", "a 404 with the very same page as a path nothing serves", "a refusal"), prose_problems, "the refusal"),
-    ("the strict reading left out", _replace("spec_08", "**Reads strictly.**", "**Reads.**"), prose_problems, "reads strictly"),
-    ("scripts off left out", _replace("spec_08", "**Works with scripts off.**", "**Works.**"), prose_problems, "scripts off"),
-    ("I21 left out", _replace("spec_08", "never draws an empty chart for it", "draws it"), prose_problems, "I21"),
-    ("the snapshots ruling left out", _replace("spec_08", "the pack's own snapshots", "the trends' live figures"), prose_problems, "snapshots"),
-    ("words a source does not hold", _replace("spec_08", '`services/api/packs.py` "ORDER BY position"', '`services/api/packs.py` "ORDER BY title"'), citation_problems, "does not hold"),
+    ("the refusal sentence left out", _in_section("a 404 with the very same page as a path nothing serves", "a refusal"), prose_problems, "the refusal"),
+    ("the strict reading left out", _in_section("**Reads strictly.**", "**Reads.**"), prose_problems, "reads strictly"),
+    ("scripts off left out", _in_section("**Works with scripts off.**", "**Works.**"), prose_problems, "scripts off"),
+    ("I21 left out", _in_section("never draws an empty chart for it", "draws it"), prose_problems, "I21"),
+    ("the snapshots ruling left out", _in_section("the pack's own snapshots", "the trends' live figures"), prose_problems, "snapshots"),
+    ("words a source does not hold", _in_section('`services/api/packs.py` "ORDER BY position"', '`services/api/packs.py` "ORDER BY title"'), citation_problems, "does not hold"),
     ("a field left out that the type no longer has", _field_gone("PackItem", "added_by"), census_problems, "no field added_by"),
-    ("a left-out field of a type the census does not walk", _replace("spec_08", "`ReportPack.id`", "`PackVersionSummary.version`"), census_problems, "not a type the census walks"),
-    ("a left-out field named twice", _replace("spec_08", "`ReportPack.investigation_id`", "`ReportPack.id`"), census_problems, "twice"),
+    ("a left-out field of a type the census does not walk", _in_section("`ReportPack.id`", "`PackVersionSummary.version`"), census_problems, "not a type the census walks"),
+    ("a left-out field named twice", _in_section("`ReportPack.investigation_id`", "`ReportPack.id`"), census_problems, "twice"),
     ("the row without its scenario", _row(ROW, scenario=""), function_problems, "scenario"),
     ("the row routed while incomplete", _row(ROW, route=PATH), function_problems, "stays empty"),
     ("the row's where moved", _row(ROW, where="apps/workspace/src/reports/"), function_problems, "has moved"),
