@@ -1,0 +1,65 @@
+{#- The reader's cases and one case's page with its brief (slice GR1a; scenario CS), read-only, drawn on the server and complete without a
+    script. The list is a table with a caption, column headers (th, scope col) and a row header for each case holding its name as a link;
+    a case's page is its facts as a description list and its brief as headings and an ordered list. Nothing here is a form, a button or a
+    control, and nothing counts: the page draws what it is given, in the order given. The words are `server/views/casesWords.ts`'s. -#}
+{% extends "layout.njk" %}
+{% block content %}
+{% if view.kind == "table" %}
+<h1>{{ words.listTitle }}</h1>
+<p>{{ words.lede }}</p>
+<table class="table">
+<caption class="caption">{{ words.caption }}</caption>
+<thead>
+<tr>{% for column in words.columns %}<th scope="col">{{ column }}</th>{% endfor %}
+</tr>
+</thead>
+<tbody>
+{% for row in view.rows %}<tr><th scope="row"><a href="{{ row.href }}">{{ row.name }}</a>{% if row.closed %}<p>{{ words.closed }}</p>{% endif %}</th><td>{{ row.level }}</td><td>{{ row.domains }}</td><td>{% if row.datasets.length %}<ul>{% for dataset in row.datasets %}<li>{{ dataset }}</li>{% endfor %}</ul>{% else %}{{ words.noDatasets }}{% endif %}</td><td>{{ row.made }}</td></tr>
+{% endfor %}</tbody>
+</table>
+<p><a href="/">{{ words.back }}</a></p>
+{% elif view.kind == "empty" %}
+<h1>{{ words.listTitle }}</h1>
+<p>{{ words.noCases }}</p>
+<p><a href="/">{{ words.back }}</a></p>
+{% elif view.kind == "case" %}
+<h1>{{ view.name }}</h1>
+<h2>{{ words.about }}</h2>
+<dl>
+<dt>{{ words.level }}</dt><dd>{{ view.level }}</dd>
+<dt>{{ words.domains }}</dt><dd>{{ view.domains }}</dd>
+<dt>{{ words.datasets }}</dt><dd>{% if view.datasets.length %}{% for dataset in view.datasets %}{{ dataset }}{% if not loop.last %}, {% endif %}{% endfor %}{% else %}{{ words.noDatasets }}{% endif %}</dd>
+<dt>{{ words.made }}</dt><dd>{{ view.made }}</dd>
+</dl>
+<h2>{{ words.brief }}</h2>
+{% if view.brief.kind == "none" %}
+<p>{{ words.noBrief }}</p>
+{% else %}
+<h3>{{ words.priority }}</h3>
+<p>{% if view.brief.priority %}{{ view.brief.priority }}{% else %}{{ words.noPriority }}{% endif %}</p>
+<h3>{{ words.requirements }}</h3>
+{% if view.brief.requirements.length %}
+<ol>
+{% for r in view.brief.requirements %}<li><p>{{ r.text }}</p><p>{{ r.status }}</p>{% if r.answered %}<p>{{ r.answered }}</p>{% endif %}{% if r.attachments.length %}<p>{{ words.attached }}</p><ul>{% for kind in r.attachments %}<li>{{ kind }}</li>{% endfor %}</ul>{% endif %}</li>
+{% endfor %}</ol>
+{% else %}
+<p>{{ words.noRequirements }}</p>
+{% endif %}
+{% endif %}
+<p><a href="/cases">{{ words.toCases }}</a></p>
+<p><a href="/">{{ words.back }}</a></p>
+{% elif view.kind == "ended" %}
+<h1>{{ title }}</h1>
+<p role="alert">{{ ended }}</p>
+<p><a href="/">{{ words.back }}</a></p>
+{% elif view.kind == "unreadable-case" %}
+<h1>{{ title }}</h1>
+<p role="alert">{{ words.unreadableCase }}</p>
+<p><a href="/cases">{{ words.toCases }}</a></p>
+<p><a href="/">{{ words.back }}</a></p>
+{% else %}
+<h1>{{ title }}</h1>
+<p role="alert">{{ words.unreadableList }}</p>
+<p><a href="/">{{ words.back }}</a></p>
+{% endif %}
+{% endblock %}

@@ -24,3 +24,15 @@ export const TEAM_WORDS: {
 export const RIGHT_WORDS: Readonly<Partial<Record<string, string>>>;
 export function rightName(right: string): string;
 export function rightSays(right: string): string;
+
+/*
+ * For the cases page's words (`server/views/casesWords.ts`; slice GR1a): a level's name is `LEVEL_WORDS` above; a domain pack's label,
+ * the core model's name and the case picker's untitled name are `investigation/cases.ts`'s, and a moment is written by
+ * `time/utcStamp.ts`. `test/govuk/cases.test.ts` holds each to the package's own type.
+ */
+export type DomainPack = "fibo" | "niem" | "stix";
+export const DOMAIN_PACKS: readonly { name: DomainPack; label: string }[];
+export const POLE_LABEL: string;
+export function domainLabels(domains: readonly DomainPack[]): string;
+export function caseLabel(entry: { name: string; created_at: string }): string;
+export function utcStampOf(iso: string): string;

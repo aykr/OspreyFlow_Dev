@@ -397,8 +397,8 @@ const briefBody = (): { priority: string; requirements: Record<string, unknown>[
 
 /** A different valid value for each field of each model: a drawn field must change the page with it, a left-out field must not. */
 const OTHER: Record<string, Record<string, unknown>> = {
-  InvestigationListing: { id: "c-harbour", name: "Renamed in the list", level: "viewer", created_at: "2025-01-03T04:05:00Z", created_by: "acct-other", domains: ["stix"], tab_hidden: true, datasets: ["Another ledger"], dataset_ids: ["ds-another"] },
-  Investigation: { id: "c-harbour", name: "Renamed case", created_at: "2025-01-03T04:05:00Z", created_by: "acct-other", owning_unit: "another-unit", domains: ["stix"], domains_chosen: true },
+  InvestigationListing: { id: "c-renamed", name: "Renamed in the list", level: "viewer", created_at: "2025-01-03T04:05:00Z", created_by: "acct-other", domains: ["stix"], tab_hidden: true, datasets: ["Another ledger"], dataset_ids: ["ds-another"] },
+  Investigation: { id: "c-other", name: "Renamed case", created_at: "2025-01-03T04:05:00Z", created_by: "acct-other", owning_unit: "another-unit", domains: ["stix"], domains_chosen: true },
   CaseBrief: { priority: "A different priority", requirements: [] },
   BriefRequirement: { id: "r-other", text: "A different requirement", status: "open", answered_at: "2025-01-03T04:05:00Z", attachments: [] },
   BriefAttachment: { id: "t-other", kind: "pattern", title: "A different title" },
@@ -433,7 +433,7 @@ async function drawn(b: Bodies): Promise<{ list: string; case: string; listStatu
   const w = await world({ list_answer: { status: 200, body: b.list }, case_answer: { status: 200, body: b.case }, brief_answer: { status: 200, body: b.brief } });
   const list = await getAs(w, PATH);
   const one = await getAs(w, pageOf("c-harbour"));
-  return { list: mainText(list.text), case: mainText(one.text), listStatus: list.status, caseStatus: one.status };
+  return { list: mainOf(list.text), case: mainOf(one.text), listStatus: list.status, caseStatus: one.status };
 }
 
 // ------------------------------------------------------------------------------------------------ the cases
@@ -455,9 +455,9 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
     const w = await world({ levels: {} });
     const res = await getAs(w, PATH);
     expect(res.status).toBe(200);
-    expect(mainText(res.text)).toContain(CASES_WORDS.none);
+    expect(mainText(res.text)).toContain(CASES_WORDS.noCases);
     expect(mainOf(res.text)).not.toMatch(/<table|<caption|<th\b/);
-    expect(CASES_WORDS.none).toBe("You have no cases to show.");
+    expect(CASES_WORDS.noCases).toBe("You have no cases to show.");
   });
 
   it("CS3: a case whose tab the reader closed is listed in its place with the words, and an open tab says nothing", async () => {
@@ -506,7 +506,7 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
       expect(refusalProblems(res, unknown), id).toEqual([]);
       expect(calls(w.conduit), id).toEqual([`GET /v1/investigations/${id}`]);
     }
-    for (const query of ["?case=", "?case=c-harbour&case=c-ferry", "?case[x]=c-harbour"]) {
+    for (const query of ["?case=", "?case=c-harbour&case=c-ferry", "?case=c-harbour&case="]) {
       w.conduit.calls.splice(0);
       const res = await getAs(w, `${PATH}${query}`);
       expect(refusalProblems(res, unknown), query).toEqual([]);
@@ -596,16 +596,16 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
 
   it("CS10: a body missing any field the route's model sends, or of the wrong shape, is the could-not-be-read page, never empty", async () => {
     expect(listView(listBody())).toBeDefined();
-    expect(caseView(caseBody(), briefBody(), listBody())).toBeDefined();
+    expect(caseView("c-harbour", caseBody(), briefBody(), listBody())).toBeDefined();
     const models = Object.keys(REQUIRED) as (keyof typeof REQUIRED)[];
     expect(models.sort()).toEqual(["BriefAttachment", "BriefRequirement", "CaseBrief", "Investigation", "InvestigationListing"]);
     let tried = 0;
     for (const model of models) {
       for (const field of REQUIRED[model]) {
         const b = withField(model, field, undefined);
-        const view = model === "InvestigationListing" ? listView(b.list) : caseView(b.case, b.brief, b.list);
+        const view = model === "InvestigationListing" ? listView(b.list) : caseView("c-harbour", b.case, b.brief, b.list);
         expect(view, `${model}.${field} removed`).toBeUndefined();
-        if (model === "InvestigationListing") expect(caseView(b.case, b.brief, b.list), `${model}.${field} removed, case page`).toBeUndefined();
+        if (model === "InvestigationListing") expect(caseView("c-harbour", b.case, b.brief, b.list), `${model}.${field} removed, case page`).toBeUndefined();
         tried += 1;
       }
     }
@@ -626,12 +626,12 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
     ];
     for (const [model, field, value] of wrong) {
       const b = withField(model, field, value);
-      expect(model === "InvestigationListing" ? listView(b.list) : caseView(b.case, b.brief, b.list), `${model}.${field} = ${JSON.stringify(value)}`).toBeUndefined();
+      expect(model === "InvestigationListing" ? listView(b.list) : caseView("c-harbour", b.case, b.brief, b.list), `${model}.${field} = ${JSON.stringify(value)}`).toBeUndefined();
     }
     for (const top of [null, {}, "x", [null]]) {
       expect(listView(top)).toBeUndefined();
-      expect(caseView(top, briefBody(), listBody())).toBeUndefined();
-      expect(caseView(caseBody(), top, listBody())).toBeUndefined();
+      expect(caseView("c-harbour", top, briefBody(), listBody())).toBeUndefined();
+      expect(caseView("c-harbour", caseBody(), top, listBody())).toBeUndefined();
     }
     // And through the service: one missing field of each model is the 502 page.
     for (const [model, field] of [["InvestigationListing", "level"], ["Investigation", "domains"], ["CaseBrief", "priority"], ["BriefRequirement", "status"], ["BriefAttachment", "kind"]] as const) {
