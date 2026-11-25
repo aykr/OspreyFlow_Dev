@@ -1277,9 +1277,13 @@ describe("one writer: no entry point writes a size above the live limits, read s
     parts.controls.sideSash.dispatch("keydown", { key: "ArrowLeft", shiftKey: true });
     now = { windowHeight: 800, workWidth: 600 };
     parts.controls.sideSash.dispatch("keydown", { key: "Home" });
-    expect(getLayoutSizes().sideWidth).toBe(300);
-    expect(stored().sideWidth).toBe(300);
+    // The window's shrink brought the analyst's 404 down to 300 (their size, held to the window). Home then resets: it
+    // stores the default, which the small window shows at its limit; it does not store the limit as if it were chosen
+    // (round 12).
+    expect(getLayoutSizes().sideWidth).toBe(DEFAULT_SIDE_WIDTH);
+    expect(stored().sideWidth).toBe(DEFAULT_SIDE_WIDTH);
     expect(parts.controls.sideSash.getAttribute("aria-valuenow")).toBe("300");
+    expect(parts.side.getAttribute("data-side-width")).toBe("300");
   });
 
   it("Home on the timeline in a window 150 high stores 105, seven tenths of it, not the default 130 (the verifier's worked case)", () => {
@@ -2216,8 +2220,9 @@ describe("a page's data-max below the default is shown, and never saved by a dra
     expect(JSON.parse(stored() ?? "{}")).toMatchObject({ sideWidth: BELOW.side, timelineHeight: BELOW.timeline });
     parts.controls.sideSash.dispatch("keydown", { key: "ArrowRight" });
     parts.controls.sideSash.dispatch("keydown", { key: "Home" });
+    // What is drawn is held to the bound; what is stored is the default, not the bound (round 12).
     expect(Number(parts.controls.sideSash.getAttribute("aria-valuenow"))).toBeLessThanOrEqual(BELOW.side);
-    expect(JSON.parse(stored() ?? "{}").sideWidth).toBeLessThanOrEqual(BELOW.side);
+    expect(JSON.parse(stored() ?? "{}").sideWidth).toBe(DEFAULT_SIDE_WIDTH);
   });
 
   it("a size the analyst kept above the bound is still brought down to it in storage", () => {
@@ -2356,5 +2361,116 @@ describe("a page's data-max below the default is shown, and never saved by a dra
     expect(stored()).toBeNull();
     store.actions.setSideWidth(BELOW.side - 20, { maxPx: BELOW.side });
     expect(JSON.parse(stored() ?? "{}").sideWidth).toBe(BELOW.side - 20);
+  });
+});
+
+// -------------------------------------------- round 12 (the verifier's finding on round 11): Home resets, it does not save the bound
+//
+// Once the analyst had kept a size, Home stored the page's bound or the window's limit as if it were their choice (the
+// default clamped, then written), so a later page with no bound, or a reload in a roomy window, opened at 300, 320 or 105
+// and not at 340 or 130, and the workspace, which reads the same key, with it. Spec/02: "Home or a double-click resets it",
+// and "only a size the analyst chose is stored". Home stores the default (340, 130); what the sash draws is that default
+// held to the bound and the limit, as for a default nobody chose (round 8). Every read is of storage and the drawn
+// attributes straight after the key, before any `getState()`, and a page opened afterwards with no bound is the proof.
+
+describe("Home resets a kept size: it stores the default, never a bound the analyst did not choose", () => {
+  const sizes = () => JSON.parse(localStorage.getItem(LAYOUT_SIZES_KEY) ?? "{}") as { sideWidth?: number; timelineHeight?: number };
+  const BOUND = { side: 320, timeline: 100 };
+
+  /** A page whose sashes carry `data-max` (or none), a store under `v`, and a size already kept by the analyst. */
+  function kept(v: Viewport, bound: boolean, keep: { sideWidth: number; timelineHeight: number }) {
+    forgetLayoutSizesForTest();
+    localStorage.setItem(LAYOUT_SIZES_KEY, JSON.stringify({ ...keep, panelHeights: {} }));
+    forgetLayoutSizesForTest();
+    const parts = page();
+    if (bound) {
+      parts.controls.sideSash.attributes.set("data-max", String(BOUND.side));
+      parts.controls.timelineSash.attributes.set("data-max", String(BOUND.timeline));
+    }
+    const store = createPanelFrameStore({ viewport: () => v });
+    live.push(store);
+    attachPanelFrame(parts.root as unknown as PanelFrameRoot, store);
+    return { ...parts, store };
+  }
+
+  /** What a page that opens afterwards, with no bound and a roomy window, draws. */
+  function reloadRoomy() {
+    const parts = page();
+    const store = createPanelFrameStore({ viewport: () => VIEWPORTS.roomy as Viewport });
+    live.push(store);
+    attachPanelFrame(parts.root as unknown as PanelFrameRoot, store);
+    return parts;
+  }
+
+  it("the verifier's trace: data-max 320 in a roomy window, 400 kept; the first draw brings it to 320, ArrowRight stores 304, Home stores 340 and draws 320", () => {
+    const parts = kept(VIEWPORTS.roomy as Viewport, true, { sideWidth: 400, timelineHeight: 300 });
+    expect(sizes().sideWidth).toBe(BOUND.side);
+    parts.controls.sideSash.dispatch("keydown", { key: "ArrowRight" });
+    expect(sizes().sideWidth).toBe(304);
+    parts.controls.sideSash.dispatch("keydown", { key: "Home" });
+    expect(sizes().sideWidth, "Home stored the page's bound").toBe(DEFAULT_SIDE_WIDTH);
+    expect(parts.controls.sideSash.getAttribute("aria-valuenow")).toBe("320");
+    expect(parts.side.getAttribute("data-side-width")).toBe("320");
+    // A page with no bound, opened afterwards in a roomy window, opens at the default.
+    parts.store.destroy();
+    expect(reloadRoomy().controls.sideSash.getAttribute("aria-valuenow")).toBe(String(DEFAULT_SIDE_WIDTH));
+  });
+
+  it("the same on the timeline: data-max 100, 300 kept; Home stores 130 and draws 100, and a page with no bound opens at 130", () => {
+    const parts = kept(VIEWPORTS.roomy as Viewport, true, { sideWidth: 400, timelineHeight: 300 });
+    parts.controls.timelineSash.dispatch("keydown", { key: "ArrowUp" });
+    parts.controls.timelineSash.dispatch("keydown", { key: "Home" });
+    expect(sizes().timelineHeight, "Home stored the page's bound").toBe(DEFAULT_TIMELINE_HEIGHT);
+    expect(parts.controls.timelineSash.getAttribute("aria-valuenow")).toBe("100");
+    expect(parts.timeline.getAttribute("data-timeline-height")).toBe("100");
+    parts.store.destroy();
+    expect(reloadRoomy().controls.timelineSash.getAttribute("aria-valuenow")).toBe(String(DEFAULT_TIMELINE_HEIGHT));
+  });
+
+  it("with no bound, in a window too small for the default (the verifier's worked windows), Home from a kept size stores the default, not the limit", () => {
+    const tight = kept({ windowHeight: 150, workWidth: 600 }, false, { sideWidth: 304, timelineHeight: 100 });
+    tight.controls.sideSash.dispatch("keydown", { key: "Home" });
+    tight.controls.timelineSash.dispatch("keydown", { key: "Home" });
+    expect(sizes().sideWidth, "Home stored the window's limit").toBe(DEFAULT_SIDE_WIDTH);
+    expect(sizes().timelineHeight, "Home stored the window's limit").toBe(DEFAULT_TIMELINE_HEIGHT);
+    expect(tight.controls.sideSash.getAttribute("aria-valuenow")).toBe("300");
+    expect(tight.controls.timelineSash.getAttribute("aria-valuenow")).toBe("105");
+    tight.store.destroy();
+    const roomy = reloadRoomy();
+    expect(roomy.controls.sideSash.getAttribute("aria-valuenow")).toBe(String(DEFAULT_SIDE_WIDTH));
+    expect(roomy.controls.timelineSash.getAttribute("aria-valuenow")).toBe(String(DEFAULT_TIMELINE_HEIGHT));
+  });
+
+  it("through the store alone, given the sash's bound as the key path gives it, Home from a kept size stores the default", () => {
+    forgetLayoutSizesForTest();
+    localStorage.setItem(LAYOUT_SIZES_KEY, JSON.stringify({ sideWidth: 400, timelineHeight: 300, panelHeights: {} }));
+    forgetLayoutSizesForTest();
+    const store = createPanelFrameStore({ viewport: () => VIEWPORTS.roomy as Viewport });
+    live.push(store);
+    store.actions.resizeByKey("side-width", { key: "Home" }, { maxPx: BOUND.side });
+    store.actions.resizeByKey("timeline-height", { key: "Home" }, { maxPx: BOUND.timeline });
+    expect(sizes().sideWidth).toBe(DEFAULT_SIDE_WIDTH);
+    expect(sizes().timelineHeight).toBe(DEFAULT_TIMELINE_HEIGHT);
+  });
+
+  // The round-4 table's rows, with a size kept first: Home on each sash, in each viewport, with and without a bound.
+  describe.each(Object.entries(VIEWPORTS))("the table: Home from a kept size, %s", (_name, v) => {
+    for (const bound of [true, false]) {
+      it(`${bound ? "with" : "without"} a page's bound, the stored value is the default and the drawn value is held to the range`, () => {
+        const parts = kept(v, bound, { sideWidth: 450, timelineHeight: 400 });
+        // Move off whatever the first draw left, so that Home has a size to reset.
+        parts.controls.sideSash.dispatch("keydown", { key: "ArrowRight" });
+        parts.controls.timelineSash.dispatch("keydown", { key: "ArrowDown" });
+        parts.controls.sideSash.dispatch("keydown", { key: "Home" });
+        parts.controls.timelineSash.dispatch("keydown", { key: "Home" });
+        expect(sizes().sideWidth, "Home stored something that is not the default").toBe(DEFAULT_SIDE_WIDTH);
+        expect(sizes().timelineHeight, "Home stored something that is not the default").toBe(DEFAULT_TIMELINE_HEIGHT);
+        const limit = limitsOf(v);
+        const side = Math.max(300, Math.min(limit.side, bound ? BOUND.side : limit.side));
+        const timeline = Math.max(96, Math.min(limit.timeline, bound ? BOUND.timeline : limit.timeline));
+        expect(parts.controls.sideSash.getAttribute("aria-valuenow")).toBe(String(Math.min(DEFAULT_SIDE_WIDTH, side)));
+        expect(parts.controls.timelineSash.getAttribute("aria-valuenow")).toBe(String(Math.min(DEFAULT_TIMELINE_HEIGHT, timeline)));
+      });
+    }
   });
 });
