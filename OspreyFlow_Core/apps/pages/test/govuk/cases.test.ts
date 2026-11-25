@@ -632,6 +632,15 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
       }
     }
     expect(tried).toBeGreaterThanOrEqual(22);
+    // Every field of every model of a shape no field of these models has (an object): the type check of each field, one case a field.
+    // (Found by planting: with one field's type check taken out, presence alone still passed every case above.)
+    for (const model of models) {
+      for (const field of REQUIRED[model]) {
+        const b = withField(model, field, { wrong: true });
+        const view = model === "InvestigationListing" ? listView(b.list) : caseView("c-harbour", b.case, b.brief, b.list);
+        expect(view, `${model}.${field} of the wrong shape`).toBeUndefined();
+      }
+    }
     // Wrong shapes, one field at a time.
     const wrong: [string, string, unknown][] = [
       ["InvestigationListing", "level", "owner"],
