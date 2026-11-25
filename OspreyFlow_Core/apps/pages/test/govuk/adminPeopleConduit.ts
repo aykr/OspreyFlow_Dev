@@ -65,6 +65,8 @@ export interface AdminConduitOptions {
   people_answer?: Canned;
   /** The same for the roles route. */
   roles_answer?: Canned;
+  /** The roles route gives no answer: the connection is cut after the person is known and the right is held (the people route answers). */
+  roles_no_answer?: boolean;
 }
 
 export interface AdminConduit {
@@ -117,7 +119,9 @@ export async function adminConduit(options: AdminConduitOptions): Promise<AdminC
       "/v1/admin/people": () => send(options.people_answer?.status ?? 200, options.people_answer?.body ?? options.people),
       "/v1/admin/people/rows": () => send(200, { rows: [], without_author: [] }),
       "/v1/admin/roles": () =>
-        send(options.roles_answer?.status ?? 200, options.roles_answer?.body ?? {
+        options.roles_no_answer === true
+          ? req.socket.destroy()
+          : send(options.roles_answer?.status ?? 200, options.roles_answer?.body ?? {
           built_in: BUILT_IN.map((role) => ({ ...role, rights: [], gives: [] })),
           custom: (options.custom ?? []).map((role) => ({ ...role, version: 1, rights: [], changed_by: "someone", changed_at: "2026-11-01T09:00:00Z", holders: 0, team: null })),
         }),

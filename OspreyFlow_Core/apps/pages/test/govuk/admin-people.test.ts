@@ -92,6 +92,7 @@ async function world(options: WorldOptions = {}): Promise<World> {
     custom: options.custom ?? CUSTOM,
     ...(options.people_answer ? { people_answer: options.people_answer } : {}),
     ...(options.roles_answer ? { roles_answer: options.roles_answer } : {}),
+    ...(options.roles_no_answer ? { roles_no_answer: true } : {}),
   });
   conduits.push(conduit);
   const app = createApp({
@@ -448,6 +449,22 @@ describe("the People list (the govuk tree)", () => {
     expect(out.status).toBe(401);
     expect(textOf(mainOf(out.text))).toContain(refusalWords(401, undefined, ""));
     expect(tableOf(out.text)).toBeUndefined();
+    // The same two cases for the second read, the roles: the people route answered, and the roles route gave no answer or a 401.
+    const rolesAway = await world({ roles_no_answer: true });
+    const rolesGone = await people(rolesAway);
+    expect(calls(rolesAway.conduit)).toEqual(["GET /v1/admin/people", "GET /v1/admin/roles"]);
+    expect(rolesGone.status).toBe(502);
+    expect(textOf(mainOf(rolesGone.text))).toContain("The people could not be read just now");
+    expect(tableOf(rolesGone.text)).toBeUndefined();
+    for (const person of PEOPLE) expect(rolesGone.text).not.toContain(person.name);
+    const rolesEnded = await world({ roles_answer: { status: 401, body: { detail: "Not authenticated" } } });
+    const rolesOut = await people(rolesEnded);
+    expect(calls(rolesEnded.conduit)).toEqual(["GET /v1/admin/people", "GET /v1/admin/roles"]);
+    expect(rolesOut.status).toBe(401);
+    expect(textOf(mainOf(rolesOut.text))).toContain(refusalWords(401, undefined, ""));
+    expect(textOf(mainOf(rolesOut.text))).not.toContain("The people could not be read just now");
+    expect(tableOf(rolesOut.text)).toBeUndefined();
+    for (const person of PEOPLE) expect(rolesOut.text).not.toContain(person.name);
   });
 
   it("AP5: a person without the right, and any other refusal, gets the page of a path nothing serves, with none of the Conduit's words", async () => {
