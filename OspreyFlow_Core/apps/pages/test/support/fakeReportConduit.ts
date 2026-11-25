@@ -85,10 +85,11 @@ const reply = (res: ServerResponse, status: number, body: unknown): void => {
   res.end(JSON.stringify(body));
 };
 
+/** Counts by key, in the order of the keys: the route's `_weeks` sorts its rows (week, then label), so a fake that kept the order of the world would hide a page that relied on it. */
 function count<T>(items: T[], key: (item: T) => string): Map<string, number> {
   const out = new Map<string, number>();
   for (const item of items) out.set(key(item), (out.get(key(item)) ?? 0) + 1);
-  return out;
+  return new Map([...out].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
 }
 
 /** The week an alert was closed in: the real route counts a closure by its decision date. */

@@ -386,9 +386,11 @@ export function monitoringView(report: Report, caseId: string): MonitoringView {
   const headline = words.raised(report.total, report.weeks);
   const countedOn = report.asOf !== undefined && !Number.isNaN(new Date(report.asOf).getTime()) ? words.countedOn(formatDay(report.asOf)) : null;
   const periods = periodsFor(caseId, report.weeks, () => true);
-  if (report.total === 0) {
-    return { kind: "figures", headline, countedOn, periods, nothing: words.noAlerts, figures: [] };
-  }
+  // The period bounds what was RAISED in it and nothing else: the route counts a closure by when it was decided and the team view over
+  // every alert the reader may see (`services/api/reports.py` `_monitoring_figures`, `_panel_figures`), and sends the held rows to
+  // Editors whatever the period holds. With nothing raised, the two sections of what was raised are said once in words and every other
+  // figure the route sent is still drawn (a round-4 finding: a page that said only this hid figures the route had sent).
+  const nothing = report.total === 0 ? words.noAlerts : null;
   const weeks = new Map<string, number>();
   for (const row of report.raised) weeks.set(row.week_start, (weeks.get(row.week_start) ?? 0) + row.count);
   const week = [...weeks].sort(([a], [b]) => a.localeCompare(b)).map(([start, count]) => ({ label: formatDay(start), count }));
@@ -411,8 +413,7 @@ export function monitoringView(report: Report, caseId: string): MonitoringView {
   const time = report.took.map((row) => ({ label: row.label.charAt(0).toUpperCase() + row.label.slice(1), count: row.value }));
 
   const figures: Figure[] = [
-    figureOf(words.bars.week, week, words.noAlerts),
-    figureOf(words.bars.rule, byRule, words.noAlerts),
+    ...(nothing === null ? [figureOf(words.bars.week, week, words.noAlerts), figureOf(words.bars.rule, byRule, words.noAlerts)] : []),
     figureOf(words.bars.outcome, outcome, words.noClosed),
     figureOf(words.bars.time, time, words.noClosed),
     { id: words.hotlist.id, heading: words.hotlist.heading, caption: "", columns: [], rows: [], chart: null, empty: null, says: words.hotlist.says(report.hotlists) },
@@ -445,7 +446,7 @@ export function monitoringView(report: Report, caseId: string): MonitoringView {
       says: null,
     });
   }
-  return { kind: "figures", headline, countedOn, periods, nothing: null, figures };
+  return { kind: "figures", headline, countedOn, periods, nothing, figures };
 }
 
 /** A report past its bound, in words: the numbers are the route's, and the way out is a link to each shorter period. */
