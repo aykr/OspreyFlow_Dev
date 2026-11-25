@@ -29,8 +29,10 @@ import { fileURLToPath } from "node:url";
 
 import { afterEach, describe, expect, it } from "vitest";
 import type { Express } from "express";
+import { TYPOLOGY_LABELS, typologyLabel } from "@ospreyflow/glass-shared";
 
 import { PAGES } from "../../server/pageList.js";
+import { typologyWords } from "../../server/views/alertQueueWords.js";
 import { build } from "../support/build.js";
 import { request, signIn } from "../support/http.js";
 import type { Signed } from "../support/http.js";
@@ -319,7 +321,11 @@ describe("the alert queue page (the govuk tree)", () => {
     const mine = aCase({ name: "Wing review" });
     const reader = aReader({ cases: [mine] });
     const cases: [QueuedAlert, string[]][] = [
-      [aRow({ row: { kind: "typology" } }), ["Typology rule", "Open", "24 November 2026, 09:15 UTC"]],
+      [aRow({ row: { kind: "typology" }, alert: { typology: "structuring" } }), ["Structuring", "Open", "24 November 2026, 09:15 UTC"]],
+      [aRow({ row: { kind: "typology" }, alert: { typology: "dormant_reactivated" } }), ["Dormant account reactivated", "Open", "24 November 2026, 09:15 UTC"]],
+      [aRow({ row: { kind: "typology" }, alert: { typology: null } }), ["Alert", "Open", "24 November 2026, 09:15 UTC"]],
+      [aRow({ row: { kind: "typology" }, alert: { typology: "a_typology_nobody_named" } }), ["Alert", "Open", "24 November 2026, 09:15 UTC"]],
+      [aRow({ row: { kind: "analyst" }, alert: { rule_id: "analyst:dataset:harbour-extract" } }), ["Dataset alert", "Open", "24 November 2026, 09:15 UTC"]],
       [aRow({ row: { kind: "hotlist" } }), ["Hotlist", "Open", "24 November 2026, 09:15 UTC"]],
       [aRow({ row: { kind: "monitor" }, alert: { status: "claimed", assignee: "who" }, summary: "Claimed with a name" }), ["Watched pattern", "Claimed", "24 November 2026, 09:15 UTC"]],
       [aRow({ row: { kind: "analyst" }, alert: { status: "closing" } }), ["Raised by an analyst", "Closing", "24 November 2026, 09:15 UTC"]],
@@ -336,13 +342,23 @@ describe("the alert queue page (the govuk tree)", () => {
     expect(res.status).toBe(200);
     const grid = gridOf(res.text);
     cases.forEach(([row, [kind, state, when]], i) => {
-      expect(grid?.rows[i]?.slice(1, 4), row.summary).toEqual([kind, i === 2 ? "Claimed" : state, when]);
+      expect(grid?.rows[i]?.slice(1, 4), row.summary).toEqual([kind, state, when]);
     });
-    expect(grid?.rows[5]?.[2]).toBe("Claimed by Sam Example");
-    expect(grid?.rows[6]?.[2]).toBe("Open, suppressed");
+    const after = cases.length;
+    expect(grid?.rows[after]?.[2]).toBe("Claimed by Sam Example");
+    expect(grid?.rows[after + 1]?.[2]).toBe("Open, suppressed");
     expect(res.text).not.toContain("reason-marker");
-    expect(grid?.rows[7]?.[3]).toBe("24 November 2026, 09:15 UTC");
+    expect(grid?.rows[after + 2]?.[3]).toBe("24 November 2026, 09:15 UTC");
     expect(res.text).toMatch(/<time datetime="2026-11-24T09:15:00\.000Z">24 November 2026, 09:15 UTC<\/time>/);
+  });
+
+  it("AQ2: a typology alert is named by its typology exactly as the React queue names it (the shared table, every key of it)", () => {
+    // The page keeps its own copy of the table (it imports no workspace package, as `studioWords.ts` does not): this holds the copy to the
+    // shared one, key by key and for the fallback, so the two trees never name one alert in two ways.
+    for (const [key, words] of Object.entries(TYPOLOGY_LABELS)) expect(typologyWords(key), key).toBe(words);
+    for (const unknown of [null, undefined, "", "a_typology_nobody_named"]) expect(typologyWords(unknown), String(unknown)).toBe(typologyLabel(unknown));
+    // `toString` and `constructor` are not typologies: a name taken from the object's own prototype would be a word nobody wrote.
+    for (const inherited of ["toString", "constructor", "__proto__"]) expect(typologyWords(inherited), inherited).toBe("Alert");
   });
 
   it("AQ3: with no case lists the cases the Conduit sends as links to their queues, and reads no queue", async () => {
@@ -447,7 +463,16 @@ describe("the alert queue page (the govuk tree)", () => {
       ["a summary that is not text", aRow({ row: { summary: 7 as never } })],
       ["a suppressed mark that is not true or false", aRow({ row: { suppressed: "no" as never } })],
       ["a holder's name that is neither text nor null", aRow({ row: { assignee_name: 3 as never } })],
+      ["a typology that is neither text nor null", aRow({ row: { kind: "typology" }, alert: { typology: 3 as never } })],
+      ["an analyst alert whose rule is not text", aRow({ row: { kind: "analyst" }, alert: { rule_id: 3 as never } })],
     ];
+    // A typology alert without the typology the route always sends, and an analyst alert without its rule, are bodies that are not the route's.
+    const noTypology = aRow({ row: { kind: "typology" } });
+    delete (noTypology.alert as unknown as Record<string, unknown>)["typology"];
+    wrong.push(["a typology alert without a typology", noTypology]);
+    const noRule = aRow({ row: { kind: "analyst" } });
+    delete (noRule.alert as unknown as Record<string, unknown>)["rule_id"];
+    wrong.push(["an analyst alert without a rule", noRule]);
     for (const [why, row] of wrong) {
       w.conduit.fault = { on: "queue", body: [good, row] };
       await unreadable(why);
