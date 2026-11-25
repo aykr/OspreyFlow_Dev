@@ -508,10 +508,19 @@ describe("the alert queue page (the govuk tree)", () => {
       ["a level in the case that is not enough", insufficient, mine.id],
       ["a case id that is not a plain one", ok, "../me"],
       ["a case id of two thousand characters", ok, "x".repeat(2000)],
+      // `encodeURIComponent` leaves a dot segment as it is and the address is then resolved, so `.` would read
+      // `/v1/investigations/alert-queue` (a case's own page, which writes an audit row) and `..` would read `/v1/alert-queue`.
+      ["a case id that is one dot", ok, "."],
+      ["a case id that is two dots", ok, ".."],
     ];
     for (const [why, who, id] of refusals) {
       const p = await w.as(who);
+      const callsBefore = w.conduit.calls.length;
       const res = await p.get(queueUrl(id));
+      // A dot segment is refused before the Conduit is asked: whatever address it would be resolved to, no call is made for it.
+      if (id === "." || id === "..") {
+        expect(w.conduit.calls.slice(callsBefore).map((c) => c.url), why).toEqual([]);
+      }
       expect(res.status, why).toBe(404);
       // The same page, byte for byte but for the token and the nonce: nothing in it says what was refused or why.
       expect(sameFor(res.text, p.signed.csrf), why).toBe(sameFor((await p.get(NOWHERE)).text, p.signed.csrf));
