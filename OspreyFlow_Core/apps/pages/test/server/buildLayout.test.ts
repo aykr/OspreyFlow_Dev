@@ -105,6 +105,8 @@ describe("the build's GOV.UK tree steps (slice GR2a)", () => {
     }
     const words = readFileSync(join(out, "server", "views", "helpWords.js"), "utf8");
     expect(bareImports(words)).toEqual([]);
+    // Slice GR4a: the trends page's words are bundled the same way.
+    expect(bareImports(readFileSync(join(out, "server", "views", "packTrendsWords.js"), "utf8"))).toEqual([]);
     // The control for the check itself: the compiler's own output of the same file does import the package.
     expect(bareImports('import { HELP_TITLE } from "@ospreyflow/glass-shared";')).toEqual(["@ospreyflow/glass-shared"]);
   });
@@ -123,7 +125,10 @@ describe("the build's GOV.UK tree steps (slice GR2a)", () => {
   ] as const)("is red for a build without %s", (_name, fault, words) => {
     const built = build(fault);
     if (fault === "tree") expect(existsSync(join(built.dist, "tree-govuk", "layout.njk"))).toBe(false);
-    else expect(bareImports(readFileSync(join(built.dist, "server", "views", "helpWords.js"), "utf8"))).toEqual(["@ospreyflow/glass-shared"]);
+    else {
+      expect(bareImports(readFileSync(join(built.dist, "server", "views", "helpWords.js"), "utf8"))).toEqual(["@ospreyflow/glass-shared"]);
+      expect(bareImports(readFileSync(join(built.dist, "server", "views", "packTrendsWords.js"), "utf8"))).toEqual(["@ospreyflow/glass-shared"]);
+    }
     const problems = problemsWith(runIsolated(built));
     expect(problems.length, problems.join("; ")).toBeGreaterThan(0);
     expect(problems.join("; ")).toMatch(words);

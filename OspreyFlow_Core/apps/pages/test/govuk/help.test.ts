@@ -518,8 +518,9 @@ function listedRoutes(text: string): string[] {
   return lines.slice(1).map((l) => /^\s+-\s+"?(\/[^"\s]*)"?\s*$/.exec(l)?.[1] ?? `NOT A ROUTE: ${l}`);
 }
 
-/** A row whose function is not complete: its pages are in the list, and its own `route` stays empty until every section has one (slice AD3a: `admin`). */
-const INCOMPLETE_ROWS: ReadonlySet<string> = new Set(["admin"]);
+/** A row whose function is not complete: its pages are in the list, and its own `route` stays empty until every section has one (slice AD3a: `admin`;
+ * slice GR4a: `reports-figures`, whose first page is trends shown together). */
+const INCOMPLETE_ROWS: ReadonlySet<string> = new Set(["admin", "reports-figures"]);
 
 function routeListProblems(listText: string, pages: readonly PageModule[], functionsText: string): string[] {
   const found: string[] = [];

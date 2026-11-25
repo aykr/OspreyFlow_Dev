@@ -35,11 +35,13 @@ import { fileURLToPath } from "node:url";
 import type { Express } from "express";
 import { afterEach, describe, expect, it } from "vitest";
 import { WITHHELD_ITEMS_SENTENCE, formatDay } from "@ospreyflow/glass-shared";
+import type * as Real from "@ospreyflow/glass-shared";
 
 import { createApp } from "../../server/app.js";
 import { PAGES } from "../../server/pageList.js";
 import { MemorySessionStore } from "../../server/sessionStore.js";
 import { readDraft, readPublished } from "../../server/views/packTrendsWords.js";
+import type * as Stub from "../../server/types/glassShared.js";
 import { refusalWords } from "../../server/views/studioWords.js";
 import { testClock } from "../support/clock.js";
 import { cookieFrom, csrfFromPage, request } from "../support/http.js";
@@ -47,6 +49,20 @@ import { generateSecret } from "../support/secret.js";
 import { bearer, providerFor, textOf } from "../support/studioWorld.js";
 import { READ_REPORTS, RECORD_ASSESSMENT, draftBody, figures, packItem, packsConduit, publishedBody, readableFor } from "./packsConduit.js";
 import type { Canned, PacksConduit, Reader, StoredItem, StoredPack } from "./packsConduit.js";
+
+// The compiled service is checked against `server/types/glassShared.d.ts`, not the package's source (`tsconfig.build.json`); this holds
+// each declaration this page uses to the package's own type, so that a shape `packText.ts` changes and the stub still has as it was fails
+// `npm run typecheck` (as `help.test.ts` does for the Help page's).
+type Conforms<Real, Stub> = Real extends Stub ? true : never;
+export const STUB_CONFORMS_TO_THE_PACKAGE: [
+  Conforms<typeof Real.WITHHELD_ITEMS_SENTENCE, typeof Stub.WITHHELD_ITEMS_SENTENCE>,
+  Conforms<typeof Real.formatDay, typeof Stub.formatDay>,
+  Conforms<typeof Real.formatNumber, typeof Stub.formatNumber>,
+  Conforms<typeof Real.periodKey, typeof Stub.periodKey>,
+  Conforms<typeof Real.periodsOf, typeof Stub.periodsOf>,
+  Conforms<typeof Real.trendSentence, typeof Stub.trendSentence>,
+  Conforms<Stub.TrendFigures, Parameters<typeof Real.trendSentence>[0]>,
+] = [true, true, true, true, true, true, true];
 
 const PAGES_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const CORE = join(PAGES_DIR, "..", "..");
