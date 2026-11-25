@@ -40,6 +40,7 @@ import {
   SASH_STEP,
   createPanelFrameStore,
   findInlineStyle,
+  shownSize,
   type PanelFrameStore,
   type SizeWriter,
 } from "./panelFrameStore";
@@ -1658,37 +1659,39 @@ describe("a page's data-max on the sashes holds on every path: keys, Home, the p
     });
   });
 
-  it("Home on a sash whose data-max is under the default stores the bound, not the default (the verifier's worked case: 100 and 320 in a roomy window)", () => {
+  it("Home on a sash whose data-max is under the default draws the bound and stores nothing, as nothing was chosen (round 11; 100 and 320 in a roomy window)", () => {
     const parts = bounded({ windowHeight: 1200, workWidth: 1600 });
     parts.controls.timelineSash.dispatch("keydown", { key: "Home" });
-    expect(getLayoutSizes().timelineHeight).toBe(100);
-    expect(stored().timelineHeight).toBe(100);
+    expect(getLayoutSizes().timelineHeight).toBe(DEFAULT_TIMELINE_HEIGHT);
+    expect(localStorage.getItem(LAYOUT_SIZES_KEY), "Home wrote the page's bound").toBeNull();
     expect(parts.controls.timelineSash.getAttribute("aria-valuenow")).toBe("100");
     expect(parts.controls.timelineSash.getAttribute("aria-valuemax")).toBe("100");
     parts.controls.sideSash.dispatch("keydown", { key: "Home" });
-    expect(getLayoutSizes().sideWidth).toBe(320);
-    expect(stored().sideWidth).toBe(320);
+    expect(getLayoutSizes().sideWidth).toBe(DEFAULT_SIDE_WIDTH);
+    expect(localStorage.getItem(LAYOUT_SIZES_KEY), "Home wrote the page's bound").toBeNull();
     expect(parts.controls.sideSash.getAttribute("aria-valuenow")).toBe("320");
     // The grow key from there does not shrink the panel.
     parts.controls.timelineSash.dispatch("keydown", { key: "ArrowUp" });
-    expect(getLayoutSizes().timelineHeight).toBe(100);
+    expect(parts.controls.timelineSash.getAttribute("aria-valuenow")).toBe("100");
+    expect(localStorage.getItem(LAYOUT_SIZES_KEY), "a grow key at the bound wrote it").toBeNull();
   });
 
-  it("Home through the store alone, given the sash's bound as the key path gives it, stores the bound (no attach to correct it afterwards)", () => {
+  it("Home through the store alone, given the sash's bound as the key path gives it, holds to it and writes nothing (no attach to correct it afterwards)", () => {
     now = { windowHeight: 1200, workWidth: 1600 };
     const store = createPanelFrameStore({ viewport });
     live.push(store);
     store.actions.resizeByKey("timeline-height", { key: "Home" }, { maxPx: 100 });
-    expect(getLayoutSizes().timelineHeight).toBe(100);
-    expect(stored().timelineHeight).toBe(100);
+    expect(getLayoutSizes().timelineHeight).toBe(DEFAULT_TIMELINE_HEIGHT);
+    expect(localStorage.getItem(LAYOUT_SIZES_KEY)).toBeNull();
     store.actions.resizeByKey("side-width", { key: "Home" }, { maxPx: 320 });
-    expect(getLayoutSizes().sideWidth).toBe(320);
-    expect(stored().sideWidth).toBe(320);
+    expect(getLayoutSizes().sideWidth).toBe(DEFAULT_SIDE_WIDTH);
+    expect(localStorage.getItem(LAYOUT_SIZES_KEY)).toBeNull();
     // A bound above the window's limit lifts nothing, and one under the minimum never goes under it.
     store.actions.resizeByKey("timeline-height", { key: "Home" }, { maxPx: 9000 });
     expect(getLayoutSizes().timelineHeight).toBe(DEFAULT_TIMELINE_HEIGHT);
     store.actions.resizeByKey("side-width", { key: "Home" }, { maxPx: 10 });
-    expect(getLayoutSizes().sideWidth).toBe(300);
+    expect(shownSize(store.getState(), "side-width", { maxPx: 10 })).toBe(300);
+    expect(localStorage.getItem(LAYOUT_SIZES_KEY)).toBeNull();
   });
 
   it("a sash with no data-max is not bounded by another sash's: the default still comes back in a roomy window", () => {
@@ -2164,18 +2167,57 @@ describe("a page's data-max below the default is shown, and never saved by a dra
     expect(stored()).toBeNull();
   });
 
-  it("Home on each sash is the analyst's act and stores the bound", () => {
+  // Round 11: only a size the analyst chose is stored. A key that changes nothing on the screen (Home at a default shown at
+  // the page's bound, a grow key at the bound) writes nothing, however the bound is reached.
+  it("Home on each sash, with nothing kept, changes nothing on the screen and stores nothing", () => {
     const parts = bounds(VIEWPORTS.roomy as Viewport);
     parts.controls.sideSash.dispatch("keydown", { key: "Home" });
     parts.controls.timelineSash.dispatch("keydown", { key: "Home" });
-    expect(JSON.parse(stored() ?? "{}")).toMatchObject({ sideWidth: BELOW.side, timelineHeight: BELOW.timeline });
+    expect(stored(), "Home wrote the page's bound").toBeNull();
+    expect(parts.controls.sideSash.getAttribute("aria-valuenow")).toBe(String(BELOW.side));
+    expect(parts.controls.timelineSash.getAttribute("aria-valuenow")).toBe(String(BELOW.timeline));
   });
 
-  it("an arrow key is the analyst's act and stores what it reaches, held to the bound", () => {
+  it("a grow key at the bound, with nothing kept, changes nothing on the screen and stores nothing (the verifier's worked case)", () => {
     const parts = bounds(VIEWPORTS.roomy as Viewport);
     parts.controls.sideSash.dispatch("keydown", { key: "ArrowLeft" });
+    parts.controls.sideSash.dispatch("keydown", { key: "ArrowLeft", shiftKey: true });
     parts.controls.timelineSash.dispatch("keydown", { key: "ArrowUp" });
+    parts.controls.timelineSash.dispatch("keydown", { key: "ArrowUp", shiftKey: true });
+    expect(stored(), "a grow key at the bound wrote it").toBeNull();
+    expect(parts.controls.sideSash.getAttribute("aria-valuenow")).toBe(String(BELOW.side));
+    expect(parts.controls.timelineSash.getAttribute("aria-valuenow")).toBe(String(BELOW.timeline));
+  });
+
+  it("through the store alone, a grow key and Home at a page's bound write nothing either", () => {
+    const store = createPanelFrameStore({ viewport: () => VIEWPORTS.roomy as Viewport });
+    live.push(store);
+    store.actions.resizeByKey("side-width", { key: "ArrowLeft" }, { maxPx: BELOW.side });
+    store.actions.resizeByKey("side-width", { key: "Home" }, { maxPx: BELOW.side });
+    store.actions.resizeByKey("timeline-height", { key: "ArrowUp" }, { maxPx: BELOW.timeline });
+    store.actions.resizeByKey("timeline-height", { key: "Home" }, { maxPx: BELOW.timeline });
+    store.actions.setSideWidth(5000, { maxPx: BELOW.side });
+    store.actions.setTimelineHeight(5000, { maxPx: BELOW.timeline });
+    expect(stored()).toBeNull();
+  });
+
+  it("an arrow key that does change the screen is the analyst's act and stores what it reaches, held to the bound", () => {
+    const parts = bounds(VIEWPORTS.roomy as Viewport);
+    parts.controls.sideSash.dispatch("keydown", { key: "ArrowRight" });
+    parts.controls.timelineSash.dispatch("keydown", { key: "ArrowDown" });
+    expect(JSON.parse(stored() ?? "{}")).toMatchObject({ sideWidth: BELOW.side - 16, timelineHeight: 96 });
+  });
+
+  it("a size the analyst kept (a stored 400) is moved by Home, and what Home stores is held to the bound", () => {
+    const parts = bounds(VIEWPORTS.roomy as Viewport, () => {
+      localStorage.setItem(LAYOUT_SIZES_KEY, JSON.stringify({ sideWidth: 400, timelineHeight: 300, panelHeights: {} }));
+    });
+    // Stored sizes above the bound are brought down at the first draw: they were the analyst's.
     expect(JSON.parse(stored() ?? "{}")).toMatchObject({ sideWidth: BELOW.side, timelineHeight: BELOW.timeline });
+    parts.controls.sideSash.dispatch("keydown", { key: "ArrowRight" });
+    parts.controls.sideSash.dispatch("keydown", { key: "Home" });
+    expect(Number(parts.controls.sideSash.getAttribute("aria-valuenow"))).toBeLessThanOrEqual(BELOW.side);
+    expect(JSON.parse(stored() ?? "{}").sideWidth).toBeLessThanOrEqual(BELOW.side);
   });
 
   it("a size the analyst kept above the bound is still brought down to it in storage", () => {
@@ -2227,7 +2269,8 @@ describe("a page's data-max below the default is shown, and never saved by a dra
     parts.controls.timelineSash.dispatch("keydown", { key: "ArrowUp" });
     expect(parts.controls.sideSash.getAttribute("aria-valuenow")).toBe("320");
     expect(parts.controls.timelineSash.getAttribute("aria-valuenow")).toBe("100");
-    expect(JSON.parse(stored() ?? "{}")).toMatchObject({ sideWidth: 320, timelineHeight: 100 });
+    // Nothing changed on the screen, so nothing was chosen and nothing is stored (round 11).
+    expect(stored()).toBeNull();
   });
 
   it("J: through the store alone, a shrink key with the page's bound steps from the bound (no attach)", () => {
@@ -2271,6 +2314,8 @@ describe("a page's data-max below the default is shown, and never saved by a dra
           element.dispatch("keydown", row);
           // Read straight after the key: the drawn value, never through getState().
           expect(Number(element.getAttribute("aria-valuenow")), `${sash.name} ${row.key}`).toBe(expected);
+          // Round 11: a key that changes nothing on the screen chose nothing, so it stores nothing.
+          if (expected === before) expect(stored(), `${sash.name} ${row.key} changed nothing yet wrote ${stored()}`).toBeNull();
           expect(Number(element.getAttribute("aria-valuenow"))).toBeLessThanOrEqual(Number(element.getAttribute("aria-valuemax")));
         });
       }
@@ -2300,13 +2345,16 @@ describe("a page's data-max below the default is shown, and never saved by a dra
     expect(sash.getAttribute("aria-valuenow")).toBe("60");
   });
 
-  it("the store's own calls say what they are: a hold to a bound writes nothing at the default, a set does", () => {
+  it("the store's own calls say what they are: a hold to a bound writes nothing at the default, a set that moves the screen does", () => {
     const store = createPanelFrameStore({ viewport: () => VIEWPORTS.roomy as Viewport });
     live.push(store);
     store.actions.setSideWidth(DEFAULT_SIDE_WIDTH, { maxPx: BELOW.side, fitting: true });
     store.actions.setTimelineHeight(DEFAULT_TIMELINE_HEIGHT, { maxPx: BELOW.timeline, fitting: true });
     expect(stored()).toBeNull();
+    // A set that changes nothing on the screen (the default, shown at the bound already) is not a size chosen either.
     store.actions.setSideWidth(DEFAULT_SIDE_WIDTH, { maxPx: BELOW.side });
-    expect(JSON.parse(stored() ?? "{}").sideWidth).toBe(BELOW.side);
+    expect(stored()).toBeNull();
+    store.actions.setSideWidth(BELOW.side - 20, { maxPx: BELOW.side });
+    expect(JSON.parse(stored() ?? "{}").sideWidth).toBe(BELOW.side - 20);
   });
 });
