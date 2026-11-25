@@ -290,10 +290,11 @@ def keyboard_problems(data: dict[str, Any]) -> list[str]:
     text = data["keyboard_test"]
     if not text:
         return ["test/govuk/keyboard/alert-queue.spec.ts is not a file: rule 13 asks for the tab order in the tree's folder"]
+    code = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("//"))
     found: list[str] = []
-    if "tabOrder" not in text:
+    if "tabOrder(page)" not in code:
         found.append("the keyboard case does not read the tab order")
-    if re.search(r"\.click\(|page\.mouse", text):
+    if re.search(r"\.click\(|page\.mouse", code):
         found.append("the keyboard case uses a pointer")
     return found
 
@@ -381,7 +382,8 @@ def _in(key: str, name: str, old: str, new: str) -> Callable[[dict[str, Any]], N
 
     def plant(data: dict[str, Any]) -> None:
         assert old in data[key][name], f"the plant's anchor {old!r} is not in {name}"
-        data[key][name] = data[key][name].replace(old, new, 1)
+        # Every occurrence: a pin names the route more than once (a docstring, an assertion), and a plant that leaves one is no plant.
+        data[key][name] = data[key][name].replace(old, new)
 
     return plant
 

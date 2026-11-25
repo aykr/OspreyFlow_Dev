@@ -7,3 +7,4 @@
 # `/` is not here: it is the service's own route, and the tree switch (`OSPREY_PAGES_TREE`) decides which tree draws it.
 routes:
   - /help
+  - /alert-queue

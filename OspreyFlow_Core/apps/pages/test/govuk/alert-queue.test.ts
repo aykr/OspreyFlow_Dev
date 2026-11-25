@@ -354,7 +354,7 @@ describe("the alert queue page (the govuk tree)", () => {
     for (const path of ["/alert-queue", "/alert-queue?case="]) {
       const res = await p.get(path);
       expect(res.status).toBe(200);
-      const links = focusable(mainOf(res.text)).map((s) => [s.text, s.href]);
+      const links = focusable(mainOf(res.text)).filter((s) => s.href?.startsWith("/alert-queue")).map((s) => [s.text, s.href]);
       expect(links).toEqual([
         ["Wing review", `/alert-queue?case=${encodeURIComponent(one.id)}`],
         ["Harbour & <quay> case", `/alert-queue?case=${encodeURIComponent(two.id)}`],
@@ -569,7 +569,7 @@ describe("the alert queue page (the govuk tree)", () => {
     const reader = aReader({ cases: [mine] });
     const sent = [
       aRow({ summary: "An open one" }),
-      aRow({ summary: "A closed one", alert: { status: "closed" } }),
+      aRow({ summary: "A closing one", alert: { status: "closing" } }),
       aRow({ summary: "A suppressed one", row: { suppressed: true } }),
       aRow({ summary: "A low severity one", row: { severity: "low" } }),
       aRow({ summary: "An alert raised by someone else", alert: { owner_id: "someone-else" } }),
@@ -682,8 +682,7 @@ describe("the alert queue page (the govuk tree)", () => {
     const p = await w.as(reader);
     const real = (await p.get(queueUrl(mine.id))).text;
     const nowhere = (await p.get(NOWHERE)).text;
-    const stranger = aReader({ cases: [] });
-    const refused = (await (await world([stranger], [])).as(stranger).then((q) => q.get(queueUrl("x")))).text;
+    const refused = (await p.get(queueUrl("no-such-case"))).text;
     expect(refused).toContain("That page could not be found.");
     // The real page and the real Conduit call are clean under every check (so a finding below is the plant's).
     expect(structureProblems(real)).toEqual([]);

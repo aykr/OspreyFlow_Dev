@@ -198,7 +198,9 @@ export function queryRefusal(query: URLSearchParams): string | undefined {
 export async function queueConduit(world: { readers: Reader[]; alerts: Held[]; reach?: boolean }): Promise<QueueConduit> {
   const server = createServer((req, res) => {
     const target = new URL(req.url ?? "/", "http://conduit.test");
-    calls.push({
+    // The sign-in's own report (SE8c) is the page service's and not a read of the page: kept apart, as the Studio's fake keeps it.
+    const reported = req.method === "POST" && target.pathname === "/v1/session-events";
+    (reported ? events : calls).push({
       method: req.method ?? "GET",
       url: req.url ?? "",
       path: target.pathname,
@@ -206,6 +208,11 @@ export async function queueConduit(world: { readers: Reader[]; alerts: Held[]; r
       headers: req.headers,
       rawHeaders: req.rawHeaders,
     });
+    if (reported) {
+      res.writeHead(204);
+      res.end();
+      return;
+    }
     const header = req.headers["authorization"];
     const bearer = typeof header === "string" && header.startsWith("Bearer ") ? header.slice(7) : undefined;
     const reader = bearer === undefined ? undefined : fake.readers.find((r) => r.token === bearer);
@@ -244,6 +251,7 @@ export async function queueConduit(world: { readers: Reader[]; alerts: Held[]; r
     return json(res, 200, rows);
   });
   const calls: Seen[] = [];
+  const events: Seen[] = [];
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
   const fake: QueueConduit = {
     url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`,

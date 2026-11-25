@@ -175,12 +175,12 @@ def parity_problems(tmp_path: Path) -> list[str]:
 
 
 def test_the_real_tree_is_partial() -> None:
-    """Today `FUNCTIONS.yaml` has 49 rows and the GOV.UK tree has one page, Help (slice GR2a): one route in the list."""
+    """Today `FUNCTIONS.yaml` has 49 rows and the GOV.UK tree has two pages, Help (slice GR2a) and the alert queue (slice RM1a): two routes in the list."""
     assert len(real_rows()) == 49
     assert tree_parity.govuk_tree_state() == PARTIAL
     assert tree_parity.ROUTE_LIST.is_file(), "the GOV.UK tree's route list is gone"
-    assert tree_parity._routes(tree_parity.ROUTE_LIST) == ["/help"]
-    assert [row["id"] for row in real_rows() if row["route"]] == ["help"]
+    assert tree_parity._routes(tree_parity.ROUTE_LIST) == ["/help", "/alert-queue"]
+    assert [row["id"] for row in real_rows() if row["route"]] == ["alerts-rules-watches", "help"]
 
 
 def real_defaults_problems() -> list[str]:
