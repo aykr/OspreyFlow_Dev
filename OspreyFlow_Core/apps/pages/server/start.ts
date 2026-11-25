@@ -9,7 +9,7 @@ import type { AddressInfo } from "node:net";
 
 import { Redis } from "ioredis";
 
-import { createApp } from "./app.js";
+import { createApp, streamTokenFor } from "./app.js";
 import { defaultAssets } from "./assets.js";
 import type { AssetsSetting } from "./assets.js";
 import { loadConfig } from "./config.js";
@@ -136,10 +136,12 @@ export async function main(
   });
   // Every WebSocket upgrade is answered here, never by a page's route: with no Conduit address set the
   // proxy is absent and each one is refused 404 (ADR-152 decision 5).
+  const tokenFor = streamTokenFor(app);
   const stream = attachStreamProxy(server, {
     settings: config.stream,
     store,
     sessionSecret: config.sessionSecret.reveal(),
+    ...(tokenFor ? { tokenFor } : {}),
     ...(deps.clock ? { clock: deps.clock } : {}),
     ...(deps.streamCheckMs === undefined ? {} : { checkMs: deps.streamCheckMs }),
     log: (message) => {

@@ -52,8 +52,9 @@ from schemas.domain import (
 )
 from schemas.explore import TypeCounts
 
-from .alert_queue import monitoring_queue
+from .alert_queue import monitoring_queue_and_left_out
 from .alerts import AlertStore
+from .dataset_scope import read_only_layer
 from .explore import ExploreService
 from .held_rows import HeldRowStore
 from .kyc import assess
@@ -240,12 +241,43 @@ async def alert_report(
     query's answer, what they name one batched read as the reader (`monitoring_queue`) — from which
     the typology figures (ADR-111) and the monitoring figures (ADR-134 decision 2) are both
     counted, so they cannot disagree about which alerts the reader may see."""
+    figures, _ = await alert_report_and_left_out(
+        alerts, graph, analytics, investigation_id, reader, today=today, period_weeks=period_weeks
+    )
+    return figures
+
+
+async def alert_report_and_left_out(
+    alerts: AlertStore,
+    graph: GraphPort,
+    analytics: AnalyticsPort,
+    investigation_id: str,
+    reader: Principal,
+    *,
+    today: date,
+    period_weeks: int = 12,
+) -> tuple[ReportFigures, bool]:
+    """`alert_report`, and whether the reader's rights left any alert out of its figures: a yes or
+    no (SE8b). True when the queue left one out whole because the reader cannot read what it cites
+    (the queue's own decision), or when the case borrows another case's layer read-only and the
+    reader, holding no level on the original, has it left out of their read set, with an alert of
+    theirs on it (`AlertStore.left_out_on_borrowed_layer`). **Not** the case's own dataset scope:
+    an alert on a dataset the case does not read is not one of its figures, and sets nothing (the
+    owner's ruling of 23 November 2026, option A)."""
     now = datetime.now(UTC)
     start = today - timedelta(weeks=period_weeks)
-    every_kind = await monitoring_queue(alerts, graph, analytics, investigation_id, reader)
+    every_kind, left_out = await monitoring_queue_and_left_out(
+        alerts, graph, analytics, investigation_id, reader
+    )
+    # An alert on the borrowed layer, which the reader's read set leaves out for want of a level on
+    # the original case, never reaches the queue's loop (the store's query drops it), so the loop
+    # cannot say it was left out: ask the store, with the same scope.
+    left_out = left_out or await alerts.left_out_on_borrowed_layer(
+        investigation_id, reader, read_only_layer()
+    )
     typology = [q.alert for q in every_kind if q.kind == "typology"]
     by_week, by_age, outcomes, total = _alert_figures(typology, start=start, now=now)
-    return ReportFigures(
+    figures = ReportFigures(
         period_weeks=period_weeks,
         as_of=today,
         generated_at=now,
@@ -255,6 +287,7 @@ async def alert_report(
         outcomes=outcomes,
         monitoring=_monitoring_figures(every_kind, start=start, now=now, reader_id=reader.id),
     )
+    return figures, left_out
 
 
 async def _customers(graph: GraphPort, reader: Principal) -> list[str]:
@@ -362,11 +395,66 @@ async def case_report(
     period_weeks: int = 12,
     show_held: bool = False,
 ) -> ReportFigures:
-    figures = await alert_report(
+    figures, _ = await case_report_and_withheld(
+        alerts=alerts, graph=graph, analytics=analytics, held=held, compute=compute,
+        explore=explore, ontology=ontology, domains=domains, investigation_id=investigation_id,
+        reader=reader, today=today, period_weeks=period_weeks, show_held=show_held,
+    )  # fmt: skip
+    return figures
+
+
+async def case_report_and_withheld(
+    *,
+    alerts: AlertStore,
+    graph: GraphPort,
+    analytics: AnalyticsPort,
+    held: HeldRowStore,
+    compute: ComputePort,
+    explore: ExploreService,
+    ontology: OntologySchema,
+    domains: Sequence[str],
+    investigation_id: str,
+    reader: Principal,
+    today: date,
+    period_weeks: int = 12,
+    show_held: bool = False,
+) -> tuple[ReportFigures, bool]:
+    """`case_report`, and whether the reader's figures were lowered by what they may not see (the
+    flag a report's ledger row carries as `withheld`, SE8b): a yes or no, never a count, and read
+    from each figure's own computation, not from a stand-in. It is true when
+
+    - the alert queue left out an alert whole because the reader cannot read what it cites
+      (`monitoring_queue_and_left_out`), or the reader holds no level on the original case of a
+      layer this case borrows read-only and an alert of theirs on it was left out of their read set
+      (`AlertStore.left_out_on_borrowed_layer`), either of which lowers every alert and monitoring
+      figure; or
+    - held rows are shown (`show_held`) and the case holds a row of any status the reader's marking
+      or reach leaves out (`HeldRowStore.left_out_for`, the same clauses as the count).
+
+    **The flag is a floor, not a ceiling.** It is true when the reader's rights lowered an alert
+    figure or a held-row figure (the cases above). It does **not yet see the KYC and POLE
+    figures**: they are counted as the reader (`explore.counts`, `list_nodes`), so the reader's
+    rights can lower them, and a lowered KYC or POLE total is recorded `withheld=False` today. That
+    is a known gap, not a design decision: only the graph adapter can say what its own count left
+    out (rule 3: the Conduit may not compute an unfiltered count and compare), so the complete fix
+    is a port change in a part of its own (SE8e: the counts result gains a `withheld` boolean from
+    the adapter, and this flag becomes one `any` over every figure source). The owner's ruling of
+    23 November 2026 (option A) covers the alert part only; the KYC and POLE gap is the
+    conductor's finding, reported to the owner on 24 November 2026. The known-floor cases are
+    pinned in `test_report_figures_withheld.py` (`..._is_a_known_floor_until_SE8e`): when SE8e
+    lands they are the tests that flip.
+
+    An alert the queue's scope keeps from the reader for who it was given to (a team's alone, a
+    watch's owner's) is not the reader's rights lowering a figure but who the alert is for, and
+    sets nothing."""
+    figures, left_out = await alert_report_and_left_out(
         alerts, graph, analytics, investigation_id, reader, today=today, period_weeks=period_weeks
     )
     held_figures = None
     if show_held:
+        for status in ("held", "released", "rejected"):
+            if await held.left_out_for(investigation_id, reader, status=status):
+                left_out = True
         held_figures = HeldFigures(
             held=len(await held.list_authorized(investigation_id, reader, status="held")),
             released=len(await held.list_authorized(investigation_id, reader, status="released")),
@@ -388,7 +476,7 @@ async def case_report(
                 "the explore counts carry no computed_at, so the card cannot say when"
             )
         pole = pole_figures(counts, ontology, counted_at=counts.computed_at)
-    return figures.model_copy(update={"held": held_figures, "kyc": kyc, "pole": pole})
+    return figures.model_copy(update={"held": held_figures, "kyc": kyc, "pole": pole}), left_out
 
 
 def feed_rows(figures: ReportFigures) -> list[tuple[str, str, str, str, int]]:
@@ -447,7 +535,9 @@ def feed_rows(figures: ReportFigures) -> list[tuple[str, str, str, str, int]]:
 __all__ = [
     "ReportLimitExceededError",
     "alert_report",
+    "alert_report_and_left_out",
     "case_report",
+    "case_report_and_withheld",
     "feed_rows",
     "pole_figures",
 ]

@@ -282,9 +282,7 @@ _SEVERITY_SQL = (
     + f"WHEN rule_id LIKE 'drawn_watch:%' THEN {_quoted(DEFAULT_SEVERITY['drawn_watch'])} "
     + f"ELSE {_quoted(DEFAULT_SEVERITY['monitor'])} END)"
 )
-_SEVERITY_RANK_SQL = (
-    f"(CASE {_SEVERITY_SQL} WHEN 'high' THEN 3 WHEN 'medium' THEN 2 ELSE 1 END)"
-)
+_SEVERITY_RANK_SQL = f"(CASE {_SEVERITY_SQL} WHEN 'high' THEN 3 WHEN 'medium' THEN 2 ELSE 1 END)"
 #: Whether a hotlist or monitor alert is shared with its owner's team: a full alert (never a
 #: `notify` stub, which carries nothing a second person may read; ADR-038) with a team written on
 #: it, and — for a hotlist — whose hotlist's audience is `team` *now*, so an owner who turns a
@@ -333,6 +331,7 @@ def queue_scope(
     position: int,
     *,
     answers_for: Sequence[str] = (),
+    with_reach: bool = True,
 ) -> tuple[str, list[object]]:
     """ADR-133 decision 5, rule 3: which alerts the one queue may hold for `principal`, read in a
     case, as SQL (`AND (...)`, its parameters from `$position`). A typology alert is the case's
@@ -349,12 +348,14 @@ def queue_scope(
 
     L3.6 (ADR-143 Amendment 2 decision 8): a drawn watch's alert is its owner's in the watch's case
     alone — never through another case, as a hotlist's or monitor's is — and never shared: the
-    drawn item it cites lives in that case's layer."""
+    drawn item it cites lives in that case's layer.
+
+    `with_reach=False` leaves the dataset reach clause (and its parameter) off, for the one caller
+    that asks about the borrowed layer alone (`AlertStore.left_out_on_borrowed_layer`, SE8b); no
+    read of alerts for a reader ever passes it."""
     case, me, unit, teams, authored, datasets = (f"${position + i}" for i in range(6))
-    reach, extra = reach_clause(principal, position + 6)
-    watch = (
-        "typology IS NULL AND rule_id NOT LIKE 'analyst:%' AND rule_id NOT LIKE 'drawn_watch:%'"
-    )
+    reach, extra = reach_clause(principal, position + 6) if with_reach else ("", [])
+    watch = "typology IS NULL AND rule_id NOT LIKE 'analyst:%' AND rule_id NOT LIKE 'drawn_watch:%'"
     sql = (
         f" AND {_KIND_SQL} IS NOT NULL AND ("
         f"(typology IS NOT NULL AND investigation_id = {case} AND {_routed_sql(teams, authored)}) "
@@ -479,9 +480,7 @@ def _row_to_facts(row: asyncpg.Record) -> list[AlertFact]:
     if not citations:
         return [fact]
     split = json.loads(row["cited_handlings"]) if row["cited_handlings"] else None
-    groups = (
-        [[Handling(**h) for h in group] for group in split["citations"]] if split else []
-    )
+    groups = [[Handling(**h) for h in group] for group in split["citations"]] if split else []
     if (
         split is None
         or len(groups) != len(citations)
@@ -838,11 +837,15 @@ class AlertStore:
                 else json.dumps([h.model_dump() for h in distinct_handlings(handlings)]),
                 None
                 if cited_handlings is None
-                else json.dumps({
-                    "core": [h.model_dump() for h in distinct_handlings(cited_handlings[0])],
-                    "citations": [[h.model_dump() for h in distinct_handlings(group)]
-                                  for group in cited_handlings[1]],
-                }),  # fmt: skip
+                else json.dumps(
+                    {
+                        "core": [h.model_dump() for h in distinct_handlings(cited_handlings[0])],
+                        "citations": [
+                            [h.model_dump() for h in distinct_handlings(group)]
+                            for group in cited_handlings[1]
+                        ],
+                    }
+                ),  # fmt: skip
             )
         await self.publish_facts([alert.id])
 
@@ -913,8 +916,7 @@ class AlertStore:
         authored = sorted(set(await self._answers_for(principal)))
         async with self._pool.acquire() as conn:
             rows = await conn.fetch(
-                "SELECT id FROM alerts WHERE id = ANY($1::text[]) AND "
-                + _routed_sql("$2", "$3"),
+                "SELECT id FROM alerts WHERE id = ANY($1::text[]) AND " + _routed_sql("$2", "$3"),
                 sorted(set(alert_ids)),
                 reader_teams(principal),
                 authored,
@@ -1096,6 +1098,40 @@ class AlertStore:
                 *params,
             )
         return [_row_to_queue_row(row) for row in rows]
+
+    async def left_out_on_borrowed_layer(
+        self, investigation_id: str, principal: Principal, borrowed: str | None
+    ) -> bool:
+        """Whether the reader's own rights took an alert out of the queue by leaving the borrowed
+        layer out of their read set: a yes or no, never a count (rule 7). A case made from another
+        borrows the original case's layer read-only, and `readable_of_case` leaves it out of
+        `principal.datasets` unless the reader holds a level on the original: that refusal is the
+        one thing in a case's read set that is the reader's rights (the owner's ruling of 23
+        November 2026, SE8b, option A). An alert on any other dataset the case does not read is
+        **not** this: `principal.datasets` in a case route is the case's read set, not the reader's
+        own rights, and an alert the reader owns on another dataset is not a figure of this case.
+
+        So the answer is true only when `borrowed` (the request's read-only layer,
+        `dataset_scope.read_only_layer`) is a layer the principal's set leaves out, and an alert the
+        queue would hold for them (the same `queue_scope`, without its reach clause) is on it. A
+        reader with no dataset limit, a case that borrows nothing, or a reader who reads the layer
+        loses nothing to it and costs no query."""
+        if borrowed is None or principal.datasets is None or borrowed in principal.datasets:
+            return False
+        scope, extra = queue_scope(
+            principal,
+            investigation_id,
+            1,
+            answers_for=await self._answers_for(principal),
+            with_reach=False,
+        )
+        async with self._pool.acquire() as conn:
+            found = await conn.fetchval(
+                f"SELECT EXISTS (SELECT 1 FROM alerts WHERE dataset_id = ${len(extra) + 1}{scope})",
+                *extra,
+                borrowed,
+            )
+        return found is True
 
     async def case_of(self, alert_id: str) -> str | None:
         """The case an alert was raised in (`investigation_id`), or `None` for an id no alert holds
@@ -1833,9 +1869,7 @@ async def raiser_reads_admitting(
     query for every alert asked (rule 7: the read follows the ids, never what is hidden)."""
     handlings = await store.handlings_by_id([a.id for a in alerts if a.alert_node_id is None])
     return {
-        a.id
-        for a in alerts
-        if raiser_read_admits(a, handlings.get(a.id), reader, store.scheme)
+        a.id for a in alerts if raiser_read_admits(a, handlings.get(a.id), reader, store.scheme)
     }
 
 
@@ -2234,10 +2268,16 @@ async def remark_alerts(
         try:
             revision = await graph.supersede_node(
                 node.id,
-                NodeWrite(id=new_node_id(), type=node.type, properties=node.properties,
-                          provenance=node.provenance, handling=required,
-                          created_by="remark_alert_nodes", created_at=datetime.now(UTC),
-                          datasets=node.datasets),  # fmt: skip
+                NodeWrite(
+                    id=new_node_id(),
+                    type=node.type,
+                    properties=node.properties,
+                    provenance=node.provenance,
+                    handling=required,
+                    created_by="remark_alert_nodes",
+                    created_at=datetime.now(UTC),
+                    datasets=node.datasets,
+                ),  # fmt: skip
                 tx,
             )
             if on_supersede is not None:
@@ -2473,9 +2513,7 @@ async def evidence_available(
     transactions without asking whether they may view it (rule 3; L2.8b's R1)."""
     if alert.mode is AlertMode.NOTIFY_STUB:
         return True
-    readable = await read_evidence(
-        [alert], principal, graph, analytics, scope=lambda _: case
-    )
+    readable = await read_evidence([alert], principal, graph, analytics, scope=lambda _: case)
     return readable.whole(alert)
 
 

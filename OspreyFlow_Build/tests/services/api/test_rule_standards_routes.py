@@ -33,29 +33,31 @@ from xml.etree import ElementTree
 
 import pytest
 from fastapi.testclient import TestClient
-from rule_standards import StoredRuleFiles, rule_files, to_bpmn, to_dmn
 from services.api import rule_standards_routes
 from services.api.app import (
     app,
     get_audit,
     get_datasets,
+    get_export_ledger,
     get_investigations,
     get_ontology,
     get_principal,
     get_typology_rules,
 )
+from services.api.datasets import Dataset
 from services.api.investigations import (
     AccessLevel,
     InsufficientAccessError,
     Investigation,
     InvestigationNotFoundError,
 )
-from services.api.datasets import Dataset
 from services.api.typology_rules import TypologyRuleNotFoundError
 
+from rule_standards import StoredRuleFiles, rule_files, to_bpmn, to_dmn
 from schemas.domain import Principal, TypologyRule
 from schemas.rule_standards import RULE_FILE_MAX_CHARS
 from schemas.sentences import RuleSentence, SentenceRuleInput, SentenceRuleParams
+from tests.services.api.export_ledger_fakes import RefusingLedger
 from tests.services.api.test_rule_sentences import ONTOLOGY
 
 CASE = Investigation(id="case-s", name="C", created_at=datetime(2026, 1, 1, tzinfo=UTC),
@@ -180,13 +182,20 @@ class _Audit:
         self.entries.append(entry)
 
 
+class _Ledger(RefusingLedger):
+    """The export ledger's `record`, keeping what it was given and refusing a row with no subject
+    as the real store does (SE8b, rule 15)."""
+
+
 @pytest.fixture
 def world() -> Iterator[dict[str, Any]]:
-    things: dict[str, Any] = {"rules": _Rules(), "audit": _Audit(), "datasets": _Datasets()}
+    things: dict[str, Any] = {
+        "rules": _Rules(), "audit": _Audit(), "datasets": _Datasets(), "ledger": _Ledger(),
+    }  # fmt: skip
     app.dependency_overrides.update({
         get_investigations: _Cases, get_ontology: lambda: ONTOLOGY,
         get_typology_rules: lambda: things["rules"], get_audit: lambda: things["audit"],
-        get_datasets: lambda: things["datasets"],
+        get_datasets: lambda: things["datasets"], get_export_ledger: lambda: things["ledger"],
     })  # fmt: skip
     yield things
     app.dependency_overrides.clear()
@@ -219,6 +228,15 @@ def test_export_gives_the_two_files_of_the_rule_and_is_audited(world: dict[str, 
     assert dmn.status_code == 200 and "<dmn:decisionTable " in dmn.text
     assert [e["action"] for e in world["audit"].entries] == ["export_rule_file", "export_rule_file"]
     assert world["audit"].entries[0]["resolved_query"] == {"rule_id": "r-1", "file": "bpmn"}
+    # SE8b: each file that left has its ledger row: who, the rule by id (never its name), the case.
+    first, second = world["ledger"].entries
+    assert (first.artefact_kind, first.principal_id, first.investigation_id) == (
+        "rule_file", VIEWER.id, CASE.id,
+    )  # fmt: skip
+    assert (first.subject_kind, first.subject_id) == ("rule", "r-1") == (
+        second.subject_kind, second.subject_id,
+    )  # fmt: skip
+    assert "okafor" not in first.model_dump_json().lower()
 
 
 def test_the_export_route_serves_the_files_stored_beside_the_rules_version(world: dict[str, Any]) -> None:
@@ -269,6 +287,7 @@ def test_a_rule_the_reader_may_not_see_is_the_same_404_as_a_missing_one(
         seen = _as(VIEWER).get(f"{BASE}/{rid}/export.bpmn")
         assert (seen.status_code, seen.json()) == (missing.status_code, missing.json()), rid
     assert "export_rule_file" not in [e["action"] for e in world["audit"].entries]
+    assert world["ledger"].entries == [], "a refused export left nothing, so it has no row"
 
 
 def test_a_template_rule_or_one_for_the_whole_deployment_is_refused_in_words(

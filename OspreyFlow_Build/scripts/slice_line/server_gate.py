@@ -197,7 +197,7 @@ def slot_hold(slice_id: str, tip: str) -> str | None:
     if not is_red(e):
         return None
     done = c.read_json(rerun_record(slice_id, rid)) or {}
-    if done.get("tip") == tip and done.get("result") == "green":
+    if done.get("tip") == tip and done.get("result") in ("green", "unplaced"):  # unplaced: the whole gate settles it
         return None
     tests, bare = failing_names(e)
     if not tests and not bare:  # nothing named to rerun: the whole gate at the merge settles it, as before
@@ -225,9 +225,76 @@ def prerequisites(makefile: Path, target: str) -> list[str]:
 TEST_FILE = re.compile(r"\A(?:\.\./)?(OspreyFlow_Build/tests/[A-Za-z0-9_./-]+\.py)\Z")
 
 
+#: Item 4 (the owner's approval, 23 November 2026): the records folder, and what in it no records commit may change
+#: under a server result (the same rule land() lands a merge by): the scan rows and the owner's own files.
+RECORDS_REL = f"{c.V062_REL}/"
+SCAN_ROWS_REL = f"{c.V062_REL}/scan_rows"
+OWNER_FILES = (f"{c.V062_REL}/dial.yaml", f"{c.V062_REL}/accounts.yaml", f"{c.V062_REL}/live_step.yaml",
+               f"{c.V062_REL}/resume.tsv", f"{c.V062_REL}/standing.tsv")
+#: The targets of today's full gate that read the records folder, which the Mac always runs when a server result stands
+#: across records commits (the owner's approved list, items 1 to 3; item 4, live-collect, is run beside make test's
+#: files, item 5: every test whose scan_map.tsv row covers the folder, and test_live_select.py besides).
+RECORDS_TARGETS = ("slice-line-check", "citation-check", "client-name-check")
+RECORDS_TESTS = ("tests/test_live_select.py",)
+LINE_MAP_REL = "OspreyFlow_Build/scripts/slice_line/scan_map.tsv"
+
+
+def git_ok(args: list[str]) -> tuple[bool, str]:
+    p = subprocess.run(["git", *args], cwd=c.REPO, capture_output=True, text=True)
+    return p.returncode == 0, p.stdout.strip()
+
+
+def records_moved(e: dict, base: str, tip: str, tree: str) -> tuple[list[str], str | None]:
+    """(the files the records commits changed, None) when main has moved since the server's run only by records
+    commits (item 4): each a Slice-Records commit with one parent, together changing only records-folder files that are
+    not scan rows, the owner's files or a file the slice changed; and the Mac's candidate tree differs from the server's
+    (the server's main with the slice merged, made again here and checked against the tree the server gives) in
+    exactly those files, each as main has it. Otherwise ([], why)."""
+    smain, stree = str(e.get("main") or ""), str(e.get("tree") or "")
+    words = f"main has moved since the server's run (it ran on {smain[:10]}, main is {base[:10]})"
+    if not smain or not stree or not git_ok(["merge-base", "--is-ancestor", smain, base])[0]:
+        return [], f"{words}, and not forward"
+    _, commits = git_ok(["rev-list", "--reverse", f"{smain}..{base}"])
+    for sha in commits.split():
+        _, parents = git_ok(["rev-list", "--parents", "-n", "1", sha])
+        _, trailers = git_ok(["log", "-1", "--format=%(trailers:only,unfold)", sha])
+        if len(parents.split()) != 2 or "Slice-Records: yes" not in trailers:
+            return [], f"{words} by {sha[:10]}, which is not a records commit"
+    _, diff = git_ok(["diff", "--name-only", "--no-renames", smain, base])
+    paths = sorted(diff.split())
+    _, own = git_ok(["diff", "--name-only", "--no-renames", f"{smain}...{tip}"])
+    bad = [f for f in paths if not f.startswith(RECORDS_REL) or f.startswith(SCAN_ROWS_REL + "/") or f in OWNER_FILES
+           or f in own.split()]
+    if bad:
+        return [], f"{words}, in a path the server's run tested or the merge reads ({', '.join(bad[:5])})"
+    ok, made = git_ok(["merge-tree", "--write-tree", "--no-messages", smain, tip])
+    if not ok or made.split("\n", 1)[0] != stree:
+        return [], f"{words}, and the server's candidate tree {stree[:10]} cannot be made again here"
+    _, differ = git_ok(["diff", "--name-only", "--no-renames", stree, tree])
+    same = all(git_ok(["rev-parse", f"{tree}:{f}"]) == git_ok(["rev-parse", f"{base}:{f}"]) for f in paths)
+    if sorted(differ.split()) != paths or not same:
+        return [], (f"{words}, and the Mac's candidate tree differs from the server's in more than the records "
+                    f"commits' files ({', '.join(sorted(differ.split())[:5])})")
+    return paths, None
+
+
+def records_tests(tree: Path) -> list[str]:
+    """The test files (relative to OspreyFlow_Build) of item 5: every scan_map.tsv row of the candidate tree whose
+    prefixes cover the records folder, and RECORDS_TESTS."""
+    import scan_select
+    try:
+        table = scan_select.load((tree / LINE_MAP_REL).read_text())
+    except (OSError, ValueError):
+        table = scan_select.entries()
+    rows = {t for t, prefixes, _ in table if any(RECORDS_REL.startswith(p) or p.startswith(RECORDS_REL)
+                                                 for p in prefixes)}
+    return sorted(rows | set(RECORDS_TESTS))
+
+
 def same_candidate(e: dict | None, base: str, tip: str, tree: str) -> str | None:
     """Why the server's run is not for the Mac's own candidate (None when it is): the same main tip (for a slice stacked
-    on others, main exactly the tree the server ran it on), the same slice tip and the same candidate tree hash."""
+    on others, main exactly the tree the server ran it on), the same slice tip and the same candidate tree hash; or main
+    moved since only by records commits, the trees differing in exactly their files (item 4, records_moved)."""
     if not e:
         return "no result from the server for this slice at this tip"
     if e.get("state") == "done" and e.get("verdict") not in VERDICTS:  # an error: nothing was run, no candidate
@@ -238,7 +305,9 @@ def same_candidate(e: dict | None, base: str, tip: str, tree: str) -> str | None
             return (f"stacked on {', '.join(e.get('below') or [])}: main is not the tree the server ran it on (one "
                     "below has not landed as tested); it goes to the server again")
     elif e.get("main") != base:
-        return f"main has moved since the server's run (it ran on {str(e.get('main'))[:10]}, main is {base[:10]})"
+        if e.get("tip") != tip:
+            return "the server's run is for another tip of the slice"
+        return records_moved(e, base, tip, tree)[1]
     if e.get("tip") != tip:
         return "the server's run is for another tip of the slice"
     if e.get("tree") != tree:
@@ -259,13 +328,15 @@ def matches(e: dict | None, base: str, tip: str, tree: str) -> str | None:
     return None
 
 
-def remainder(e: dict, tree: Path, mk: Path) -> dict:
+def remainder(e: dict, tree: Path, mk: Path, records: list[str] | tuple = ()) -> dict:
     """What the Mac still runs of today's full gate when the server's green counts, and what is taken from the server:
     each `ci` prerequisite the server does not name as run and passed (core-check by Core's own `check` targets, each
     named), and `make test` whole unless the server names it passed, then only the test files it did not run (written
     as a second makefile, `mk`, for make test's own pytest command). Anything the server names but the Mac cannot place
     runs on the Mac whole: never weaker than today on a path the server did not prove."""
     passed = {t for t in e.get("passed_targets") or [] if isinstance(t, str)}
+    if records:  # item 4: main moved by records commits since the server's run; what reads them runs on the Mac
+        passed -= set(RECORDS_TARGETS)
     ci = prerequisites(tree / "OspreyFlow_Build/Makefile", "ci")
     core = prerequisites(tree / "OspreyFlow_Core/Makefile", "check")
     targets, taken, mac = [], [], []
@@ -287,6 +358,10 @@ def remainder(e: dict, tree: Path, mk: Path) -> dict:
     if "test" in passed and all(files):
         taken.append("test")
         files = sorted({"../" + m.group(1) for m in files})
+        if records:
+            files = sorted(set(files) | {f"../OspreyFlow_Build/{t}" for t in records_tests(tree)})
+            targets.append(["make", "live-collect"])
+            mac.append("live-collect (the records folder moved)")
         if files:
             mk.write_text("server-test-files:\n\t$(IN_CORE) $(PYTEST) $(SERVER_TEST_FILES)\n")
             targets.append(["make", "-f", "Makefile", "-f", str(mk), "server-test-files",
@@ -295,7 +370,7 @@ def remainder(e: dict, tree: Path, mk: Path) -> dict:
     else:
         targets.append(["make", "test"])
         mac.append("test")
-    return {"targets": targets, "taken": taken, "mac": mac}
+    return {"targets": targets, "taken": taken, "mac": mac, "records": list(records)}
 
 
 # ------------------------------------------------------------------ item 3: the stack

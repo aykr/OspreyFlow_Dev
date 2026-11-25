@@ -7,6 +7,11 @@
  * socket to the Conduit with the person's access token in an `Authorization: Bearer` header (the Conduit
  * tries the header first, so no ticket is minted). Frames, text and binary, pass both ways unchanged.
  *
+ * The token is the one `accessTokenFor` gives (slice PL9b), awaited before the Conduit is contacted: an upgrade is handled here,
+ * outside Express, so the app's renewal middleware never runs for it, and the proxy asks the app's own renewal (`tokenFor`, the
+ * same one every page request meets: one exchange for a session however many meet its token's end). A provider that will not
+ * renew has ended the session; the browser's socket is then closed 1008 in the sign-in's words, and the Conduit is not contacted.
+ *
  * What is refused, and where, always before the browser's socket is upgraded and before the Conduit is
  * contacted:
  *   - any upgrade on a path but the stream's: 404;
@@ -41,14 +46,17 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import type { IncomingMessage, Server } from "node:http";
 import type { Duplex } from "node:stream";
 
+import type { SessionData } from "express-session";
 import { WebSocket, WebSocketServer } from "ws";
 import type { RawData } from "ws";
 
+import { SessionEnded, accessTokenFor } from "./accessToken.js";
 import type { StreamSettings } from "./config.js";
 import { PagesSessionStore } from "./expressStore.js";
 import { COOKIE_NAME } from "./sessionPolicy.js";
 import type { SessionRecord } from "./sessionPolicy.js";
 import type { SessionStore } from "./sessionStore.js";
+import { SIGNED_OUT_WORDS } from "./v1.js";
 
 export interface StreamDeps {
   /** Absent when `OSPREY_PAGES_CONDUIT_URL` is unset: every upgrade is then answered 404. */
@@ -56,6 +64,12 @@ export interface StreamDeps {
   store: SessionStore;
   /** The cookie-signing secret: the session cookie is verified exactly as `express-session` signed it. */
   sessionSecret: string;
+  /**
+   * The access token a session's call carries, renewed first when it is near its end (`createApp`'s own: the same renewal as every
+   * page request's, single flight with them). Left out, the session's own token is used as it is (a deployment with no sign-in
+   * flow has none to renew with). It throws `SessionEnded` when the provider will not renew; the session is then destroyed.
+   */
+  tokenFor?: (sid: string, session: SessionData) => Promise<string>;
   /** Milliseconds since the epoch. */
   clock?: () => number;
   /** How often open sockets are looked at, in milliseconds. */
@@ -161,16 +175,23 @@ export function attachStreamProxy(server: Server, deps: StreamDeps): StreamProxy
   });
 
   /** The session the cookie names, or undefined when there is none, it is not ours or it has ended. */
-  function readSession(sid: string): Promise<SessionRecord | undefined> {
+  function readWholeSession(sid: string): Promise<(SessionData & { auth: SessionRecord }) | undefined> {
     return new Promise((resolve, reject) => {
       sessions.get(sid, (error, session) => {
         if (error) reject(error instanceof Error ? error : new Error("the session store failed"));
-        else resolve(session?.auth);
+        else resolve(session?.auth === undefined ? undefined : (session as SessionData & { auth: SessionRecord }));
       });
     });
   }
 
-  function bridge(browser: WebSocket, record: SessionRecord, sid: string, id: string): void {
+  async function readSession(sid: string): Promise<SessionRecord | undefined> {
+    return (await readWholeSession(sid))?.auth;
+  }
+
+  const tokenFor = deps.tokenFor ?? ((_sid: string, session: SessionData): Promise<string> => accessTokenFor(session.auth as SessionRecord));
+
+  /** `accessToken` is what `accessTokenFor` gave for this connection: the one the Conduit is shown, renewed if it was near its end. */
+  function bridge(browser: WebSocket, accessToken: string, sid: string, id: string): void {
     const connection: Live = {
       sid,
       lastFrame: clock(),
@@ -187,7 +208,7 @@ export function attachStreamProxy(server: Server, deps: StreamDeps): StreamProxy
     let upstream: WebSocket;
     try {
       upstream = new WebSocket(`${upstreamBase ?? ""}/v1/investigations/${id}/stream`, {
-        headers: { Authorization: `Bearer ${record.accessToken}` },
+        headers: { Authorization: `Bearer ${accessToken}` },
         perMessageDeflate: false,
         handshakeTimeout: UPSTREAM_HANDSHAKE_MS,
         followRedirects: false,
@@ -299,9 +320,9 @@ export function attachStreamProxy(server: Server, deps: StreamDeps): StreamProxy
       refuse(socket, 401, "Unauthorized");
       return;
     }
-    let record: SessionRecord | undefined;
+    let record: (SessionData & { auth: SessionRecord }) | undefined;
     try {
-      record = await readSession(sid);
+      record = await readWholeSession(sid);
     } catch {
       log("pages: stream: the session store could not be read");
       refuse(socket, 503, "Service Unavailable");
@@ -311,9 +332,26 @@ export function attachStreamProxy(server: Server, deps: StreamDeps): StreamProxy
       refuse(socket, 401, "Unauthorized");
       return;
     }
+    // The token the Conduit is shown is the one the renewal gives, not the one the record holds: a person whose access token has
+    // ended, and whose browser has asked the service for nothing else, reconnects with a renewed one. A provider that will not
+    // renew has ended the session (it is destroyed), and the socket is closed in the sign-in's words with the old token never sent.
+    let accessToken: string | undefined;
+    try {
+      accessToken = await tokenFor(sid, record);
+    } catch (error) {
+      if (!(error instanceof SessionEnded)) {
+        log("pages: stream: the access token could not be renewed");
+        refuse(socket, 503, "Service Unavailable");
+        return;
+      }
+    }
     if (socket.destroyed) return;
     browsers.handleUpgrade(req, socket, head, (browser) => {
-      bridge(browser, record, sid, id);
+      if (accessToken === undefined) {
+        browser.close(1008, fitReason(SIGNED_OUT_WORDS));
+        return;
+      }
+      bridge(browser, accessToken, sid, id);
     });
   }
 

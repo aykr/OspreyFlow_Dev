@@ -157,6 +157,13 @@ class Store(RaiserReads):
     def held_alert_ids(self) -> set[str]:
         return {a.id for a in self.alerts}
 
+    async def left_out_on_borrowed_layer(
+        self, investigation_id: str, reader: Principal, borrowed: str | None
+    ) -> bool:
+        """No borrowed layer is left out of the reader's read set here (the real store's answer is
+        `test_report_figures_withheld`'s)."""
+        return False
+
     async def list_queue(
         self, investigation_id: str, reader: Principal, **_: object
     ) -> list[QueueRow]:

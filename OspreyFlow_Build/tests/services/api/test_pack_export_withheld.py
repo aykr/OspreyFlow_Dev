@@ -31,6 +31,7 @@ from schemas.domain import (
     SourceRef,
 )
 from schemas.packs import EntitySnapshot, PackExportRequest, ReportPack
+from tests.services.api.export_ledger_fakes import RefusingLedger
 from tests.services.api.no_transactions import NO_TRANSACTIONS
 
 SCHEME = load_uk_le_scheme()
@@ -73,12 +74,8 @@ class _Graph:
         return node
 
 
-class _Ledger:
-    def __init__(self) -> None:
-        self.entries: list[Any] = []
-
-    async def record(self, entry: Any) -> None:
-        self.entries.append(entry)
+class _Ledger(RefusingLedger):
+    """Keeps the rows, and refuses one with no subject as the real store does (rule 15)."""
 
 
 def _note(item_id: str, classification: str) -> StoredPackItem:

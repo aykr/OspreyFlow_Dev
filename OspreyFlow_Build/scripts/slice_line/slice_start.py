@@ -121,7 +121,7 @@ def start(slice_id: str) -> dict:
                          + "\n- ".join(problems) + f"\nThe whole run: {log}")
     rec = c.rec_dir(slice_id)
     frozen = {"slice": slice_id, "build": row["build"], "branch": branch, "worktree": str(wt), "base": base,
-              **{k: row[k] for k in c.FROZEN_KEYS}, "frozen_at": c.now()}
+              **{k: row[k] for k in c.FROZEN_KEYS}, "plant": c.plant_hash(c.plant_text(slice_id)), "frozen_at": c.now()}
     c.write_json(rec / "frozen.json", frozen)
     c.write_json(rec / "sessions.json", {"builder": [], "verifier": []})
     st = c.set_state(slice_id, phase="building", round=1, rounds_limit=conf["rounds"], setting=setting,
