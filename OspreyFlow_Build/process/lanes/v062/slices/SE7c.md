@@ -40,5 +40,5 @@ green after round 1's merge.
 
 ## Checks
 
-The acceptance; `tests/services/api/test_assessments.py`, `test_assessment_routes.py`; `test_doc_citations_check.py`;
-`ruff check .`. The merge's full gate runs every other test (live ones are owed).
+The acceptance; `test_doc_citations_check.py`;
+`ruff check .`. `test_assessments.py` and `test_assessment_routes.py` need a live database: the merge's full gate runs them.
