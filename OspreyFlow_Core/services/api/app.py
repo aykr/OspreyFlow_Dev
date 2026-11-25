@@ -601,7 +601,12 @@ from .assessments import (
     SaveGapRequest,
     SaveJudgementRequest,
     UnverifiableCitationError,
+    UnverifiableLinkError,
+    confirm_assumption_links,
+    confirm_gap_links,
     flag_judgements_citing_superseded_node,
+    list_visible_assumptions,
+    list_visible_gaps,
     list_visible_judgements,
     new_assumption,
     new_gap,
@@ -3603,6 +3608,17 @@ async def _unverifiable_citation_handler(
             "detail": str(exc),
             "citation_ids": exc.citation_ids,
         },
+    )
+
+
+@app.exception_handler(UnverifiableLinkError)
+async def _unverifiable_link_handler(request: Request, exc: UnverifiableLinkError) -> JSONResponse:
+    """A gap's or an assumption's save refused for a link the saver cannot confirm (the access
+    fix of 25 November 2026, `services/api/assessments.py::UnverifiableLinkError`): the shape of
+    `unverifiable_citation` above, naming only the ids the saver sent."""
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"error": "unverifiable_link", "detail": str(exc), "link_ids": exc.link_ids},
     )
 
 
@@ -8777,8 +8793,11 @@ async def save_gap_route(
     principal: PrincipalDep,
     body: SaveGapRequest,
     gaps_store: GapsStoreDep,
+    graph: GraphDep,
     audit: AuditDep,
 ) -> IntelligenceGap:
+    # Rule 3: every linked entity must be a node the saver may see, or nothing is written.
+    await confirm_gap_links(graph, principal, body.linked_entities)
     gap = new_gap(
         investigation_id=investigation.id,
         question=body.question,
@@ -8805,9 +8824,11 @@ async def list_gaps_route(
     investigation: InvestigationViewerDep,
     principal: PrincipalDep,
     gaps_store: GapsStoreDep,
+    graph: GraphDep,
     principal_names: PrincipalNamesDep,
 ) -> IntelligenceGapListResponse:
-    gaps = await gaps_store.list_for_investigation(investigation.id, principal)
+    # Rule 3: a linked entity this reader may not see is left out, with no count and no placeholder.
+    gaps = await list_visible_gaps(gaps_store, investigation.id, principal, graph)
     names = await principal_names.display_names(g.raised_by for g in gaps)
     return IntelligenceGapListResponse(
         gaps=[g.model_copy(update={"raised_by_name": names.get(g.raised_by)}) for g in gaps]
@@ -8824,8 +8845,14 @@ async def save_assumption_route(
     principal: PrincipalDep,
     body: SaveAssumptionRequest,
     assumptions_store: AssumptionsStoreDep,
+    judgements_store: JudgementsStoreDep,
+    graph: GraphDep,
     audit: AuditDep,
 ) -> Assumption:
+    # Rule 3: every linked judgement must be one the saver is shown in this case, or nothing is written.
+    await confirm_assumption_links(
+        judgements_store, investigation.id, principal, graph, body.linked_judgements
+    )
     assumption = new_assumption(
         investigation_id=investigation.id,
         statement=body.statement,
@@ -8851,9 +8878,15 @@ async def list_assumptions_route(
     investigation: InvestigationViewerDep,
     principal: PrincipalDep,
     assumptions_store: AssumptionsStoreDep,
+    judgements_store: JudgementsStoreDep,
+    graph: GraphDep,
 ) -> AssumptionListResponse:
+    # Rule 3: a linked judgement hidden from this reader (ADR-046) is left out, with no count and
+    # no placeholder.
     return AssumptionListResponse(
-        assumptions=await assumptions_store.list_for_investigation(investigation.id, principal)
+        assumptions=await list_visible_assumptions(
+            assumptions_store, judgements_store, investigation.id, principal, graph
+        )
     )
 
 
