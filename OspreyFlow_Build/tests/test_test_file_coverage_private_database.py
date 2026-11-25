@@ -274,3 +274,30 @@ def test_as_root_the_helper_skips_in_words_naming_root(
         with private_postgres.running_postgres(tmp_path / "work"):
             pytest.fail("a private database was started as root")
     assert not (tmp_path / "work").exists()
+
+
+async def test_a_second_helper_in_the_same_folder_refuses_and_leaves_the_first_running(
+    tmp_path: Path,
+) -> None:
+    """The helper stops and removes only what it started: given a folder where another instance already
+    runs, it refuses and touches nothing, and the first instance still answers and keeps its folder."""
+    import asyncpg
+
+    from tests.private_postgres import running_postgres
+
+    with running_postgres(tmp_path) as first:
+        pid = int((first.data_dir / "postmaster.pid").read_text().splitlines()[0])
+        with pytest.raises(FileExistsError):
+            with running_postgres(tmp_path):
+                pytest.fail("a second private database was started in the first one's folder")
+        assert _alive(pid)
+        assert first.folder.exists()
+        connection = await asyncpg.connect(
+            host=first.host, port=first.port, user=first.user, database=first.database
+        )
+        try:
+            assert await connection.fetchval("SELECT 1") == 1
+        finally:
+            await connection.close()
+    assert not _alive(pid)
+    assert not first.folder.exists()
