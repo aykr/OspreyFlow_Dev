@@ -407,8 +407,16 @@ used. Where the browser gives no storage (a private window), a change lasts for 
 in the table (the timeline seven tenths of the window; the column leaving the canvas 320; a stacked panel the window's
 height) are computed by the store from the live window at each resize, never from the page's markup, which cannot
 follow a window that is resized after it is written; a bound a page passes can only lower them. Every write of a
-size goes through one function in the store that holds it to them, Home (which asks for the default, 340 or 130) and a
-pointer drag included. A kept size above today's limit is brought down when it is read and at the next key press. A size still at its default (340px, 130px) that a small window cannot hold is shown at the window's limit and is not stored, so that a reload in a roomy window opens at the default again; only a size the analyst chose is stored. Home is a reset: it stores the default (340px, 130px), which the sash draws held to the window's limit and the page's bound, and never stores the limit or the bound in its place, so a later page with no bound, or a reload in a roomy window, opens at the default.
+size goes through one function in the store, and **that function stores only the size the analyst's own act asked for**
+(a drag to a width, a key that moves a sash by a step, a typed size, Home's default; the owner, 25 November 2026). **A limit
+or a page's bound changes what is drawn, never what is stored:** the React workspace reads the same stored sizes, so a size
+lost to a small window or to one page's bound would be the analyst's own size lost for good. A kept size above today's limit
+is therefore drawn at the limit and left as it is kept; reading what is kept, drawing, a window resize and a resize
+call write nothing. A key that would change nothing on the screen (a grow key at the limit or the bound) stores nothing; a key
+that carries a sash past the limit stores the size it asked for (one step at most beyond what was drawn), which is drawn at the limit. A size still at its
+default (340px, 130px) that a small window cannot hold is shown at the window's limit and is not stored. Home is a reset: it
+stores the default (340px, 130px), which the sash draws held to the window's limit and the page's bound, and never stores the
+limit or the bound in its place, so a later page with no bound, or a reload in a roomy window, opens at the default.
 
 ### 2.0 The top bar (ADR-065; rebuilt by ADR-097 step 1)
 

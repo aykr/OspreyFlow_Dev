@@ -25,16 +25,20 @@
 // taller than the window). A server-rendered page cannot keep them in its markup, since the window changes after the
 // page is written, so the store asks one function, `Viewport`, each time (the default reads the window as
 // `sidePanelState.isWide()` reads `innerWidth`; a test or a page gives its own). A `maxPx` a caller passes can only
-// lower a limit, never lift it. A stored size above today's limit is brought down when it is read and at each key press.
+// lower a limit, never lift it.
 //
-// One writer (round 4): every write of a panel size, whichever way it arrives (an arrow, Shift, Home, a pointer drag's
-// `setSideWidth`, a programmatic set, the stored value read at start, a window resize, and even a direct call to
-// `layoutSizes` while a store is live), ends in `writeSize` below. It first brings every kept size down to the window as
-// it is now, then holds the new one between its minimum and its upper limit (the live window's, lowered by a page's
-// `maxPx` and never lifted), then writes. The `layoutSizes` setters are not called from anywhere else (a test reads this
-// file and fails on any other call), and `SIZE_WRITERS` below lists the entry points that reach the writer: a test
-// walks each against three viewports and fails if `actions` has a key that is neither listed there nor known to write
-// no size. Home asks the writer for the default, which it stores as the default (a reset, never the bound) and the window shows held to the limit.
+// A limit changes what is drawn, never what is stored (the owner's ruling of 25 November 2026, round 13). What is kept
+// in `ospreyflow.layout-sizes` is read by the React workspace too, so it holds only a size the analyst's own action asked
+// for: a drag to a width, a key that moves by a step, a typed size, Home's default. The window's limit and a page's
+// `data-max` are applied when a size is *drawn* (`shownSizes`, `shownSize`): a stored 450 opened in a window that holds
+// 380, or on a page whose sash says 320, is drawn at 380 or 320 and is still 450 in storage. Reading what is stored, drawing,
+// a window resize and `fitToWindow` write nothing.
+//
+// One writer: every write of a panel size, whichever way it arrives (an arrow, Shift, Home, a pointer drag's
+// `setSideWidth`, a programmatic set), ends in `writeSize` below, which says in its own words what it stores. The
+// `layoutSizes` setters are not called from anywhere else (a test reads this file and fails on any other call), and
+// `SIZE_WRITERS` below lists the entry points that reach the writer: a test walks each against every bound and starting
+// state and fails if `actions` has a key that is neither listed there nor known to write no size.
 //
 // With no script, nothing in this folder runs: every panel is in its normal state with no controls (the markup a page
 // writes carries none).
@@ -45,8 +49,6 @@ import type { PANEL_FRAME_ACTIONS } from "../keyboard/actionRegistry";
 // marked below; `tests` fail on a call anywhere else in this file, on a named import of one, and on a re-export.
 import * as sizeStore from "./layoutSizes";
 import {
-  DEFAULT_SIDE_WIDTH,
-  DEFAULT_TIMELINE_HEIGHT,
   MAX_SIDE_WIDTH,
   MIN_CANVAS_WIDTH,
   MIN_PANEL_HEIGHT,
@@ -104,7 +106,7 @@ export const DEFAULT_FOLDED_PANELS: readonly SidePanelId[] = SIDE_PANEL_IDS.filt
  * that the table in the tests has to give it a row; one that is on neither this list nor the tests' list of actions
  * that write no size fails a test.
  */
-export const SIZE_WRITERS = ["setSideWidth", "setPanelHeight", "setTimelineHeight", "resizeByKey", "fitToWindow"] as const;
+export const SIZE_WRITERS = ["setSideWidth", "setPanelHeight", "setTimelineHeight", "resizeByKey"] as const;
 export type SizeWriter = (typeof SIZE_WRITERS)[number];
 
 export type ResizeAxis = "side-width" | "panel-height" | "timeline-height";
@@ -189,12 +191,6 @@ export interface SizeLimits {
    * never goes below its minimum whatever this says.
    */
   maxPx?: number;
-  /**
-   * The size is being brought down to a bound (a page drawing a state, a window resize), not asked for by the analyst: a
-   * column or timeline still at its default is then shown at the bound and nothing is written, as `fitToWindow` does for
-   * the window's limit. Only a key, a drag or a set that is the analyst's act leaves this off.
-   */
-  fitting?: boolean;
 }
 
 export interface ResizeContext extends SizeLimits {
@@ -230,7 +226,7 @@ export interface PanelFrameActions {
   resizeByKey(axis: ResizeAxis, key: KeyLike, context?: ResizeContext): boolean;
   /** The canvas toolbar's *Details*. */
   toggleDetails(): void;
-  /** A window resize: brings every kept size down to the window as it is now. A page calls it from its resize listener. */
+  /** A window resize: redraws every size for the window as it is now, and writes nothing. A page calls it from its resize listener. */
   fitToWindow(): void;
 }
 
@@ -286,8 +282,8 @@ const finite = (px: number): boolean => typeof px === "number" && Number.isFinit
 
 /**
  * The sizes as the page shows them: each held between its minimum and the window's limit as it is now. What is kept in
- * this browser is read by `layoutSizes`, which does not know the window; a default larger than a small window allows is
- * shown at the limit here and is not written (`apply`), so it is never mistaken for a size the analyst chose.
+ * this browser is read by `layoutSizes`, which does not know the window; a size larger than a small window allows is
+ * shown at the limit here and is not rewritten (`writeSize` is for the analyst's own act), so it is never mistaken for one.
  */
 export function shownSizes(
   sizes: LayoutSizes,
@@ -346,95 +342,58 @@ export function createPanelFrameStore(options: PanelFrameStoreOptions = {}): Pan
     return upperLimits(size);
   };
 
-  const lowered = lowerLimit;
-
   // The one writer: nothing outside this region calls a `layoutSizes` setter or reset.
   // writer: begin
   type SizeTarget = { axis: "side-width" } | { axis: "timeline-height" } | { axis: "panel-height"; id: SidePanelId };
-  type Limits = ReturnType<typeof upperLimits>;
 
-  /** Set while a write of ours is in progress, so that the listener below treats only a write that is not ours as new. */
-  let writing = false;
-  const guarded = (work: () => void): void => {
-    const was = writing;
-    writing = true;
-    try {
-      work();
-    } finally {
-      writing = was;
-    }
-  };
+  /** The size `layoutSizes` itself would keep for a request: whole pixels, never under the minimum, the column never over 480. */
+  const asKept = (axis: SizeTarget["axis"], request: number): number =>
+    axis === "side-width"
+      ? clamp(Math.round(request), MIN_SIDE_WIDTH, MAX_SIDE_WIDTH)
+      : Math.max(axis === "timeline-height" ? MIN_TIMELINE_HEIGHT : MIN_PANEL_HEIGHT, Math.round(request));
 
   /**
-   * What the sash shows for a kept size: `shownSize`, the same value the draw and the key stepping read, held to the
-   * window's limit lowered by the page's `maxPx`. A write that comes to this changes nothing on the screen (round 11).
-   */
-  const heldBy = (kept: LayoutSizes, axis: "side-width" | "timeline-height", limits: Limits, maxPx?: number): number | undefined =>
-    shownSize({ ...kept, limits }, axis, { maxPx });
-
-  /**
-   * One size, held between its minimum and its limit (`"default"`: the size a reset gives, stored as the default and
-   * shown held to the limit, never stored as the limit).
+   * EVERY WRITE OF A SIZE TO `ospreyflow.layout-sizes` IS THIS FUNCTION, AND IT WRITES ONLY WHAT THE ANALYST ASKED FOR.
    *
-   * A column or timeline still at its default, with no other size kept, is not a size the analyst chose: when only the
-   * window's limit brings it down it is shown lower (`shownSizes`) and nothing is written, so a reload in a roomy window
-   * opens at the default again. `fitting` is a size being brought down to the window or to a page's bound (not one asked for): it writes only
-   * a size that is not the default. A size asked for writes unless it is just what is already shown, and what is shown is
-   * the size as the page's bound holds it too (`heldBy`): a grow key at the bound, or Home, changes nothing and writes
-   * nothing, so a bound the analyst never chose is not stored as theirs (round 11).
+   * It is called for the analyst's own act: a drag to a width (`setSideWidth`, `setPanelHeight`, `setTimelineHeight`), a
+   * key that moves a sash by a step (the size the sash showed, plus or minus the step), a typed size, or Home (`"default"`:
+   * the default, which is the size Home asks for). It stores that size, as asked (whole pixels, never under the minimum,
+   * the column never over 480: the range `layoutSizes` keeps for anyone), and nothing else. **It never stores a value
+   * produced by the window's limit or a page's `data-max`**: a clamp changes what is drawn (`shownSize`), never what is
+   * stored, because the React workspace reads this key too and a size lost to a small window or to one page's bound is the
+   * analyst's own size lost for good. So nothing that is not the analyst's act reaches this function: reading what is stored,
+   * the first draw, a window resize and `fitToWindow` do not call it.
+   *
+   * One thing it leaves alone: a request that would change nothing on the screen (a grow key at the limit or the bound, a
+   * size that comes to what the sash already shows) stores nothing, so a bound is never kept as if it were chosen.
+   *
+   * Home asks for the default and stores it (or forgets a stacked panel's own height, which is its default), unless that
+   * is already what is kept; the window shows it held to the limit, and it is never stored as the limit.
    */
-  const apply = (target: SizeTarget, request: number | "default", limits: Limits, maxPx?: number, fitting = false): void => {
+  const writeSize = (target: SizeTarget, request: number | "default", maxPx?: number): void => {
     const kept = getLayoutSizes();
-    if (target.axis === "side-width") {
-      // A reset asks for the default itself: what the sash shows is that default held to the limit and the page's bound
-      // (`shownSize`), and what is stored is the default, so a bound is never kept as if the analyst chose it (round 12).
-      if (request === "default") {
-        if (kept.sideWidth !== DEFAULT_SIDE_WIDTH) sizeStore.setSideWidth(DEFAULT_SIDE_WIDTH);
-        return;
-      }
-      const next = clamp(request, MIN_SIDE_WIDTH, lowered(limits.sideWidth, MIN_SIDE_WIDTH, maxPx));
-      if (kept.sideWidth === DEFAULT_SIDE_WIDTH && (fitting || next === heldBy(kept, "side-width", limits, maxPx))) return;
-      sizeStore.setSideWidth(next);
-    } else if (target.axis === "timeline-height") {
-      if (request === "default") {
-        if (kept.timelineHeight !== DEFAULT_TIMELINE_HEIGHT) sizeStore.setTimelineHeight(DEFAULT_TIMELINE_HEIGHT);
-        return;
-      }
-      const next = clamp(request, MIN_TIMELINE_HEIGHT, lowered(limits.timelineHeight, MIN_TIMELINE_HEIGHT, maxPx));
-      if (kept.timelineHeight === DEFAULT_TIMELINE_HEIGHT && (fitting || next === heldBy(kept, "timeline-height", limits, maxPx))) return;
-      sizeStore.setTimelineHeight(next);
-    } else if (request === "default") {
-      // A stacked panel's default is no height of its own: it shares the column again, so there is nothing to exceed.
-      sizeStore.resetPanelHeight(target.id);
-    } else {
-      sizeStore.setPanelHeight(target.id, clamp(request, MIN_PANEL_HEIGHT, lowered(limits.panelHeight, MIN_PANEL_HEIGHT, maxPx)));
+    if (request === "default") {
+      if (target.axis === "side-width") sizeStore.resetSideWidth();
+      else if (target.axis === "timeline-height") sizeStore.resetTimelineHeight();
+      else sizeStore.resetPanelHeight(target.id);
+      return;
     }
+    const asked = asKept(target.axis, request);
+    const limits = limitsNow();
+    const panel = target.axis === "panel-height" ? target.id : null;
+    const showsNow = shownSize({ ...kept, limits }, target.axis, { panel, maxPx });
+    const wouldShow =
+      target.axis === "side-width"
+        ? shownSize({ ...kept, sideWidth: asked, limits }, target.axis, { maxPx })
+        : target.axis === "timeline-height"
+          ? shownSize({ ...kept, timelineHeight: asked, limits }, target.axis, { maxPx })
+          : shownSize({ ...kept, panelHeights: { ...kept.panelHeights, [target.id]: asked }, limits }, target.axis, { panel, maxPx });
+    if (showsNow !== undefined && wouldShow === showsNow) return;
+    if (target.axis === "side-width") sizeStore.setSideWidth(asked);
+    else if (target.axis === "timeline-height") sizeStore.setTimelineHeight(asked);
+    else sizeStore.setPanelHeight(target.id, asked);
   };
-
-  /** Brings every kept size down to `limits` (a stored one, or one a smaller window now rules out). */
-  const fitAll = (limits: Limits): void => {
-    const sizes = getLayoutSizes();
-    apply({ axis: "side-width" }, sizes.sideWidth, limits, undefined, true);
-    apply({ axis: "timeline-height" }, sizes.timelineHeight, limits, undefined, true);
-    for (const id of SIDE_PANEL_IDS) {
-      const own = sizes.panelHeights[id];
-      if (own !== undefined) apply({ axis: "panel-height", id }, own, limits, undefined, true);
-    }
-  };
-
-  /** Every write of a size is this: fit what is kept to the window now, then write the one asked for, held to it. */
-  const writeSize = (target: SizeTarget, request: number | "default", maxPx?: number, fitting = false): void =>
-    guarded(() => {
-      const limits = limitsNow();
-      fitAll(limits);
-      apply(target, request, limits, maxPx, fitting);
-    });
-
-  const fit = (): void => guarded(() => fitAll(limitsNow()));
   // writer: end
-
-  // What was stored is held to today's window as soon as the store is made.
-  fit();
 
   const snapshot = (): PanelFrameState => {
     const sizes = getLayoutSizes();
@@ -453,22 +412,13 @@ export function createPanelFrameStore(options: PanelFrameStoreOptions = {}): Pan
   const sync = (): void => {
     store.setState(snapshot(), true);
   };
-  /** Brings what is kept down to the window, and redraws if the window's limits moved though no size did. */
-  const fitAndRedraw = (): void => {
-    fit();
+  /** Redraws if the window's limits moved though no size did. Nothing is written: a limit changes what is drawn. */
+  const redrawIfWindowMoved = (): void => {
     const held = store.getState().limits;
     const now = limitsNow();
     if (held.sideWidth !== now.sideWidth || held.timelineHeight !== now.timelineHeight || held.panelHeight !== now.panelHeight) sync();
   };
-  // A size written by anything but the writer (a direct call to `layoutSizes` while this store is live) is held to the
-  // window at once, before it is drawn: the store does not rely on every caller coming through `writeSize`.
-  const stops = [
-    onLayoutSizesChange(() => {
-      if (!writing) fit();
-      sync();
-    }),
-    onSidePanelOrderChange(sync),
-  ];
+  const stops = [onLayoutSizesChange(sync), onSidePanelOrderChange(sync)];
   sidePanelListeners.add(sync);
 
   const actions: PanelFrameActions = {
@@ -504,18 +454,21 @@ export function createPanelFrameStore(options: PanelFrameStoreOptions = {}): Pan
       sync();
     },
     setSideWidth(px, limits) {
-      if (finite(px)) writeSize({ axis: "side-width" }, px, limits?.maxPx, limits?.fitting === true);
+      if (finite(px)) writeSize({ axis: "side-width" }, px, limits?.maxPx);
+      redrawIfWindowMoved();
     },
     setPanelHeight(id, px, limits) {
-      if (isSidePanelId(id) && finite(px)) writeSize({ axis: "panel-height", id }, px, limits?.maxPx, limits?.fitting === true);
+      if (isSidePanelId(id) && finite(px)) writeSize({ axis: "panel-height", id }, px, limits?.maxPx);
+      redrawIfWindowMoved();
     },
     setTimelineHeight(px, limits) {
-      if (finite(px)) writeSize({ axis: "timeline-height" }, px, limits?.maxPx, limits?.fitting === true);
+      if (finite(px)) writeSize({ axis: "timeline-height" }, px, limits?.maxPx);
+      redrawIfWindowMoved();
     },
     resizeByKey(axis, key, context = {}) {
       const step = key.shiftKey ? SASH_LARGE_STEP : SASH_STEP;
-      // The window may have changed since the last key: bring what is kept down to it before stepping from it.
-      fitAndRedraw();
+      // The window may have changed since the last key: step from what is drawn for the window as it is now.
+      redrawIfWindowMoved();
       const state = store.getState();
       const panel = isSidePanelId(context.panel) ? context.panel : null;
       // A vertical sash (the column's) grows leftwards, a stacked panel's grows downwards, the timeline's upwards
@@ -523,11 +476,11 @@ export function createPanelFrameStore(options: PanelFrameStoreOptions = {}): Pan
       const grows = axis === "side-width" ? "ArrowLeft" : axis === "panel-height" ? "ArrowDown" : "ArrowUp";
       const shrinks = axis === "side-width" ? "ArrowRight" : axis === "panel-height" ? "ArrowUp" : "ArrowDown";
       if (key.key === "Home") {
-        // Home asks the one writer for the default, which holds it to the limit like any other size, and to the page's
-        // own bound (`maxPx`) as the arrow keys are: what the sash draws as its maximum is what Home can reach.
-        if (axis === "side-width") writeSize({ axis: "side-width" }, "default", context.maxPx);
-        else if (axis === "timeline-height") writeSize({ axis: "timeline-height" }, "default", context.maxPx);
-        else if (panel !== null) writeSize({ axis: "panel-height", id: panel }, "default", context.maxPx);
+        // Home asks the one writer for the default, which stores it as the default (the analyst's own reset) and never as the
+        // limit or the page's bound; the sash draws it held to them.
+        if (axis === "side-width") writeSize({ axis: "side-width" }, "default");
+        else if (axis === "timeline-height") writeSize({ axis: "timeline-height" }, "default");
+        else if (panel !== null) writeSize({ axis: "panel-height", id: panel }, "default");
         return true;
       }
       if (key.key !== grows && key.key !== shrinks) return false;
@@ -548,12 +501,12 @@ export function createPanelFrameStore(options: PanelFrameStoreOptions = {}): Pan
       return true;
     },
     toggleDetails: () => toggleSidePanel(),
-    fitToWindow: () => fitAndRedraw(),
+    fitToWindow: redrawIfWindowMoved,
   };
 
   return {
     getState() {
-      fitAndRedraw();
+      redrawIfWindowMoved();
       return store.getState();
     },
     subscribe: (listener) => store.subscribe(listener),

@@ -145,7 +145,7 @@ function buildPage(bound: Bound) {
   const timeline = new FakeElement({ "data-panel-frame": "timeline" });
   const slots = SIDE_PANEL_IDS.map((id) => new FakeElement({ "data-panel-slot": id }));
   const button = (action: string, extra: Record<string, string> = {}) => new FakeElement({ "data-action": action, ...extra });
-  const dataMax = (axis: keyof NonNullable<Bound["dataMax"]>) => (bound.dataMax ? { "data-max": String(bound.dataMax[axis]) } : {});
+  const dataMax = (axis: keyof NonNullable<Bound["dataMax"]>): Record<string, string> => (bound.dataMax ? { "data-max": String(bound.dataMax[axis]) } : {});
   const controls = {
     hide: button("hide-side-panel"),
     show: button("show-side-panel"),
