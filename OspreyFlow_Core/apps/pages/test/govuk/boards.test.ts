@@ -319,9 +319,12 @@ const refusalProblems = (refused: { status: number; text: string }, unknown: { s
 const NEVER = [
   "investigation_not_found", "board_not_found", "right_required", "investigate", "acct-", "doc-", "i-tall", "layer-of-the-case", "ds-ledger",
   "Hidden informant", "Meets", "Drives", "Blake's own lead", "Blake's private board", "Another case's board", "SECRET<", "not this name", "9-000-001",
-  "hidden", "Hidden", "not shared", "Old lead", "Gone lead", "ceiling", UNIT,
+  "hidden", "Hidden", "not shared", "Old lead", "Gone lead", "ceiling", "A document of the case", UNIT,
 ];
 /** Read in the main landmark: the layout's sign-out form holds a hidden input, which is the layout's and says nothing of the board. */
+/** Any sign of an item the reader may not see (BD7): a fourth drawn item counted, a word that something is withheld or unseen. */
+const hiddenProblems = (html: string): string[] =>
+  [/\b4 drawn items\b/, /\b4\b/, /withheld|cannot see|may not see|not shown to you|hidden/i].filter((re) => re.test(mainText(html))).map((re) => `the page says ${re}`);
 const neverProblems = (html: string): string[] => NEVER.filter((word) => mainOf(html).includes(word)).map((word) => `the page shows ${JSON.stringify(word)}`);
 
 // ------------------------------------------------------------------------------------------------ what the page should draw
@@ -344,8 +347,8 @@ function labelOf(item: Item): string {
   return `Unnamed ${item.type}`;
 }
 const gradingSaid = (g: { scheme: string; source: string; intelligence: string; handling: string }): string => `${g.source}${g.intelligence}${g.handling} (${g.scheme})`;
-const sourceSaid = (d: NonNullable<Item["drawn"]>): string =>
-  [d.source_note ?? "", d.source_document ? BOARDS_WORDS.aDocument : ""].filter((part) => part !== "").join(" ");
+/** A source note as written; a document is never said (the route sends its id to readers who may not read it: a question). */
+const sourceSaid = (d: NonNullable<Item["drawn"]>): string => d.source_note ?? BOARDS_WORDS.noNote;
 
 /** Every fault in the list as drawn against what the route sent: the same function reads the real page and each planted one (BD1). */
 function listProblems(html: string, w: World, ids: string[]): string[] {
@@ -360,7 +363,7 @@ function listProblems(html: string, w: World, ids: string[]): string[] {
     const sent = boardOf(boardById(id), w.reader, w.options) as { name: string; shared: boolean; start: "blank" | "view" | "selection"; drawn: number; created_at: string };
     if (row.head !== sent.name) found.push(`row ${i} is ${JSON.stringify(row.head)}, not ${JSON.stringify(sent.name)}`);
     if (row.href !== boardOfPath(id)) found.push(`row ${i}'s link is ${JSON.stringify(row.href)}, not ${boardOfPath(id)}`);
-    const want = [sent.shared ? BOARDS_WORDS.shared : BOARDS_WORDS.private, BOARDS_WORDS.starts[sent.start], BOARDS_WORDS.drawnCount(sent.drawn), utcStampOf(sent.created_at)];
+    const want = [sent.shared ? BOARDS_WORDS.shared : BOARDS_WORDS.private, BOARDS_WORDS.drawnCount(sent.drawn), utcStampOf(sent.created_at)];
     if (JSON.stringify(row.cells.slice(1)) !== JSON.stringify(want)) found.push(`row ${i}'s cells are ${JSON.stringify(row.cells.slice(1))}, not ${JSON.stringify(want)}`);
   });
   return found;
@@ -481,15 +484,25 @@ const sampleReader: Reader = { token: "t", id: ALEX, unit: UNIT, rights: ["inves
 const sampleOptions: BoardsConduitOptions = { readers: [sampleReader], cases: CASES, boards: BOARDS, items: ITEMS, links: LINKS };
 const listBody = (): Record<string, unknown>[] => ALEXS.map((id) => boardOf(boardById(id), sampleReader, sampleOptions));
 const openedBody = (): Record<string, unknown> => JSON.parse(JSON.stringify(openedOf(boardById("b-quay"), sampleReader, sampleOptions, UNIT))) as Record<string, unknown>;
+/** The cap's refusal as the route sends it (`LimitExceeded`). */
+const limitBody = (): Record<string, unknown> => ({ error: "limit_exceeded", cap_kind: "nodes", cap: 50000, would_be: 50012, options: ["save_as_view", "filter", "promote_to_batch"] });
+const quayView = (body: unknown): unknown => boardView(CASE, "b-quay", body);
 
-/** A different valid value for each field of each model: a drawn field must change a page with it, a left-out field must not. */
+type Json = Record<string, unknown>;
+const nodeIn = (opened: Json, id: string): Json => (opened["nodes"] as Json[]).find((n) => n["id"] === id) as Json;
+const edgeIn = (opened: Json, id: string): Json => (opened["edges"] as Json[]).find((e) => e["id"] === id) as Json;
+const copy = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+
+/** A different valid value for each field of each model: a drawn field must change a page with it (the page still drawn), a checked
+ * field must make the body one the page cannot draw from, and a left-out field must change nothing. A function is given the bodies, for a
+ * value made from another part of them. */
 const OTHER_GRADING = { scheme: "3x5x2", source: "C", intelligence: "4", handling: "P" };
 const OTHER: Record<string, Record<string, unknown>> = {
   Board: { id: "b-renamed", case_id: "c-other", name: "Renamed board", created_by: "acct-other", created_at: "2025-01-03T04:05:00Z", shared: true, drawn: 9, start: "view" },
   BoardOpened: {
     board: { id: "b-quay", case_id: CASE, name: "Another name", created_by: ALEX, created_at: "2026-11-10T09:30:00Z", shared: false, drawn: 3, start: "selection" },
-    nodes: [],
-    edges: [],
+    nodes: (b: Bodies) => [...(b.opened["nodes"] as Json[])].reverse(),
+    edges: (b: Bodies) => [...(b.opened["edges"] as Json[])].reverse(),
     drawn: [],
     items: {},
     layout: {},
@@ -503,30 +516,75 @@ const OTHER: Record<string, Record<string, unknown>> = {
     may_draw: false,
     may_promote: true,
   },
-  Node: { id: "n-owner-2", type: "Company", properties: { name: "Hale Shipping" }, provenance: null, handling: null, resolution: { cluster_id: "k-1" }, audit: { revision: 2 }, datasets: ["ds-other"] },
-  Edge: { id: "l-seen-2", type: "EMPLOYS", source: "n-vessel", target: "d-crew", properties: { since: "2020" }, interval: { valid_from: "2020-01-01T00:00:00Z", valid_to: null }, occurrences: 5, weight: 0.5, basis: "probabilistic", provenance: null, handling: null, audit: { revision: 3 }, datasets: ["ds-other"] },
-  Provenance: { state: "inferred", sources: [], sources_withheld: true, extracted_by: "a model", extraction_confidence: 0.4, first_seen: "2025-01-03T04:05:00Z", last_confirmed: "2025-02-03T04:05:00Z", confirmed_by: "acct-other", drawn: null, gazetteer: "gazetteer-osm-x" },
-  DrawnAssertion: { provenance_class: "analyst_drawn", item_id: "i-other", asserted_by: "acct-other", board_id: "b-other", case_id: "c-other", label: "Another label", grading: OTHER_GRADING, original_grading: OTHER_GRADING, source_note: "Another note", source_document: "doc-another", icon: "anchor" },
+  Node: {
+    id: "n-owner-2",
+    type: "Company",
+    properties: { name: "Hale Shipping" },
+    // On the drawn tall man (`TARGET`): another drawn provenance, another label.
+    provenance: (b: Bodies) => {
+      const other = copy(nodeIn(b.opened, "d-tall")["provenance"] as Json);
+      (other["drawn"] as Json)["label"] = "Tall man, renamed";
+      return other;
+    },
+    handling: (b: Bodies) => ({ ...(nodeIn(b.opened, "n-owner")["handling"] as Json), classification: "OFFICIAL" }),
+    resolution: { cluster_id: "k-1" },
+    audit: { revision: 2 },
+    datasets: ["ds-other"],
+  },
+  Edge: {
+    id: "l-seen-2",
+    type: "EMPLOYS",
+    source: "n-vessel",
+    target: "d-crew",
+    properties: { since: "2020" },
+    interval: { valid_from: "2020-01-01T00:00:00Z", valid_to: null },
+    occurrences: 5,
+    weight: 0.5,
+    basis: "probabilistic",
+    // Another drawn link's provenance: another label, grading and note.
+    provenance: (b: Bodies) => copy(edgeIn(b.opened, "l-used")["provenance"]),
+    handling: (b: Bodies) => ({ ...(edgeIn(b.opened, "l-seen")["handling"] as Json), classification: "OFFICIAL-SENSITIVE" }),
+    audit: { revision: 3 },
+    datasets: ["ds-other"],
+  },
+  Provenance: {
+    state: "inferred",
+    sources: [],
+    sources_withheld: true,
+    extracted_by: "a model",
+    extraction_confidence: 0.4,
+    first_seen: "2025-01-03T04:05:00Z",
+    last_confirmed: "2025-02-03T04:05:00Z",
+    confirmed_by: "acct-other",
+    drawn: (b: Bodies) => ({ ...copy((nodeIn(b.opened, "d-tall")["provenance"] as Json)["drawn"] as Json), label: "Another assertion" }),
+    gazetteer: "gazetteer-osm-x",
+  },
+  DrawnAssertion: { provenance_class: "analyst_guessed", item_id: "i-other", asserted_by: "acct-other", board_id: "b-other", case_id: "c-other", label: "Another label", grading: OTHER_GRADING, original_grading: OTHER_GRADING, source_note: "Another note", source_document: "doc-another", icon: "anchor" },
   Grading: { scheme: "3x5x2", source: "C", intelligence: "4", handling: "P" },
   Handling: { classification: "OFFICIAL", handling_code: "H9", action_code: "act", sanitisation_code: "san", originator: "unit-o", owning_unit: "unit-p", review_date: "2027-01-01", legal_basis: "a basis" },
+  LimitExceeded: { error: "conflict", cap_kind: "edges", cap: 250000, would_be: 250031, options: ["promote_to_batch", "filter", "save_as_view"] },
 };
 
 interface Bodies {
   list: unknown;
   opened: Record<string, unknown>;
+  limit: Record<string, unknown>;
 }
-const bodies = (): Bodies => ({ list: listBody(), opened: openedBody() });
+const bodies = (): Bodies => ({ list: listBody(), opened: openedBody(), limit: limitBody() });
 
-type Json = Record<string, unknown>;
-const nodeIn = (opened: Json, id: string): Json => (opened["nodes"] as Json[]).find((n) => n["id"] === id) as Json;
-const edgeIn = (opened: Json, id: string): Json => (opened["edges"] as Json[]).find((e) => e["id"] === id) as Json;
+/** Where a field is changed, when not where its model's others are: the node's provenance on a drawn node (a loaded one carries no
+ * assertion to change). */
+const TARGET: Record<string, (b: Bodies) => Json[]> = {
+  "Node.provenance": (b) => [nodeIn(b.opened, "d-tall")],
+};
 
 /** Where each model is changed in the bodies: a Board in the list's first row and in the opened board, a Node the loaded owner (a link's
- * end), an Edge the drawn link to it, the drawn tall man's provenance, assertion and grading, the owner's handling. */
-function targetsOf(b: Bodies, model: string): Json[] {
+ * end), an Edge the drawn link to it, the drawn tall man's provenance, assertion and grading, the owner's handling, the cap's refusal. */
+function targetsOf(b: Bodies, model: string, field: string): Json[] {
+  const special = TARGET[`${model}.${field}`];
+  if (special) return special(b);
   const opened = b.opened;
-  const tall = nodeIn(opened, "d-tall");
-  const provenance = tall["provenance"] as Json;
+  const provenance = nodeIn(opened, "d-tall")["provenance"] as Json;
   switch (model) {
     case "Board":
       return [(b.list as Json[])[0] as Json, opened["board"] as Json];
@@ -544,53 +602,61 @@ function targetsOf(b: Bodies, model: string): Json[] {
       return [(provenance["drawn"] as Json)["grading"] as Json];
     case "Handling":
       return [nodeIn(opened, "n-owner")["handling"] as Json];
+    case "LimitExceeded":
+      return [b.limit];
     default:
       throw new Error(`no model ${model}`);
   }
 }
 
-/** The bodies with one field of one model changed (or removed, `value` undefined). A Node's or an Edge's provenance or handling given as
- * `null` in OTHER is changed to another valid one: the other drawn item's, the other marking. */
+/** The bodies with one field of one model changed (or removed, `value` undefined; a function is called with the bodies first). */
 function withField(model: string, field: string, value: unknown): Bodies {
   const b = bodies();
-  for (const target of targetsOf(b, model)) {
-    if (value === undefined) delete target[field];
-    else if (value === null && (model === "Node" || model === "Edge") && field === "provenance") {
-      // Another valid provenance: the drawn tall man's, for the loaded owner; the loaded link's, for the drawn link. Either now disagrees
-      // with the route's `drawn` list, and the page refuses the body, which changes the page.
-      target[field] = model === "Node" ? JSON.parse(JSON.stringify(nodeIn(b.opened, "d-tall")["provenance"])) : JSON.parse(JSON.stringify(edgeIn(b.opened, "l-owns")["provenance"]));
-    } else if (value === null && (model === "Node" || model === "Edge") && field === "handling") {
-      target[field] = { ...(target[field] as Json), classification: "OFFICIAL-SENSITIVE" === (target[field] as Json)["classification"] ? "OFFICIAL" : "OFFICIAL-SENSITIVE" };
-    } else target[field] = JSON.parse(JSON.stringify(value));
+  const given = typeof value === "function" ? (value as (b: Bodies) => unknown)(b) : value;
+  for (const target of targetsOf(b, model, field)) {
+    if (given === undefined) delete target[field];
+    else target[field] = copy(given);
   }
   return b;
 }
 
-/** Both pages as the real service draws them from these bodies (the fixture serves them through its real refusals). */
-async function drawn(b: Bodies): Promise<{ list: string; board: string; listStatus: number; boardStatus: number }> {
-  const w = await world({ list_answer: { status: 200, body: b.list }, board_answer: { status: 200, body: b.opened } });
-  const list = await getAs(w, listOf());
-  const one = await getAs(w, boardOfPath("b-quay"));
-  return { list: mainOf(list.text), board: mainOf(one.text), listStatus: list.status, boardStatus: one.status };
+interface Drawn {
+  pages: { html: string; status: number }[];
 }
 
-type Census = Record<string, { readonly drawn: readonly string[]; readonly left: readonly string[] }>;
+/** The three pages as the real service draws them from these bodies (the fixture serves them through its real refusals): the list, the
+ * board, and the board past the cap. */
+async function drawn(b: Bodies): Promise<Drawn> {
+  const w = await world({ list_answer: { status: 200, body: b.list }, board_answer: { status: 200, body: b.opened } });
+  const capped = await world({ board_answer: { status: 409, body: b.limit } });
+  const list = await getAs(w, listOf());
+  const one = await getAs(w, boardOfPath("b-quay"));
+  const cap = await getAs(capped, boardOfPath("b-quay"));
+  return { pages: [list, one, cap].map((res) => ({ html: mainOf(res.text), status: res.status })) };
+}
 
-/** Every field a census says is drawn that changes nothing, and every field it says is left out that changes a page, when the field's
- * value changes (BD12): the same function reads the real census and each planted one (BD17). */
+type Census = Record<string, { readonly drawn: readonly string[]; readonly checked: readonly string[]; readonly left: readonly string[] }>;
+
+/** Every field a census puts in the wrong list (BD12): a drawn field that changes no page that is still drawn, a checked field the page
+ * still draws from when it changes, a left-out field that changes a page. The same function reads the real census and each planted one
+ * (BD17). */
 async function censusProblems(census: Census): Promise<string[]> {
   const found: string[] = [];
   const base = await drawn(bodies());
-  if (base.listStatus !== 200 || base.boardStatus !== 200) return [`the pages answered ${base.listStatus} and ${base.boardStatus}`];
-  for (const [model, { drawn: drawnFields, left }] of Object.entries(census)) {
-    const fields = [...drawnFields, ...left];
+  if (JSON.stringify(base.pages.map((p) => p.status)) !== "[200,200,409]") return [`the pages answered ${base.pages.map((p) => p.status).join(", ")}`];
+  for (const [model, { drawn: drawnFields, checked, left }] of Object.entries(census)) {
+    const fields = [...drawnFields, ...checked, ...left];
     if (JSON.stringify(Object.keys(OTHER[model] ?? {}).sort()) !== JSON.stringify(fields.filter((f) => !NOT_SENT.includes(`${model}.${f}`)).sort())) found.push(`the census of ${model} is not the fields the test can change`);
     for (const field of fields) {
       if (NOT_SENT.includes(`${model}.${field}`)) continue;
       const changed = await drawn(withField(model, field, (OTHER[model] as Record<string, unknown>)[field]));
-      const moved = changed.list !== base.list || changed.board !== base.board;
-      if (drawnFields.includes(field) && !moved) found.push(`${model}.${field} is drawn but changes nothing`);
-      if (!drawnFields.includes(field) && moved) found.push(`${model}.${field} is left out but changes the page`);
+      const pairs = changed.pages.map((page, i) => ({ page, was: base.pages[i] as { html: string; status: number } }));
+      const redrawn = pairs.some(({ page, was }) => page.status === was.status && page.html !== was.html);
+      const refused = pairs.some(({ page, was }) => page.status !== was.status);
+      const moved = pairs.some(({ page, was }) => page.html !== was.html || page.status !== was.status);
+      if (drawnFields.includes(field) && !redrawn) found.push(`${model}.${field} is drawn but changes no page that is still drawn`);
+      if (checked.includes(field) && !refused) found.push(`${model}.${field} is checked but the page still draws from a body with it changed`);
+      if (left.includes(field) && moved) found.push(`${model}.${field} is left out but changes the page`);
     }
   }
   return found;
@@ -616,10 +682,11 @@ describe("the boards page on the GOV.UK tree (scenario BD)", () => {
     expect(headings(mainOf(res.text))[0]).toEqual({ level: 1, text: BOARDS_WORDS.listTitle });
     expect(neverProblems(res.text)).toEqual([]);
     // The route's own count: the quay board has four drawn items, one hidden from Alex by its marking; three are said, never four.
-    expect(tableCalled(res.text, BOARDS_WORDS.caption)?.rows.map((r) => r.cells[3])).toEqual(["3 drawn items", "0 drawn items", "1 drawn item"]);
+    expect(tableCalled(res.text, BOARDS_WORDS.caption)?.rows.map((r) => r.cells[2])).toEqual(["3 drawn items", "0 drawn items", "1 drawn item"]);
     expect([BOARDS_WORDS.shared, BOARDS_WORDS.private]).toEqual(["Shared with the case", "Only you"]);
-    expect(BOARDS_WORDS.starts).toEqual({ blank: "Blank", view: "From a view", selection: "From a selection" });
-    expect(BOARDS_WORDS.columns).toEqual(["Board", "Shared", "How it began", "Drawn items", "Made"]);
+    // How a board began is not said: the route's `start` says only whether a reference the reader may see is on it (`Boards.wire`).
+    expect(BOARDS_WORDS.columns).toEqual(["Board", "Shared", "Drawn items", "Made"]);
+    expect(mainText(res.text)).not.toMatch(/From a selection|From a view|Blank/);
     // The way back is the case's own page.
     expect(focusable(res.text).map((s) => s.href)).toContain(`/cases?case=${CASE}`);
   });
@@ -640,13 +707,15 @@ describe("the boards page on the GOV.UK tree (scenario BD)", () => {
     expect(headings(mainOf(res.text))[0]).toEqual({ level: 1, text: "Quay sketch" });
     expect(boardProblems(res.text, w, "b-quay")).toEqual([]);
     const text = mainText(res.text);
-    for (const fact of [BOARDS_WORDS.private, BOARDS_WORDS.starts.selection, utcStampOf("2026-11-10T09:30:00Z")]) expect(text).toContain(fact);
+    for (const fact of [BOARDS_WORDS.private, utcStampOf("2026-11-10T09:30:00Z")]) expect(text).toContain(fact);
     // Every drawn item is said as drawn, with its marking and its grading; a document is said by its kind alone.
     const drawnRows = tableCalled(res.text, BOARDS_WORDS.drawnCaption)?.rows ?? [];
     expect(drawnRows.map((r) => r.head)).toEqual(["Unknown male “Tall” Drawn, not loaded", "White van Drawn, not loaded", "Night crew Drawn, not loaded"]);
     expect(drawnRows.map((r) => r.cells[2])).toEqual(["OFFICIAL", "OFFICIAL-SENSITIVE", "OFFICIAL"]);
     expect(drawnRows.map((r) => r.cells[3])).toEqual(["A11 (5x5x5)", "B21 (5x5x5)", "C32 (5x5x5)"]);
-    expect(drawnRows.map((r) => r.cells[4])).toEqual(["Seen from the harbour wall", "A document of the case", "Seen from the harbour wall A document of the case"]);
+    // A source note as written; an item with only a document says no note was given, and no document is said, even by its kind.
+    expect(drawnRows.map((r) => r.cells[4])).toEqual(["Seen from the harbour wall", "No note given", "Seen from the harbour wall"]);
+    expect(text).not.toContain("A document of the case");
     const loadedRows = tableCalled(res.text, BOARDS_WORDS.loadedCaption)?.rows ?? [];
     expect(loadedRows.map((r) => r.head)).toEqual([`Morning Star ${BOARDS_WORDS.loadedNote}`, `Rowan Hale ${BOARDS_WORDS.loadedNote}`]);
     expect(BOARDS_WORDS.loadedNote).toBe("A dataset this case reads: a live reference, not editable here");
@@ -655,6 +724,10 @@ describe("the boards page on the GOV.UK tree (scenario BD)", () => {
     const react = read(CORE, "apps", "workspace", "src", "boards", "boardModel.ts");
     expect(react).toContain('const NAME_KEYS = ["name", "family_name", "value_normalised", "account_number", "title"] as const;');
     expect(read(PAGES_DIR, "server", "views", "boardsWords.ts")).toContain('const NAME_KEYS = ["name", "family_name", "value_normalised", "account_number", "title"] as const;');
+    for (const line of ['if (key === "family_name" && typeof given === "string" && given.trim()) return `${given} ${value}`;', "return `Unnamed ${node.type}`;", 'if (edge.type === "SAME_AS") return "same as";', 'if (edge.type === "NOT_SAME_AS") return "not the same as";', 'return edge.type.toLowerCase().replaceAll("_", " ");']) {
+      expect(react, line).toContain(line);
+      expect(read(PAGES_DIR, "server", "views", "boardsWords.ts"), line).toContain(line);
+    }
     const unnamed = await world({ items: ITEMS.map((i) => (i.id === "n-vessel" ? { ...i, properties: {} } : i)) });
     expect(tableCalled((await getAs(unnamed, boardOfPath("b-quay"))).text, BOARDS_WORDS.loadedCaption)?.rows[0]?.head).toBe(`Unnamed Vessel ${BOARDS_WORDS.loadedNote}`);
   });
@@ -672,7 +745,7 @@ describe("the boards page on the GOV.UK tree (scenario BD)", () => {
     // A link whose end the route did not send: a body the page cannot draw from, never an end said as unknown or looked up elsewhere.
     const b = openedBody();
     (b["edges"] as Json[])[0] = { ...((b["edges"] as Json[])[0] as Json), target: "n-not-sent" };
-    expect(boardView(b)).toBeUndefined();
+    expect(quayView(b)).toBeUndefined();
     const w2 = await world({ board_answer: { status: 200, body: b } });
     const res2 = await getAs(w2, boardOfPath("b-quay"));
     expect(res2.status).toBe(502);
@@ -701,7 +774,7 @@ describe("the boards page on the GOV.UK tree (scenario BD)", () => {
       }
     }
     // Values that name nothing: nothing is asked.
-    for (const query of ["", "?case=", "?board=b-quay", "?case=c-harbour&case=c-other", "?case=.", "?case=..", "?case=%2E%2E", "?case=c-harbour&board=", "?case=c-harbour&board=.", "?case=c-harbour&board=..", "?case=c-harbour&board=b-quay&board=b-empty"]) {
+    for (const query of ["", "?case=", "?board=b-quay", "?case=c-harbour&case=c-other", "?case=.", "?case=..", "?case=%2E%2E", "?case=c-harbour&board=", "?case=c-harbour&board=.", "?case=c-harbour&board=..", "?case=c-harbour&board=b-quay&board=b-empty", "?case=c-harbour&board=b-quay%2Fmatches", "?case=c-harbour&board=b-quay%2Fpictures", "?case=c-harbour%2Fviews", "?case=c-harbour%2Fboards&board=b-quay", "?case=c-harbour&board=%2F"]) {
       w.conduit.calls.splice(0);
       const res = await getAs(w, `${PATH}${query}`);
       expect(refusalProblems(res, unknown), query).toEqual([]);
@@ -725,7 +798,10 @@ describe("the boards page on the GOV.UK tree (scenario BD)", () => {
     expect(mainText(quay.text)).toContain("1 item you placed has since been withdrawn.");
     expect(mainText(quay.text)).not.toContain("Old lead");
     // Two withdrawn, said in the plural.
-    const two = await world({ items: ITEMS.map((i) => (i.id === "n-vessel" ? { ...i, withdrawn: true } : i)) });
+    const two = await world({
+      items: [...ITEMS, { id: "d-older", type: "Person", properties: {}, marking: "OFFICIAL", drawn: drawnBy(ALEX, "b-earlier", "i-older", "Older lead"), withdrawn: true }],
+      boards: BOARDS.map((b) => (b.id === "b-quay" ? { ...b, references: [...b.references, "d-older"] } : b)),
+    });
     expect(mainText((await getAs(two, boardOfPath("b-quay"))).text)).toContain("2 items you placed have since been withdrawn.");
     // The shared board's creator is Blake: Alex is sent zero and told nothing; Blake is told.
     const shift = await getAs(alex, boardOfPath("b-shift"));
@@ -745,9 +821,9 @@ describe("the boards page on the GOV.UK tree (scenario BD)", () => {
     expect(neverProblems(res.text)).toEqual([]);
     expect(tableCalled(res.text, BOARDS_WORDS.drawnCaption)?.rows).toHaveLength(3);
     expect(tableCalled(res.text, BOARDS_WORDS.linksCaption)?.rows).toHaveLength(3);
-    expect(mainText(res.text)).not.toMatch(/\b4\b|withheld|cannot see|may not see/);
+    expect(hiddenProblems(res.text)).toEqual([]);
     // The list's count is the route's, three: the hidden fourth is in none.
-    expect(tableCalled((await getAs(w, listOf())).text, BOARDS_WORDS.caption)?.rows[0]?.cells[3]).toBe("3 drawn items");
+    expect(tableCalled((await getAs(w, listOf())).text, BOARDS_WORDS.caption)?.rows[0]?.cells[2]).toBe("3 drawn items");
     // The fixture models the route: the hidden item is in no part of what it sends, and `missing` does not count it.
     const sent = JSON.stringify(openedOf(boardById("b-quay"), w.reader, w.options, UNIT));
     expect(sent).not.toMatch(/d-secret|Hidden informant|l-secret|l-high/);
@@ -769,7 +845,15 @@ describe("the boards page on the GOV.UK tree (scenario BD)", () => {
       expect(res2.status, JSON.stringify(body)).toBe(502);
       expect(failedProblems(res2.text)).toEqual([]);
     }
-    expect(limitView({ error: "limit_exceeded", cap_kind: "edges", cap: 250000, would_be: 250001, options: ["save_as_view", "filter", "promote_to_batch"] })).toBeDefined();
+    expect(mainText(res.text)).toContain("Too many to show: 5 items against a limit of 3.");
+    const linksCapped = await world({ capEdges: 2 });
+    const byLinks = await getAs(linksCapped, boardOfPath("b-quay"));
+    expect(byLinks.status).toBe(409);
+    expect(tooLargeProblems(byLinks.text)).toEqual([]);
+    expect(mainText(byLinks.text)).toContain("Too many to show: 3 links against a limit of 2.");
+    expect(limitView({ error: "limit_exceeded", cap_kind: "edges", cap: 250000, would_be: 250001, options: ["save_as_view", "filter", "promote_to_batch"] })?.says).toBe(
+      "Too many to show: 250,001 links against a limit of 250,000. Nothing of the board is shown.",
+    );
   });
 
   it("BD9: the Conduit is asked as the person, each route exactly once per render, nothing of the browser's, no write, nothing unsigned", async () => {
@@ -827,75 +911,111 @@ describe("the boards page on the GOV.UK tree (scenario BD)", () => {
 
   it("BD11: a body missing any field the routes' models send, or of the wrong shape, is the could-not-be-read page, never empty", async () => {
     expect(listView(CASE, listBody())).toBeDefined();
-    expect(boardView(openedBody())).toBeDefined();
+    expect(quayView(openedBody())).toBeDefined();
+    expect(limitView(limitBody())).toBeDefined();
     const models = Object.keys(REQUIRED) as (keyof typeof REQUIRED)[];
-    expect([...models].sort()).toEqual(["Board", "BoardOpened", "DrawnAssertion", "Edge", "Grading", "Handling", "Node", "Provenance"]);
+    expect([...models].sort()).toEqual(["Board", "BoardOpened", "DrawnAssertion", "Edge", "Grading", "Handling", "LimitExceeded", "Node", "Provenance"]);
+    /** Every view a body of `model` reaches: the board (and the list, for a board), or the cap's refusal. */
+    const viewsOf = (b: Bodies, model: string): unknown[] =>
+      model === "LimitExceeded" ? [limitView(b.limit)] : model === "Board" ? [quayView(b.opened), listView(CASE, b.list)] : [quayView(b.opened)];
     let tried = 0;
     for (const model of models) {
       for (const field of REQUIRED[model]) {
-        const removed = withField(model, field, undefined);
-        expect(boardView(removed.opened), `${model}.${field} removed, board page`).toBeUndefined();
-        if (model === "Board") expect(listView(CASE, removed.list), `${model}.${field} removed, list`).toBeUndefined();
-        const wrong = withField(model, field, wrongOf(model, field));
-        expect(boardView(wrong.opened), `${model}.${field} of the wrong shape, board page`).toBeUndefined();
-        if (model === "Board") expect(listView(CASE, wrong.list), `${model}.${field} of the wrong shape, list`).toBeUndefined();
+        expect(viewsOf(withField(model, field, undefined), model), `${model}.${field} removed`).toEqual(viewsOf(withField(model, field, undefined), model).map(() => undefined));
+        expect(viewsOf(withField(model, field, wrongOf(model, field)), model).every((v) => v === undefined), `${model}.${field} of the wrong shape`).toBe(true);
         tried += 1;
       }
     }
-    expect(tried).toBe(75);
+    expect(tried).toBe(80);
     // A field that may be absent from what is sent is not required, and is still read strictly when it is there.
     expect(MAY_BE_ABSENT).toEqual(["Provenance.drawn", "Provenance.gazetteer"]);
     expect(NOT_SENT).toEqual(["Edge.weight_components"]);
     const noGazetteer = bodies();
-    expect(boardView(noGazetteer.opened)).toBeDefined();
-    expect(boardView(withField("Provenance", "gazetteer", 7).opened)).toBeUndefined();
-    expect(boardView(withField("Provenance", "drawn", "not an object").opened)).toBeUndefined();
+    expect(quayView(noGazetteer.opened)).toBeDefined();
+    expect(quayView(withField("Provenance", "gazetteer", 7).opened)).toBeUndefined();
+    expect(quayView(withField("Provenance", "drawn", "not an object").opened)).toBeUndefined();
     // A drawn element without its assertion, and an assertion on an element the route does not name as drawn.
-    expect(boardView(withField("Provenance", "drawn", undefined).opened)).toBeUndefined();
+    expect(quayView(withField("Provenance", "drawn", undefined).opened)).toBeUndefined();
     const extra = bodies();
-    (nodeIn(extra.opened, "n-owner")["provenance"] as Json)["drawn"] = JSON.parse(JSON.stringify((nodeIn(extra.opened, "d-tall")["provenance"] as Json)["drawn"]));
-    expect(boardView(extra.opened)).toBeUndefined();
+    (nodeIn(extra.opened, "n-owner")["provenance"] as Json)["drawn"] = copy((nodeIn(extra.opened, "d-tall")["provenance"] as Json)["drawn"]);
+    expect(quayView(extra.opened)).toBeUndefined();
     const namedButLoaded = bodies();
     (namedButLoaded.opened["drawn"] as string[]).push("n-vessel");
-    expect(boardView(namedButLoaded.opened)).toBeUndefined();
+    expect(quayView(namedButLoaded.opened)).toBeUndefined();
+    // A body that is not the one asked for: another case's board, another board.
+    expect(boardView("c-other", "b-quay", openedBody())).toBeUndefined();
+    expect(boardView(CASE, "b-empty", openedBody())).toBeUndefined();
+    expect(listView("c-other", listBody())).toBeUndefined();
+    // An element named twice, a board listed twice, a drawn id named twice.
+    const twiceNode = bodies();
+    (twiceNode.opened["nodes"] as Json[]).push(copy(nodeIn(twiceNode.opened, "n-vessel")));
+    expect(quayView(twiceNode.opened)).toBeUndefined();
+    const twiceEdge = bodies();
+    (twiceEdge.opened["edges"] as Json[]).push(copy(edgeIn(twiceEdge.opened, "l-owns")));
+    expect(quayView(twiceEdge.opened)).toBeUndefined();
+    const twiceDrawn = bodies();
+    (twiceDrawn.opened["drawn"] as string[]).push("d-tall");
+    expect(quayView(twiceDrawn.opened)).toBeUndefined();
+    expect(listView(CASE, [...listBody(), listBody()[0]])).toBeUndefined();
+    // A drawn item with no source at all (`DrawnAssertion._has_a_source`): neither a note nor a document.
+    const sourceless = bodies();
+    Object.assign((nodeIn(sourceless.opened, "d-tall")["provenance"] as Json)["drawn"] as Json, { source_note: null, source_document: null });
+    expect(quayView(sourceless.opened)).toBeUndefined();
+    const blankNote = bodies();
+    Object.assign((nodeIn(blankNote.opened, "d-tall")["provenance"] as Json)["drawn"] as Json, { source_note: "  ", source_document: null });
+    expect(quayView(blankNote.opened)).toBeUndefined();
     // Wrong values, one field at a time.
     const wrong: [string, string, unknown][] = [
       ["Board", "start", "drawing"],
       ["Board", "drawn", -1],
       ["Board", "drawn", 1.5],
       ["Board", "created_at", "yesterday"],
+      ["Board", "created_at", "7"],
+      ["Board", "created_at", "2026"],
       ["Board", "shared", "yes"],
+      ["Board", "name", ""],
       ["BoardOpened", "missing", -2],
       ["BoardOpened", "drawn", [1]],
       ["BoardOpened", "may_draw", "no"],
       ["Node", "datasets", [1]],
+      ["Node", "type", ""],
       ["Edge", "basis", "certain"],
       ["Edge", "occurrences", "many"],
       ["Provenance", "state", "withdrawn"],
       ["Provenance", "first_seen", "not a time"],
+      ["Provenance", "first_seen", "12"],
+      ["Provenance", "sources", [7]],
       ["DrawnAssertion", "provenance_class", "analyst_guessed"],
       ["DrawnAssertion", "label", 7],
+      ["DrawnAssertion", "label", ""],
       ["Grading", "source", null],
+      ["Grading", "source", ""],
+      ["Grading", "scheme", ""],
       ["Handling", "classification", 3],
+      ["Handling", "review_date", "soon"],
     ];
     for (const [model, field, value] of wrong) {
       const b = withField(model, field, value);
-      expect(boardView(b.opened), `${model}.${field} = ${JSON.stringify(value)}`).toBeUndefined();
+      expect(quayView(b.opened), `${model}.${field} = ${JSON.stringify(value)}`).toBeUndefined();
       if (model === "Board") expect(listView(CASE, b.list), `list ${field} = ${JSON.stringify(value)}`).toBeUndefined();
     }
+    const wrongLimit: [string, unknown][] = [["cap_kind", "items"], ["cap", -1], ["would_be", 2.5], ["options", ["filter"]], ["options", ["filter", "filter", "filter"]], ["error", "conflict"]];
+    for (const [field, value] of wrongLimit) expect(limitView(withField("LimitExceeded", field, value).limit), `LimitExceeded.${field} = ${JSON.stringify(value)}`).toBeUndefined();
     for (const top of [null, {}, "x", [null], 3]) {
       expect(listView(CASE, top)).toBeUndefined();
-      expect(boardView(top)).toBeUndefined();
+      expect(quayView(top)).toBeUndefined();
+      expect(limitView(top)).toBeUndefined();
     }
     // And through the service: one missing field of each model is the 502 page.
     for (const model of models) {
-      const pages = await drawn(withField(model, REQUIRED[model][0] as string, undefined));
-      expect(pages.boardStatus, model).toBe(502);
-      if (model === "Board") expect(pages.listStatus).toBe(502);
+      const pages = (await drawn(withField(model, REQUIRED[model][0] as string, undefined))).pages;
+      if (model === "LimitExceeded") expect(pages[2]?.status, model).toBe(502);
+      else expect(pages[1]?.status, model).toBe(502);
+      if (model === "Board") expect(pages[0]?.status).toBe(502);
     }
   });
 
-  it("BD12: every field of the eight models is drawn or named as left out; a drawn field changes a page and a left-out one does not", async () => {
+  it("BD12: every field of the nine models is drawn, checked or named as left out; a drawn field changes a page, a checked one refuses the body, a left-out one changes nothing", { timeout: 120_000 }, async () => {
     expect(await censusProblems(CENSUS)).toEqual([]);
   });
 
@@ -903,19 +1023,19 @@ describe("the boards page on the GOV.UK tree (scenario BD)", () => {
     const w = await world();
     const empty = await getAs(w, boardOfPath("b-empty"));
     expect(empty.status).toBe(200);
-    expect(mainText(empty.text)).toContain("This board has nothing drawn on it yet.");
+    expect(mainText(empty.text)).toContain("No items are shown on this board.");
     expect(mainOf(empty.text)).not.toMatch(/<table|<caption|<th\b/);
     expect(focusable(empty.text).map((s) => s.href ?? s.text)).toEqual(["#main", "Sign out", listOf(), "/"]);
     // The shared board: one drawn item, nothing loaded, no link.
     const shift = await getAs(w, boardOfPath("b-shift"));
     expect(boardProblems(shift.text, w, "b-shift")).toEqual([]);
-    expect(mainText(shift.text)).toContain("No loaded items are on this board.");
-    expect(mainText(shift.text)).toContain("No links are on this board.");
+    expect(mainText(shift.text)).toContain("No loaded items are shown on this board.");
+    expect(mainText(shift.text)).toContain("No links are shown on this board.");
     expect(tablesOf(shift.text).map((t) => t.caption)).toEqual([BOARDS_WORDS.drawnCaption]);
     // Loaded items and nothing drawn.
     const onlyLoaded = await world({ boards: BOARDS.map((b) => (b.id === "b-quay" ? { ...b, drawn: [] } : b)) });
     const res = await getAs(onlyLoaded, boardOfPath("b-quay"));
-    expect(mainText(res.text)).toContain("Nothing is drawn on this board yet.");
+    expect(mainText(res.text)).toContain("No drawn items are shown on this board.");
     expect(tablesOf(res.text).map((t) => t.caption)).toEqual([BOARDS_WORDS.loadedCaption, BOARDS_WORDS.linksCaption]);
     expect(structureProblems(res.text)).toEqual([]);
   });
@@ -1010,11 +1130,14 @@ describe("the boards page on the GOV.UK tree (scenario BD)", () => {
       const linkRow = /<tr><th scope="row">Seen with<\/th>[\s\S]*?<\/tr>/.exec(real)?.[0] as string;
       expect(linkRow).toBeDefined();
       expect(boardProblems(real.replace(linkRow, `${linkRow}\n${linkRow}`), w, "b-quay")).not.toEqual([]);
-      // A hidden item said, as a row or as a line.
+      // A hidden item said, as a count, a row or a line.
+      expect(hiddenProblems(real.replace("</main>", "<p>4 drawn items</p></main>"))).not.toEqual([]);
+      expect(hiddenProblems(real.replace("</main>", "<p>Some items are withheld from you.</p></main>"))).not.toEqual([]);
       expect(neverProblems(real.replace("</main>", "<p>1 item is hidden from you</p></main>"))).not.toEqual([]);
       expect(neverProblems(real.replace("White van", "Hidden informant"))).not.toEqual([]);
       // A document said by its identifier.
-      expect(neverProblems(real.replace("A document of the case", "doc-photo-7"))).not.toEqual([]);
+      expect(neverProblems(real.replace("No note given", "doc-photo-7"))).not.toEqual([]);
+      expect(neverProblems(real.replace("No note given", "A document of the case"))).not.toEqual([]);
       // The fixture sending the hidden item's count as `missing`, which the real route never does: the page draws what it is sent.
       const b = openedBody();
       b["missing"] = 2;
@@ -1055,13 +1178,13 @@ describe("the boards page on the GOV.UK tree (scenario BD)", () => {
       expect(emptyListProblems(emptyHtml)).toEqual([]);
       expect(emptyListProblems(emptyHtml.replace("No boards in this case yet.", `<table><caption>${BOARDS_WORDS.caption}</caption></table>`))).not.toEqual([]);
       // A reader that took a missing field as empty: the real view given a default for it draws, where the real one refuses.
-      const lenient = (body: Json): unknown => boardView({ missing: 0, ...body });
+      const lenient = (body: Json): unknown => quayView({ missing: 0, ...body });
       const removed = withField("BoardOpened", "missing", undefined);
-      expect(boardView(removed.opened)).toBeUndefined();
+      expect(quayView(removed.opened)).toBeUndefined();
       expect(lenient(removed.opened)).toBeDefined();
     });
 
-    it("BD17: the census fails for a drawn field that changes nothing; the structure for a control or a link out of order; scripts off for a script", async () => {
+    it("BD17: the census fails for a drawn field that changes nothing; the structure for a control or a link out of order; scripts off for a script", { timeout: 120_000 }, async () => {
       const w = await world();
       const real = (await getAs(w, boardOfPath("b-quay"))).text;
       expect(structureProblems(real.replace("</h1>", '</h1><form method="get" action="/cases/boards"><button>Draw</button></form>'))).not.toEqual([]);
@@ -1073,15 +1196,21 @@ describe("the boards page on the GOV.UK tree (scenario BD)", () => {
       expect(scriptsOffProblems(real.replace("</main>", '<script src="/x.js"></script></main>'))).not.toEqual([]);
       expect(scriptsOffProblems(real.replace("<table", '<table style="color: red"'))).not.toEqual([]);
       expect(scriptsOffProblems(real.replace("<a ", '<a onclick="x()" '))).not.toEqual([]);
-      const moved = (model: keyof typeof CENSUS, field: string, to: "drawn" | "left"): Census => {
-        const { drawn: d, left: l } = CENSUS[model];
-        const without = (list: readonly string[]): string[] => list.filter((f) => f !== field);
-        return { ...CENSUS, [model]: to === "drawn" ? { drawn: [...d, field], left: without(l) } : { drawn: without(d), left: [...l, field] } };
+      type List = "drawn" | "checked" | "left";
+      const moved = (model: keyof typeof CENSUS, field: string, to: List): Census => {
+        const lists: Record<List, string[]> = { drawn: [...CENSUS[model].drawn], checked: [...CENSUS[model].checked], left: [...CENSUS[model].left] };
+        for (const list of Object.keys(lists) as List[]) lists[list] = lists[list].filter((f) => f !== field);
+        lists[to].push(field);
+        return { ...CENSUS, [model]: lists };
       };
-      expect(await censusProblems(moved("DrawnAssertion", "asserted_by", "drawn"))).toEqual(["DrawnAssertion.asserted_by is drawn but changes nothing"]);
-      expect(await censusProblems(moved("BoardOpened", "layout", "drawn"))).toEqual(["BoardOpened.layout is drawn but changes nothing"]);
+      expect(await censusProblems(moved("DrawnAssertion", "asserted_by", "drawn"))).toEqual(["DrawnAssertion.asserted_by is drawn but changes no page that is still drawn"]);
+      expect(await censusProblems(moved("BoardOpened", "layout", "drawn"))).toEqual(["BoardOpened.layout is drawn but changes no page that is still drawn"]);
       expect(await censusProblems(moved("Grading", "handling", "left"))).toEqual(["Grading.handling is left out but changes the page"]);
       expect(await censusProblems(moved("Board", "drawn", "left"))).toEqual(["Board.drawn is left out but changes the page"]);
+      // A field the page only checks, claimed as drawn (the review of 25 November: a refusal is not a drawing); a drawn one claimed as checked.
+      expect(await censusProblems(moved("Edge", "id", "drawn"))).toEqual(["Edge.id is drawn but changes no page that is still drawn"]);
+      expect(await censusProblems(moved("Board", "name", "checked"))).toEqual(["Board.name is checked but the page still draws from a body with it changed"]);
+      expect(await censusProblems(moved("LimitExceeded", "would_be", "left"))).toEqual(["LimitExceeded.would_be is left out but changes the page"]);
     });
 
     it("BD17: the source checks fail for a filter, a sort or a cut in the page's code", () => {
@@ -1135,7 +1264,7 @@ describe("the boards page on the GOV.UK tree (scenario BD)", () => {
       expect((await fetch(`${blake.conduit.url}${base}/b-blake`, { headers: { Authorization: `Bearer ${blake.reader.token}` } })).status).toBe(200);
       // The opened board sends every field of `BoardOpened`, and nothing the reader may not see.
       const opened = (await ask2(`${base}/b-quay`, as2)).body as Record<string, unknown>;
-      expect(Object.keys(opened).sort()).toEqual([...CENSUS.BoardOpened.drawn, ...CENSUS.BoardOpened.left].sort());
+      expect(Object.keys(opened).sort()).toEqual([...CENSUS.BoardOpened.drawn, ...CENSUS.BoardOpened.checked, ...CENSUS.BoardOpened.left].sort());
       expect(JSON.stringify(opened)).not.toMatch(/d-secret|l-high|l-secret/);
       expect("weight_components" in ((opened["edges"] as Json[])[0] as Json)).toBe(false);
       // Past the cap: the typed refusal, never a part of the board.

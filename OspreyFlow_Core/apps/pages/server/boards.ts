@@ -16,8 +16,8 @@
  *  - a refusal of the read (any 4xx but a 401 and the cap's 409: someone else's private board, another case's, none at all, a case the
  *    reader holds no level on, another unit's, none, the right to investigate wanting): a 404 with the page of a path nothing serves, drawn
  *    from the same words and template, with none of the Conduit's words, never a sentence that a board is not shared;
- *  - a `case` or a `board` that is empty, repeated, a dot segment or not a plain value, and a `board` with no `case`: the same 404, and
- *    nothing is asked;
+ *  - a `case` or a `board` that is empty, repeated, a dot segment, holds a slash or is not a plain value, and a `board` with no `case`:
+ *    the same 404, and nothing is asked;
  *  - a board past the working-set cap (the route's 409 `limit_exceeded`, read strictly): a 409 page saying so, with the refusal's three
  *    options in words, and no part of the board (rule 2);
  *  - a 401: the Studio's words, to sign in again (a 401);
@@ -59,8 +59,10 @@ async function ask(conduit: Conduit, path: string): Promise<Reply | undefined> {
 }
 
 /** A value named once, as a plain value: anything else names nothing. `.` and `..` too: `v1` encodes each segment, but a dot segment is
- * one the address's own parser folds away, so it would ask another route than the board's. */
-const plain = (value: unknown): value is string => typeof value === "string" && value !== "" && value !== "." && value !== "..";
+ * one the address's own parser folds away, so it would ask another route than the board's. And a value holding a slash: `v1` sends it as
+ * `%2F`, which the Conduit's server decodes before it routes, so `b-quay/matches` would ask the board's matches, a route the reader never
+ * chose (the review of 25 November found it). */
+const plain = (value: unknown): value is string => typeof value === "string" && value !== "" && value !== "." && value !== ".." && !value.includes("/");
 const refused = (reply: Reply): boolean => reply.status >= 400 && reply.status < 500 && reply.status !== 401;
 const notFound = (res: Response): void => void res.status(404).render("error", { ...NOT_FOUND });
 
@@ -108,7 +110,7 @@ async function boardsGet(req: Request, res: Response): Promise<void> {
     return;
   }
   if (refused(opened)) return notFound(res);
-  const view = opened.status === 200 ? boardView(opened.json) : undefined;
+  const view = opened.status === 200 ? boardView(caseId, boardId, opened.json) : undefined;
   if (view === undefined) return unreadable();
   res.render("boards", context(view.name, { ...view, ...back }));
 }

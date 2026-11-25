@@ -15,7 +15,7 @@
 </tr>
 </thead>
 <tbody>
-{% for row in view.rows %}<tr><th scope="row"><a href="{{ row.href }}">{{ row.name }}</a></th><td>{{ row.shared }}</td><td>{{ row.start }}</td><td>{{ row.drawn }}</td><td>{{ row.made }}</td></tr>
+{% for row in view.rows %}<tr><th scope="row"><a href="{{ row.href }}">{{ row.name }}</a></th><td>{{ row.shared }}</td><td>{{ row.drawn }}</td><td>{{ row.made }}</td></tr>
 {% endfor %}</tbody>
 </table>
 <p><a href="{{ view.toCase }}">{{ words.toCase }}</a></p>
@@ -30,7 +30,6 @@
 <h2>{{ words.about }}</h2>
 <dl>
 <dt>{{ words.sharedLabel }}</dt><dd>{{ view.shared }}</dd>
-<dt>{{ words.startLabel }}</dt><dd>{{ view.start }}</dd>
 <dt>{{ words.made }}</dt><dd>{{ view.made }}</dd>
 </dl>
 {% if view.withdrawn %}<p>{{ view.withdrawn }}</p>{% endif %}
@@ -46,7 +45,7 @@
 </tr>
 </thead>
 <tbody>
-{% for r in view.drawn %}<tr><th scope="row">{{ r.label }}<p>{{ words.drawnNote }}</p></th><td>{{ r.type }}</td><td>{{ r.marking }}</td><td>{{ r.grading }}</td><td>{% for part in r.source %}<p>{{ part }}</p>{% endfor %}</td></tr>
+{% for r in view.drawn %}<tr><th scope="row">{{ r.label }}<p>{{ words.drawnNote }}</p></th><td>{{ r.type }}</td><td>{{ r.marking }}</td><td>{{ r.grading }}</td><td>{{ r.note }}</td></tr>
 {% endfor %}</tbody>
 </table>
 {% else %}
@@ -76,7 +75,7 @@
 </tr>
 </thead>
 <tbody>
-{% for r in view.links %}<tr><th scope="row">{{ r.label }}</th><td>{{ r.type }}</td><td>{{ r.from }}</td><td>{{ r.to }}</td><td>{% if r.drawn %}{{ words.drawn }}{% else %}{{ words.loaded }}{% endif %}</td><td>{{ r.marking }}</td><td>{{ r.grading }}</td><td>{% for part in r.source %}<p>{{ part }}</p>{% endfor %}</td></tr>
+{% for r in view.links %}<tr><th scope="row">{{ r.label }}</th><td>{{ r.type }}</td><td>{{ r.from }}</td><td>{{ r.to }}</td><td>{% if r.drawn %}{{ words.drawn }}{% else %}{{ words.loaded }}{% endif %}</td><td>{{ r.marking }}</td><td>{{ r.grading }}</td><td>{{ r.note }}</td></tr>
 {% endfor %}</tbody>
 </table>
 {% else %}
