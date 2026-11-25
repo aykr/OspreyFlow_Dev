@@ -576,7 +576,8 @@ class UnverifiableLinkError(Exception):
     def __init__(self, link_ids: list[str]) -> None:
         self.link_ids = link_ids
         super().__init__(
-            f"link(s) {', '.join(link_ids)} could not be confirmed as something you may see in this case"
+            f"link(s) {', '.join(link_ids)} could not be confirmed as something you may see "
+            "in this case"
         )
 
 
@@ -606,7 +607,9 @@ async def list_visible_gaps(
     gaps = await store.list_for_investigation(investigation_id, principal)
     served: list[IntelligenceGap] = []
     for gap in gaps:
-        kept = [ref for ref in gap.linked_entities if await _reference_visible(graph, principal, ref)]
+        kept = [
+            ref for ref in gap.linked_entities if await _reference_visible(graph, principal, ref)
+        ]
         served.append(gap.model_copy(update={"linked_entities": kept}))
     return served
 
@@ -618,7 +621,8 @@ async def list_visible_assumptions(
     principal: Principal,
     graph: GraphPort,
 ) -> list[Assumption]:
-    """The case's assumptions for this reader, each with only the linked judgements they are shown."""
+    """The case's assumptions for this reader, each with only the linked judgements they are
+    shown."""
     assumptions = await store.list_for_investigation(investigation_id, principal)
     if not any(a.linked_judgements for a in assumptions):
         return assumptions
@@ -629,7 +633,9 @@ async def list_visible_assumptions(
     ]
 
 
-async def confirm_gap_links(graph: GraphPort, principal: Principal, linked_entities: list[str]) -> None:
+async def confirm_gap_links(
+    graph: GraphPort, principal: Principal, linked_entities: list[str]
+) -> None:
     """Refuses, before anything is written, a linked entity the saver cannot confirm as a node they
     may see: the check a judgement's `supporting` citations get (`_unverifiable_citations`)."""
     unverifiable = await _unverifiable_citations(graph, principal, linked_entities)
@@ -644,7 +650,8 @@ async def confirm_assumption_links(
     graph: GraphPort,
     linked_judgements: list[str],
 ) -> None:
-    """Refuses, before anything is written, a linked judgement the saver is not shown in this case."""
+    """Refuses, before anything is written, a linked judgement the saver is not shown in this
+    case."""
     if not linked_judgements:
         return
     shown = await visible_judgement_ids(judgements, investigation_id, principal, graph)

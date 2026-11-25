@@ -8849,7 +8849,8 @@ async def save_assumption_route(
     graph: GraphDep,
     audit: AuditDep,
 ) -> Assumption:
-    # Rule 3: every linked judgement must be one the saver is shown in this case, or nothing is written.
+    # Rule 3: every linked judgement must be one the saver is shown in this case, or nothing is
+    # written.
     await confirm_assumption_links(
         judgements_store, investigation.id, principal, graph, body.linked_judgements
     )
