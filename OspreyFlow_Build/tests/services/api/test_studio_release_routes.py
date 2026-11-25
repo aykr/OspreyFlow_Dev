@@ -826,7 +826,11 @@ def test_the_run_order_travels_and_lands_as_a_new_version_among_the_imported_dra
         "/v1/datasets/pid/release/import", params={"dry_run": True}, json={"files": files}
     )
     assert plan.status_code == 200, plan.text
-    assert any("run order among 2 of its pipelines" in n for n in plan.json()["notes"])
+    # Alpha <- Beta <- Gamma relates three pipelines, though only two of them run after something: the words count the
+    # pipelines the order relates (a pipeline only ever run after is one of them), not the links' keys.
+    notes = plan.json()["notes"]
+    assert any("run order among 3 of its pipelines" in n for n in notes), notes
+    assert not any("run order among 2 of its pipelines" in n for n in notes), notes
     before = asyncio.run(second.run_orders.current("pid"))
     assert before is not None and before.version == 1
 

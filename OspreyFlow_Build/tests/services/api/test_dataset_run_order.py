@@ -2,8 +2,10 @@
 owner's rulings of 24 November 2026, items 1 to 6 under "IS6").
 
 **What the order is stored as: "runs after" links.** For each pipeline of the dataset, the pipelines it runs after. A cycle
-is therefore possible (a pipeline that must run after itself, directly or through others), and it is refused on save, in
-words naming the pipelines in it. A pipeline with no link runs after nothing. The stored order is **versioned**: every save
+is therefore possible (a pipeline that must run after itself, directly or through others), and a cycle among the pipelines
+the saver can see is refused on save, in words naming the pipelines in it. **A cycle that closes only through a pipeline
+hidden from the saver is stored, and the saver is told nothing of it** (the owner's ruling of 25 November 2026, option a,
+which amends his ruling 3 of 24 November for that case only; refused at the run by a later part). A pipeline with no link runs after nothing. The stored order is **versioned**: every save
 is a new number (the first is 1, none stored is 0), with who saved it and when, and **a save names the number its person
 read** (`expected_version`, required): a stale number is refused 409 `run_order_refused` in words, never overwritten, as a
 domain-model draft's save is (`test_model_draft_expected_version.py`). Nothing is run.
@@ -28,8 +30,9 @@ the code really receives, through the real app and the real `get_principal`, wit
   words that tell one reason from another: `test_ro8_*`;
 - RO9 to RO12 the access rules: a person without the right, or whose cases do not read the dataset, told anything; the
   gate after the version; a pipeline the reader may not see named, counted or implied; a save over another unit's links
-  losing them; the refusal of a cycle telling a saver that a path exists through pipelines they cannot see:
-  `test_ro9_*` to `test_ro12_*`;
+  losing them; a cycle through a hidden pipeline refused, or told differently (it is stored, the answer is the same as
+  with no such path), or a cycle among visible pipelines not refused, or naming a hidden one: `test_ro9_*` to
+  `test_ro12_*`;
 - RO13 a route with no right declared, or another right: `test_ro13_*`; RO14 two saves of one number both winning:
   `test_ro14_*`.
 
@@ -51,6 +54,7 @@ from services.api.dataset_run_order import (
     InMemoryRunOrderStore,
     PostgresRunOrderStore,
     RunOrderRefused,
+    pipelines_in_a_cycle,
 )
 from services.api.datasets import Dataset, InMemoryDatasetStore
 
@@ -596,6 +600,70 @@ def test_ro12_a_cycle_that_runs_through_a_pipeline_the_saver_cannot_see_is_not_t
     # And a cycle among what the saver does see is refused whatever else is stored.
     again = _put(world, _entries(p_enrich=["p-ingest"], p_ingest=["p-enrich"]), 2)
     assert again.status_code == 422 and again.json()["error"] == "run_order_cycle"
+
+
+#: Another unit's links: a path Enrich -> Theirs -> Ingest, which with "Ingest after Enrich" closes a cycle through a
+#: pipeline alice cannot see. And the same stored order with the path cut: the only thing the second world lacks.
+CLOSES_THROUGH_HIDDEN = {"p-theirs": ["p-enrich"], "p-ingest": ["p-theirs"]}
+NO_PATH_THROUGH_HIDDEN = {"p-theirs": ["p-enrich"]}
+
+
+def _alice_saves_in_a_world_holding(
+    world: SimpleNamespace, stored: dict[str, list[str]], entries: list[dict[str, Any]]
+) -> Any:
+    """A fresh store holding `stored` as the Conduit wrote it (version 1), then alice's save from number 1."""
+    fresh = InMemoryRunOrderStore()
+    asyncio.run(fresh.save(DATASET, stored, SYSTEM, expected_version=0))
+    app.state.run_orders = fresh
+    world.store = fresh
+    return _put(world, entries, 1, "alice")
+
+
+def test_ro12_a_cycle_that_closes_only_through_a_pipeline_the_saver_cannot_see_is_stored_and_the_answer_is_the_same_as_with_no_such_path(
+    world: SimpleNamespace,
+) -> None:
+    """The owner's ruling of 25 November 2026 (option a): such a cycle is stored (refused at the run, a later part's), and
+    the saver is told nothing of it: not a refusal, not other words, not another count, not another key. Both worlds give
+    alice the same save, so she cannot tell a hidden path from none. A planted change that checks the merged links for a
+    cycle and refuses turns the first world's save into a 422, which is what tells her a path exists."""
+    through = _alice_saves_in_a_world_holding(
+        world, CLOSES_THROUGH_HIDDEN, _entries(p_enrich=["p-ingest"])
+    )
+    # The cycle really is what was stored (so this is the case, not a nearby one), and it is whole: the hidden links stayed.
+    kept = asyncio.run(world.store.current(DATASET))
+    assert kept is not None and kept.version == 2
+    assert kept.runs_after == {
+        "p-enrich": ["p-ingest"], "p-theirs": ["p-enrich"], "p-ingest": ["p-theirs"],
+    }  # fmt: skip
+    assert pipelines_in_a_cycle(kept.runs_after) == {"p-enrich", "p-ingest", "p-theirs"}
+    without = _alice_saves_in_a_world_holding(
+        world, NO_PATH_THROUGH_HIDDEN, _entries(p_enrich=["p-ingest"])
+    )
+    assert through.status_code == without.status_code == 200, (through.text, without.text)
+    one, other = through.json(), without.json()
+    for answer in (one, other):
+        answer.pop("saved_at")
+    assert one == other
+    assert "p-theirs" not in through.text and "Theirs" not in through.text
+
+
+def test_ro12_a_cycle_among_pipelines_the_saver_sees_is_refused_naming_them_whatever_hidden_links_are_stored(
+    world: SimpleNamespace,
+) -> None:
+    """Item 1 of the ruling: every cycle among what the saver sees is refused, naming them. Their pipelines are named and a
+    hidden one is not (a check over the merged links would name "Theirs" too, and in the stored world only), and the refusal
+    is word for word the one a world with no hidden path gives, so it says nothing of one."""
+    cycle = _entries(p_enrich=["p-ingest"], p_ingest=["p-enrich"])
+    through = _alice_saves_in_a_world_holding(world, CLOSES_THROUGH_HIDDEN, cycle)
+    without = _alice_saves_in_a_world_holding(world, NO_PATH_THROUGH_HIDDEN, cycle)
+    assert through.status_code == without.status_code == 422, (through.text, without.text)
+    assert through.json()["error"] == "run_order_cycle"
+    assert through.json() == without.json()
+    assert "“Enrich”" in through.text and "“Ingest”" in through.text
+    assert "Theirs" not in through.text and "p-theirs" not in through.text
+    # Nothing was written by either refusal.
+    kept = asyncio.run(world.store.current(DATASET))
+    assert kept is not None and kept.version == 1
 
 
 # --- RO13: every route names its right ----------------------------------------------------------------------------------
