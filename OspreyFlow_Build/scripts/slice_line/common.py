@@ -332,18 +332,19 @@ def deliver_rulings(tree: Path) -> str | None:
 
 #: The scout's table of every open case, before a slice's fifth round (the owner, 21 November 2026: after round 4 a
 #: read-only scout lists every open case as a table, and rounds 5 to 8 are judged against it; no fifth round without
-#: it): slices/<ID>_ROUND<N>_TABLE.md beside the slice's brief, N 5 or more, in the main checkout (committed or not).
+#: it): slices/<ID>_ROUND<N>_TABLE.md beside the slice's brief, N the round's own number (5 or more), in the main
+#: checkout (committed or not).
 TABLE_ROUND = 5
 
 
-def round_table(slice_id: str) -> Path | None:
-    """The slice's open-case table for rounds 5 on, or None when there is none."""
-    folder = REPO / V062_REL / "slices"
-    for f in sorted(folder.glob(f"{slice_id}_ROUND*_TABLE.md")) if folder.is_dir() else []:
-        m = re.fullmatch(rf"{re.escape(slice_id)}_ROUND(\d+)_TABLE\.md", f.name)
-        if m and int(m.group(1)) >= TABLE_ROUND and f.read_text().strip():
-            return f
-    return None
+def round_table(slice_id: str, round_: int) -> Path | None:
+    """The slice's open-case table for this round, from round 5 on: the one whose number is the round's own, not
+    empty; None when it is missing (the conductor, 25 November 2026: the first table in name order was taken, so
+    ROUND10 beat ROUND6, 11 and 12, and builders were given their part's oldest table)."""
+    if round_ < TABLE_ROUND:
+        return None
+    f = REPO / V062_REL / "slices" / f"{slice_id}_ROUND{int(round_)}_TABLE.md"
+    return f if f.is_file() and f.read_text().strip() else None
 
 
 #: The owner's written word for resume.py (README, "Resuming a slice"): lines `<slice> <action> <YYYY-MM-DD>`, one use

@@ -372,8 +372,13 @@ M = [
  ("resume.py", '    if rnd < rule["from_round"]:\n', '    if False:\n', "gaps_only_at_round_2_go_round"),
  ("resume.py", '    if faults or other:\n', '    if other:\n', "fault_and_a_gap_go_round"),
  # LINE_FIXES_5_BRIEF.md, D: no fifth round without the scout's table
- ("run_seat.py", '    if st.get("round", 1) >= c.TABLE_ROUND and not c.round_table(slice_id):', '    if False:', "round_5_without_the_table"),
- ("common.py", '        if m and int(m.group(1)) >= TABLE_ROUND and f.read_text().strip():', '        if m:', "only_a_round_5_or_later_table"),
+ ("run_seat.py", '    if st.get("round", 1) >= c.TABLE_ROUND and not c.round_table(slice_id, st["round"]):', '    if False:', "round_5_without_the_table"),
+ # 53: the table whose number is the round's own (the conductor, 25 November 2026), and the board's past lines
+ ("common.py", '    f = REPO / V062_REL / "slices" / f"{slice_id}_ROUND{int(round_)}_TABLE.md"', '    f = next(iter(sorted((REPO / V062_REL / "slices").glob(f"{slice_id}_ROUND*_TABLE.md"))), REPO / "none")', "test_round_table and (rounds_own or own_table_is_missing)"),
+ ("common.py", '    return f if f.is_file() and f.read_text().strip() else None', '    return f if f.is_file() else None', "test_round_table and (only_a_round_5)"),
+ ("common.py", '    if round_ < TABLE_ROUND:\n        return None\n    f = REPO', '    f = REPO', "test_round_table and (rounds_1_to_4)"),
+ ("run_seat.py", '    table = c.round_table(slice_id, st.get("round", 1))', '    table = c.round_table(slice_id, c.TABLE_ROUND)', "test_round_table and (rounds_own)"),
+ ("board.py", '        if ln["date"] < today:', '        if False:', "test_owner_line_waiting and (date_has_passed or beside_a_past_line)"),
  ("common.py", 'TABLE_ROUND = 5\n', 'TABLE_ROUND = 4\n', "rounds_1_to_4_need_no_table"),
  # LINE_FIXES_5_BRIEF.md, 1: the plan-id pattern
  ("common.py", r"""(r'\[\s*"([A-Z]{2,4}\d+)"\s*,\s*\d+\s*,'""", r"""(r'\[\s*"([A-Z]{2}\d+)"\s*,\s*\d+\s*,'""", "one_id_of_each_prefix_length"),

@@ -51,16 +51,17 @@ def pin_dial(w, setting="balanced"):
 def run_seat(w, seat, results):
     """run_seat.<seat>('S1'), its sessions stood in by `results`, one per launch, in order; no pause between tries.
     Returns (process, the accounts each launch was given)."""
-    rf, calls = w["tmp"] / "results.json", w["tmp"] / "calls.json"
+    rf, calls, prompts = w["tmp"] / "results.json", w["tmp"] / "calls.json", w["tmp"] / "prompts.json"
     rf.write_text(json.dumps(results))
     t = w["tmp"] / "verifier-transcript.jsonl"
     code = f"""
 import json, sys
 sys.path.insert(0, {str(w['lines'])!r})
 import run_seat
-results, calls = json.load(open({str(rf)!r})), []
+results, calls, prompts = json.load(open({str(rf)!r})), [], []
 def launch(seat, account, cwd, prompt, model, effort, env_extra, log, extra=None, interactive=False):
     calls.append(account)
+    prompts.append(prompt)
     res = results.pop(0)
     open({str(t)!r}, "w").write(json.dumps({{"type": "assistant", "text": json.dumps(res)}}) + "\\n")
     return res
@@ -71,6 +72,7 @@ try:
     rc = getattr(run_seat, {seat!r})("S1")
 finally:
     open({str(calls)!r}, "w").write(json.dumps(calls))
+    open({str(prompts)!r}, "w").write(json.dumps(prompts))
 sys.exit(rc)
 """
     p = sh([w["py"], "-c", code], w["repo"], w["env"], check=False)
