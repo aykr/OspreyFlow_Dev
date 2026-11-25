@@ -1330,7 +1330,7 @@
    "case": 16,
    "id": "16-cluster-9443",
    "label": "cluster, origin port 9443",
-   "raised_in": "PL7a2b round 2",
+   "raised_in": "PL7a2b round 2; the round-8 verifier: the load balancer publishes 80 and 443 only, so an origin on another port is refused",
    "config": {
     "shape": "cluster",
     "origin": "https://osprey.example.org:9443",
@@ -1343,22 +1343,15 @@
     "brand": "ospreyflow"
    },
    "expect": {
-    "derived": {
-     "public_origin": "https://osprey.example.org:9443",
-     "identity": "https://id.osprey.example.org:9443",
-     "issuer": "https://id.osprey.example.org:9443/realms/osprey",
-     "identity_alias": "id.osprey.example.org",
-     "identity_port": 9443,
-     "extra_listener": null,
-     "proxy_https_port": null,
-     "trust": null,
-     "environment": {
-      "OSPREY_PAGES_PUBLIC_ORIGIN": "https://osprey.example.org:9443",
-      "OSPREY_PAGES_OIDC_ISSUER": "https://id.osprey.example.org:9443/realms/osprey",
-      "OSPREY_PAGES_CLIENT_ID": "osprey-pages"
-     },
-     "identity_site": null,
-     "proxy_alias": null
+    "refuse": {
+     "key": "port_taken",
+     "error": "PageServiceNeedsAnotherPort",
+     "words": [
+      ":9443",
+      "does not publish",
+      "network.public_origin"
+     ],
+     "names_setting": true
     }
    }
   },

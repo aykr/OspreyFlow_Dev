@@ -911,6 +911,106 @@ def test_the_realm_client_reads_derive_where_the_service_is_on() -> None:
     assert client["attributes"]["post.logout.redirect.uris"] == "https://planted.example.org/"
 
 
+# ---- 8b. the Glass's client, the sign-in theme and the organisation's address (PL7f round 9) ----
+
+
+def _the_other_sign_in_addresses(row: dict[str, Any]) -> dict[str, Any]:
+    """Every other place that writes the origin or the identity address into a sign-in setting
+    with the service on, as the code returns it: the Glass's realm client (`realm.glass_client`),
+    the sign-in theme's link back (`keycloak_theme.login_theme_options`) and the organisation's
+    redirect and post-logout addresses (`realm.organisation_redirect_uris`, given an alias, the
+    way a deployment with `governance.organisation_sign_in` has one)."""
+    from harness.keycloak_theme import login_theme_options
+    from harness.realm import glass_client, organisation_redirect_uris
+
+    config = config_of(row)
+    governance = config.governance.model_copy(update={"organisation_sign_in": "org"})
+    config = config.model_copy(update={"governance": governance})
+    return {
+        "client": glass_client(config),
+        "theme": login_theme_options(config),
+        "organisation": organisation_redirect_uris(config),
+    }
+
+
+def other_sign_in_findings(row: dict[str, Any]) -> list[str]:
+    """Where those addresses are not the strings `derive` gives, compared as they are."""
+    from harness import page_addresses
+
+    config = config_of(row)
+    with tree_of(row):
+        derived = page_addresses.derive(config)
+    assert isinstance(derived, page_addresses.PageAddresses), row["id"]
+    origin = derived.public_origin
+    got = _the_other_sign_in_addresses(row)
+    client, found = got["client"], []
+    if client["redirectUris"] != [f"{origin}/"]:
+        found.append(f"the Glass's client redirects to {client['redirectUris']}, not {origin}/")
+    if client["webOrigins"] != [origin]:
+        found.append(f"the Glass's client web origin is {client['webOrigins']}, not {origin}")
+    if client["attributes"]["post.logout.redirect.uris"] != origin:
+        found.append(f"the Glass's client post-logout address is not {origin}")
+    if got["theme"]["glass_origin"] != origin:
+        found.append(f"the sign-in theme's glass_origin is {got['theme']['glass_origin']}")
+    endpoint = f"{derived.identity}/realms/osprey/broker/org/endpoint"
+    if got["organisation"] != (endpoint, f"{endpoint}/logout_response"):
+        found.append(
+            f"the organisation's redirect addresses are {got['organisation']}, not {endpoint}"
+        )
+    return found
+
+
+@pytest.mark.parametrize("row", DERIVED, ids=[r["id"] for r in DERIVED])
+def test_the_glass_client_the_theme_and_the_organisation_agree_with_derive(
+    row: dict[str, Any],
+) -> None:
+    """With the setting on, for every table case that is derived: the Glass's realm client
+    (redirect, web origin, post-logout), the sign-in theme's `glass_origin` and the organisation's
+    redirect and post-logout addresses are the strings `derive` gives, compared as they are
+    (`spec/05_DEPLOYMENT.md` section 2.8: 'the same strings by construction')."""
+    assert other_sign_in_findings(row) == []
+
+
+def _as_main_had_the_origin(config: Any) -> str:
+    """`page_addresses.client_origin` as main wrote it: the origin as the deployment wrote it."""
+    return str(config.network.public_origin)
+
+
+def _as_main_had_the_broker(config: Any) -> str:
+    """`page_addresses.broker_identity` as main wrote it (the real old line, `realm.py`'s
+    `f"{origin.scheme}://id.{origin.netloc}"` over `urlsplit(config.network.public_origin)`)."""
+    origin = urlsplit(config.network.public_origin)
+    return f"{origin.scheme}://id.{origin.netloc}"
+
+
+@pytest.mark.parametrize(
+    ("row_id", "name", "plant", "says"),
+    [
+        ("7-acme-explicit-443", "client_origin", _as_main_had_the_origin, "the Glass's client"),
+        ("14-upper-case-host", "client_origin", _as_main_had_the_origin, "the Glass's client"),
+        ("7-acme-explicit-443", "client_origin", _as_main_had_the_origin, "glass_origin"),
+        ("14-upper-case-host", "client_origin", _as_main_had_the_origin, "glass_origin"),
+        ("7-acme-explicit-443", "broker_identity", _as_main_had_the_broker, "organisation"),
+        ("14-upper-case-host", "broker_identity", _as_main_had_the_broker, "organisation"),
+    ],
+)
+def test_the_other_sign_in_addresses_are_red_for_main_s_raw_origin_form(
+    row_id: str, name: str, plant: Callable[[Any], str], says: str
+) -> None:
+    """Rule 15, at the shape main really had: with the on-branch of `client_origin` or of
+    `broker_identity` back to the raw-origin form, case 7 (`:443` written) and case 14 (upper
+    case) carry `:443` or capitals that `derive` never gives. Clean first, red naming the place,
+    clean again."""
+    from harness import page_addresses
+
+    row = _row(row_id)
+    assert other_sign_in_findings(row) == []
+    with mock.patch.object(page_addresses, name, plant):
+        found = other_sign_in_findings(row)
+    assert any(says in line for line in found), found
+    assert other_sign_in_findings(row) == []
+
+
 # ---- 9. the cluster's own list of published ports (PL7f round 5) --------------------------------
 
 #: Ports no other list names: not 80 or 8080 (`harness.site.PLAIN_HTTP_PORTS`, refused in every
@@ -948,7 +1048,11 @@ def _port_refusal_findings(port: int, published: Callable[[list[Any]], list[Any]
     from harness import page_addresses
 
     got = _derive_with_published(_cluster_row_on(port), published)
-    if isinstance(got, page_addresses.Refusal) and got.key == "port_taken":
+    if (
+        isinstance(got, page_addresses.Refusal)
+        and got.key == "port_taken"
+        and "does not publish" not in got.words
+    ):
         return []
     return [f"an https origin on :{port} was {type(got).__name__}, not refused as a port taken"]
 
@@ -957,15 +1061,59 @@ def _adds(port: int) -> Callable[[list[Any]], list[Any]]:
     return lambda real: [*real, {"port": port, "target": port}]
 
 
-@pytest.mark.parametrize("port", ONLY_THE_CLUSTERS_LIST)
-def test_a_port_only_the_clusters_list_names_is_free_until_the_list_names_it(port: int) -> None:
-    """The port is derived while nothing publishes it (so the refusal below is the list's, not the
-    port's own: no other list, no plain-HTTP fallthrough, names it)."""
+def _unpublished_findings(port: int, published: Callable[[list[Any]], list[Any]]) -> list[str]:
+    """What is wrong where an HTTPS origin on `port`, a port the cluster's list does not name, is
+    not refused in words that say the load balancer does not publish it."""
     from harness import page_addresses
 
+    got = _derive_with_published(_cluster_row_on(port), published)
+    if not isinstance(got, page_addresses.Refusal):
+        return [f"a cluster origin on :{port}, which nothing publishes, was {type(got).__name__}"]
+    wanted = (f":{port}", "does not publish", "pages.enabled")
+    return [f"the refusal lacks {w!r}: {got.words}" for w in wanted if w not in got.words]
+
+
+@pytest.mark.parametrize("port", ONLY_THE_CLUSTERS_LIST)
+def test_a_cluster_origin_on_a_port_the_load_balancer_does_not_publish_is_refused(
+    port: int,
+) -> None:
+    """PL7f round 9 (the owner's: sign-in): the load balancer publishes 80 and 443 and nothing
+    else, so an HTTPS origin on any other port reaches nothing, and `derive` used to return an
+    issuer on it. Refused in words naming `pages.enabled` and the port, as a compose shape
+    refuses a port its proxy does not publish. Case 16 reads "as small (3 to 14)"; small derives a
+    port only where its proxy publishes it, and this is the cluster's same reading of its own
+    list."""
+    from harness import page_addresses
+
+    assert _unpublished_findings(port, lambda real: real) == []
     got = _derive_with_published(_cluster_row_on(port), lambda real: real)
-    assert isinstance(got, page_addresses.PageAddresses), got
-    assert got.identity_port == port
+    assert isinstance(got, page_addresses.Refusal) and got.key == "port_taken", got
+    assert "plain HTTP" not in got.words, "a free port is not a plain-HTTP port"
+
+
+@pytest.mark.parametrize("port", ONLY_THE_CLUSTERS_LIST)
+def test_the_unpublished_port_check_is_red_when_it_is_taken_out(port: int) -> None:
+    """Rule 15: the check taken out (`derive` as it was: `_taken_ports` alone, which names only
+    what the list names) derives the origin on a port nothing publishes. Clean, red, clean."""
+    from harness import page_addresses
+
+    assert _unpublished_findings(port, lambda real: real) == []
+    with mock.patch.object(page_addresses, "_not_published", lambda config: None):
+        found = _unpublished_findings(port, lambda real: real)
+    assert found and f":{port}" in found[0], found
+    assert _unpublished_findings(port, lambda real: real) == []
+
+
+def test_the_cluster_derives_the_one_https_port_it_publishes() -> None:
+    """The other side of the rule: 443, the cluster's one HTTPS port, is still derived (and the
+    list is what says so: a list that no longer names it refuses it, in the same words)."""
+    from harness import page_addresses
+
+    row = _cluster_row_on(443)
+    got = _derive_with_published(row, lambda real: real)
+    assert isinstance(got, page_addresses.PageAddresses) and got.identity_port == 443, got
+    refused = _derive_with_published(row, lambda real: [e for e in real if e["port"] != 443])
+    assert isinstance(refused, page_addresses.Refusal) and "does not publish" in refused.words
 
 
 @pytest.mark.parametrize("port", ONLY_THE_CLUSTERS_LIST)
@@ -1008,9 +1156,10 @@ def test_the_check_is_red_when_the_clusters_branch_of_the_taken_ports_is_removed
 
 
 @pytest.mark.parametrize("port", ONLY_THE_CLUSTERS_LIST)
-def test_the_check_is_red_when_the_clusters_list_returns_nothing(port: int) -> None:
-    """The fault at the list itself: `harness.cluster.proxy_ports` returning an empty list. The
-    planted port is no longer named by it, so it is derived, and the check says so."""
+def test_the_taken_port_check_is_red_when_the_clusters_list_is_not_read(port: int) -> None:
+    """The fault at the list: a port planted in `harness.cluster.proxy_ports` is refused as taken
+    only because `derive` reads that list. Read from nowhere (the list returning nothing for the
+    taken-ports half), the planted port is no longer refused as taken: the finding is named."""
     assert _port_refusal_findings(port, _adds(port)) == []
     found = _port_refusal_findings(port, lambda real: [])
     assert found and f":{port}" in found[0], found
