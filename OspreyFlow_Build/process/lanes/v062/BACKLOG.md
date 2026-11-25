@@ -546,3 +546,11 @@ Accepted on the owner's standing line (gaps in a test only, from round 3) or his
 ### New row 36 (25 November 2026, GR3a's accepted gap in a test: on the standing line, tip `63c2d5689c`; it names an access rule, so the owner was told)
 
 **ADR-152 invariant I15 names `test_the_dashboard_page_answers_a_reader_without_read_reports_as_a_missing_report` (the owner's approved correction `ADR152_I15_ROW`), and no file has a test by that name.** The behaviour is right and tested under another name; GR3a's round-6 and round-7 tables asked for the exact name, but the line's `round_table` fault gave those rounds round 5's table, so the builder never saw the request. Nothing checks that an invariant's named test exists (rule 12): the scenario file checks only I15's first name (`test_govuk_alert_monitoring_scenario.py` about lines 653 to 656). **A fix:** rename (or add) the test under I15's exact name, red against a page that answers 403 or names the right; and a check that every test ADR-152's invariant table names exists in the tree.
+
+### New row 37 (25 November 2026, RM1a's accepted gap in a test: on the standing line, tip `f35dd00b69`)
+
+**Scenario AQ1's "in the order sent" is exercised by nothing that would catch a re-sort.** Every order RM1a's tests send is already newest first, so a page that sorts the rows again by time passes every vitest case; the Python source grep does not list `.toSorted(`. Done when a case sends rows **not** in time order and asserts they are drawn exactly as sent, red with a planted newest-first sort (and with `.toSorted(`).
+
+### New row 38 (25 November 2026, RM1a's accepted gap in a test: on the standing line, tip `f35dd00b69`)
+
+**The fixture Conduit never sends `created_at` in the real route's form (rule 15).** The page's reader turns one time it cannot parse into "could not be read" (502) for the whole queue, so a break in parsing the real form would make every real queue unreadable with every test green. Done when the fixture's `created_at` is the exact form the real alert-queue route serialises (read from its model, not hand-written), and a case shows the page parses it.
