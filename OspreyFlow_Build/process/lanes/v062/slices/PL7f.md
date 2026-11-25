@@ -74,3 +74,16 @@ Nothing else.
 ## Never merge another part's unmerged tip (the owner, 23 November 2026)
 
 **Never merge another part's unmerged tip, or any branch but main, into your branch.** Take main in when the line tells you to, and nothing else. A part that did this (AD1b, with AD1a's tip) had the hook count the other part's tests as its own. If your part needs another part's change that has not merged, stop and tell the conductor.
+
+## Round 2, continued (the owner's ruling D234, 24 November 2026, in chat: option 1 of your report)
+
+**A correction first: the brief's round-2 section above was wrong.** The owner's switch `~/.ospreyflow/no-local-stacks` was **not** lifted; it is still on this Mac (dated 9 November). You were right not to rename it or move `OSPREY_LEASE_DIR`, and you still must not.
+
+**The owner's ruling: exempt exactly one command in `OspreyFlow_Build/tests/local_docker_guard.py`, and nothing else.**
+1. **The one command:** the Caddy test's own `docker run --rm --network none` of the pinned image `caddy:2.11.4-alpine` with exactly the three read-only mounts it uses (`<cases>:/cases:ro`, `<etc>:/etc/caddy:ro`, `<certs>:/certs:ro`) and `sh -c <its script>`, **named by the test** (`tests/harness/test_page_addresses_caddy.py`). The exemption is matched on that whole shape, as the wrapper receives it at its real call site (the argument list `subprocess.run` gets); any difference (another image or tag, a fourth mount, a mount not `:ro`, another network, no `--rm`, another test asking) is refused as today.
+2. **Every other docker call stays refused under `no-local-stacks`**, the refusing `docker` on the session's `PATH` included.
+3. **A planted fault, red first (rule 15):** a test shows a second command refused while the exemption is in place: at least the same `docker run` with a fourth mount, and the same with `--network` other than `none`, each in the argument-list shape the wrapper receives. Show it red with the exemption widened (for example, matched on the image alone), then green.
+4. **Then run the Caddy test**: it must pass on `caddy:2.11.4-alpine` (on the Mac already).
+5. **When 017-1 lands, this test moves to the server's container checks and the exemption comes out.** Say this in a comment beside the exemption, naming 017-1.
+
+**The scan-map row** for `tests/harness/test_page_addresses.py` is on main (`scan_rows/PL7f.tsv`, written by the conductor from your report): `OspreyFlow_Core/harness/` and `OspreyFlow_Core/packages/schemas/`. Do not write into `scan_rows/`.
