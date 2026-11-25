@@ -723,8 +723,8 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
     expect(structureProblems(one.text)).toEqual([]);
     const hrefs = (html: string): (string | undefined)[] => focusable(html).map((s) => s.href ?? s.text);
     expect(hrefs(list.text)).toEqual(["#main", "Sign out", ...MINE.map(pageOf), "/"]);
-    expect(hrefs(one.text)).toEqual(["#main", "Sign out", PATH, "/"]);
-    expect(focusable(one.text).map((s) => s.text).slice(2)).toEqual([CASES_WORDS.toCases, CASES_WORDS.back]);
+    expect(hrefs(one.text)).toEqual(["#main", "Sign out", "/cases/boards?case=c-harbour", PATH, "/"]);
+    expect(focusable(one.text).map((s) => s.text).slice(2)).toEqual([CASES_WORDS.boards, CASES_WORDS.toCases, CASES_WORDS.back]);
     expect(headings(mainOf(one.text)).map((h) => h.level)).toEqual([1, 2, 2, 3, 3]);
   });
 

@@ -323,9 +323,10 @@ def function_problems(data: dict[str, Any]) -> list[str]:
 
 
 def route_problems(data: dict[str, Any]) -> list[str]:
-    expected = ["/help", "/admin/people", PATH]
+    # The tree's fourth page, a case's drawing boards (slice GG4a), sits under it and is listed after it (`test_govuk_boards_scenario.py`).
+    expected = ["/help", "/admin/people", PATH, "/cases/boards"]
     if data["routes"] != expected:
-        return [f"the route list is {data['routes']!r}: the tree has three pages, {expected}"]
+        return [f"the route list is {data['routes']!r}: the tree has four pages, {expected}"]
     return []
 
 
@@ -555,8 +556,8 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
     ("the row without its journeys", _row(ROW, scenario=", ".join(EXPECTED_IDS)), function_problems, "scenario"),
     ("the row routed while incomplete", _row(ROW, route=PATH), function_problems, "stays empty"),
     ("the row's where moved", _row(ROW, where="apps/workspace/src/investigation/"), function_problems, "has moved"),
-    ("a route in the list the code has no page for", lambda d: d["routes"].append("/welcome"), route_problems, "three pages"),
-    ("the cases path left out of the list", lambda d: d["routes"].remove(PATH), route_problems, "three pages"),
+    ("a route in the list the code has no page for", lambda d: d["routes"].append("/welcome"), route_problems, "four pages"),
+    ("the cases path left out of the list", lambda d: d["routes"].remove(PATH), route_problems, "four pages"),
     ("the page at another path", _replace("page_module", f'path: "{PATH}"', 'path: "/case"'), module_problems, "its path"),
     ("the page for both trees", _replace("page_module", 'trees: ["govuk"]', 'trees: ["default", "govuk"]'), module_problems, "GOV.UK tree alone"),
     ("the page answering POST", _replace("page_module", 'methods: ["GET"]', 'methods: ["GET", "POST"]'), module_problems, "GET alone"),

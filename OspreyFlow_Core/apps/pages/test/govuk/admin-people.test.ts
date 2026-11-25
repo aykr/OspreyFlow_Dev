@@ -657,7 +657,7 @@ describe("the tree that serves the page, and the lists that name it", () => {
     const routesText = read(PAGES_DIR, "tree-govuk", "routes.yaml");
     const functionsText = read(PAGES_DIR, "FUNCTIONS.yaml");
     expect(listProblems(routesText, functionsText)).toEqual([]);
-    expect(listedRoutes(routesText)).toEqual(["/help", PATH, "/cases"]);
+    expect(listedRoutes(routesText)).toEqual(["/help", PATH, "/cases", "/cases/boards"]);
   });
 });
 
