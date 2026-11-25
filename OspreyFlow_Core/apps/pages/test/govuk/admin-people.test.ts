@@ -9,7 +9,7 @@
  * Which test fails if the invariant is broken (rule 12):
  *  - a person missing, out of order, a column other than Person, Roles and State, a table with no caption or header   -> AP1
  *  - a role shown as its identifier, a right with no name, a grant that is not said in words                         -> AP2
- *  - a state said other than Enabled, Disabled, Invited, or the organisation's sign-in left out                      -> AP3
+ *  - a state said other than Enabled, Disabled, Invited, the organisation's sign-in or a guest's mark left out          -> AP3
  *  - an empty or failed read drawn as a table, a partial table, a failure said as a refusal                          -> AP4
  *  - a person without the right who learns the page is there, or sees the Conduit's words, or the right's name      -> AP5
  *  - a person the page removed, skipped, cut, added or sorted (for any clearance or unit, at any length), a count of people -> AP6

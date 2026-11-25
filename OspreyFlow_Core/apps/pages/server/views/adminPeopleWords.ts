@@ -25,6 +25,7 @@ export const ADMIN_PEOPLE_WORDS = {
   disabled: "Disabled",
   invited: "Invited — must set a password",
   organisation: "Signs in through the organisation",
+  guest: "Guest: homed outside this organisation's Entra ID; signs in only while guest accounts are admitted",
   empty: "There are no people to list.",
   unreadable: "The people could not be read just now. Nothing is shown, and nothing has changed. Try again in a few minutes.",
   help: "What each role and right lets a person do",
@@ -67,10 +68,12 @@ export function roleWords(role: string, catalogue: NonNullable<ReturnType<typeof
   return ADMIN_PEOPLE_WORDS.olderGrant;
 }
 
-/** The state of an account, in words: the React section's (`People.tsx`) and the organisation's sign-in beside it. */
-export function stateWords(enabled: boolean, mustSetPassword: boolean, organisationLinked: boolean): string[] {
+/** The state of an account, in words: the React section's (`People.tsx`), the organisation's sign-in beside it and, for a guest (B2B)
+ * account, the mark that it signs in only while guest accounts are admitted (`PersonAccount.guest`, ADR-148 Amendment 17). */
+export function stateWords(enabled: boolean, mustSetPassword: boolean, organisationLinked: boolean, guest: boolean): string[] {
   const first = !enabled ? ADMIN_PEOPLE_WORDS.disabled : mustSetPassword ? ADMIN_PEOPLE_WORDS.invited : ADMIN_PEOPLE_WORDS.enabled;
-  return organisationLinked ? [first, ADMIN_PEOPLE_WORDS.organisation] : [first];
+  const words = organisationLinked ? [first, ADMIN_PEOPLE_WORDS.organisation] : [first];
+  return guest ? [...words, ADMIN_PEOPLE_WORDS.guest] : words;
 }
 
 /** What the page draws from the two answers, or `undefined` when either is not the shape the page draws from (said as a failure). */
@@ -86,7 +89,7 @@ export function peopleView(people: unknown, roles: unknown): PeopleView | undefi
     rows.push({
       name: person["name"].trim() === "" ? person["username"] : person["name"],
       roles: roleList.length === 0 ? [ADMIN_PEOPLE_WORDS.noRoles] : roleList.map((role) => roleWords(role, catalogue)),
-      state: stateWords(person["enabled"], person["must_set_password"] === true, person["organisation_linked"] === true),
+      state: stateWords(person["enabled"], person["must_set_password"] === true, person["organisation_linked"] === true, person["guest"] === true),
     });
   }
   return rows.length === 0 ? { kind: "empty" } : { kind: "table", rows };
