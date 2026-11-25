@@ -609,7 +609,7 @@ describe("trends shown together (the govuk tree)", () => {
     expect([...mainOf(res.text).matchAll(/<svg\b/g)].length).toBe(2);
     expect([...mainOf(res.text).matchAll(/<table\b/g)].length).toBe(2);
     // The sentence comes before the trends, not in a place among them.
-    expect(mainOf(res.text).indexOf(WITHHELD_ITEMS_SENTENCE)).toBeLessThan(mainOf(res.text).indexOf("pack-trend"));
+    expect(mainOf(res.text).indexOf(WITHHELD_ITEMS_SENTENCE)).toBeLessThan(mainOf(res.text).indexOf('class="pack-trend"'));
     // Nothing withheld: no sentence.
     expect(textOf(mainOf((await trendsPage(await world())).text))).not.toContain(WITHHELD_ITEMS_SENTENCE);
     // Every trend withheld: the sentence, and no chart.
@@ -938,7 +938,7 @@ describe("each check above is red against the real page, file or fixture with on
     expect(orderProblems(sorted.readDraft)).not.toEqual([]);
     const unsaid = await plantedViews(replaceOnce("withheld: body[\"withheld\"]", "withheld: false && body[\"withheld\"]"));
     expect(withheldProblems(unsaid.readDraft)).not.toEqual([]);
-    const everyKind = await plantedViews(replaceOnce("if (item.kind !== \"trend\")", "if (false)"));
+    const everyKind = await plantedViews(replaceOnce("if (item.kind !== \"trend\") continue;", "if (item.kind !== \"trend\") { trends.push({ title: String(item[\"note\"]) } as TrendView); continue; }"));
     expect(kindProblems(everyKind.readDraft)).not.toEqual([]);
   });
 
@@ -950,7 +950,7 @@ describe("each check above is red against the real page, file or fixture with on
     const lenient = await plantedViews(replaceOnce('isNumber(result["total"])', '(result["total"] === undefined || isNumber(result["total"]))'));
     expect(await strictProblems(throughAView(lenient.readDraft, lenient.readPublished))).toContain("TrendResult.total left out was drawn (200)");
     // A field the scenario names as left out, drawn: the person who added the item.
-    const addedBy = await plantedViews(replaceOnce("marking: item.marking,", "marking: `${item.marking} ${String((item as unknown as Body)[\"added_by\"])}`,"));
+    const addedBy = await plantedViews(replaceOnce("trends.push(trendView(figures, item.marking));", "trends.push(trendView(figures, `${item.marking} ${String(item[\"added_by\"])}`));"));
     expect(await censusProblems(throughAView(addedBy.readDraft, addedBy.readPublished))).toContain("PackItem.added_by is named as left out, but changing it changes the page");
     // A field the census reads as drawn but the view drops: the published version's number.
     const noVersion = await plantedViews(replaceOnce("published(version,", "published(0,"));
@@ -976,7 +976,7 @@ describe("each check above is red against the real page, file or fixture with on
     expect(scriptsOffProblems(plant(/<svg\b[\s\S]*?<\/svg>/, ""))).toContain('the trend "Harbour meetings" has no chart');
     expect(scriptsOffProblems(plant(/<title id="[^"]*">[^<]*<\/title>/, ""))).toContain('the chart of "Harbour meetings" has no text alternative');
     expect(scriptsOffProblems(plant(/<table\b[\s\S]*?<\/table>/, ""))).toContain('the chart of "Harbour meetings" is not followed by its table');
-    expect(structureProblems(plant(/<h2\b/, "<h3"))).not.toEqual([]);
+    expect(structureProblems(plant(/<h2\b([^>]*)>([^<]*)<\/h2>/, "<h3$1>$2</h3>"))).toContain('the heading "Harbour meetings" skips from level 1 to 3');
     expect(structureProblems(plant(/<\/main>/, '<form method="post" action="/v1/x"><button>Arrange</button></form></main>'))).not.toEqual([]);
     expect(structureProblems(plant(/scope="row"/, ""))).not.toEqual([]);
     const harbour = trendsOf(page)[0] as DrawnTrend;
