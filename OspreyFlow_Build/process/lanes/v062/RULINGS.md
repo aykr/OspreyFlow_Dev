@@ -3,6 +3,19 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 25 November 2026, about 16:25 UTC: GR1a as an away round (the owner, in chat)
+
+**GR1a runs as an away round on the server now**, on every proposal (a) of its draft (`slices/drafts_2026-11-25/GR1a.md`) and the owner's exception to start before GG2b. **The conductor does not start GR1 in the line:** it enters through its away branch, like GR4a, after the owner fetches it (its round 1 merges `away/GR1a`).
+
+## 25 November 2026, about 16:20 UTC: AD1c round 11; SE7c, GG2a and the drafts (the owner, in chat)
+
+**AD1c: yes, Superset's metadata database counts under "each database the render makes"**: it is on the same server, made by the deployment's own code. **Round 11 on the conductor's table:** one census of every database the deployment makes on that server, each closed the same way, so a new one cannot be missed; plus tests for the EXECUTE revoke's refusal words and for silence on a healthy run. His third add-round line today.
+**Away rounds:** GR4a started (round 1 merges `away/GR4a`); **SE7c**, a security part for `away/access-fix` (his word extends D247's exception to it; its round 1 merges it; never accepted narrower; judged by the verifier, the server and the full gate); **GG2a**'s row and round-1 brief (round 1 merges `away/GG2a`; its merge waits for his Mac's own measurement, the 18 November ruling); **the drafts of `drafts/2026-11-25`** copied into `slices/drafts_2026-11-25/` for his rulings tonight; the away copy-tests job never started, PL4h covers it. **PL8a's merge need not wait for 19:30.**
+
+## 25 November 2026, about 16:10 UTC: I21's rename approved; apply_53 tonight (the owner, in chat)
+
+**`approved: ADR152_I21_ROW 2b32bafb`.** **apply_53 stopped at 14:19 on the early warning's suite** (`test_lists.py::test_the_lists_match_this_repository`, failing on main since PL7f merged: its new `test_page_addresses_caddy.py` is not in the early warning's lists; not 53's fault). The demo-server session is fixing the lists; **the owner retries apply_53 tonight once that is on main. The conductor keeps moving old tables aside until then.**
+
 ## 25 November 2026, about 13:55 UTC: GR4a's away round and its four questions (the owner, in chat)
 
 **GR4a's away round is done** (its table green; its report in `away/GR4a_AWAY_REPORT.md` on the branch); the owner fetched it as the local branch `away/GR4a`. **His answers:** (1) keep `/packs/trends?case=…&pack=…`; (2) keep the one shared withheld sentence, never a placeholder (rule 3); (3) rename I21's test in the decision log (the conductor proposes the diff, `ADR152_I21_ROW`, for his approval); (4) confirmed: an Editor sees the working pack, everyone else the newest published version. **GR4a starts as D247 says (round 1 merges `away/GR4a`) first thing at 19:30, not before:** apply_53 is running and the Mac goes offline at 14:30.
