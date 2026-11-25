@@ -83,7 +83,6 @@ KNOWN_WITHOUT_SCENARIO = {
     "matrix-ownership",
     "reports-figures",
     "reports-dashboards",
-    "admin",
     "needs-you",
     "top-bar-home",
     "govuk-frame",

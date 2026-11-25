@@ -1,0 +1,32 @@
+{#- Admin › People (slice AD3a; scenario AP): the people the Conduit lists, read-only, drawn on the server and complete without a script.
+    A table with a caption, column headers (th, scope col) and a row header for each person (th, scope row); a person's roles and
+    state are lists of words. Nothing here is a form, a button or a control, and nothing counts: the page draws what it is given.
+    The words are `server/views/adminPeopleWords.ts`'s. The two links are the page's only actions: Help, which says what each role
+    and right lets a person do, and the way back. -#}
+{% extends "layout.njk" %}
+{% block content %}
+<h1>{{ words.title }}</h1>
+{% if view.kind == "table" %}
+<p>{{ words.lede }}</p>
+<table class="table">
+<caption class="caption">{{ words.caption }}</caption>
+<thead>
+<tr>{% for column in words.columns %}<th scope="col">{{ column }}</th>{% endfor %}
+</tr>
+</thead>
+<tbody>
+{% for person in view.rows %}<tr><th scope="row">{{ person.name }}</th><td><ul>{% for role in person.roles %}<li>{{ role }}</li>{% endfor %}</ul></td><td><ul>{% for state in person.state %}<li>{{ state }}</li>{% endfor %}</ul></td>
+</tr>
+{% endfor %}</tbody>
+</table>
+{% elif view.kind == "empty" %}
+<p>{{ words.lede }}</p>
+<p>{{ words.empty }}</p>
+{% elif view.kind == "ended" %}
+<p role="alert">{{ ended }}</p>
+{% else %}
+<p role="alert">{{ words.unreadable }}</p>
+{% endif %}
+<p><a href="/help">{{ words.help }}</a></p>
+<p><a href="/">{{ words.back }}</a></p>
+{% endblock %}

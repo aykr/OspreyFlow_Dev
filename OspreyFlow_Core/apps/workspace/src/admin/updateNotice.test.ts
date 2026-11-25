@@ -35,6 +35,26 @@ describe("updateWords", () => {
     expect(words.detail).toContain("The newest release is v0.5.0.");
   });
 
+  it("tells a build stamped for the coming release (v0.7.0-dev) the same, whatever update_available says", () => {
+    for (const available of [false, true]) {
+      const words = updateWords("v0.7.0-dev", checked({ current: "v0.7.0-dev", latest: "v0.6.1", update_available: available }));
+      expect(words.tone).toBe("plain");
+      expect(words.headline).toBe("This deployment builds from its checkout; it moves with git pull and ospreyflow start --build.");
+      expect(words.headline).not.toMatch(/up to date/i);
+      expect(words.detail).toContain("The newest release is v0.6.1.");
+    }
+  });
+
+  it("reads the form from the deployment's own version when the check's current differs", () => {
+    expect(updateWords("v0.7.0-dev", checked({ current: "v0.6.1", latest: "v0.6.1" })).headline).toContain("builds from its checkout");
+    expect(updateWords("dev-abc1234", checked({ current: "v0.6.1", latest: "v0.6.1" })).headline).toContain("builds from its checkout");
+    expect(updateWords(null, checked({ current: "v0.7.0-dev", latest: "v0.6.1" })).headline).toContain("builds from its checkout");
+  });
+
+  it("still says up to date for a bare release that is the newest", () => {
+    expect(updateWords("v0.6.1", checked({ current: "v0.6.1", latest: "v0.6.1" })).headline).toBe("Up to date: v0.6.1 is the newest release.");
+  });
+
   it("says why a check could not answer, and offers nothing", () => {
     const words = updateWords("v0.4.1", checked({ latest: null, problem: "GitHub's limit on unauthenticated requests was reached; try again in an hour." }));
     expect(words.tone).toBe("problem");

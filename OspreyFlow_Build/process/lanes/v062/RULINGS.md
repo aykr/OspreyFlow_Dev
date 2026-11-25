@@ -3,6 +3,33 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 25 November 2026, about 08:10 UTC: PL8a round 13; apply_52 tonight (the owner, in chat)
+
+**PL8a:** one more round on its structural table (his third add-round line today), the table renamed ROUND13 (round 12's builder was shown round 10's table by the line's `round_table` fault, so it did row 1 only). The stale `PL8a accept 2026-11-24` line deleted by the owner. **apply_52 (line-fix 52) is not applied in this gap: the conductor keeps merging; the owner applies it tonight.**
+
+## 25 November 2026, morning: PL8a's structural round, PL7f's reserve, ruling 6 withdrawn (the owner, in chat, about 07:45 UTC)
+
+1. **PL8a: option (a), one structural round 12** (D225 item 3): Home forgets the stored size; a size is written only when it is the size the analyst's own action asked for, never a clamped value; one test over every panel action × bound × starting state. Its add-round line is in.
+2. **PL7f: two add-round lines are in resume.tsv in reserve**, so it has rounds to spare before GG2a's 13:00 cut-off; **the conductor uses them only if a verifier finds more** at its rounds limit.
+3. **Ruling 6 (PL11b) is withdrawn:** the licence register is for what the code gate cannot see, and `make licence-check` already covers Sigma, graphology and MapLibre. **The conductor's correction to GG2a's item 4 and case 9 stands.**
+
+## 25 November 2026: the away rounds, AD1c, GR4a, GG2a and the licence register (the owner, in chat, about 06:30 UTC)
+
+1. **PL8a:** the add-round line for today; round 11 on its table.
+2. **Away rounds (D246; GR4a and GG2a only): one exception to the 23 November rule.** A builder's round 1 may merge a branch `away/<ID>` that the owner fetches from server-backup into this checkout. **No other branch, and no other part.** The owner fetches it on his return.
+3. **AD1c, option (c):** a small part (AD1d) teaches `test-file-coverage-check` that a test starting its own private database (`initdb` in a temporary folder) is not live-service, red first. **Then AD1c imports `asyncpg` plainly; no import is ever written to miss a check.**
+4. **GR4a:** 1(a) read-only first; 2(a) the pack's snapshots with their counted-on date; 3(a) whoever may read the pack now, and 404 otherwise (the same as a pack that does not exist); 4(a) "Trends shown together" at `/packs/{pack_id}/trends`; 5 a new spec/08 scenario first. **ADR-152 decision 10's citation is corrected with GR4a's spec changes.**
+5. **GG2a:** proposals 1(a) to 6(a) (a module of its own served only by the perf harness; the workspace's CI gate, §5's own numbers measured on the owner's Mac on his return; the fixture moved to `glass-shared`; the newest Sigma 4.x at least 14 days old, pinned exactly, with its register rows; stop and bring the figures if CI misses; the register's missing rows a separate part). **It runs as an away round only if PL7f has merged by 13:00.**
+6. **The licence register:** a small part (PL11b) adds the missing rows (`sigma`, `@sigma/*`, `graphology`, `maplibre-gl`), before RL2. **Held, not cut (the conductor, 25 November 2026, about 06:35 UTC): the finding behind it was the conductor's error.** `spec/LICENCE_REGISTER.yaml` is only for what the code gate does not see (weights, map data, fonts, base images: its header and `spec/00` §7); the drawing libraries are code and pass `make licence-check`'s Node half (`license-checker` over the installed packages) against §7's allowlist (MIT, BSD-3-Clause). The owner was told and asked to confirm the ruling is withdrawn. GG2a's item 4 and case 9 were corrected the same way.
+
+## 25 November 2026: GR3a's structural fix, (A)+(B) (the owner, in chat, about 05:30 UTC)
+
+**GR3a was stopped under D225 item 3** (rounds 4, 5 and 6 found the same kind: the page drifting from what the real route sends, hidden by a hand-written fixture). **(A), GR3a's round 7:** a strict reader (a body missing a field the generated `MonitoringFigures`/`ReportFigures` types require is the page's "could not be read" answer, never a zero; a test case per required field, made from the type's own field list); a field census (a test walks every field of the generated type and fails unless the page draws it or spec/08 names it as left out); the fixture's team view counts `mine` and `older_than_week` from its world. **(B), a new part GR3b:** every GOV.UK page's fixture Conduit answers from the real route (a Python test runs the real routes in-process over the same synthetic worlds, stores at the conformance fakes, and writes golden JSON the page tests serve; a test fails when a golden drifts from the route). Its brief is drafted for the owner's rulings.
+
+## 25 November 2026: IS6a's cycle through a hidden pipeline (the owner, in chat, about 05:00 UTC)
+
+**Option (a).** The save refuses, naming them, every cycle among pipelines the saver can see; **a cycle that closes only through a pipeline hidden from the saver is stored, and refused at the run**, in words to whoever runs it or can see every pipeline in it. **This amends the owner's IS6 ruling 3 (24 November, "a cycle is refused on save, naming its pipelines") for that case only; access rule 3 stays whole:** the saver is never told, by refusal, wording, count or timing, that a hidden pipeline or a path through one exists. **Finding 2 (the import plan's pipeline count) is fixed in the same round.**
+
 ## 24 November 2026, night: PL7f's Docker exemption (D234) and AD1c's read-only role (the owner, in chat, about 23:50 to 23:55 UTC)
 
 **PL7f (D234), option 1 of its report:** exempt in `tests/local_docker_guard.py` exactly the Caddy test's one command (`docker run --rm --network none`, the pinned `caddy:2.11.4-alpine` image, the three read-only mounts), named by the test; every other docker call stays refused under `no-local-stacks`, and a planted fault shows a second command refused. Sent back to its builder for that change; the conductor adds the scan-map row for `tests/harness/test_page_addresses.py` from the folders its report lists. **When 017-1 lands, this test moves to the server's container checks and the exemption comes out.** (The conductor's correction: PL7f's round-2 brief had said the switch was lifted; it is still on.)

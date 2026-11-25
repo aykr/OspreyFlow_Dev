@@ -33,3 +33,7 @@ The two new tests; the existing `apps/pages` vitest files; `tests/glass_trees/te
 ## Out of scope
 
 Rules and watches pages, closing or assigning an alert (later slices); the alert monitoring figures (GR3a); any Conduit change; `apps/workspace`; the protected files. **A finding that names an access rule, a key, a credential or a security rule is stopped and reported, never accepted narrower.**
+
+## Before you start (the conductor, 25 November 2026, 04:25 UTC: what GR3a's round-2 verifier found)
+
+**A new route in `OspreyFlow_Core/apps/pages/tree-govuk/routes.yaml` is pinned in four places, and one of them is not in your checks.** `OspreyFlow_Build/tests/harness/test_pages_setting.py::test_the_real_govuk_tree_routes_help_to_pages_and_not_the_home_page` (about line 2352) asserts the front proxy routes exactly `OWN_PATHS | {"/help", ...}` to the page service on the govuk brand, for both `small` and `cluster`; it reads the real `routes.yaml` through `harness/pages_service.py` `route_paths()`. Add your path there (and its docstring's words), beside `test_tree_parity.py`, `test_govuk_help_scenario.py`'s route problems and HP9 in `help.test.ts`, and **run that harness file before you stop** (it is not in your frozen checks, but the merge's full gate runs it). GR3a (`/reports`) and AD3a (Admin People) add theirs too: when main moves under you, keep every side's path.
