@@ -3,6 +3,10 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 25 November 2026, about 08:10 UTC: PL8a round 13; apply_52 tonight (the owner, in chat)
+
+**PL8a:** one more round on its structural table (his third add-round line today), the table renamed ROUND13 (round 12's builder was shown round 10's table by the line's `round_table` fault, so it did row 1 only). The stale `PL8a accept 2026-11-24` line deleted by the owner. **apply_52 (line-fix 52) is not applied in this gap: the conductor keeps merging; the owner applies it tonight.**
+
 ## 25 November 2026, morning: PL8a's structural round, PL7f's reserve, ruling 6 withdrawn (the owner, in chat, about 07:45 UTC)
 
 1. **PL8a: option (a), one structural round 12** (D225 item 3): Home forgets the stored size; a size is written only when it is the size the analyst's own action asked for, never a clamped value; one test over every panel action × bound × starting state. Its add-round line is in.
