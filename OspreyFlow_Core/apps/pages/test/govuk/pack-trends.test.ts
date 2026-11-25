@@ -51,7 +51,7 @@ import { READ_REPORTS, RECORD_ASSESSMENT, draftBody, figures, packItem, packsCon
 import type { Canned, PacksConduit, Reader, StoredItem, StoredPack } from "./packsConduit.js";
 
 // The compiled service is checked against `server/types/glassShared.d.ts`, not the package's source (`tsconfig.build.json`); this holds
-// each declaration this page uses to the package's own type, so that a shape `packText.ts` changes and the stub still has as it was fails
+// each declaration this page uses to the package's own type, so that a shape `packages/glass-shared/src/reports/packText.ts` changes and the stub still has as it was fails
 // `npm run typecheck` (as `help.test.ts` does for the Help page's).
 type Conforms<Real, Stub> = Real extends Stub ? true : never;
 export const STUB_CONFORMS_TO_THE_PACKAGE: [
@@ -80,7 +80,6 @@ type RealFigures = Parameters<typeof Real.trendSentence>[0];
 
 const PAGES_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const CORE = join(PAGES_DIR, "..", "..");
-const BUILD = join(CORE, "..", "OspreyFlow_Build");
 const read = (...parts: string[]): string => readFileSync(join(...parts), "utf8");
 
 const PATH = "/packs/trends";
@@ -409,7 +408,7 @@ const AMERICAN = /\b(?:color|colors|organization|organizations|center|centers|au
 const americanSpellings = (text: string): string[] => [...text.matchAll(new RegExp(AMERICAN.source, "gi"))].map((m) => m[0]);
 const boardProblems = (texts: { name: string; text: string }[]): string[] => texts.filter((s) => /board/i.test(withoutComments(s.text))).map((s) => `${s.name} says "board"`);
 
-/** The shared words the page must import and never write again (`packText.ts`). */
+/** The shared words the page must import and never write again (`packages/glass-shared/src/reports/packText.ts`). */
 const SHARED_WORDS = [WITHHELD_ITEMS_SENTENCE, "had no ", "not in the sum", "Some items of this pack"];
 const copiesOfSharedWords = (texts: { name: string; text: string }[]): string[] =>
   texts.flatMap((s) => SHARED_WORDS.filter((w) => withoutComments(s.text).includes(w)).map((w) => `${s.name} writes again ${JSON.stringify(w)}`));
@@ -474,13 +473,42 @@ async function strictProblems(render: Render): Promise<string[]> {
   return found;
 }
 
-/** The left-out fields, by name, from scenario TS's own sentence. */
-function leftOut(): Set<string> {
-  const spec = read(BUILD, "spec", "08_ACCEPTANCE_SCENARIOS.md");
-  const section = spec.slice(spec.indexOf("## Scenario TS"), spec.indexOf("\n## ", spec.indexOf("## Scenario TS") + 1));
-  const sentence = /\*\*Left out, by field name\*\*([^\n]*)/.exec(section)?.[1] ?? "";
-  return new Set([...sentence.matchAll(/`([A-Za-z]+\.[a-z_]+)`/g)].map((m) => m[1] as string));
-}
+/**
+ * The fields the page leaves out, by name. Scenario TS's "Left out, by field name" sentence is the same list: this folder stands alone
+ * and cannot read it, so `test_govuk_pack_trends_scenario.py` holds the two the same.
+ */
+const LEFT_OUT = [
+  "ReportPack.id",
+  "ReportPack.investigation_id",
+  "ReportPack.created_by",
+  "ReportPack.created_at",
+  "ReportPack.updated_at",
+  "ReportPack.versions",
+  "PublishedPack.pack_id",
+  "PublishedPack.investigation_id",
+  "PublishedPack.published_by",
+  "PublishedPack.published_by_name",
+  "PackItem.id",
+  "PackItem.added_by",
+  "PackItem.added_at",
+  "PackItem.trend_id",
+  "PackItem.assessment",
+  "PackItem.entity",
+  "PackItem.note",
+  "PackItem.alert",
+  "PackItem.replaced_at",
+  "PackItem.replaced_by",
+  "TrendFigures.marking",
+  "TrendDefinitionInput.event_types",
+  "TrendDefinitionInput.measure",
+  "TrendDefinitionInput.interval",
+  "TrendDefinitionInput.group_by",
+  "TrendDefinitionInput.filters",
+  "TrendResult.classifications",
+  "TrendResult.handlings",
+];
+
+const leftOut = (): Set<string> => new Set(LEFT_OUT);
 
 /** For each drawn field, a change a reader would see; `setup` puts both bodies where the field shows (a sum, a series). */
 interface Change {
