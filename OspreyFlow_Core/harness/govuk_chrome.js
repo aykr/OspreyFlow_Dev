@@ -78,10 +78,34 @@
       top.appendChild(banner);
     }
     var host = window.location.hostname.toLowerCase();
-    var onGovUk = host === "gov.uk" || host.slice(-7) === ".gov.uk";
+    // ADR-152 decision 14, invariant I9: the crown and the GOV.UK logotype need the identity switch
+    // (`appearance.govuk_identity`, off by default) as well as, for the crown, a gov.uk address.
+    // The harness writes the switch into the settings every time (true or false). Fail closed (the owner's ruling of
+    // 23 November 2026): a settings object with no key, or any value but a real true, is off. A deployment made before the
+    // switch existed draws no GOV.UK identity until its theme is next written (a refresh or an apply writes it).
+    var identity = settings.govukIdentity === true;
+    var onGovUk = identity && (host === "gov.uk" || host.slice(-7) === ".gov.uk");
+    if (!identity) {
+      // Off: no logotype and no crown; the organisation's (or the service's) name, as text, and the service's after it, in the logo's
+      // place, as `GovukHeader.tsx` draws it with `identity` false.
+      var logoLink = top.querySelector(".govuk-header__homepage-link");
+      if (logoLink) {
+        var nameplate = document.createElement("span");
+        nameplate.className = "govuk-header__homepage-link govuk-header__organisation-name";
+        nameplate.textContent = settings.organisation || settings.serviceName || "OspreyFlow";
+        logoLink.parentNode.replaceChild(nameplate, logoLink);
+        // ADR-152 decision 14: the department's name "with the service name"; one name is drawn once.
+        if (settings.organisation && settings.serviceName && settings.serviceName !== settings.organisation) {
+          var service = document.createElement("span");
+          service.className = "govuk-header__service-name";
+          service.textContent = settings.serviceName;
+          nameplate.parentNode.insertBefore(service, nameplate.nextSibling);
+        }
+      }
+    }
     // ADR-132 Amendment 8 (the owner's ruling of 13 November 2026): off gov.uk the header draws no crown,
     // as the footer draws none (Amendment 7); the GOV.UK word mark stays, cropped to it. On gov.uk, as it was.
-    if (!onGovUk) {
+    if (identity && !onGovUk) {
       var logotype = top.querySelector(".govuk-header__logotype");
       var crown = logotype && logotype.querySelector("g");
       if (crown) {

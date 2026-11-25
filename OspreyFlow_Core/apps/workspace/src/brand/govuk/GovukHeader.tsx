@@ -8,10 +8,24 @@
 // link only), so the header is a small local extension of it: one slot, after the logo, that
 // `shell/PlaceSwitcher.tsx` draws the places into. Its styling is `shell/places.css`, on the header's
 // own colours.
-import { currentBrand, isGovUkHost } from "@ospreyflow/glass-shared";
+import { currentBrand, currentGovukIdentity, isGovUkHost } from "@ospreyflow/glass-shared";
 
 /** The local extension's slot (see above). */
 export const GOVUK_HEADER_PLACES_ID = "govuk-header-places";
+
+/** ADR-152 decision 14, invariant I9: with the GOV.UK identity switch off (`identity` false) the header draws no GOV.UK
+ * logotype and no crown. It carries "the department's name ... with the service name": the organisation's name in the
+ * logo's place, as plain text, and the service's name after it. One name is drawn once (an organisation with no service
+ * name, or a service with no organisation, or the two the same), and a header with neither says OspreyFlow. The
+ * sign-in page's script (`harness/govuk_chrome.js`) draws the same two names by the same rule. With the switch on, as
+ * ADR-132 draws it. Both read the page's own switch (`currentGovukIdentity`) unless told. */
+export function governmentHeaderNames(
+  organisation: string | null,
+  serviceName: string | null,
+): { name: string; serviceName: string | null } {
+  const name = organisation ?? serviceName ?? "OspreyFlow";
+  return { name, serviceName: organisation !== null && serviceName !== null && serviceName !== organisation ? serviceName : null };
+}
 
 /** `withPlaces`: the slot for the place switcher, in the Glass's frame; the identity provider's
  * sign-in page draws the header without it (`harness/govuk_chrome.js`, ADR-132 Amendment 2).
@@ -20,8 +34,24 @@ export const GOVUK_HEADER_PLACES_ID = "govuk-header-places";
 export function GovukHeader({
   withPlaces = false,
   hostname = typeof window === "undefined" ? "" : window.location.hostname,
-}: { withPlaces?: boolean; hostname?: string } = {}) {
+  identity = currentGovukIdentity(),
+  name = "OspreyFlow",
+  serviceName = null,
+}: { withPlaces?: boolean; hostname?: string; identity?: boolean; name?: string; serviceName?: string | null } = {}) {
   if (currentBrand() !== "govuk") return null;
+  if (!identity) {
+    return (
+      <div className="govuk-header">
+        <div className="govuk-header__container govuk-width-container">
+          <div className="govuk-header__logo">
+            <span className="govuk-header__homepage-link govuk-header__organisation-name">{name}</span>
+            {serviceName && <span className="govuk-header__service-name">{serviceName}</span>}
+          </div>
+          {withPlaces && <div id={GOVUK_HEADER_PLACES_ID} className="govuk-header__places" />}
+        </div>
+      </div>
+    );
+  }
   const crown = isGovUkHost(hostname);
   return (
     <div className="govuk-header">
