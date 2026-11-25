@@ -79,7 +79,7 @@ async function alertMonitoringGet(req: Request, res: Response): Promise<void> {
     return;
   }
   if (reply.status === 200) {
-    const report = readReport(reply.json, weeks);
+    const report = readReport(reply.json);
     if (report === undefined) {
       settings.log("pages: reports: the Conduit's answer was not the figures (502)");
       unreadable(res);

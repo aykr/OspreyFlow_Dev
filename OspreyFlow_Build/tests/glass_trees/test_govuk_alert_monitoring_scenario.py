@@ -263,7 +263,8 @@ def left_out_in_spec(spec_08: str) -> list[str] | None:
     """The fields the paragraph names, or `None` when scenario AM has no such paragraph."""
     for line in section_of(spec_08).splitlines():
         if line.startswith(LEFT_OUT_HEAD):
-            return re.findall(r"`([^`]+)`", line)
+            listed = re.search(r"\*\*except these: (.*?)\*\*", line)
+            return re.findall(r"`([^`]+)`", listed.group(1)) if listed else []
     return None
 
 

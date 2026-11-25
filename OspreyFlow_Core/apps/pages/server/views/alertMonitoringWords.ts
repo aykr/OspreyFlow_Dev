@@ -215,7 +215,7 @@ interface Team {
 /** What the report route sent that the page draws, checked: the same names as the Conduit's `ReportFigures`. */
 export interface Report {
   weeks: number;
-  asOf: string | undefined;
+  asOf: string;
   /** The alerts raised in the period, of every kind: the sum of the rows of `raised_by_rule`, never the route's `alerts_total` (typology alerts alone). */
   total: number;
   raised: Count[];
@@ -232,8 +232,8 @@ const isRecord = (value: unknown): value is Record<string, unknown> => typeof va
 const isCount = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && Number.isInteger(value) && value >= 0;
 const isText = (value: unknown): value is string => typeof value === "string";
 
+/** A list the route always sends: an absent one is not an empty one, and is not read as one (the owner's ruling of 25 November 2026). */
 function listOf<T>(value: unknown, read: (item: unknown) => T | undefined): T[] | undefined {
-  if (value === undefined) return [];
   if (!Array.isArray(value)) return undefined;
   const out: T[] = [];
   for (const item of value) {
@@ -244,34 +244,39 @@ function listOf<T>(value: unknown, read: (item: unknown) => T | undefined): T[] 
   return out;
 }
 
+// Every field of a row is required, a default included: the route serialises the whole model (`typology` is `""` where there is none, a
+// count is `0`), and `packages/schemas/generated/ReportFigures.ts` marks them optional only because the model gives them a default.
+// A row with a field missing is not the route's row, so it is never read with a zero or an empty word put in its place.
+
 const weekCount = (item: unknown): Count | undefined =>
-  isRecord(item) && isText(item["week_start"]) && isText(item["label"]) && isCount(item["count"]) && (item["typology"] === undefined || item["typology"] === null || isText(item["typology"]))
-    ? { week_start: item["week_start"], label: item["label"], typology: isText(item["typology"]) ? item["typology"] : "", count: item["count"] }
+  isRecord(item) && isText(item["week_start"]) && isText(item["label"]) && isText(item["typology"]) && isCount(item["count"])
+    ? { week_start: item["week_start"], label: item["label"], typology: item["typology"], count: item["count"] }
     : undefined;
 
-const optionalCount = (value: unknown): number | undefined => (value === undefined || value === null ? 0 : isCount(value) ? value : undefined);
-
 const openCount = (item: unknown): OpenCount | undefined =>
-  isRecord(item) && isText(item["label"]) && isCount(item["count"]) && (AGE_BANDS as readonly unknown[]).includes(item["age"]) && (item["typology"] === undefined || item["typology"] === null || isText(item["typology"]))
-    ? { label: item["label"], typology: isText(item["typology"]) ? item["typology"] : "", age: item["age"] as Age, count: item["count"] }
+  isRecord(item) && isText(item["label"]) && isText(item["typology"]) && (AGE_BANDS as readonly unknown[]).includes(item["age"]) && isCount(item["count"])
+    ? { label: item["label"], typology: item["typology"], age: item["age"] as Age, count: item["count"] }
     : undefined;
 
 function teamRow(item: unknown): Team | undefined {
-  if (!isRecord(item) || !isText(item["label"])) return undefined;
-  if (item["typology"] !== undefined && item["typology"] !== null && !isText(item["typology"])) return undefined;
-  const numbers = ["unassigned", "mine", "older_than_week", "closed", "not_of_interest"].map((key) => optionalCount(item[key]));
-  if (numbers.some((n) => n === undefined)) return undefined;
-  const [unassigned, mine, older, closed, notOfInterest] = numbers as number[];
-  return { label: item["label"], typology: isText(item["typology"]) ? item["typology"] : "", unassigned: unassigned as number, mine: mine as number, older: older as number, closed: closed as number, notOfInterest: notOfInterest as number };
+  if (!isRecord(item) || !isText(item["label"]) || !isText(item["typology"])) return undefined;
+  const { unassigned, mine, older_than_week: older, closed, not_of_interest: notOfInterest } = item;
+  if (!isCount(unassigned) || !isCount(mine) || !isCount(older) || !isCount(closed) || !isCount(notOfInterest)) return undefined;
+  return { label: item["label"], typology: item["typology"], unassigned, mine, older, closed, notOfInterest };
 }
 
 /**
- * The route's figures, or `undefined` when the body is anything but them: a partial figure is never made from what could be read.
+ * The route's figures, or `undefined` when the body is anything but them: a partial figure is never made from what could be read, and a
+ * field the route always sends but this body lacks is "could not be read", never a zero (the owner's ruling of 25 November 2026, from
+ * the finding that `{"alerts_total": 3, "monitoring": {}}` was drawn as "0 alerts raised"). Required: `period_weeks`, `as_of`,
+ * `generated_at`, `alerts_total`, `monitoring` with each of its six lists, and `held` (an object, or `null` where the route sends none).
  * `alerts_total` is checked and not drawn: the route counts typology alerts alone in it ("as they always have", `schemas/domain.py`), and
  * the page's count of alerts raised is that of `monitoring.raised_by_rule`, which counts every kind, as the React board's is.
  */
-export function readReport(body: unknown, requested: number): Report | undefined {
+export function readReport(body: unknown): Report | undefined {
   if (!isRecord(body) || !isCount(body["alerts_total"]) || !isRecord(body["monitoring"])) return undefined;
+  const period = body["period_weeks"];
+  if (!isCount(period) || period < 1 || period > 52 || !isText(body["as_of"]) || !isText(body["generated_at"])) return undefined;
   const monitoring = body["monitoring"];
   const raised = listOf(monitoring["raised_by_rule"], weekCount);
   const closed = listOf(monitoring["closed_by_outcome"], weekCount);
@@ -282,14 +287,14 @@ export function readReport(body: unknown, requested: number): Report | undefined
   if (!raised || !closed || !hotlists || !took || !team || !open) return undefined;
   let held: Report["held"] = null;
   const sent = body["held"];
-  if (sent !== undefined && sent !== null) {
+  if (sent === undefined) return undefined;
+  if (sent !== null) {
     if (!isRecord(sent) || !isCount(sent["held"]) || !isCount(sent["released"]) || !isCount(sent["rejected"])) return undefined;
     held = { held: sent["held"], released: sent["released"], rejected: sent["rejected"] };
   }
-  const weeks = isCount(body["period_weeks"]) && body["period_weeks"] > 0 ? body["period_weeks"] : requested;
   return {
-    weeks,
-    asOf: isText(body["as_of"]) ? body["as_of"] : undefined,
+    weeks: period,
+    asOf: body["as_of"],
     total: raised.reduce((n, row) => n + row.count, 0),
     raised,
     closed,
@@ -413,7 +418,7 @@ const rankOf = (label: string): number => RANK[label] ?? 3;
 export function monitoringView(report: Report, caseId: string): MonitoringView {
   const words = ALERT_MONITORING_WORDS;
   const headline = words.raised(report.total, report.weeks);
-  const countedOn = report.asOf !== undefined && !Number.isNaN(new Date(report.asOf).getTime()) ? words.countedOn(formatDay(report.asOf)) : null;
+  const countedOn = !Number.isNaN(new Date(report.asOf).getTime()) ? words.countedOn(formatDay(report.asOf)) : null;
   const periods = periodsFor(caseId, report.weeks, () => true);
   // The period bounds what was RAISED in it and nothing else: the route counts a closure by when it was decided and the team view over
   // every alert the reader may see (`services/api/reports.py` `_monitoring_figures`, `_panel_figures`), and sends the held rows to
