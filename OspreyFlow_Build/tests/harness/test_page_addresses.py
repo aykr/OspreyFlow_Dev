@@ -913,8 +913,8 @@ def test_the_realm_client_reads_derive_where_the_service_is_on() -> None:
 
 # ---- 9. the cluster's own list of published ports (PL7f round 5) --------------------------------
 
-#: Ports no other list names: not 80 or 8080 (`harness.site.PLAIN_HTTP_PORTS`, refused in every shape
-#: whatever the cluster's list says), not 443, and not a port the compose shapes publish.
+#: Ports no other list names: not 80 or 8080 (`harness.site.PLAIN_HTTP_PORTS`, refused in every
+#: shape whatever the cluster's list says), not 443, and not a port the compose shapes publish.
 ONLY_THE_CLUSTERS_LIST = (9443, 8444)
 
 
@@ -1018,8 +1018,8 @@ def test_the_check_is_red_when_the_clusters_list_returns_nothing(port: int) -> N
 
 def test_every_port_the_clusters_list_really_names_but_its_https_one_is_refused() -> None:
     """The list as it really is: not empty, and each port in it other than 443 refused for an
-    HTTPS origin there (80 today). Shown red, in `test_the_real_list_check_is_red_for_an_empty_list`,
-    when the list is empty (a loop over nothing proves nothing)."""
+    HTTPS origin there (80 today). Shown red when the list is empty
+    (`test_the_real_list_check_is_red_for_an_empty_list`) (a loop over nothing proves nothing)."""
     assert _real_list_findings(lambda real: real) == []
 
 
