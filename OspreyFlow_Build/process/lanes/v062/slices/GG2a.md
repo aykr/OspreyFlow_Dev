@@ -102,3 +102,16 @@ without the stack lease, or on another account's run, is not a measurement (rule
 
 The graph module itself (a list of cases, the working set, its capped refusal: R4's later slices); the React
 workspace's move to Sigma 4 (WS4, after the budget is met); any other drawing library.
+
+## Round 1 (D247; the conductor, 25 November 2026): merge `away/GG2a` first
+
+**Your first step: merge the local branch `away/GG2a` into your branch** (the owner fetched it from server-backup; his
+exception for D246's away rounds). Keep both sides where main has moved. Its report,
+`process/lanes/v062/away/GG2a_AWAY_REPORT.md` on that branch, is the record of the away round: read it whole, including
+"A correction the owner should read first" (the settings passed where Sigma 4 does not read them, caught by `typecheck`).
+**Every figure in it was taken on the server under its sandbox; none is a measurement of the owner's Mac or of CI.**
+
+Then: the frozen checks green here; the perf spec itself (`npm run test:perf --workspace apps/pages`) is **not** run by
+you (the owner measures on his Mac); the two CI wiring diffs stay diffs for him. **This part's merge waits for the
+owner's Mac measurement and his answers to the report's questions** (the first frame's margin; which event the first
+frame ends on; whether CI gets an expansion gate).

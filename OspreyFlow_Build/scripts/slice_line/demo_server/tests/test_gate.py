@@ -202,3 +202,52 @@ def test_a_target_with_a_skip_inside_or_owning_a_mac_only_spec_is_never_named_pa
     assert st["guarded-check"] == "passed" and st["map-check"] == "passed"  # each exited 0
     assert "guarded-check" not in a["passed_targets"] and "map-check" not in a["passed_targets"]
     assert "good-check" in a["passed_targets"]
+
+
+E = "\x1b"
+#: vitest's lines for one failing case as the server's log has them (25 November 2026), colour codes in: its × line
+#: (no file, its time) and its FAIL line (the file, the group, the case); a Playwright ✘ line; a pytest FAILED line.
+COLOURED = [
+    "   %s[31m×%s[39m in every string a person can be shown%s[33m 5609%s[2mms%s[22m%s[39m" % ((E,) * 6),
+    "%s[41m%s[1m FAIL %s[22m%s[49m src/copyWords.test.ts%s[2m > %s[22mthe Glass's copy says pipeline%s[2m > "
+    "%s[22min every string a person can be shown" % ((E,) * 8),
+    "%s[31m  ✘  %s[39m 3 [chromium] › keyboard/walk.spec.ts:12:3 › reaches Save (5.1s)" % (E, E),
+    "%s[31mFAILED%s[0m ../OspreyFlow_Build/tests/test_x.py::test_y - boom" % (E, E),
+    "%s[32m ✓%s[39m src/a.test.ts (3 tests)" % (E, E),
+]
+
+
+def test_a_failing_case_is_named_with_its_colour_codes_taken_out_and_once():
+    """D249: three server runs went red on test-js naming no test, as vitest's FAIL line began with colour codes."""
+    import sys
+
+    from conftest import DEMO
+    sys.path.insert(0, str(DEMO))
+    import runner as r  # the module, as test_shield.py imports it
+
+    got = [r.failing_test(ln) for ln in COLOURED]
+    assert got == [None,  # vitest's × line: the FAIL line names the same case, with its file and without a time
+                   "src/copyWords.test.ts > the Glass's copy says pipeline > in every string a person can be shown",
+                   "3 [chromium] › keyboard/walk.spec.ts:12:3 › reaches Save (5.1s)",
+                   "../OspreyFlow_Build/tests/test_x.py::test_y",  # pytest's coloured FAILED, read as its plain one
+                   None]
+    assert r.failing_test("FAILED ../OspreyFlow_Build/tests/test_x.py::test_y - boom") == \
+        "../OspreyFlow_Build/tests/test_x.py::test_y"  # uncoloured lines are read as before
+    assert r.failing_test("   × in every string 12ms") is None and r.failing_test(" FAIL  src/b.spec.tsx > c") == "src/b.spec.tsx > c"
+
+
+def test_the_real_gate_names_a_coloured_vitest_failure_under_its_target(world):
+    w = world
+    ran, tip = mini(w)
+    mk = w["repo"] / "OspreyFlow_Build/Makefile"
+    sh(["git", "switch", "-q", "main"], w["repo"], w["env"])
+    vitest = ("red-check:\n"
+              "\t@printf '   \\033[31m\\303\\227\\033[39m a case 5609ms\\n'\n"
+              "\t@printf '\\033[41m\\033[1m FAIL \\033[22m\\033[49m src/a.test.ts\\033[2m > \\033[22mgroup\\033[2m > \\033[22ma case\\n'\n"
+              "\t@false\n")
+    mk.write_text(mk.read_text().replace("red-check:\n\t@echo 'FAILED ../OspreyFlow_Build/tests/test_r.py::test_q - boom'\n\t@false\n", vitest))
+    sh("git commit -qam 'chore: a coloured vitest failure'", w["repo"], w["env"])
+    a = run_real_gate(w)
+    assert a["failing"]["by_target"]["red-check"] == ["src/a.test.ts > group > a case"]
+    assert "src/a.test.ts > group > a case" in a["failing"]["tests"]
+    assert not any("5609ms" in t or t == "a case 5609ms" for t in a["failing"]["tests"])

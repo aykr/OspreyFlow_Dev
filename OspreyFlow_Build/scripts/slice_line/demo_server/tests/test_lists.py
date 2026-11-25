@@ -27,6 +27,18 @@ def test_every_ci_target_that_starts_a_container_or_binds_a_fixed_port_is_not_ru
     assert all(r["verdict"] == "not-run" for (k, n), r in rows.items() if n.startswith("trivy-image-"))
 
 
+def test_the_real_caddy_test_is_left_out_here_and_never_run_under_the_guard():
+    """D249: PL7f's test_page_addresses_caddy.py runs the proxy's image through the one docker command the guard
+    exempts (D234), and where it cannot it fails in words, never skips (its docstring). This server has no container
+    tooling, so it is listed not run, as its docstring says; listed run container-guarded it would pass the check and
+    turn every server run red."""
+    name = "OspreyFlow_Build/tests/harness/test_page_addresses_caddy.py"
+    rows = {(r["kind"], r["name"]): r for r in lists.read_tsv(lists.LISTS)}
+    assert (rows[("test", name)]["verdict"], rows[("test", name)]["reason"]) == ("not-run", "container")
+    listed, unlisted = lists.not_run_tests(REPO)
+    assert name in [r["name"] for r in listed] and name not in unlisted
+
+
 MAKE_BUILD = "ci: core-check good-check\ncore-check:\n\t$(MAKE) -C ../OspreyFlow_Core check\ngood-check:\n\techo ok\n"
 MAKE_CORE = "check: lint\nlint:\n\techo ok\n"
 LISTS = ("kind\tname\tverdict\treason\tevidence\tnote\n"

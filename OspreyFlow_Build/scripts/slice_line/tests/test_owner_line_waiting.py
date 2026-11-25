@@ -82,3 +82,28 @@ def test_a_slice_not_stopped_never_shows_it(world):
     owner_line(w, f"S1\tadd-round\t{TODAY}")
     row, entry = board(w)
     assert "owner's line" not in row and "owner_line" not in entry, (row, entry)
+
+
+def day(offset):
+    import time
+    return time.strftime("%Y-%m-%d", time.gmtime(time.time() + offset * 86400))
+
+
+@pytest.mark.parametrize("offset", [-1, -30])
+def test_a_line_whose_date_has_passed_is_not_shown_since_resume_never_applies_it(world, offset):
+    """The conductor, 25 November 2026: the board showed an unused owner's line whatever its date; resume.py applies a
+    line on its own day only (UTC), so a line whose date has passed is waiting for nothing."""
+    w = world
+    at_limit(w)
+    owner_line(w, f"S1\tadd-round\t{day(offset)}")
+    row, entry = board(w)
+    assert "owner's line" not in row and "owner_line" not in entry, (row, entry)
+    assert resume(w, "S1", "add-round").returncode != 0                     # and resume.py does refuse it
+
+
+def test_beside_a_past_line_todays_line_is_the_one_shown(world):
+    w = world
+    at_limit(w)
+    owner_line(w, f"S1\taccept\t{day(-1)}", f"S1\tadd-round\t{TODAY}")
+    row, entry = board(w)
+    assert waiting(row, entry, "add-round"), (row, entry)

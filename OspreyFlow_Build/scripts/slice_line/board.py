@@ -184,7 +184,7 @@ ANY_STOP = ("move-seat", "undo-seat-failure")
 
 
 def owners_line(sid: str, st: dict, rec: Path, lines: list[dict]) -> dict | None:
-    """The owner's unapplied line in resume.tsv that answers this slice's stop, or None."""
+    """The owner's unapplied line in resume.tsv that answers this slice's stop, dated today or later, or None."""
     if st.get("phase") == "refused":
         kind = "refused"
     elif st.get("phase") != "stopped":
@@ -195,7 +195,11 @@ def owners_line(sid: str, st: dict, rec: Path, lines: list[dict]) -> dict | None
         kind = "findings"
     else:
         kind = "other"
+    import resume  # its own day (UTC): a line is applied on its date only, so one whose date has passed waits for nothing
+    today = resume.today()
     for ln in lines:
+        if ln["date"] < today:  # the conductor, 25 November 2026: shown whatever its date, though never applied
+            continue
         if ln["slice"] == sid and (ln["action"] in ANSWERS[kind] or ln["action"] in ANY_STOP):
             return {"action": " ".join([ln["action"], *ln["args"]]), "date": ln["date"], "line": ln["text"]}
     return None

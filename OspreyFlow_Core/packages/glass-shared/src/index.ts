@@ -15,9 +15,10 @@
 //   color/palette, tokens, oklab, nodeGlyphs
 //                             the canvas's colours by theme, the token mirrors, the OKLab arithmetic, the node glyphs
 //   welcome/statement         what the product is, worded once (ADR-034 Amendment 1)
-//   layout/layoutSizes, panelOrder, sidePanelState
+//   layout/layoutSizes, panelOrder, sidePanelState, panelFrameStore, panelFrameAttach
 //                             the sizes, the panel order and the side panel's mode, kept in this browser: the plain
-//                             halves (the React hooks over them stay in the workspace's files of the same names)
+//                             halves (the React hooks over them stay in the workspace's files of the same names); the
+//                             store that holds them with the fold and the ten panel actions, and its attach point
 //   admin/inviter             what an inviter may give: the types and `givableLevels`, `givableCodes` (the context and
 //                             `useInviter` stay in the workspace)
 //   ingest/api, ingest/sources/api, ingest/releases/releasesApi
@@ -101,6 +102,8 @@ export * from "./color/nodeGlyphs";
 export * from "./layout/panelOrder";
 export * from "./layout/layoutSizes";
 export * from "./layout/sidePanelState";
+export * from "./layout/panelFrameStore";
+export * from "./layout/panelFrameAttach";
 export * from "./admin/inviter";
 export * from "./ingest/api";
 export * from "./ingest/sources/api";

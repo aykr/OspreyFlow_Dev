@@ -268,11 +268,12 @@ def route_problems(data: dict[str, Any]) -> list[str]:
     routed = sorted(row["route"] for row in data["functions"] if row.get("route"))
     # The tree's second page, the Admin People list (slice AD3a), is the first section of the `admin` row, whose own route stays empty
     # while the function is incomplete: it is in the list, and no row carries it (`test_govuk_admin_people_scenario.py` holds that).
-    # The third, trends shown together (slice GR4a), is the same for the `reports-figures` row (`test_govuk_pack_trends_scenario.py`).
-    if data["routes"] != ["/help", "/admin/people", "/packs/trends"]:
-        return [f"the route list is {data['routes']!r}: the tree has three pages, /help, /admin/people and /packs/trends"]
-    if routed != ["/help"]:
-        return [f"the rows that have a route are {routed!r}, not just /help"]
+    # Slice GR3a added the alert monitoring page (`/reports`): its row, `reports-figures`, carries the route.
+    # Slice GR4a's trends shown together (`/packs/trends`) is the fourth, a second page of the same row (`test_govuk_pack_trends_scenario.py`).
+    if data["routes"] != ["/help", "/admin/people", "/reports", "/packs/trends"]:
+        return [f"the route list is {data['routes']!r}: the tree has four pages, /help, /admin/people, /reports and /packs/trends"]
+    if routed != ["/help", "/reports"]:
+        return [f"the rows that have a route are {routed!r}, not just /help and /reports"]
     return []
 
 

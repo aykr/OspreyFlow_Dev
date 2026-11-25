@@ -268,16 +268,17 @@ def function_problems(data: dict[str, Any]) -> list[str]:
     if help_row is None or help_row["route"] != "/help":
         found.append("the help row's route is not /help")
     routed = sorted(row["route"] for row in data["functions"] if row.get("route"))
-    if routed != ["/help"]:
-        found.append(f"the rows that have a route are {routed!r}, not just /help")
+    # slice GR3a's page (`reports-figures`, `/reports`) is the one other row with a route
+    if routed != ["/help", "/reports"]:
+        found.append(f"the rows that have a route are {routed!r}, not just /help and /reports")
     return found
 
 
 def route_problems(data: dict[str, Any]) -> list[str]:
-    # The third page, trends shown together (slice GR4a), came after this one.
-    if data["routes"] != ["/help", PATH, "/packs/trends"]:
+    # Slice GR3a added the alert monitoring page (`/reports`), and slice GR4a trends shown together (`/packs/trends`) after it.
+    if data["routes"] != ["/help", PATH, "/reports", "/packs/trends"]:
         return [
-            f"the route list is {data['routes']!r}: the tree has three pages, /help, {PATH} and /packs/trends"
+            f"the route list is {data['routes']!r}: the tree has four pages, /help, {PATH}, /reports and /packs/trends"
         ]
     return []
 
