@@ -431,7 +431,8 @@ describe("the alert monitoring figures (the govuk tree)", () => {
   });
 
   it("AM5: a case with no alerts in the period says so in words and draws no chart", async () => {
-    const v = await visitAs(readerOf({}));
+    // A Viewer: the route sends no held rows, so nothing at all is left to draw.
+    const v = await visitAs(readerOf({ cases: { [EMPTY_CASE]: "viewer" } }));
     const res = await v.get(`/reports?case=${EMPTY_CASE}`);
     expect(res.status).toBe(200);
     const text = words(res.text);
@@ -439,6 +440,73 @@ describe("the alert monitoring figures (the govuk tree)", () => {
     expect(text).toContain("No alerts were raised in this period.");
     expect(mainOf(res.text)).not.toMatch(/<svg|<table/);
     expect(structureProblems(res.text)).toEqual([]);
+  });
+
+  it("AM5: an Editor's case with no alerts says so and still draws the held rows the route sent, and no chart", async () => {
+    // The route sends the held rows to Editors whatever the period holds (`app.py` `_case_report`): the page does not hide them.
+    const v = await visitAs(readerOf({}));
+    const res = await v.get(`/reports?case=${EMPTY_CASE}`);
+    expect(words(res.text)).toContain("No alerts were raised in this period.");
+    expect(figuresOnPage(res.text)).toEqual({
+      "Held rows by what became of them": [
+        ["Held", "2"],
+        ["Released", "5"],
+        ["Rejected", "1"],
+      ],
+    });
+    expect(mainOf(res.text)).not.toMatch(/<svg/);
+    expect(chartProblems(res.text)).toEqual([]);
+  });
+
+  it("AM5: a period with nothing raised in it still draws what the route sent of closures, the team and held rows (a round-4 finding)", async () => {
+    // The real route counts a closure by when it was decided and the team rows over every alert the reader may see, not by when the
+    // alert was raised (`reports.py` `_monitoring_figures`, `_panel_figures`): so `raised_by_rule` is empty here while the rest is not.
+    const viewer = readerOf({ id: "viewer", cases: { [CASE]: "viewer" } });
+    const v = await visitAs(readerOf({}), [viewer]);
+    const old = (over: Partial<WorldAlert>): WorldAlert => ({ week: "2026-01-05", label: "typology", typology: "structuring", needs: "OFFICIAL", ...over });
+    v.conduit.world.set(CASE, [
+      old({ closedAs: "true_positive", closedWeek: "2026-11-16", tookBand: "over 30 days" }),
+      old({ closedAs: "false_positive", closedWeek: "2026-11-09", tookBand: "over 30 days" }),
+      old({}),
+      old({ closedAs: "false_positive", closedWeek: "2026-02-02", tookBand: "over 30 days" }),
+      old({ label: "hotlists", typology: undefined }),
+    ]);
+    const route = await routeSays(v.conduit, v.token, CASE);
+    expect(route.monitoring.raised_by_rule, "the fixture models a period with nothing raised in it").toEqual([]);
+    expect(route.monitoring.closed_by_outcome.length).toBeGreaterThan(0);
+    const html = (await v.get(`/reports?case=${CASE}`)).text;
+    const text = words(html);
+    expect(text).toContain("0 alerts raised in the last 12 weeks");
+    expect(text).toContain("No alerts were raised in this period.");
+    const tables = figuresOnPage(html);
+    expect(Object.keys(tables)).not.toContain("Alerts raised each week");
+    expect(Object.keys(tables)).not.toContain("Alerts raised by rule");
+    expect(tables["Alerts closed by outcome"]).toEqual([
+      ["False positive", "1"],
+      ["True match", "1"],
+    ]);
+    expect(tables["Alerts closed by time taken"]).toEqual([
+      ["Under a day", "0"],
+      ["1 to 7 days", "0"],
+      ["7 to 30 days", "0"],
+      ["Over 30 days", "2"],
+    ]);
+    expect(tables["Team view by rule"]).toEqual([
+      ["Hotlists", "1", "0", "0", "none closed"],
+      ["Structuring", "1", "0", "0", "50% of 2"],
+    ]);
+    expect(tables["Held rows by what became of them"]).toEqual([
+      ["Held", "2"],
+      ["Released", "5"],
+      ["Rejected", "1"],
+    ]);
+    // The same of a Viewer: the route sends no held rows, and the closures and the team are still drawn.
+    const seen = await visitOn(v.conduit, viewer);
+    const asViewer = figuresOnPage((await seen.get(`/reports?case=${CASE}`)).text);
+    expect(Object.keys(asViewer)).toContain("Alerts closed by outcome");
+    expect(Object.keys(asViewer)).not.toContain("Held rows by what became of them");
+    expect(chartProblems(html)).toEqual([]);
+    expect(structureProblems(html)).toEqual([]);
   });
 
   it("AM5: a section with nothing to count says so, and a chart is never drawn with no bar", async () => {

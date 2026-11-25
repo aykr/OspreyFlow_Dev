@@ -527,6 +527,44 @@ def test_the_total_counts_typology_alerts_alone_and_the_monitoring_figures_count
         app.dependency_overrides.clear()
 
 
+def test_the_period_bounds_what_was_raised_and_not_what_was_closed_or_waiting(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The fact the page must not get wrong (a round-4 finding): `raised_by_rule` is cut to the alerts raised in the period, but a
+    closure is counted by when it was decided and the team rows are counted over every alert the reader may see, so a period in which
+    nothing was raised can hold closures and open work. A page that said "no alerts" and drew nothing else would hide figures the route sent."""
+    from services.api import reports
+    from services.api.app import app
+
+    from tests.services.api.test_reports_viewer_journey import _journey_client
+
+    try:
+        client = _journey_client(monkeypatch, OFFICIAL_READER)
+        monkeypatch.setattr(reports, "monitoring_queue_and_left_out", _raised_long_ago)
+        monitoring = _figures_as(client, OFFICIAL_READER)["monitoring"]
+        assert monitoring["raised_by_rule"] == [], "nothing was raised in the period"
+        assert sum(c["count"] for c in monitoring["closed_by_outcome"]) == 1, "the alert closed in the period is counted"
+        assert sum(r["value"] for r in monitoring["time_to_close"]) == 1
+        team = {(t["label"], t["typology"]): t for t in monitoring["team"]}
+        assert team[("typology", "structuring")]["unassigned"] == 1, "an open alert raised long ago is in the team view"
+        assert team[("typology", "structuring")]["closed"] == 1
+    finally:
+        app.dependency_overrides.clear()
+
+
+async def _raised_long_ago(store: Any, graph: Any, analytics: Any, investigation_id: str, reader: Principal, **kwargs: Any) -> Any:
+    """Two alerts raised a year ago: one still open, one closed yesterday."""
+    from datetime import UTC, datetime, timedelta
+
+    from schemas.domain import Alert, AlertMode, QueuedAlert
+
+    long_ago = datetime.now(UTC) - timedelta(days=365)
+    open_one = Alert(id="old-open", rule_id="typology:structuring", owner_id="raiser", mode=AlertMode.FULL,
+                     created_at=long_ago, typology="structuring", referent_node_ids=["n-official"])  # fmt: skip
+    closed_one = Alert(id="old-closed", rule_id="typology:structuring", owner_id="raiser", mode=AlertMode.FULL,
+                       created_at=long_ago, typology="structuring", referent_node_ids=["n-official"],
+                       status="closed", disposition="true_positive", decided_at=datetime.now(UTC) - timedelta(days=1))  # fmt: skip
+    return [QueuedAlert(alert=a, summary="", kind="typology") for a in (open_one, closed_one)], False
+
+
 async def _only_other_kinds(store: Any, graph: Any, analytics: Any, investigation_id: str, reader: Principal, **kwargs: Any) -> Any:
     shown = [q for q in _world() if q.kind != "typology" and q.alert.referent_node_ids == ["n-official"]]
     return shown, False

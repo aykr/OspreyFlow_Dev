@@ -11,6 +11,11 @@
  *  - the case: a case the person holds no level on, one in another unit, one nobody shared and one that is not there are one
  *    answer, 404 `{"error": "investigation_not_found"}` (`InvestigationStore.get_authorized`, ADR-041);
  *  - `weeks` is a whole number from 1 to 52: another value is FastAPI's own 422 (`detail` a list), after the right and the case;
+ *  - the period bounds different things, as `reports.py` does: `raised_by_rule` and `hotlist_matches` count the alerts RAISED in it; a
+ *    closure (`closed_by_outcome`, `time_to_close`, a team row's closed count) is counted by when it was DECIDED, and the team rows
+ *    (`unassigned`, and a row of zeros for a rule whose alerts are all old) over every alert the reader may see whenever it was raised
+ *    (`_monitoring_figures` lines 199 to 218, `_panel_figures` lines 161 to 188), so a period can hold closures and open work with
+ *    nothing raised in it;
  *  - every figure is counted as the reader: an alert whose citations name anything above the reader's clearance is in no total,
  *    week, rule, outcome or age (the queue's all-or-nothing check, `alert_queue.monitoring_queue_and_left_out`, ADR-039), and the
  *    bound is counted from what the reader sees; past it, 409 `limit_exceeded` with `would_be` of the visible alerts alone;
@@ -34,6 +39,8 @@ export interface WorldAlert {
   needs: Clearance;
   /** How it was closed (`true_positive`, `false_positive`, ...), or `closed` for none; absent while it is open. */
   closedAs?: string;
+  /** The Monday of the week it was closed in; absent, the week it was raised in. The real route counts a closure by this, not by when the alert was raised. */
+  closedWeek?: string;
   /** The age band it was closed in. */
   tookBand?: "under a day" | "1 to 7 days" | "7 to 30 days" | "over 30 days";
 }
@@ -84,30 +91,38 @@ function count<T>(items: T[], key: (item: T) => string): Map<string, number> {
   return out;
 }
 
-/** The figures of the real `MonitoringFigures`, counted over the alerts a reader may see. */
-function figuresOf(alerts: WorldAlert[], weeks: number, level: "viewer" | "editor" | "author"): Record<string, unknown> {
+/** The week an alert was closed in: the real route counts a closure by its decision date. */
+const decidedWeek = (a: WorldAlert): string => a.closedWeek ?? a.week;
+
+/**
+ * The figures of the real `MonitoringFigures`. `seen` is every alert the reader may see, whenever it was raised; `since` is the
+ * period's start (`YYYY-MM-DD`): only `raised_by_rule` and `hotlist_matches` are cut to the alerts raised in it.
+ */
+function figuresOf(seen: WorldAlert[], since: string, weeks: number, level: "viewer" | "editor" | "author"): Record<string, unknown> {
+  const alerts = seen.filter((a) => a.week >= since);
   const raised = [...count(alerts, (a) => `${a.week}|${a.label}|${a.typology ?? ""}`)].map(([key, n]) => {
     const [week, label, typology] = key.split("|") as [string, string, string];
     return { week_start: week, label, ...(typology ? { typology } : {}), count: n };
   });
-  const closedAlerts = alerts.filter((a) => a.closedAs !== undefined);
-  const closed = [...count(closedAlerts, (a) => `${a.week}|${a.closedAs as string}`)].map(([key, n]) => {
+  const closedAlerts = seen.filter((a) => a.closedAs !== undefined && decidedWeek(a) >= since);
+  const closed = [...count(closedAlerts, (a) => `${decidedWeek(a)}|${a.closedAs as string}`)].map(([key, n]) => {
     const [week, label] = key.split("|") as [string, string];
     return { week_start: week, label, count: n };
   });
   const took = count(closedAlerts, (a) => a.tookBand ?? "under a day");
   const hotlists = [...count(alerts.filter((a) => a.label === "hotlists"), (a) => a.week)].map(([week, n]) => ({ week_start: week, label: "hotlists", count: n }));
-  const groups = [...new Set(alerts.map((a) => `${a.label}|${a.typology ?? ""}`))].map((key) => key.split("|") as [string, string]);
+  const groups = [...new Set(seen.map((a) => `${a.label}|${a.typology ?? ""}`))].map((key) => key.split("|") as [string, string]);
   const team = groups.map(([label, typology]) => {
-    const mine = alerts.filter((a) => a.label === label && (a.typology ?? "") === typology);
+    const mine = seen.filter((a) => a.label === label && (a.typology ?? "") === typology);
+    const done = mine.filter((a) => a.closedAs !== undefined && decidedWeek(a) >= since);
     return {
       label,
       ...(typology ? { typology } : {}),
       unassigned: mine.filter((a) => a.closedAs === undefined).length,
       mine: 0,
       older_than_week: 0,
-      closed: mine.filter((a) => a.closedAs !== undefined).length,
-      not_of_interest: mine.filter((a) => a.closedAs === "false_positive" || a.closedAs === "no_further_action").length,
+      closed: done.length,
+      not_of_interest: done.filter((a) => a.closedAs === "false_positive" || a.closedAs === "no_further_action").length,
     };
   });
   return {
@@ -187,13 +202,15 @@ export async function fakeReportConduit(readers: Reader[]): Promise<FakeReportCo
     if (!Number.isInteger(weeks) || weeks < 1 || weeks > 52) {
       return reply(res, 422, { detail: [{ type: "int_parsing", loc: ["query", "weeks"], msg: "Input should be a valid integer" }] });
     }
-    const since = Date.parse(`${AS_OF}T00:00:00Z`) - weeks * 7 * DAY;
-    // The all-or-nothing check: an alert citing anything the reader may not read is in nothing, and the bound counts what is left.
-    const visible = (fake.world.get(caseId) ?? []).filter((a) => RANK[a.needs] <= RANK[reader.clearance] && Date.parse(`${a.week}T00:00:00Z`) >= since);
-    if (visible.length > fake.bound) {
-      return reply(res, 409, { error: "limit_exceeded", cap_kind: "alerts", cap: fake.bound, would_be: visible.length, options: ["shorter_period", "fewer_typologies"] });
+    const since = new Date(Date.parse(`${AS_OF}T00:00:00Z`) - weeks * 7 * DAY).toISOString().slice(0, 10);
+    // The all-or-nothing check: an alert citing anything the reader may not read is in nothing. The bound counts, of what is left, the
+    // alerts raised in the period (`in_period`), as the real route does.
+    const seen = (fake.world.get(caseId) ?? []).filter((a) => RANK[a.needs] <= RANK[reader.clearance]);
+    const raisedIn = seen.filter((a) => a.week >= since).length;
+    if (raisedIn > fake.bound) {
+      return reply(res, 409, { error: "limit_exceeded", cap_kind: "alerts", cap: fake.bound, would_be: raisedIn, options: ["shorter_period", "fewer_typologies"] });
     }
-    return reply(res, 200, figuresOf(visible, weeks, level));
+    return reply(res, 200, figuresOf(seen, since, weeks, level));
   };
 
   const server: Server = createServer(handle);
