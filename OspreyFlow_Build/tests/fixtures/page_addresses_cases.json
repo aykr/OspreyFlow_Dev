@@ -1428,6 +1428,64 @@
    }
   },
   {
+   "case": 12,
+   "id": "12-cluster-plain-http-port",
+   "label": "cluster, origin port 80 (the load balancer's plain-HTTP port)",
+   "raised_in": "the round-3 verifier, 25 November: the owner's cases 12 and 19 hold in every shape, the cluster's too",
+   "config": {
+    "shape": "cluster",
+    "origin": "https://osprey.example.org:80",
+    "own_certificate": null,
+    "expose_conduit": false,
+    "redirect_http": false,
+    "access_key": false,
+    "pages": true,
+    "complete_govuk_tree": false,
+    "brand": "ospreyflow"
+   },
+   "expect": {
+    "refuse": {
+     "key": "port_taken",
+     "error": "PageServiceNeedsAnotherPort",
+     "words": [
+      ":80",
+      "plain HTTP",
+      "network.public_origin"
+     ],
+     "names_setting": true
+    }
+   }
+  },
+  {
+   "case": 19,
+   "id": "19-cluster-8080",
+   "label": "cluster, an HTTPS origin on the plain-HTTP port 8080",
+   "raised_in": "the round-3 verifier, 25 November: the owner's cases 12 and 19 hold in every shape, the cluster's too",
+   "config": {
+    "shape": "cluster",
+    "origin": "https://osprey.example.org:8080",
+    "own_certificate": null,
+    "expose_conduit": false,
+    "redirect_http": false,
+    "access_key": false,
+    "pages": true,
+    "complete_govuk_tree": false,
+    "brand": "ospreyflow"
+   },
+   "expect": {
+    "refuse": {
+     "key": "port_taken",
+     "error": "PageServiceNeedsAnotherPort",
+     "words": [
+      ":8080",
+      "plain HTTP",
+      "network.public_origin"
+     ],
+     "names_setting": true
+    }
+   }
+  },
+  {
    "case": 17,
    "id": "17-cloud-platform",
    "label": "cloud-platform, the setting on",

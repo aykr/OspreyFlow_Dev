@@ -47,6 +47,7 @@ no other folder; the render helpers it imports glob only what is named here.
 from __future__ import annotations
 
 import contextlib
+import json
 import re
 from collections.abc import Callable, Iterator
 from pathlib import Path
@@ -2490,8 +2491,20 @@ ORIGIN_FORMS = [
     ("path", "https://osprey.example.org/app", "refused", None, False),
     ("query", "https://osprey.example.org?x=1", "refused", None, False),
     ("fragment", "https://osprey.example.org#x", "refused", None, False),
-    ("default-port", "https://osprey.example.org:443", "rendered", "https://osprey.example.org", False),
-    ("default-port-zeros", "https://osprey.example.org:0443", "rendered", "https://osprey.example.org", False),
+    (
+        "default-port",
+        "https://osprey.example.org:443",
+        "rendered",
+        "https://osprey.example.org",
+        False,
+    ),
+    (
+        "default-port-zeros",
+        "https://osprey.example.org:0443",
+        "rendered",
+        "https://osprey.example.org",
+        False,
+    ),
     ("default-port-userinfo", "https://user:pw@osprey.example.org:443", "refused", None, False),
     ("ipv4", "https://10.1.2.3", "refused", None, True),
     ("ipv4-port", "https://10.1.2.3:9443", "refused", None, True),
@@ -2599,9 +2612,7 @@ def test_the_refusal_is_the_only_thing_between_a_form_and_a_service_that_cannot_
     the row says the service refuses it, the real check refuses that environment (and so the
     refusal is what keeps a service that cannot start from being rendered); where it does not, the
     refusal is the render being stricter than it need be, and the real check says so."""
-    with _patched(
-        "harness.page_addresses", "_origin_problem", _no_refusal_at_all
-    ):
+    with _patched("harness.page_addresses", "_origin_problem", _no_refusal_at_all):
         files = _small_files(brand, origin, pages=True)
     assert not isinstance(files, ValueError), f"{name}: another refusal stands in the way: {files}"
     _public, _issuer, verdict = _what_the_render_gave("small", files)
@@ -2752,3 +2763,148 @@ def test_an_https_origin_on_a_plain_http_port_of_another_shape_is_refused(
     from schemas.deployment import OspreyConfig
 
     assert render(OspreyConfig.model_validate(raw), resolver=ref.resolver).artefacts
+
+
+# ---- PL7f round 4: with the setting off, every address is what main rendered before this part ----
+#
+# **What is asked (rule 12).** ADR-152 Amendment 3 item 2 and the release note both say: with
+# `pages.enabled` off, a deployment's rendered files are exactly what they were. PL7f's one
+# normaliser dropped a written default port (`https://host:443`) and lower-cased the host for every
+# address, setting or no setting, so Keycloak's issuer (`KC_HOSTNAME`), the env file's origins, the
+# Glass's identity provider, the runbook, the Glass client's redirect addresses, the organisation's
+# redirect addresses and the sign-in page's Glass origin changed for a deployment that never turned
+# the service on. `tests/fixtures/pages_off_addresses_reference.json` holds what the tree at its
+# `commit` (main before this part) rendered for each shape and origin, made by
+# `tests/harness/pages_off_capture.py` run against that tree out of git, never by hand;
+# `test_the_off_reference_is_what_the_commit_renders` proves it still is, wherever the commit is
+# in the clone. It also reads, through git, `OspreyFlow_Core/` of that commit (extracted to
+# `tmp_path`), and the one fixture file; it walks no other folder.
+
+OFF_REFERENCE_FILE = (
+    Path(__file__).resolve().parents[1] / "fixtures" / "pages_off_addresses_reference.json"
+)
+OFF_REFERENCE = json.loads(OFF_REFERENCE_FILE.read_text(encoding="utf-8"))
+
+
+def off_differences(got: dict[str, Any], key: str) -> list[str]:
+    """Each field of the capture for `key` that is not what the reference holds, naming the field
+    and, for the rendered files, the file."""
+    want = OFF_REFERENCE["cases"][key]
+    found: list[str] = []
+    for field, expected in want.items():
+        actual = got[key].get(field)
+        if field == "render" and isinstance(expected, dict) and isinstance(actual, dict):
+            for name in sorted(set(expected) | set(actual)):
+                if expected.get(name) != actual.get(name):
+                    found.append(f"{key}: {name} is not what main rendered")
+        elif actual != expected:
+            found.append(f"{key}: {field} is not what main rendered")
+    return found
+
+
+@pytest.fixture(scope="module")
+def off_capture() -> dict[str, Any]:
+    from tests.harness import pages_off_capture
+
+    return pages_off_capture.as_data()
+
+
+@pytest.mark.parametrize("key", sorted(OFF_REFERENCE["cases"]))
+def test_off_every_identity_and_sign_in_address_is_what_main_rendered(
+    key: str, off_capture: dict[str, Any]
+) -> None:
+    """Each shape, with the origin written with a default port, without one, with the host in
+    upper case and on another port, renders every address as the reference does."""
+    assert off_differences(off_capture, key) == []
+
+
+def test_the_off_reference_covers_a_written_default_port_in_every_shape() -> None:
+    """The cases that matter are in the reference, in the compose shapes, the cluster and the cloud
+    platform: an origin with its default port written out, the host in upper case (where the shape
+    takes one), and the same origin written plain."""
+    keys = list(OFF_REFERENCE["cases"])
+    for shape in ("local-lite", "small", "small+tls", "cluster", "cloud-platform"):
+        origins = [k.split(" ", 1)[1] for k in keys if k.startswith(f"{shape} ")]
+        hosts = [o.split("://")[1].split(":")[0] for o in origins]
+        assert any(o.endswith((":443", ":80")) for o in origins), shape
+        assert any(h != h.lower() for h in hosts) or shape == "cloud-platform", shape
+        assert any(o.count(":") == 1 and o.split("://")[1] == h for o, h in zip(origins, hosts)), (
+            shape
+        )
+
+
+def _the_commit_is_here() -> bool:
+    import subprocess
+
+    done = subprocess.run(
+        ["git", "cat-file", "-e", f"{OFF_REFERENCE['commit']}^{{commit}}"],
+        cwd=Path(__file__).resolve().parent,
+        capture_output=True,
+        check=False,
+    )
+    return done.returncode == 0
+
+
+def test_the_off_reference_is_what_the_commit_renders(tmp_path: Path) -> None:
+    """The reference is not hand-written: the capture script, run against `OspreyFlow_Core/` taken
+    out of git at the reference's commit, gives exactly the file's cases. Skipped in words only
+    where the clone does not hold that commit (a shallow one), where the file stays the pin."""
+    import os
+    import subprocess
+    import sys
+
+    if not _the_commit_is_here():
+        pytest.skip(
+            f"commit {OFF_REFERENCE['commit']} is not in this clone (a shallow one): the reference "
+            "file pins the setting-off render, and was made from that commit"
+        )
+    here = Path(__file__).resolve()
+    repo = here.parents[3]
+    archive = tmp_path / "old.tar"
+    for command in (
+        ["git", "archive", OFF_REFERENCE["commit"], "-o", str(archive), "OspreyFlow_Core",
+         ":!OspreyFlow_Core/docs", ":!OspreyFlow_Core/apps/workspace/src",
+         ":!OspreyFlow_Core/apps/workspace/public", ":!OspreyFlow_Core/apps/workspace/tests"],
+        ["tar", "-x", "-f", str(archive), "--directory", str(tmp_path)],
+    ):  # fmt: skip
+        subprocess.run(command, cwd=repo, check=True, capture_output=True)
+    core = tmp_path / "OspreyFlow_Core"
+    build = here.parents[2]
+    done = subprocess.run(
+        [sys.executable, str(here.parent / "pages_off_capture.py")],
+        cwd=tmp_path,
+        env={
+            **os.environ,
+            "PYTHONPATH": os.pathsep.join([str(core), str(core / "packages"), str(build)]),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=300,
+    )
+    assert done.returncode == 0, done.stderr[-2000:]
+    assert json.loads(done.stdout) == OFF_REFERENCE["cases"]
+
+
+def test_a_written_default_port_forgotten_is_red(off_capture: dict[str, Any]) -> None:
+    """Planted at the shape the renderers see (rule 15): the one normaliser's address, as PL7f
+    round 3 had it, leaves a written default port off whether or not the service is on. The same
+    comparison names `KC_HOSTNAME`'s file for the `:443` origin, and is clean without the plant."""
+    from harness import page_addresses
+
+    key = "small https://osprey.example.org:443"
+    assert off_differences(off_capture, key) == []
+
+    def forgotten(*given: Any) -> str:
+        scheme, host, port = given[-3:]
+        return f"{scheme}://{host}" + (
+            f":{port}" if port != page_addresses.default_port(scheme) else ""
+        )
+
+    from tests.harness import pages_off_capture
+
+    with mock.patch.object(page_addresses, "address", forgotten):
+        planted = json.loads(json.dumps(pages_off_capture.capture(), sort_keys=True, default=str))
+    found = off_differences(planted, key)
+    assert any("compose.yaml" in line for line in found), found
+    assert any("deployment.env" in line for line in found), found
