@@ -25,7 +25,7 @@ send, an invite body the real route refuses). RM1a uses the same pattern.
    tests name a world by id. Two readers of different clearance per world where a figure is per-reader (rule 7).
 4. **The hand-written fixtures go**, route by route, as each golden set lands; none is left half-hand-written.
 
-## Open questions for the owner
+## The owner's rulings on the open questions (25 November 2026): (a) one part per route, the report route first (this part), then AD3b and RM1b; (b) GR3a merges first; (c) the drift check runs in `make test` on every merge, and regenerating the goldens is a separate target a builder runs on purpose, never automatic. Cut after GR3a merges.
 
 - **(a) Scope:** all three pages' routes in one part, or one part per route (GR3b report, AD3b admin, RM1b queue)?
   My proposal: one part for the report route first (GR3a's), then the others as each page's next part.

@@ -1,7 +1,7 @@
 # Slice GG2a · GG2 · The budget page: Sigma 4 in the page service, measured against spec/02 §5 at 50,000 nodes and 250,000 links, before any graph module is built (ruled by the owner, 25 November 2026)
 
 **Status: ruled (the owner, 25 November 2026: proposals 1(a) to 6(a) below); an away round (D246) only if PL7f has
-merged by 13:00.** On the server's build account: **on the branch `away/GG2a`, a commit at least every 15 minutes,
+merged by 13:30 (moved from 13:00 by the owner, 25 November about 12:40 UTC).** On the server's build account: **on the branch `away/GG2a`, a commit at least every 15 minutes,
 nothing merged or pushed to the dev repository.** On the owner's return he fetches `away/GG2a` from server-backup; the
 conductor starts GG2a from main and **its round 1 merges `away/GG2a` in** (the owner's one exception, D246's away
 rounds only).

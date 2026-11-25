@@ -3,6 +3,20 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 25 November 2026, about 12:40 UTC: GR3b's three questions; hand-back 53; GG2a's cut-off (the owner, in chat)
+
+**GR3b:** (a) **one part per route**: the report route first (GR3b), then AD3b and RM1b as each page's next part; (b) **GR3a merges first**; (c) **the drift check** (goldens against what the route answers now) **runs in `make test` on every merge**; **regenerating the goldens is a separate target a builder runs on purpose, never automatic.** GR3b is cut after GR3a merges.
+**The two line faults** (`round_table` returning a part's oldest table; the board showing a past-dated `resume.tsv` line as waiting) **are line-fix's hand-back 53**, which the owner applies tonight; **the conductor keeps its workaround** (superseded tables moved to `slices/aside/`) until then.
+**GG2a's cut-off moves to 13:30** (the owner back at about 13:30): its away round runs only if PL7f has merged by then.
+
+## 25 November 2026, about 12:25 UTC: every database role's password as a client-made verifier (the owner, in chat)
+
+**Option (a): a small part of its own (AD1e):** a client-made SCRAM-SHA-256 verifier for **every role the render's database steps set** (the gateway's `litellm`, Keycloak's, and any other), so no plaintext password is ever in SQL text sent to PostgreSQL; **shown red first with `log_statement = 'all'`**, using AD1c's approach. **A security finding: never accepted narrower.** **It starts after AD1c merges.**
+
+## 25 November 2026, about 11:45 UTC: GR3a back for I15's test (the owner, in chat)
+
+**GR3a: sent back for the I15 test under its exact name** (`test_the_dashboard_page_answers_a_reader_without_read_reports_as_a_missing_report`); **an access rule is not accepted narrower**, even on the standing line. One row, no round beyond that one.
+
 ## 25 November 2026, about 08:10 UTC: PL8a round 13; apply_52 tonight (the owner, in chat)
 
 **PL8a:** one more round on its structural table (his third add-round line today), the table renamed ROUND13 (round 12's builder was shown round 10's table by the line's `round_table` fault, so it did row 1 only). The stale `PL8a accept 2026-11-24` line deleted by the owner. **apply_52 (line-fix 52) is not applied in this gap: the conductor keeps merging; the owner applies it tonight.**
