@@ -667,7 +667,9 @@ def test_the_key_check_is_red_when_the_issuers_fetch_is_not_on_the_open_list(tai
     assert len(listed) == len(site.OPEN_ON_THE_IDENTITY_PROVIDER) - 1
     with mock.patch.object(site, "OPEN_ON_THE_IDENTITY_PROVIDER", listed):
         found = findings(row, config, render_of(config))
-    assert any(f"{tail}" in line and "is not on the key's open list" in line for line in found), found
+    assert any(f"{tail}" in line and "is not on the key's open list" in line for line in found), (
+        found
+    )
     assert findings(row, config, render_of(config)) == []
 
 
@@ -708,6 +710,22 @@ def _env_file_value(artefacts: dict[str, str], name: str) -> str | None:
     return None
 
 
+def _chart_workload_value(artefacts: dict[str, str], workload: str, name: str) -> str | None:
+    """A variable of a chart workload's `env` (the cluster shape's `KC_HOSTNAME`), as written."""
+    for w in yaml.safe_load(artefacts["values.yaml"]).get("workloads", []):
+        if w["name"] == workload:
+            for entry in w.get("env") or []:
+                if entry["name"] == name:
+                    return None if "value" not in entry else str(entry["value"])
+    return None
+
+
+def _chart_environment_value(artefacts: dict[str, str], name: str) -> str | None:
+    """A variable of the chart's shared `environment` map (the cluster's address file)."""
+    found = (yaml.safe_load(artefacts["values.yaml"]).get("environment") or {}).get(name)
+    return None if found is None else str(found)
+
+
 def agreement_findings(
     row: dict[str, Any], config: Any, artefacts: dict[str, str], client: dict[str, Any]
 ) -> list[str]:
@@ -733,17 +751,20 @@ def agreement_findings(
         found.append(f"the realm client's post-logout address is not {origin}/")
     if row["config"]["shape"] in ("local-lite", "small"):
         hostname = _compose_value(artefacts, "keycloak", "KC_HOSTNAME")
-        if f"{hostname}/realms/osprey" != issuer:
-            found.append(
-                f"Keycloak publishes {hostname}/realms/osprey, the service is given {issuer}"
-            )
-        if _env_file_value(artefacts, "OSPREY_IDENTITY_ORIGIN") != hostname:
-            found.append("OSPREY_IDENTITY_ORIGIN is not the identity address Keycloak is given")
-        if _env_file_value(artefacts, "OSPREY_GLASS_ORIGIN") != origin:
-            found.append(
-                f"OSPREY_GLASS_ORIGIN is {_env_file_value(artefacts, 'OSPREY_GLASS_ORIGIN')}, "
-                f"the service is given {origin}"
-            )
+        identity_origin = _env_file_value(artefacts, "OSPREY_IDENTITY_ORIGIN")
+        glass_origin = _env_file_value(artefacts, "OSPREY_GLASS_ORIGIN")
+    else:
+        hostname = _chart_workload_value(artefacts, "keycloak", "KC_HOSTNAME")
+        identity_origin = _chart_environment_value(artefacts, "OSPREY_IDENTITY_ORIGIN")
+        glass_origin = _chart_environment_value(artefacts, "OSPREY_GLASS_ORIGIN")
+    if hostname is None:
+        found.append("the render gives Keycloak no KC_HOSTNAME")
+    if f"{hostname}/realms/osprey" != issuer:
+        found.append(f"Keycloak publishes {hostname}/realms/osprey, the service is given {issuer}")
+    if identity_origin != hostname:
+        found.append("OSPREY_IDENTITY_ORIGIN is not the identity address Keycloak is given")
+    if glass_origin != origin:
+        found.append(f"OSPREY_GLASS_ORIGIN is {glass_origin}, the service is given {origin}")
     return found
 
 
@@ -817,6 +838,38 @@ def test_keycloak_given_the_port_the_service_is_not_is_red() -> None:
     )
     found = agreement_findings(row, config, planted, _client_of(config))
     assert any(line.startswith("Keycloak publishes") for line in found), found
+    assert agreement_findings(row, config, artefacts, _client_of(config)) == []
+
+
+@pytest.mark.parametrize("row_id", ["16-cluster-default-port", "16-cluster-explicit-443"])
+def test_a_cluster_keycloak_given_another_issuer_than_the_service_is_red(row_id: str) -> None:
+    """Round 3 (the gap: the cluster rows were checked for the realm client alone): the chart's
+    Keycloak workload given `KC_HOSTNAME` with the port (the old `sites()` shape for case 7) or
+    another name, at the shape the chart carries it (`env` of the `keycloak` workload). Clean
+    first, red naming Keycloak, clean again; the address file's two origins likewise."""
+    row = _row(row_id)
+    config = config_of(row)
+    artefacts = render_of(config)
+    assert agreement_findings(row, config, artefacts, _client_of(config)) == []
+    hostname = _chart_workload_value(artefacts, "keycloak", "KC_HOSTNAME")
+    assert hostname == "https://id.osprey.example.org", hostname
+    for planted_text, says in [
+        (
+            artefacts["values.yaml"].replace(f"value: {hostname}\n", f"value: {hostname}:443\n", 1),
+            "Keycloak publishes",
+        ),
+        (
+            artefacts["values.yaml"].replace(
+                f"OSPREY_IDENTITY_ORIGIN: {hostname}\n",
+                "OSPREY_IDENTITY_ORIGIN: https://x.example.org\n",
+            ),
+            "OSPREY_IDENTITY_ORIGIN",
+        ),
+    ]:
+        assert planted_text != artefacts["values.yaml"]
+        planted = {**artefacts, "values.yaml": planted_text}
+        found = agreement_findings(row, config, planted, _client_of(config))
+        assert any(says in line for line in found), found
     assert agreement_findings(row, config, artefacts, _client_of(config)) == []
 
 
