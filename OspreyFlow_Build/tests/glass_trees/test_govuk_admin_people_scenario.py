@@ -67,16 +67,26 @@ EXPECTED_FUNCTIONS = 49
 
 #: What each behaviour of the page is, by id: a behaviour with no scenario is one nobody will build or test.
 BRIEF: dict[str, tuple[str, ...]] = {
-    "a table of the people the Conduit sends: caption, column headers, row headers, in order": ("AP1",),
+    "a table of the people the Conduit sends: caption, column headers, row headers, in order": (
+        "AP1",
+    ),
     "each role in words, never an identifier": ("AP2",),
     "each person's state in words": ("AP3",),
     "an empty list, a failed read, an ended session": ("AP4",),
-    "a refusal is the page of a path nothing serves, with none of the Conduit's words": ("AP5",),
-    "everything the Conduit sends drawn, nothing chosen by the page, no count": ("AP6",),
-    "the Conduit asked as the person, two reads, nothing of the browser's, no write": ("AP7",),
+    "a refusal is the page of a path nothing serves, with none of the Conduit's words": (
+        "AP5",
+    ),
+    "everything the Conduit sends drawn, nothing chosen by the page, no count": (
+        "AP6",
+    ),
+    "the Conduit asked as the person, two reads, nothing of the browser's, no write": (
+        "AP7",
+    ),
     "structure, no control, no script, the stops in order, by keyboard": ("AP8",),
     "British English, its own words, the Studio's session words": ("AP9",),
-    "the GOV.UK tree serves it, the Default tree does not, the lists name it": ("AP10",),
+    "the GOV.UK tree serves it, the Default tree does not, the lists name it": (
+        "AP10",
+    ),
     "each check is red against the real page with one thing changed": ("AP11",),
 }
 
@@ -162,7 +172,9 @@ def scenario_problems(data: dict[str, Any]) -> list[str]:
         if not behaviour:
             found.append(f"{row_id} says no behaviour")
         if tree != "GOV.UK":
-            found.append(f"{row_id} runs on {tree!r}: the People page is the GOV.UK tree's")
+            found.append(
+                f"{row_id} runs on {tree!r}: the People page is the GOV.UK tree's"
+            )
         if not read_from:
             found.append(f"{row_id} says nothing of what it was read from")
         if PAGE_TEST_NAME not in page_test:
@@ -175,9 +187,13 @@ def scenario_problems(data: dict[str, Any]) -> list[str]:
                 found.append(f"the behaviour {behaviour!r} has no scenario {row_id}")
     named_in_tests = set(TITLE.findall(data["page_test"]))
     for row_id in sorted(set(rows) - named_in_tests):
-        found.append(f"{row_id} names {PAGE_TEST_NAME} but no case of it is titled {row_id}")
+        found.append(
+            f"{row_id} names {PAGE_TEST_NAME} but no case of it is titled {row_id}"
+        )
     for row_id in sorted(named_in_tests - set(rows)):
-        found.append(f"{PAGE_TEST_NAME} has a case titled {row_id}, which is no scenario")
+        found.append(
+            f"{PAGE_TEST_NAME} has a case titled {row_id}, which is no scenario"
+        )
     return found
 
 
@@ -209,7 +225,11 @@ def citation_problems(data: dict[str, Any]) -> list[str]:
                 found.append(f"{row_id} cites {path}, which is not a file")
                 continue
             text = read(source)
-            found += [f"{row_id}: {path} does not hold {word!r}" for word in words if word not in text]
+            found += [
+                f"{row_id}: {path} does not hold {word!r}"
+                for word in words
+                if word not in text
+            ]
     return found
 
 
@@ -217,19 +237,30 @@ def function_problems(data: dict[str, Any]) -> list[str]:
     found: list[str] = []
     rows = {row["id"]: row for row in data["functions"]}
     if len(data["functions"]) != EXPECTED_FUNCTIONS:
-        found.append(f"FUNCTIONS.yaml has {len(data['functions'])} rows, not {EXPECTED_FUNCTIONS}")
+        found.append(
+            f"FUNCTIONS.yaml has {len(data['functions'])} rows, not {EXPECTED_FUNCTIONS}"
+        )
     admin = rows.get("admin")
     if admin is None:
         return [*found, "the admin row is missing"]
     ids = [item.strip() for item in admin["scenario"].split(",") if item.strip()]
     if ids != EXPECTED_IDS or ids != list(rows_of(section_of(data["spec_08"]))):
-        found.append(f"the admin row's scenario is {admin['scenario']!r}, not the section's ids {EXPECTED_IDS}")
+        found.append(
+            f"the admin row's scenario is {admin['scenario']!r}, not the section's ids {EXPECTED_IDS}"
+        )
     if admin["route"] != "":
-        found.append(f"the admin row has the route {admin['route']!r}: the function is not complete, so its route stays empty")
+        found.append(
+            f"the admin row has the route {admin['route']!r}: the function is not complete, so its route stays empty"
+        )
     if admin["status"] != "planned":
         found.append(f"the admin row's status is {admin['status']!r}, not planned")
-    if not admin["name"].startswith(ADMIN_ROW_NAME_STARTS) or admin["where"] != ADMIN_ROW_WHERE:
-        found.append("the admin row's name or where has moved: only its scenario is this slice's to fill")
+    if (
+        not admin["name"].startswith(ADMIN_ROW_NAME_STARTS)
+        or admin["where"] != ADMIN_ROW_WHERE
+    ):
+        found.append(
+            "the admin row's name or where has moved: only its scenario is this slice's to fill"
+        )
     needs = rows.get("needs-you")
     if needs is None or needs["scenario"] != "" or needs["route"] != "":
         found.append("the needs-you row is not as it was: no scenario and no route")
@@ -244,7 +275,9 @@ def function_problems(data: dict[str, Any]) -> list[str]:
 
 def route_problems(data: dict[str, Any]) -> list[str]:
     if data["routes"] != ["/help", PATH]:
-        return [f"the route list is {data['routes']!r}: the tree has two pages, /help and {PATH}"]
+        return [
+            f"the route list is {data['routes']!r}: the tree has two pages, /help and {PATH}"
+        ]
     return []
 
 
@@ -260,17 +293,25 @@ def module_problems(data: dict[str, Any]) -> list[str]:
         if needle not in text:
             found.append(f"the page module does not name {label}: {needle!r}")
     if not re.search(r"\badminPeople\b", data["page_list"]):
-        found.append("the one table of pages (pageList.ts) does not hold the People page")
+        found.append(
+            "the one table of pages (pageList.ts) does not hold the People page"
+        )
     if PATH not in " ".join(data["routes"]):
         found.append(f"the route list does not hold {PATH}")
     return found
 
 
 def known_list_problems(data: dict[str, Any]) -> list[str]:
-    block = re.search(r"KNOWN_WITHOUT_SCENARIO = \{(.*?)\n\}", data["known"], flags=re.S)
+    block = re.search(
+        r"KNOWN_WITHOUT_SCENARIO = \{(.*?)\n\}", data["known"], flags=re.DOTALL
+    )
     if block is None:
         return ["test_functions_yaml.py has no KNOWN_WITHOUT_SCENARIO list"]
-    return ['KNOWN_WITHOUT_SCENARIO still holds "admin": the list may only shrink'] if '"admin"' in block.group(1) else []
+    return (
+        ['KNOWN_WITHOUT_SCENARIO still holds "admin": the list may only shrink']
+        if '"admin"' in block.group(1)
+        else []
+    )
 
 
 # ---------------------------------------------------------------------------------------------------- the real inputs
@@ -293,7 +334,9 @@ def test_the_real_inputs_have_no_problem() -> None:
 def test_every_scenario_has_a_page_test_and_back() -> None:
     assert scenario_problems(inputs()) == []
     assert PAGE_TEST.is_file()
-    assert KEYBOARD_TEST.is_file(), "AP8 names keyboard/admin-people.spec.ts, which is not a file"
+    assert KEYBOARD_TEST.is_file(), (
+        "AP8 names keyboard/admin-people.spec.ts, which is not a file"
+    )
     section = section_of(read(SPEC_08))
     assert "keyboard/admin-people.spec.ts" in section
     assert "test_govuk_admin_people_scenario.py" in section
@@ -328,7 +371,11 @@ def test_the_known_without_scenario_list_no_longer_holds_admin() -> None:
 
 def _without_row(row_id: str) -> Callable[[dict[str, Any]], None]:
     def plant(data: dict[str, Any]) -> None:
-        data["spec_08"] = "\n".join(line for line in data["spec_08"].splitlines() if not line.startswith(f"| {row_id} |"))
+        data["spec_08"] = "\n".join(
+            line
+            for line in data["spec_08"].splitlines()
+            if not line.startswith(f"| {row_id} |")
+        )
 
     return plant
 
@@ -341,6 +388,31 @@ def _replace(key: str, old: str, new: str) -> Callable[[dict[str, Any]], None]:
     return plant
 
 
+def _replace_all(key: str, old: str, new: str) -> Callable[[dict[str, Any]], None]:
+    """Every occurrence: a name that is written in an import and again where it is used is left out of both."""
+
+    def plant(data: dict[str, Any]) -> None:
+        assert old in data[key], f"the plant's anchor {old!r} is not in {key}"
+        data[key] = data[key].replace(old, new)
+
+    return plant
+
+
+def _tree_of_row(row_id: str, tree: str) -> Callable[[dict[str, Any]], None]:
+    """The last cell of one row of THIS scenario (an earlier scenario's rows carry the same `| GOV.UK |`, which a plain replace would hit)."""
+
+    def plant(data: dict[str, Any]) -> None:
+        lines = data["spec_08"].splitlines()
+        index = next(
+            i for i, line in enumerate(lines) if line.startswith(f"| {row_id} |")
+        )
+        assert lines[index].endswith("| GOV.UK |")
+        lines[index] = lines[index][: -len("| GOV.UK |")] + f"| {tree} |"
+        data["spec_08"] = "\n".join(lines)
+
+    return plant
+
+
 def _row(row_id: str, **changes: Any) -> Callable[[dict[str, Any]], None]:
     def plant(data: dict[str, Any]) -> None:
         next(r for r in data["functions"] if r.get("id") == row_id).update(changes)
@@ -348,42 +420,149 @@ def _row(row_id: str, **changes: Any) -> Callable[[dict[str, Any]], None]:
     return plant
 
 
-PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, Any]], list[str]], str]] = [
-    ("a scenario row removed", _without_row("AP5"), scenario_problems, "no scenario AP5"),
-    ("a page test case with no scenario row", _without_row("AP11"), scenario_problems, "titled AP11"),
-    ("a row run on the other tree", _replace("spec_08", "| GOV.UK |", "| Default |"), scenario_problems, "GOV.UK tree's"),
+PLANTS: list[
+    tuple[
+        str,
+        Callable[[dict[str, Any]], None],
+        Callable[[dict[str, Any]], list[str]],
+        str,
+    ]
+] = [
+    (
+        "a scenario row removed",
+        _without_row("AP5"),
+        scenario_problems,
+        "no scenario AP5",
+    ),
+    (
+        "a page test case with no scenario row",
+        _without_row("AP11"),
+        scenario_problems,
+        "titled AP11",
+    ),
+    (
+        "a row run on the other tree",
+        _tree_of_row("AP3", "Default"),
+        scenario_problems,
+        "AP3 runs on",
+    ),
     (
         "a case retitled so the page test names no AP4",
         _replace("page_test", 'it("AP4: ', 'it("AP44: '),
         scenario_problems,
         "titled AP4",
     ),
-    ("the refusal sentence left out", _replace("spec_08", "a 404 with the very same page as a path nothing serves", "a refusal"), prose_problems, "the refusal"),
-    ("scripts off left out", _replace("spec_08", "**Works with scripts off.**", "**Works.**"), prose_problems, "scripts off"),
-    ("who may see it left out", _replace("spec_08", "**Who may see it.**", "**Who.**"), prose_problems, "who may see it"),
+    (
+        "the refusal sentence left out",
+        _replace(
+            "spec_08",
+            "a 404 with the very same page as a path nothing serves",
+            "a refusal",
+        ),
+        prose_problems,
+        "the refusal",
+    ),
+    (
+        "scripts off left out",
+        _replace("spec_08", "**Works with scripts off.**", "**Works.**"),
+        prose_problems,
+        "scripts off",
+    ),
+    (
+        "who may see it left out",
+        _replace("spec_08", "**Who may see it.**", "**Who.**"),
+        prose_problems,
+        "who may see it",
+    ),
     (
         "words a source does not hold",
-        _replace("spec_08", '.tsx` "People and their roles"', '.tsx` "People and their duties"'),
+        _replace(
+            "spec_08",
+            '.tsx` "People and their roles"',
+            '.tsx` "People and their duties"',
+        ),
         citation_problems,
         "does not hold",
     ),
-    ("the admin row without its scenario", _row("admin", scenario=""), function_problems, "scenario"),
-    ("the admin row routed while incomplete", _row("admin", route=PATH), function_problems, "stays empty"),
-    ("the admin row's where moved", _row("admin", where="apps/workspace/src/admin/"), function_problems, "has moved"),
-    ("the needs-you row given a scenario", _row("needs-you", scenario="AP1"), function_problems, "needs-you"),
+    (
+        "the admin row without its scenario",
+        _row("admin", scenario=""),
+        function_problems,
+        "scenario",
+    ),
+    (
+        "the admin row routed while incomplete",
+        _row("admin", route=PATH),
+        function_problems,
+        "stays empty",
+    ),
+    (
+        "the admin row's where moved",
+        _row("admin", where="apps/workspace/src/admin/"),
+        function_problems,
+        "has moved",
+    ),
+    (
+        "the needs-you row given a scenario",
+        _row("needs-you", scenario="AP1"),
+        function_problems,
+        "needs-you",
+    ),
     ("the help row unrouted", _row("help", route=""), function_problems, "help row"),
-    ("a route in the list the code has no page for", lambda d: d["routes"].append("/welcome"), route_problems, "two pages"),
-    ("the People path left out of the list", lambda d: d["routes"].remove(PATH), route_problems, "two pages"),
-    ("the page at another path", _replace("page_module", f'path: "{PATH}"', 'path: "/admin/persons"'), module_problems, "its path"),
-    ("the page for both trees", _replace("page_module", 'trees: ["govuk"]', 'trees: ["default", "govuk"]'), module_problems, "GOV.UK tree alone"),
-    ("the page answering POST", _replace("page_module", 'methods: ["GET"]', 'methods: ["GET", "POST"]'), module_problems, "GET alone"),
-    ("the page under another row", _replace("page_module", 'id: "admin"', 'id: "needs-you"'), module_problems, "its id"),
-    ("the page left out of the table of pages", _replace("page_list", "adminPeople", "somethingElse"), module_problems, "does not hold the People page"),
-    ("admin left in the known list", _replace("known", '"needs-you",', '"needs-you", "admin",'), known_list_problems, "still holds"),
+    (
+        "a route in the list the code has no page for",
+        lambda d: d["routes"].append("/welcome"),
+        route_problems,
+        "two pages",
+    ),
+    (
+        "the People path left out of the list",
+        lambda d: d["routes"].remove(PATH),
+        route_problems,
+        "two pages",
+    ),
+    (
+        "the page at another path",
+        _replace("page_module", f'path: "{PATH}"', 'path: "/admin/persons"'),
+        module_problems,
+        "its path",
+    ),
+    (
+        "the page for both trees",
+        _replace("page_module", 'trees: ["govuk"]', 'trees: ["default", "govuk"]'),
+        module_problems,
+        "GOV.UK tree alone",
+    ),
+    (
+        "the page answering POST",
+        _replace("page_module", 'methods: ["GET"]', 'methods: ["GET", "POST"]'),
+        module_problems,
+        "GET alone",
+    ),
+    (
+        "the page under another row",
+        _replace("page_module", 'id: "admin"', 'id: "needs-you"'),
+        module_problems,
+        "its id",
+    ),
+    (
+        "the page left out of the table of pages",
+        _replace_all("page_list", "adminPeople", "somethingElse"),
+        module_problems,
+        "does not hold the People page",
+    ),
+    (
+        "admin left in the known list",
+        _replace("known", '"needs-you",', '"needs-you", "admin",'),
+        known_list_problems,
+        "still holds",
+    ),
 ]
 
 
-@pytest.mark.parametrize(("label", "plant", "check", "expected"), PLANTS, ids=[p[0] for p in PLANTS])
+@pytest.mark.parametrize(
+    ("label", "plant", "check", "expected"), PLANTS, ids=[p[0] for p in PLANTS]
+)
 def test_the_check_fails_for_each_planted_fault(
     label: str,
     plant: Callable[[dict[str, Any]], None],

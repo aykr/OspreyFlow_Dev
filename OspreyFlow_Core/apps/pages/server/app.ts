@@ -44,6 +44,7 @@ import { STAGED_SWEEP_MS, endStaged } from "./staging.js";
 import { MemorySessionStore } from "./sessionStore.js";
 import type { SessionStore } from "./sessionStore.js";
 import { SIGNED_OUT_WORDS, isV1Path, rawPathOf, refuseJson } from "./v1.js";
+import { NOT_FOUND } from "./views/notFoundWords.js";
 
 export interface AppDeps {
   store: SessionStore;
@@ -614,7 +615,7 @@ export function createApp(deps: AppDeps): Express {
       next();
       return;
     }
-    res.status(404).render("error", { title: "Page not found", message: "That page could not be found." });
+    res.status(404).render("error", { ...NOT_FOUND });
   });
 
   const onError: ErrorRequestHandler = (error: unknown, req, res, _next) => {
