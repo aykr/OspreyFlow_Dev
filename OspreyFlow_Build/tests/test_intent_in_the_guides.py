@@ -11,7 +11,7 @@ What the owner's text asks, and the case that fails if it is not so (rule 12):
 - the architecture guide's is the fullest and the others link to it —
   `test_the_architecture_guide_has_the_fullest_passage_and_the_others_link_to_it`;
 - the passages name no product, say what "access" covers, say "coming" for what is not built, describe a hosted
-  engine as an opt-in and say the Superset tracking fix is in v0.6.2 —
+  engine as an opt-in and say the Superset tracking fix is in v0.7.0 —
   `test_the_passages_name_no_product`, `test_the_architecture_passage_says_what_access_covers_and_what_is_coming`;
 - the architecture guide's section 9 names no product, and the eleven-row table it carried moved, complete and
   unchanged, into the specification's licence register — `test_section_9_names_no_product`,
@@ -417,7 +417,7 @@ def test_the_architecture_passage_says_what_access_covers_and_what_is_coming() -
         "sign-in's attribution is coming": "sign-in",
         "the word coming": "coming",
         "a hosted engine described as an opt-in": "opt-in",
-        "the Superset tracking fix is in v0.6.2": "v0.6.2",
+        "the Superset tracking fix is in v0.7.0": "v0.7.0",
         "weights, map data, fonts and base images outside the licence gate": "base images",
     }
     assert [why for why, words in wanted.items() if words not in body] == []

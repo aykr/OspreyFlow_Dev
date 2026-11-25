@@ -1,30 +1,55 @@
-# Slice AD1d · AD1 · The models a key may use are listed for the form to offer (ADR-135 Amendment 14's deferred item); after AD1c; every finding in it is the owner's
+# Slice AD1d · AD1 · test-file-coverage-check knows a test that starts its own private database is not a live-service test (the owner's ruling (c), 25 November 2026)
 
-- **Build id:** AD1 (the Admin model form). **The owner's rulings of 23 November 2026:** "AD1d: agreed as a part of its own, after AD1c. **Every finding in it is mine.**" (He had asked whether Amendment 14's own text still requires "the models chosen from what the gateway found": it does not; the amendment is cut to his first slice and lists this in "Not in it".)
+- **Build id:** AD1 (it unblocks AD1c, the key review's open items)
 - **Dial setting:** balanced
-- **Rounds limit:** the dial's (8)
-- **After:** AD1c merged. **No row in `slices.tsv` yet; the conductor adds it when AD1c has merged.**
-- **Status of this brief:** written by the conductor on 23 November 2026, as a draft for the owner to read before a builder starts; **read, not measured: re-read every line named.**
+- **Rounds limit:** 8
+- **After:** nothing. **AD1c waits for this part to merge**, then imports `asyncpg` plainly.
 
-## What the specification says it left out
+## What
 
-ADR-135 Amendment 14 (`OspreyFlow_Build/spec/06_DECISIONS.md`, about line 41462 on the AD1b branch; on main once AD1a merges): "**Not in it:** listing the models a key may use (the draft's wildcard route and `check_provider_endpoint`), Bedrock's listing grant (ruling 9), and the map form (ADR-147's amendment)." The administration guide says "Listing the models a key may use is not built yet". The admin-forms findings file (`OspreyFlow_Build/process/lanes/admin-forms/PREBUILD_FINDINGS.md` §1 and §5.3's draft) holds the original design: the models chosen from what the gateway found, or a typed name proven by one call.
+`OspreyFlow_Build/tools/test_file_coverage_check.py` classifies a test file that imports `asyncpg` (one of
+`LIVE_SERVICE_MARKERS`, about line 105) as needing a shared live service, so it must be in both the `test` job's
+ignore list and a live-service job in `ci.yml` (protected files). AD1c's new test starts **its own private
+PostgreSQL** (`initdb` and `pg_ctl` in a temporary folder, removed at the end; skipping, saying so, where no `initdb`
+exists) and needs no shared service. Its builder got past the check by importing `asyncpg` by name at run time, which
+the owner refused: **no import is ever written to miss a check.**
 
-## What (to be settled with the owner before a builder starts; the conductor's reading)
+1. **One shared helper** for a private, throwaway PostgreSQL: `OspreyFlow_Build/tests/private_postgres.py` (or the
+   tests' existing helper folder, if there is one: read how tests share helpers today). It finds `initdb` the way
+   AD1c's test does (the machine's own PostgreSQL: Homebrew's `postgresql@*`, `/usr/lib/postgresql/*/bin`), makes a
+   data folder under the test's temporary folder, starts the server on a free port that `tests/port_guard.py` does
+   not reserve, yields its address, and stops and removes it at the end, whatever the test did. Where no `initdb`
+   exists, or the process is root, it skips **saying so**. **Never** the owner's deployment, the demo, the dev stack or
+   any store port the lanes hold.
+2. **The check:** a test file that imports `asyncpg` **and** uses that helper (by its real import, read from the
+   file's `import` statements, as `_imported_names` already reads them), and has **no other live-service marker** and
+   no `PostgresConfig.from_env()` call, is not live-service. Anything else stays as today.
+3. **The words:** the check's message for a live-service file is unchanged; its docstring names the helper and why.
 
-1. **A listing route on the gateway side** (`check_provider_endpoint` and the draft's wildcard route): given a key the administrator has typed (never stored by the page, never logged, never shown), the Conduit asks the provider for the models that key may use and returns **names only** (never any part of a key), for the form to offer beside the typed name. A typed name stays possible and is still proven by one call before **Add**.
-2. **The Bedrock listing grant (ruling 9)** as its own sub-item: what the gateway's own role must be granted to list, and how that is said in the guide.
-3. **The key rules the owner set for AD1** hold throughout: replace and remove, never reveal; the key field cleared after a save or a refusal; no key text in any log, answer or audit row; a refused listing says so in words and leaves nothing behind on the gateway.
-4. **Tests, red first, planted at the shape the code really sees (rule 15):** a gateway and provider stand-in that **models the real ones' refusals** (a key the provider refuses, a provider that answers a list with more than the key may use, a timeout, a listing grant missing), and the key-text checks of AD1b's `test_stale_engine_keys_are_named.py` extended to the listing's answers.
+## Acceptance test
 
-## Every finding in this part is the owner's
+`OspreyFlow_Build/tests/test_test_file_coverage_private_database.py` (new, pure), red first, each case planted as the
+check really receives it (a real file under its temporary tree, read through the same functions `main()` uses):
+- a file importing `asyncpg` and the helper: **not** live-service (red today);
+- a file importing `asyncpg` without the helper: live-service, as today;
+- a file importing the helper and `ArcadeDBClient` (or any other marker): live-service;
+- a file importing the helper and calling `PostgresConfig.from_env()`: live-service;
+- a file that only **names** the helper in a docstring or comment, and imports `asyncpg`: live-service (the name in
+  text is not the import);
+- **the helper itself:** started, it answers on its port as a real PostgreSQL (a `SELECT 1`), its data folder is
+  under the temporary folder, and after the test the process is gone and the folder removed; with no `initdb` on the
+  path it skips with words naming `initdb`.
 
-**It handles a key.** A finding that names a key, a credential or a security rule is **stopped and reported to the owner, never accepted narrower, never accepted on the standing line.** The conductor does not choose between options on such a finding.
+Show the check's new branch red: removed, the first case fails; and **planted with the helper test removed (any
+file importing `asyncpg` treated as private)**, the second case fails (rule 15: the plant takes the shape the real
+call site produces, not one a default branch would catch).
+
+## Checks
+
+`cd OspreyFlow_Core && ARCADEDB_HTTP_PORT=9 POSTGRES_PORT=9 UV_PYTHON=3.12 UV_PROJECT_ENVIRONMENT=$HOME/dev/osprey-acceptance/AD1d uv run --frozen pytest -c ../OspreyFlow_Build/pytest.ini -q ../OspreyFlow_Build/tests/test_test_file_coverage_private_database.py ../OspreyFlow_Build/tests/test_test_file_coverage_check.py ../OspreyFlow_Build/tests/test_doc_citations_check.py && ARCADEDB_HTTP_PORT=9 POSTGRES_PORT=9 UV_PYTHON=3.12 UV_PROJECT_ENVIRONMENT=$HOME/dev/osprey-acceptance/AD1d uv run --frozen ruff check .`; and `make -C OspreyFlow_Build test-file-coverage-check` green on the tree.
 
 ## Out of scope
 
-Anything AD1c does (the fourth route, the orphaned tokens); the map form (ADR-147's amendment); the protected files.
-
-## Never merge another part's unmerged tip (the owner, 23 November 2026)
-
-**Never merge another part's unmerged tip, or any branch but main, into your branch.** Take main in when the line tells you to, and nothing else. A part that did this (AD1b, with AD1a's tip) had the hook count the other part's tests as its own. If your part needs another part's change that has not merged, stop and tell the conductor.
+`ci.yml`, the Makefile and their lists (protected); AD1c's own test (AD1c moves to the helper after this merges); any
+other marker's meaning; the scan map. **If a private database cannot be told apart from a shared one by imports
+alone, stop and say why: do not add a comment, name or flag a file can write to opt out.**

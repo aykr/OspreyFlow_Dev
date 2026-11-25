@@ -1,0 +1,9 @@
+{
+ "name": "ADR152_I15_ROW",
+ "file": "OspreyFlow_Build/process/lanes/v062/slice-line/proposals/ADR152_I15_ROW.diff",
+ "sha256": "a166ab81523f7c59acfa7311334654c5aaa2cbd38a8cc093311690784c987085",
+ "hash8": "a166ab81",
+ "date": "2026-11-25",
+ "at": "2026-11-25T05:18:35Z",
+ "by": "the conductor, on the owner's word in chat: approved: ADR152_I15_ROW a166ab81"
+}
