@@ -87,3 +87,5 @@ Nothing else.
 5. **When 017-1 lands, this test moves to the server's container checks and the exemption comes out.** Say this in a comment beside the exemption, naming 017-1.
 
 **The scan-map row** for `tests/harness/test_page_addresses.py` is on main (`scan_rows/PL7f.tsv`, written by the conductor from your report): `OspreyFlow_Core/harness/` and `OspreyFlow_Core/packages/schemas/`. Do not write into `scan_rows/`.
+
+**Before D234's change (the conductor, 25 November 2026, 05:02 UTC):** main has moved and your branch conflicts with it in `OspreyFlow_Core/docs/administration-guide.md`, its PDF and `docs/pdf/manifest.json`, and `OspreyFlow_Core/packages/schemas/generated/OspreyConfig.ts`. Merge main in first (never another part's tip), keeping both sides; regenerate the generated TypeScript and the guide's PDF and manifest from their sources rather than hand-merging them.
