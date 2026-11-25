@@ -180,8 +180,8 @@ def test_the_real_tree_is_partial() -> None:
     assert len(real_rows()) == 49
     assert tree_parity.govuk_tree_state() == PARTIAL
     assert tree_parity.ROUTE_LIST.is_file(), "the GOV.UK tree's route list is gone"
-    assert tree_parity._routes(tree_parity.ROUTE_LIST) == ["/help", "/admin/people"]
-    assert [row["id"] for row in real_rows() if row["route"]] == ["help"]
+    assert tree_parity._routes(tree_parity.ROUTE_LIST) == ["/help", "/admin/people", "/reports"]  # GR3a added the third page
+    assert [row["id"] for row in real_rows() if row["route"]] == ["reports-figures", "help"]
 
 
 def real_defaults_problems() -> list[str]:

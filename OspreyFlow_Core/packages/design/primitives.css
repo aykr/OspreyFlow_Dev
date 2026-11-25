@@ -232,6 +232,14 @@
 .table td { padding: var(--sp-6) var(--sp-8); border-bottom: 1px solid var(--border-subtle); color: var(--text-primary); }
 .table tr:hover td { background: var(--surface-hover); }
 
+/* A chart of the GOV.UK tree's pages (spec/02 section 2.0f, slice GR3a): plain SVG, drawn by classes alone. A bar's length is its
+   `rect`'s own `width` attribute, since no class can hold a figure and a `style` attribute is refused (ADR-152 decision 8). Each chart
+   is followed in the page by a table of the same figures. */
+.figure-chart { display: block; width: 100%; max-width: 32rem; height: auto; margin: var(--sp-8) 0; }
+.figure-chart__bar { fill: var(--chart-azure); }
+.figure-chart__label { fill: var(--text-primary); font-size: var(--fs-13); text-anchor: end; }
+.figure-chart__value { fill: var(--text-primary); font-size: var(--fs-13); }
+
 .histogram { display: flex; align-items: flex-end; gap: 1px; height: 48px; }
 .histogram__bar { flex: 1; background: var(--seq-4); border-radius: var(--r-control) var(--r-control) 0 0; cursor: pointer; }
 /* Data, so the data ramp, deeper on hover and when pressed (ADR-097, DESIGN.md §3.5). */

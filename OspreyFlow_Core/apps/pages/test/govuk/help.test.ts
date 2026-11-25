@@ -41,6 +41,7 @@ import type * as Real from "@ospreyflow/glass-shared";
 
 import { createApp } from "../../server/app.js";
 import { loadConfig } from "../../server/config.js";
+import { alertMonitoring } from "../../server/alertMonitoring.js";
 import { help } from "../../server/help.js";
 import { PAGES } from "../../server/pageList.js";
 import type { PageModule } from "../../server/pages.js";
@@ -463,7 +464,10 @@ describe("OSPREY_PAGES_TREE decides which tree serves every route, `/` included"
     // The table: Help (and the Admin People list, slice AD3a) are the govuk tree's alone, and every page that was there before them is the Default tree's alone.
     expect(help.trees).toEqual(["govuk"]);
     expect(PAGES).toContain(help);
-    for (const page of PAGES) if (page !== help && page.path !== "/admin/people") expect(page.trees ?? ["default"], page.id).toEqual(["default"]);
+    // Slice GR3a's alert monitoring page is the tree's third, and the Default tree's twin of it is not built.
+    expect(alertMonitoring.trees).toEqual(["govuk"]);
+    expect(PAGES).toContain(alertMonitoring);
+    for (const page of PAGES) if (page !== help && page !== alertMonitoring && page.path !== "/admin/people") expect(page.trees ?? ["default"], page.id).toEqual(["default"]);
   });
 
   it("HP7: what decides a route's tree is the module's own list: the same Help page, named for both, is served by both (rule 15)", async () => {
@@ -542,7 +546,7 @@ describe("the route list", () => {
 
   it("HP9: is the paths the govuk tree has pages for, and the rows of FUNCTIONS.yaml that name them carry the same route", () => {
     expect(routeListProblems(listText, PAGES, functionsText)).toEqual([]);
-    expect(listedRoutes(listText)).toEqual(["/help", "/admin/people"]);
+    expect(listedRoutes(listText)).toEqual(["/help", "/admin/people", "/reports"]);
   });
 
   it("HP9: the route table registers each page under its own id and path, once: the list is one route a page", () => {
@@ -550,6 +554,7 @@ describe("the route list", () => {
     expect(govukPages.map((p) => [p.id, p.path, [...p.methods]])).toEqual([
       ["help", "/help", ["GET"]],
       ["admin", "/admin/people", ["GET"]],
+      ["reports-figures", "/reports", ["GET"]],
     ]);
   });
 });

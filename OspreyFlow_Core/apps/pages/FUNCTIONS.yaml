@@ -289,12 +289,15 @@ functions:
     route: ""
     status: "planned"
   # Split from the old `reports` row by the owner's ruling of 24 November 2026: the figures are slice GR3's. C8, C11 and C12 (spec/08) are proposed, not owner-ruled.
+  # Slice GR3a built the alert monitoring figures (scenario AM) at `/reports`, the GOV.UK tree's second page, and the row names that route as every page's row does
+  # (`test/govuk/help.test.ts`, HP9). The row is still the whole of the Reports and Figures views, trends, packs, published and data feeds: the page is the alert
+  # monitoring figures alone, and the rest of the row's function is the later slices' (see "What the page does that the owner may want to rule on", scenario AM).
   - id: reports-figures
     name: "Reports: Reports and Figures views, trends, packs, published and data feeds"
     where: "apps/workspace/src/reports/ (includes reportsTestKit.ts 145)"
     slice: "GR3"
-    scenario: ""
-    route: ""
+    scenario: "AM1, AM2, AM3, AM4, AM5, AM6, AM7, AM8, AM9, AM10, AM11"
+    route: "/reports"
     status: "planned"
   # The other half of the old `reports` row (the owner, 24 November 2026): the dashboards are later, and no slice has them yet.
   - id: reports-dashboards

@@ -1,0 +1,54 @@
+{#- The alert monitoring figures (slice GR3a; scenario AM; FUNCTIONS row `reports-figures`; spec/02 section 2.0f). The open alerts and the team view
+    are captioned tables alone; every other figure is a plain SVG
+    bar chart, drawn first, and the table of the same figures, drawn after it: a `rect` for each row with a class and its geometry as
+    attributes, a title and a description as the chart's text alternative, and no `style` attribute, script, library or outside address.
+    A column header is a th with scope col, the first cell of a row a th with scope row. Nothing is drawn that the route did not send:
+    a section the route sent no figure for says so in words, and a report past its bound is a sentence and the links to a shorter period.
+    Every action on the page is a link: no form, no control. -#}
+{% extends "layout.njk" %}
+{% block content %}
+<h1>{{ words.title }}</h1>
+{% if view.kind == "limit" %}
+<p>{{ view.sentence }}</p>
+{% if view.periods.length > 0 %}<nav aria-label="{{ words.period }}">
+<ul>
+{% for period in view.periods %}<li><a href="{{ period.href }}">{{ period.text }}</a></li>
+{% endfor %}</ul>
+</nav>
+{% endif %}
+{% else %}
+<p>{{ words.counted }}</p>
+<p>{{ view.headline }}{% if view.countedOn %}. {{ view.countedOn }}{% endif %}</p>
+<nav aria-label="{{ words.period }}">
+<ul>
+{% for period in view.periods %}<li>{% if period.href %}<a href="{{ period.href }}">{{ period.text }}</a>{% else %}<strong aria-current="page">{{ period.text }}</strong>{% endif %}</li>
+{% endfor %}</ul>
+</nav>
+{% if view.nothing %}<p>{{ view.nothing }}</p>
+{% endif %}
+{% for figure in view.figures %}<section aria-labelledby="{{ figure.id }}">
+<h2 id="{{ figure.id }}">{{ figure.heading }}</h2>
+{% if figure.says %}<p>{{ figure.says }}</p>
+{% endif %}{% if figure.empty %}<p>{{ figure.empty }}</p>
+{% endif %}{% if figure.chart %}<svg class="figure-chart" role="img" aria-labelledby="{{ figure.id }}-title {{ figure.id }}-desc" viewBox="{{ figure.chart.viewBox }}">
+<title id="{{ figure.id }}-title">{{ figure.chart.title }}</title>
+<desc id="{{ figure.id }}-desc">{{ figure.chart.desc }}</desc>
+{% for bar in figure.chart.bars %}<text class="figure-chart__label" x="220" y="{{ bar.labelY }}">{{ bar.label }}</text>
+<rect class="figure-chart__bar" x="230" y="{{ bar.y }}" width="{{ bar.width }}" height="18"/>
+<text class="figure-chart__value" x="{{ bar.valueX }}" y="{{ bar.textY }}">{{ bar.value }}</text>
+{% endfor %}</svg>
+{% endif %}{% if figure.rows.length > 0 %}<table class="table">
+<caption class="caption">{{ figure.caption }}</caption>
+<thead>
+<tr>{% for column in figure.columns %}<th scope="col">{{ column }}</th>{% endfor %}
+</tr>
+</thead>
+<tbody>
+{% for row in figure.rows %}<tr><th scope="row">{{ row.head }}</th>{% for cell in row.cells %}<td>{{ cell }}</td>{% endfor %}</tr>
+{% endfor %}</tbody>
+</table>
+{% endif %}</section>
+{% endfor %}
+{% endif %}
+<p><a href="/">{{ words.back }}</a></p>
+{% endblock %}
