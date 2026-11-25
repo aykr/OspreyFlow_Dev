@@ -77,6 +77,7 @@ test	OspreyFlow_Build/tests/harness/test_helm_chart.py	run	container-guarded	Osp
 test	OspreyFlow_Build/tests/harness/test_image_references.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_image_references.py:5
 test	OspreyFlow_Build/tests/harness/test_ingest_uploads.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_ingest_uploads.py:204
 test	OspreyFlow_Build/tests/harness/test_install_page.py	run	fixed-port	OspreyFlow_Build/tests/harness/test_install_page.py:367	uvicorn.Server is replaced by a FakeServer (line 364): nothing binds 49555
+test	OspreyFlow_Build/tests/harness/test_page_addresses_caddy.py	not-run	container	OspreyFlow_Build/tests/harness/test_page_addresses_caddy.py:32; OspreyFlow_Build/tests/harness/test_page_addresses_caddy.py:151	its one docker run of the proxy image (line 151; line 32 is its docstring naming that command) is exempt from the Docker guard (D234), and it fails in words where it cannot run, never skips: this server has no container tooling, so not run here, as its docstring says; the Mac's gate runs it
 test	OspreyFlow_Build/tests/harness/test_preflight.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_preflight.py:210
 test	OspreyFlow_Build/tests/harness/test_proxy_health.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_proxy_health.py:27
 test	OspreyFlow_Build/tests/harness/test_proxy_tls_caddy.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_proxy_tls_caddy.py:270
