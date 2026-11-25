@@ -172,6 +172,8 @@ export const ALERT_MONITORING_WORDS = {
     would: (n: number, what: "alerts" | "customers", cap: number): string => `This report would count ${formatNumber(n)} ${what}, past its limit of ${formatNumber(cap)}.`,
     choose: "Choose a shorter period.",
     shortest: "This is the shortest period.",
+    // The customers' bound counts every verifying document the reader can see, with no date (`_customers`), so no period clears it.
+    notByPeriod: "A shorter period does not change this limit.",
   },
   notFound: { title: "Case not found", message: "This case is not one you can open." },
   unreadable: {
@@ -494,9 +496,15 @@ export function monitoringView(report: Report, caseId: string): MonitoringView {
   return { kind: "figures", headline, countedOn, periods, nothing, figures };
 }
 
-/** A report past its bound, in words: the numbers are the route's, and the way out is a link to each shorter period. */
+/**
+ * A report past its bound, in words: the numbers are the route's. The alerts' bound moves with the period, so its way out is a link to each
+ * shorter period; the customers' bound does not (it counts every verifying document the reader can see, with no date), so for it the page
+ * offers no link that would answer the same and says so.
+ */
 export function limitView(limit: Limit, caseId: string, current: number): MonitoringView {
-  const periods = periodsFor(caseId, current, (weeks) => weeks < current);
   const words = ALERT_MONITORING_WORDS.limit;
-  return { kind: "limit", sentence: `${words.would(limit.wouldBe, limit.what, limit.cap)} ${periods.length > 0 ? words.choose : words.shortest}`, periods };
+  const sentence = words.would(limit.wouldBe, limit.what, limit.cap);
+  if (limit.what === "customers") return { kind: "limit", sentence: `${sentence} ${words.notByPeriod}`, periods: [] };
+  const periods = periodsFor(caseId, current, (weeks) => weeks < current);
+  return { kind: "limit", sentence: `${sentence} ${periods.length > 0 ? words.choose : words.shortest}`, periods };
 }
