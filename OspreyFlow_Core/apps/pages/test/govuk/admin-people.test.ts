@@ -12,7 +12,7 @@
  *  - a state said other than Enabled, Disabled, Invited, or the organisation's sign-in left out                      -> AP3
  *  - an empty or failed read drawn as a table, a partial table, a failure said as a refusal                          -> AP4
  *  - a person without the right who learns the page is there, or sees the Conduit's words, or the right's name      -> AP5
- *  - a person the page removed, added or sorted, a count of people anywhere                                           -> AP6
+ *  - a person the page removed, skipped, cut, added or sorted (for any clearance or unit, at any length), a count of people -> AP6
  *  - a call that carries the browser's headers, a route other than the two, a query, a write, an unsigned read       -> AP7
  *  - a form, a control, a script, a handler, an inline style, a stop out of order                                     -> AP8
  *  - an American spelling, a sentence of roles.ts written again, the session's words not the Studio's                  -> AP9
@@ -20,9 +20,10 @@
  * Every planted fault is the real page (or the real file) with one thing changed, run through the same function that finds nothing in
  * the real one (AP11, rule 15).
  */
-import { readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -33,6 +34,7 @@ import { rightName } from "@ospreyflow/glass-shared";
 import { createApp } from "../../server/app.js";
 import { PAGES } from "../../server/pageList.js";
 import { MemorySessionStore } from "../../server/sessionStore.js";
+import { peopleView } from "../../server/views/adminPeopleWords.js";
 import { refusalWords } from "../../server/views/studioWords.js";
 import { testClock } from "../support/clock.js";
 import { cookieFrom, csrfFromPage, request } from "../support/http.js";
@@ -261,7 +263,7 @@ const sourcesOfThePage = (): Source[] => SOURCES.map((name) => ({ name, text: re
 const withoutComments = (text: string): string => text.replace(/\/\*[\s\S]*?\*\/|\/\/.*$|\{#[\s\S]*?#\}/gm, "");
 
 /** The page does not choose who is drawn: no call in its code removes, cuts, sorts or turns a row round (AP6, decision 5). */
-const CHOOSING = /\.(?:filter|slice|splice|sort|toSorted|reverse|toReversed|flatMap|shift|pop)\s*\(/;
+const CHOOSING = /\.(?:filter|slice|splice|sort|toSorted|reverse|toReversed|flatMap|shift|pop)\s*\(|\b(?:continue|break)\s*;/;
 const choosingProblems = (sources: Source[]): string[] =>
   sources.filter((s) => CHOOSING.test(withoutComments(s.text))).map((s) => `${s.name} chooses which rows are drawn: ${CHOOSING.exec(withoutComments(s.text))?.[0] ?? ""}`);
 
@@ -276,6 +278,81 @@ const copiesOfRolesWords = (sources: Source[]): string[] => {
 };
 const AMERICAN = /\b(?:color|colors|organization|organizations|center|centers|authorize|authorized|behavior|license|licenses|analyze|favorite|catalog)\b/i;
 const americanSpellings = (text: string): string[] => [...text.matchAll(new RegExp(AMERICAN.source, "gi"))].map((m) => m[0]);
+
+// ------------------------------------------------------------------------------------------------ a long and varied list
+
+/** Letters only, so that no name of the list holds a digit (a count is looked for as a digit): 0 -> a, 25 -> z, 26 -> ba. */
+const letters = (n: number): string => {
+  let out = "";
+  let rest = n;
+  do {
+    out = String.fromCharCode(97 + (rest % 26)) + out;
+    rest = Math.floor(rest / 26);
+  } while (rest > 0);
+  return out;
+};
+
+/**
+ * Far more people than any cap a page might carry (a hundred is the common one), and every field an access filter applied after
+ * retrieval could key on: the clearance, the organisation unit, a service account, a disabled account, an invited one. The list is a
+ * pattern that puts each kind at the start, the middle and the end, so that a skip and a cut both show.
+ */
+const LONG_SIZE = 260;
+const CLEARANCES = ["official", "secret", "top-secret", null] as const;
+const UNITS = ["ops", "intelligence", "finance", null] as const;
+const LONG: Account[] = Array.from({ length: LONG_SIZE }, (_, i) =>
+  account({
+    id: `long-${letters(i)}`,
+    username: `person.${letters(i)}`,
+    name: `Person ${letters(i)}`,
+    enabled: i % 7 !== 3,
+    must_set_password: i % 11 === 5,
+    system_account: i % 13 === 0,
+    clearance: CLEARANCES[i % CLEARANCES.length] ?? null,
+    org_unit: UNITS[(i >> 1) % UNITS.length] ?? null,
+    roles: i % 5 === 0 ? [] : ["analyst"],
+  }),
+);
+const CATALOGUE = { built_in: BUILT_IN.map((role) => ({ ...role, rights: [], gives: [] })), custom: [] };
+
+/** What the page draws for a person: the name, or the username when the name is blank (the view's own rule). */
+const drawnName = (p: Account): string => (p.name.trim() === "" ? p.username : p.name);
+
+/** Every person sent that the view did not draw, or drew out of place: the same function reads the real view and each planted one. */
+function viewProblems(view: (people: unknown, roles: unknown) => unknown, sent: Account[]): string[] {
+  const drawn = view(sent, CATALOGUE) as { kind?: string; rows?: { name: string }[] } | undefined;
+  if (drawn?.kind !== "table" || !drawn.rows) return [`the view is not a table: ${JSON.stringify(drawn)}`];
+  const names = drawn.rows.map((r) => r.name);
+  const found: string[] = [];
+  if (names.length !== sent.length) found.push(`${names.length} rows were drawn for ${sent.length} people sent`);
+  sent.forEach((p, i) => {
+    if (names[i] !== drawnName(p)) found.push(`row ${i} is ${JSON.stringify(names[i])}, not ${JSON.stringify(drawnName(p))} (clearance ${String(p.clearance)}, unit ${String(p.org_unit)})`);
+  });
+  return found;
+}
+
+/**
+ * The real `adminPeopleWords.ts` with one change, imported: the plant is in the real file's own loop, and the same function that finds
+ * nothing in the real view (`viewProblems`) reads it. The copy lives in a folder of its own, away from the page's, and is removed.
+ */
+async function plantedView(change: (source: string) => string): Promise<(people: unknown, roles: unknown) => unknown> {
+  const real = read(PAGES_DIR, "server", "views", "adminPeopleWords.ts");
+  const planted = change(real);
+  expect(planted, "the plant changed the file").not.toBe(real);
+  const folder = mkdtempSync(join(tmpdir(), "ad3a-planted-"));
+  try {
+    const file = join(folder, "planted.ts");
+    writeFileSync(file, planted.replace('"./helpWords.js"', JSON.stringify(join(PAGES_DIR, "server", "views", "helpWords"))));
+    const module = (await import(/* @vite-ignore */ file)) as { peopleView: (people: unknown, roles: unknown) => unknown };
+    return module.peopleView;
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
+  }
+}
+
+/** The loop that builds the rows, and the push that adds one: the anchors of the plants. */
+const LOOP = "for (const person of people as unknown[]) {\n";
+const PUSH = "rows.push({";
 
 // ------------------------------------------------------------------------------------------------ the page
 
@@ -420,6 +497,17 @@ describe("the People list (the govuk tree)", () => {
     expect(countProblems((await people(one)).text)).toEqual([]);
     // The page's code holds nothing that chooses who is drawn.
     expect(choosingProblems(sourcesOfThePage())).toEqual([]);
+  });
+
+  it("AP6: draws everyone, whole, whatever their clearance or unit and however many there are: no cap, and nothing keyed on who the person is", async () => {
+    const w = await world({ people: LONG });
+    const res = await people(w);
+    expect(res.status).toBe(200);
+    expect(tableOf(res.text)?.rows.map((r) => r.head)).toEqual(LONG.map((p) => p.name));
+    expect(tableOf(res.text)?.rows.length).toBe(LONG_SIZE);
+    expect(countProblems(res.text)).toEqual([]);
+    // The same list through the view alone, and the same check that is red below.
+    expect(viewProblems(peopleView, LONG)).toEqual([]);
   });
 
   it("AP7: asks the Conduit as the person and nothing of the browser's, for the people and the roles once each, and writes nothing", async () => {
@@ -598,9 +686,24 @@ describe("each check above is red against the real page, file or fixture with on
 
     const real_sources = sourcesOfThePage();
     expect(choosingProblems(real_sources)).toEqual([]);
-    for (const call of [".filter((p) => p.enabled)", ".slice(0, 20)", ".sort()", ".reverse()", ".flatMap((p) => [p])"]) {
-      const planted = real_sources.map((s) => (s.name === "server/adminPeople.ts" ? { ...s, text: `${s.text}\nconst chosen = people${call};\n` } : s));
-      expect(choosingProblems(planted).join("\n"), call).toMatch(/chooses which rows are drawn/);
+    // Planted at the real call site: the loop that builds the rows, in the file that has it (not a statement added beside it).
+    const WORDS = "server/views/adminPeopleWords.ts";
+    const inLoop = (planted: string): Source[] => real_sources.map((s) => (s.name === WORDS ? { ...s, text: planted } : s));
+    const words = (real_sources.find((s) => s.name === WORDS) as Source).text;
+    expect(words).toContain(LOOP);
+    expect(words).toContain(PUSH);
+    const calls: [string, string][] = [
+      [".filter(", words.replace(LOOP, "for (const person of (people as unknown[]).filter((p) => p !== null)) {\n")],
+      [".slice(", words.replace(LOOP, "for (const person of (people as unknown[]).slice(0, 100)) {\n")],
+      [".sort(", words.replace(LOOP, "for (const person of (people as unknown[]).sort()) {\n")],
+      [".reverse(", words.replace(LOOP, "for (const person of (people as unknown[]).reverse()) {\n")],
+      [".flatMap(", words.replace(LOOP, "for (const person of (people as unknown[]).flatMap((p) => [p])) {\n")],
+      ["continue;", words.replace(LOOP, `${LOOP}    if (isObject(person) && person["org_unit"] === "ops") continue;\n`)],
+      ["break;", words.replace(LOOP, `${LOOP}    if (rows.length >= 100) break;\n`)],
+    ];
+    for (const [name, planted] of calls) {
+      expect(planted, name).not.toBe(words);
+      expect(choosingProblems(inLoop(planted)).join("\n"), name).toMatch(/chooses which rows are drawn/);
     }
     // The scan reads code, not a sentence about it.
     const talked = real_sources.map((s) => (s.name === "server/adminPeople.ts" ? { ...s, text: `${s.text}\n// never .filter( a row\n` } : s));
@@ -610,6 +713,32 @@ describe("each check above is red against the real page, file or fixture with on
     const copied = real_sources.map((s) => (s.name.endsWith("adminPeopleWords.ts") ? { ...s, text: `${s.text}\nconst copy = "${literal}";\n` } : s));
     expect(copiesOfRolesWords(copied)).toEqual([expect.stringContaining(literal)]);
     expect(americanSpellings("The organization's color")).toEqual(["organization", "color"]);
+  });
+
+  it("AP11: the whole-list check finds a person skipped, cut or removed by a change in the real loop, whatever the person's clearance or unit", async () => {
+    // The real view finds nothing, on the long and varied list and on the short one.
+    expect(viewProblems(peopleView, LONG)).toEqual([]);
+    expect(viewProblems(peopleView, PEOPLE)).toEqual([]);
+    const plants: [string, (source: string) => string, RegExp][] = [
+      ["a skip by organisation unit", (t) => t.replace(LOOP, `${LOOP}    if (isObject(person) && person["org_unit"] === "ops") continue;\n`), /row \d+ is/],
+      ["a skip by clearance", (t) => t.replace(LOOP, `${LOOP}    if (isObject(person) && person["clearance"] === "secret") continue;\n`), /clearance/],
+      ["a skip of everyone above a clearance", (t) => t.replace(LOOP, `${LOOP}    if (isObject(person) && person["clearance"] !== null && person["clearance"] !== "official") continue;\n`), /rows were drawn/],
+      ["a skip of the service accounts", (t) => t.replace(LOOP, `${LOOP}    if (isObject(person) && person["system_account"] === true) continue;\n`), /rows were drawn/],
+      ["a skip of the disabled", (t) => t.replace(LOOP, `${LOOP}    if (isObject(person) && person["enabled"] === false) continue;\n`), /rows were drawn/],
+      ["a cut at a hundred, by a break", (t) => t.replace(LOOP, `${LOOP}    if (rows.length >= 100) break;\n`), /100 rows were drawn for 260/],
+      ["a cut at a hundred, by a conditional push", (t) => t.replace(PUSH, `if (rows.length < 100) ${PUSH}`), /100 rows were drawn for 260/],
+      ["a cut at fifty, by the loop's own list", (t) => t.replace(LOOP, "for (const person of (people as unknown[]).slice(0, 50)) {\n"), /50 rows were drawn for 260/],
+    ];
+    for (const [name, change, expected] of plants) {
+      const found = viewProblems(await plantedView(change), LONG);
+      expect(found.length, name).toBeGreaterThan(0);
+      expect(found.join("\n"), name).toMatch(expected);
+    }
+    // A plant that no list of the earlier tests could meet: the fixtures of AP1 to AP5 carry no clearance and no unit, so a skip keyed
+    // on one draws all four of them; the long list is what shows it.
+    const keyedOnUnit = await plantedView((t) => t.replace(LOOP, `${LOOP}    if (isObject(person) && person["org_unit"] === "ops") continue;\n`));
+    expect(viewProblems(keyedOnUnit, PEOPLE)).toEqual([]);
+    expect(viewProblems(keyedOnUnit, LONG).length).toBeGreaterThan(0);
   });
 
   it("AP11: the list check finds a path left out of the route list, an admin row given a route, and a scenario left unwritten", () => {
@@ -625,7 +754,7 @@ describe("each check above is red against the real page, file or fixture with on
     expect(listProblems(routesText, unwritten).join("\n")).toMatch(/scenario is ""/);
   });
 
-  it("AP11: the fixture Conduit refuses what the real one refuses: no bearer, an unknown bearer, a bearer in the query, a missing right, a method, a path", async () => {
+  it("AP11: the fixture Conduit refuses what the real one refuses and serves what it serves: no bearer, an unknown bearer, a bearer in the query, a missing right, a method, a body, a path", async () => {
     const token = bearer();
     const holder = bearer();
     const conduit = await adminConduit({ readers: [{ token, rights: ["create_case"] }, { token: holder, rights: [MANAGE_PEOPLE] }], people: PEOPLE });
@@ -634,16 +763,37 @@ describe("each check above is red against the real page, file or fixture with on
       const res = await fetch(`${conduit.url}${path}`, init);
       return { status: res.status, body: (await res.json()) as unknown };
     };
-    const as = (who: string): RequestInit => ({ headers: { Authorization: `Bearer ${who}` } });
+    const as = (who: string, method = "GET", body?: string): RequestInit => ({ method, headers: { Authorization: `Bearer ${who}` }, ...(body === undefined ? {} : { body }) });
+    const NOT_AUTHENTICATED = { status: 401, body: { detail: "Not authenticated" } };
+    const NOT_ALLOWED = { status: 405, body: { detail: "Method Not Allowed" } };
     for (const route of ["/v1/admin/people", "/v1/admin/people/rows", "/v1/admin/roles"]) {
-      expect(await ask(route), route).toEqual({ status: 401, body: { detail: "Not authenticated" } });
-      expect(await ask(route, as(bearer())), route).toEqual({ status: 401, body: { detail: "Not authenticated" } });
-      expect(await ask(`${route}?access_token=${holder}`), route).toEqual({ status: 401, body: { detail: "Not authenticated" } });
+      expect(await ask(route), route).toEqual(NOT_AUTHENTICATED);
+      expect(await ask(route, as(bearer())), route).toEqual(NOT_AUTHENTICATED);
+      expect(await ask(`${route}?access_token=${holder}`), route).toEqual(NOT_AUTHENTICATED);
       expect(await ask(route, as(token)), route).toEqual({ status: 403, body: REFUSAL });
       expect((await ask(route, as(holder))).status, route).toBe(200);
-      expect(await ask(route, { ...as(holder), method: "POST", body: "{}" }), route).toEqual({ status: 405, body: { detail: "Method Not Allowed" } });
+      // No route serves these on a collection: the router answers first, for anyone.
+      for (const method of ["PUT", "PATCH"]) expect(await ask(route, as(holder, method, "{}")), `${method} ${route}`).toEqual(NOT_ALLOWED);
+      expect(await ask(route, { method: "PUT" }), `PUT ${route}, no bearer`).toEqual(NOT_ALLOWED);
     }
+    // The real routes serve a POST on the people (the invite) and the roles (a custom role): the same bearer and right first, then the
+    // body's own model (`InviteInput` needs a username; `CustomRoleInput` a name and rights). A POST on the rows route is not served.
+    for (const [route, fields] of [["/v1/admin/people", ["username"]], ["/v1/admin/roles", ["name", "rights"]]] as const) {
+      expect(await ask(route, { method: "POST", body: "{}" }), `POST ${route}, no bearer`).toEqual(NOT_AUTHENTICATED);
+      expect(await ask(route, as(bearer(), "POST", "{}")), `POST ${route}, unknown bearer`).toEqual(NOT_AUTHENTICATED);
+      expect(await ask(route, as(token, "POST", "{}")), `POST ${route}, no right`).toEqual({ status: 403, body: REFUSAL });
+      expect(await ask(route, as(token, "POST", "not json")), `POST ${route}, no right, bad body`).toEqual({ status: 403, body: REFUSAL });
+      const refused = await ask(route, as(holder, "POST", "{}"));
+      expect(refused.status, `POST ${route}`).toBe(422);
+      expect((refused.body as { detail: { type: string; loc: unknown[]; msg: string }[] }).detail.map((d) => [d.type, d.loc, d.msg]), `POST ${route}`).toEqual(
+        fields.map((field) => ["missing", ["body", field], "Field required"]),
+      );
+      expect((await ask(route, as(holder, "POST", "not json"))).status, `POST ${route}, not json`).toBe(422);
+    }
+    expect(await ask("/v1/admin/people/rows", as(holder, "POST", "{}")), "POST on the rows route").toEqual(NOT_ALLOWED);
     expect(await ask("/v1/admin/nothing", as(holder))).toEqual({ status: 404, body: { detail: "Not Found" } });
     expect(((await ask("/v1/admin/people", as(holder))).body as unknown[]).length).toBe(PEOPLE.length);
+    // Every one of those calls was recorded, so that a page's test can say what it asked.
+    expect(conduit.calls.length).toBeGreaterThan(30);
   });
 });

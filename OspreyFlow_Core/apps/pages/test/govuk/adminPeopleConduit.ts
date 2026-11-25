@@ -9,12 +9,18 @@
  *    before anything else the route does: a person without it is 403 `{"detail": {"error": "right_required", "right": "manage_people"}}`
  *    (the Conduit's words name the right, so the page must never show them);
  *  - a method a route does not serve is 405 `{"detail": "Method Not Allowed"}`, and a route it has not is 404 `{"detail": "Not Found"}`, both
- *    before the bearer is looked at (the router answers first).
+ *    before the bearer is looked at (the router answers first). The methods are the real routes': `/v1/admin/people` and `/v1/admin/roles`
+ *    serve GET and POST (the invite, `InviteInput`; a custom role, `CustomRoleInput`), and `/v1/admin/people/rows` serves GET and, as
+ *    the person `rows`, DELETE (`/v1/admin/people/{user_id}`); nothing else is served on them;
+ *  - a POST the route serves is checked for who the reader is and the right first, as a GET is, and then for its body, as FastAPI does: a
+ *    body missing a required field is 422 `{"detail": [{"type": "missing", "loc": ["body", <field>], "msg": "Field required", ...}]}`.
+ *    A write that would succeed is NOT modelled (the page of this slice never writes): the fixture says so with a 500 and the call is
+ *    recorded, so that a later write slice has to teach it the real 201 and its refusals, and cannot lean on a made-up answer.
  * What it sends, as the route's models do: `PersonAccount` for each person, and `RolesCatalogue` (`built_in`, `custom`) for the roles.
  * A test can make it fail (`people`, `roles`) to show what the page does with a Conduit that does.
  */
 import { createServer } from "node:http";
-import type { IncomingHttpHeaders, Server } from "node:http";
+import type { IncomingHttpHeaders, IncomingMessage, Server, ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 
 export interface Reader {
@@ -91,6 +97,11 @@ export async function adminConduit(options: AdminConduitOptions): Promise<AdminC
   const server: Server = createServer((req, res) => {
     const url = req.url ?? "/";
     calls.push({ method: req.method ?? "", url, headers: req.headers });
+    const chunks: Buffer[] = [];
+    req.on("data", (chunk: Buffer) => chunks.push(chunk));
+    req.on("end", () => answer(req, res, url, Buffer.concat(chunks).toString("utf8")));
+  });
+  const answer = (req: IncomingMessage, res: ServerResponse, url: string, text: string): void => {
     const send = (status: number, body: unknown): void => {
       res.statusCode = status;
       if (typeof body === "string") {
@@ -102,7 +113,7 @@ export async function adminConduit(options: AdminConduitOptions): Promise<AdminC
       res.end(JSON.stringify(body));
     };
     const path = url.split("?")[0] ?? "";
-    const served: Record<string, () => void> = {
+    const get: Record<string, () => void> = {
       "/v1/admin/people": () => send(options.people_answer?.status ?? 200, options.people_answer?.body ?? options.people),
       "/v1/admin/people/rows": () => send(200, { rows: [], without_author: [] }),
       "/v1/admin/roles": () =>
@@ -111,18 +122,34 @@ export async function adminConduit(options: AdminConduitOptions): Promise<AdminC
           custom: (options.custom ?? []).map((role) => ({ ...role, version: 1, rights: [], changed_by: "someone", changed_at: "2026-11-01T09:00:00Z", holders: 0, team: null })),
         }),
     };
+    // The methods each path serves, and for a POST the fields its body model requires (`InviteInput`, `CustomRoleInput`).
+    const methods: Record<string, string[]> = { "/v1/admin/people": ["GET", "POST"], "/v1/admin/people/rows": ["GET", "DELETE"], "/v1/admin/roles": ["GET", "POST"] };
+    const required: Record<string, string[]> = { "/v1/admin/people": ["username"], "/v1/admin/roles": ["name", "rights"] };
     // The router answers first, as FastAPI's does: a route it has not is 404 and a method the route does not serve is 405, for anyone.
-    const route = served[path];
-    if (!route) return send(404, { detail: "Not Found" });
-    if (req.method !== "GET") return send(405, { detail: "Method Not Allowed" });
+    const served = methods[path];
+    if (!served) return send(404, { detail: "Not Found" });
+    if (!served.includes(req.method ?? "")) return send(405, { detail: "Method Not Allowed" });
     // Then the route's dependencies, in order: who the bearer is, and the right, before the route does anything else.
     const header = req.headers["authorization"];
     const token = typeof header === "string" && header.startsWith("Bearer ") ? header.slice(7) : undefined;
     const reader = options.readers.find((r) => r.token === token);
     if (!reader) return send(401, { detail: "Not authenticated" });
     if (!reader.rights.includes(MANAGE_PEOPLE)) return send(403, REFUSAL);
-    route();
-  });
+    if (req.method === "GET") return (get[path] as () => void)();
+    if (req.method === "POST") {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        return send(422, { detail: [{ type: "json_invalid", loc: ["body", 0], msg: "JSON decode error", input: {} }] });
+      }
+      const sent = typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : {};
+      const missing = (required[path] ?? []).filter((field) => !(field in sent));
+      if (missing.length > 0) return send(422, { detail: missing.map((field) => ({ type: "missing", loc: ["body", field], msg: "Field required", input: sent })) });
+    }
+    // A write that would succeed: not modelled (see the head of this file).
+    return send(500, { detail: "the fixture Conduit does not model a successful write" });
+  };
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const port = (server.address() as AddressInfo).port;
   return {
