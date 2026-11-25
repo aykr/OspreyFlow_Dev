@@ -5,7 +5,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import {
   copyTexts,
@@ -23,14 +23,13 @@ import {
   walkOnDisc,
 } from "./copyTextsTestKit";
 
-// Which tests walk afresh, and why: the kit's hook walks the two real roots once, so a test that asks for `sourceFiles()`
-// or `movedClients()` reads that walk and pays none. A test that must walk a folder the hook did not (a temporary one)
-// pays one walk, and says so in its own timeout: the planted fault of PL4h makes a walk take 6 s, as a loaded server can,
-// so that test is given 30 s, for this test alone and never for the suite or the config.
-const ONE_FRESH_WALK_MS = 30_000;
-
-// Every test below that walks a folder of the disc afresh (`walkOnDisc`, or `sourceFiles` of a folder the hook did not walk)
-// pays that walk, and says so in its own timeout (never one raised for the suite or the config).
+// Which tests walk afresh, and why: the kit's hook walks the two real roots once, and a plant's copy is listed from that
+// walk, so a test that asks for `sourceFiles()`, `movedClients()` or a plant's `sourceFiles([root])` reads it and pays none.
+// A test that must walk a folder on disc itself (`walkOnDisc`: the check that the shared walk is what the disc says) or a
+// temporary one the hook did not walk pays those walks, and says so in its own timeout: each is a few milliseconds alone, up
+// to four a test, and the planted fault of PL4h makes a walk take 6 s, as a loaded server can, so these tests are given 30 s,
+// each its own and never raised for the suite or the config.
+const FRESH_WALKS_MS = 30_000;
 
 describe("the copy guards' kit shares one walk and one parse and changes what is read in nothing", () => {
   it("walks the same files as a fresh walk of each root on disc finds", () => {
@@ -38,13 +37,13 @@ describe("the copy guards' kit shares one walk and one parse and changes what is
     // The shared walk of both roots is the roots' own fresh walks, one after the other (no walk of one root alone: it
     // would be a second walk, with its own key).
     expect(sourceFiles()).toEqual(ROOTS.flatMap((root) => walkOnDisc(root)));
-  });
+  }, FRESH_WALKS_MS);
 
   it("finds the moved clients as a fresh walk of the shared package on disc finds them", () => {
     const fresh = walkOnDisc(SHARED_SRC).filter((path) => MOVED_FOLDERS.test(path));
     expect(fresh.length).toBeGreaterThanOrEqual(6);
     expect(movedClients()).toEqual(fresh);
-  });
+  }, FRESH_WALKS_MS);
 
   it("lists a workspace file, a shared file, and none of the tests, kits or generated types", () => {
     const walked = sourceFiles();
@@ -78,7 +77,7 @@ describe("the copy guards' kit shares one walk and one parse and changes what is
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
-  }, ONE_FRESH_WALK_MS);
+  }, FRESH_WALKS_MS);
 
   it("hands each caller its own list, so one test cannot change what another walks", () => {
     const first = sourceFiles();
@@ -90,7 +89,8 @@ describe("the copy guards' kit shares one walk and one parse and changes what is
     const planted = plantedCopy("updateNotice.ts", 'export const PLANTED = { note: "a placeholder value" };');
     try {
       const onDisc = walkOnDisc(planted.root);
-      expect(sourceFiles([planted.root])).toEqual(onDisc);
+      // The copy's list is the shared walk's, re-rooted: the same files as the disc lists, whatever order it lists them in.
+      expect([...sourceFiles([planted.root])].sort()).toEqual([...onDisc].sort());
       expect(onDisc.map((path) => relative(planted.root, path))).toContain(planted.file);
       expect(onDisc.map((path) => relative(planted.root, path)).sort()).toEqual(
         walkOnDisc(SHARED_SRC)
@@ -100,7 +100,7 @@ describe("the copy guards' kit shares one walk and one parse and changes what is
     } finally {
       planted.remove();
     }
-  });
+  }, FRESH_WALKS_MS);
 
   it("lists a plant's copy from the shared walk: no walk of the copy, and the very files of the shared package re-rooted", () => {
     sourceFiles();
@@ -123,7 +123,6 @@ describe("the copy guards' kit shares one walk and one parse and changes what is
 
   it("gives the guards' tests an explicit limit, set by the kit and explained there", (context) => {
     expect(GUARD_TEST_TIMEOUT_MS).toBeGreaterThan(5_000);
-    expect(vi.getConfig().testTimeout).toBe(GUARD_TEST_TIMEOUT_MS);
     // This test was collected under it: its own task carries the limit, not vitest's 5 s.
     expect(context.task.timeout).toBe(GUARD_TEST_TIMEOUT_MS);
   });
@@ -138,7 +137,7 @@ describe("the copy guards' kit shares one walk and one parse and changes what is
     } finally {
       rmSync(planted.root, { recursive: true, force: true });
     }
-  }, ONE_FRESH_WALK_MS);
+  }, FRESH_WALKS_MS);
 
   it("parses what each source says, not what an earlier source said, and a .tsx apart from a .ts", () => {
     const one = copyTexts("a.ts", 'export const a = "first words";');

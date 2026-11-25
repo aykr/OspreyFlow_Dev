@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 
 import ts from "typescript";
-import { beforeAll } from "vitest";
+import { beforeAll, vi } from "vitest";
 
 export const SRC = join(__dirname);
 /** The shared package's source, where the plain modules that left the workspace live (slices PL4c to PL4d2):
@@ -63,16 +63,27 @@ function discWalk(dir: string): string[] {
 // The one walk of the two real roots is paid here, in a hook of its own, not inside whichever test runs first. Its
 // timeout is explicit and explained (never raised for the suite or the config): the walk itself is a few milliseconds
 // (a few hundred files listed), but the planted fault of this slice makes it take 6 s, as a loaded server can, so the hook
-// has ten times that and still ends a walk that hangs. Every test after it reads the walk from memory.
+// has ten times that and still ends a walk that hangs. Every test after it reads the walk from memory: a plant's copy
+// too, whose list is the shared package's files of this walk re-rooted (`copySharedPackage`), never a walk of its own.
 //
 // The parse is not paid here: the guards that read texts through `copyTexts` pay it once, in their first test, and share it
 // (`parsed` below); a guard with its own parser (`copyWords.test.ts`) never reads it, and a file that imports only the
-// kit's paths (`auth/resolvedPrincipal.test.ts`) would pay a full parse for nothing. Measured alone, parsing the 479 files
-// takes 0.6 s and the largest test of the two guards 0.5 s, so a server three and a half times slower (1.5 to 2 s a file
-// alone, 5.4 to 7 s under load) takes under 2.5 s for any one test, inside vitest's 5 s: no test needs a longer timeout.
+// kit's paths (`auth/resolvedPrincipal.test.ts`) would pay a full parse for nothing.
 beforeAll(() => {
   sourceFiles();
 }, 60_000);
+
+/** The time any one test of a file that imports this kit may take: 30 s, set here for those files alone (never in the
+ * config, never for the suite). What is left in a guard's test after the one walk is reading and parsing files, which the
+ * guards' own code does (`copyWords.test.ts` reads and parses every file again in its first test, and the plants' copies in
+ * the rest: its parser is its own, so the kit cannot share it). Measured on this slice's own machine, 12 cores: the largest
+ * test, reading and parsing the 479 files of both roots, takes 0.65 to 0.75 s alone; with 36 busy loops running beside it
+ * (three to a core) it took 2.3 to 2.9 s, about four times as long, so vitest's 5 s leaves under a factor of two there; and a
+ * server's own load is not known from here (the owner saw 1.5 to 2 s alone and 5.4 to 7 s loaded for a file's walks, before
+ * this change). So the limit is stated, ten times the loaded figure measured, and ends a test that hangs. The test files
+ * stay as they were: the limit is applied to the tests collected after this module is imported, which is all of them. */
+export const GUARD_TEST_TIMEOUT_MS = 30_000;
+vi.setConfig({ testTimeout: GUARD_TEST_TIMEOUT_MS });
 
 /** The path as the guards print it: relative to its own root, the shared package's marked. */
 export function shown(path: string): string {
@@ -174,12 +185,18 @@ export function movedClients(): string[] {
     .filter((path) => MOVED_FOLDERS.test(path));
 }
 
-/** A temporary copy of the shared package, walked on disc once when it is made and that list entered in `walks`, so a
- * plant's own walk and tests read the copy's files as the disc lists them, and a cleanup that forgets it. */
+/** A temporary copy of the shared package, its list entered in `walks` without a walk: the copy is the package's source
+ * as `cpSync` finds it, so what the walk would list there is the shared walk's files under `SHARED_SRC`, re-rooted at the
+ * copy. A plant's own `sourceFiles([root])` reads that list from memory (PL4h); a cleanup forgets it. */
 function copySharedPackage(): { root: string; remove: () => void } {
   const root = mkdtempSync(join(tmpdir(), "copy-guard-"));
   cpSync(SHARED_SRC, root, { recursive: true });
-  walks.set(root, discWalk(root));
+  walks.set(
+    root,
+    sourceFiles()
+      .filter((path) => path.startsWith(SHARED_SRC))
+      .map((path) => join(root, relative(SHARED_SRC, path))),
+  );
   return {
     root,
     remove: () => {
