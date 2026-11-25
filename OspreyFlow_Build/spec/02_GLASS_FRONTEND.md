@@ -370,11 +370,53 @@ moves focus to search (`keyboard/shell.spec.ts`).
 and the right-hand column sets the column's width, the edge below each stacked panel but the last sets
 that panel's height (the last takes what is left), and the edge above the timeline sets its height. A
 sash is dragged with the pointer or, by keyboard, reached with Tab and moved with the arrow keys (16
-pixels, 64 with Shift); Home or a double-click resets it. The column stays at least 240 pixels wide and
-the canvas at least 320; a stacked panel at least 48 pixels tall; the timeline between 96 pixels and
+pixels, 64 with Shift); Home or a double-click resets it. The column stays at least 300 pixels wide (the
+owner's ruling of 24 November 2026; the code's `MIN_SIDE_WIDTH` is 300, and a width set below it is raised to it, not
+refused) and the canvas at least 320; a stacked panel at least 48 pixels tall; the timeline between 96 pixels and
 seven tenths of the window. The sizes are kept in this browser for this analyst (localStorage, beside
 the panel order), never sent and not part of the case. The canvas, the timeline and the map redraw to
 their new box at once. Reachable by keyboard (`keyboard/panel-frames.spec.ts`).
+
+**The ten panel actions (slice PL8, the owner's rulings of 24 November 2026).** What each of the ten actions of
+`PANEL_FRAME_ACTIONS` (`packages/glass-shared/src/keyboard/actionRegistry.ts`) keeps, the state a panel opens in, and
+the state with no script. *Kept* is **tab only** (the choice belongs to this tab and is not stored: each panel opens in
+its normal state on reload) or **this browser** (localStorage, under the key named in *Normal state*, for this analyst, never sent and not
+part of the case). The server-rendered pages' panel frame (`packages/glass-shared/src/layout/panelFrameStore.ts`, no
+React, no inline style) does what this table says, and the code declares the *Kept* column in `PANEL_ACTION_STORAGE`;
+`tests/glass_trees/test_panel_frame_spec_table.py` fails if the two differ. **With no script nothing here runs, and nothing reads this browser's storage: every
+panel is open, at its default size and in its default order as the *Scripts off* column says row by row (a panel that normally starts shut
+is open, since nothing could open it), and the markup carries no control for any of these actions** (the owner: "scripts
+off: every panel open in its normal state, no controls"). Where the React workspace's own behaviour differs from this
+table, this table wins (the owner: "spec/02 wins action by action").
+
+| Action id | Kept | Normal state | Scripts off |
+| --- | --- | --- | --- |
+| `hide-and-show-the-side-panel-by-keyboard` | tab only | Open and docked at a viewport of 1200px or wider; closed, opening over the canvas, below it | Open, as at a wide viewport, with no control |
+| `open-the-side-panel-to-the-full-width-and-return-by-keyboard` | tab only | Normal width (340px, or the width kept below), not full | Open at its normal width, with no control |
+| `hide-and-show-the-timeline-by-keyboard` | tab only | Folded: the 34px row alone | Open, its plot shown at 130px (the default), with no control |
+| `move-a-side-panel-up-and-down-by-keyboard` | this browser | Under `ospreyflow.side-panel-order`: The Inspector, Metrics, Query builder, then Find connections | Open in the default order, with no control |
+| `move-a-side-panel-with-alt-arrows-by-keyboard` | this browser | Under `ospreyflow.side-panel-order`: The same order and the same store as the menu's *Move up* and *Move down* | Open in the default order, with no control |
+| `fold-a-side-panel-by-keyboard` | this browser | Under `ospreyflow.side-panels-folded`: The Inspector open, the other panels folded beneath it (a value that is not a list of panels is ignored and this is used) | Every panel open (unfolded), since a folded panel could not be opened with no control |
+| `resize-the-side-panel-by-keyboard` | this browser | Under `ospreyflow.layout-sizes`: 340px wide, held between 300 and 480 (a width below 300 is raised to 300) and leaving the canvas 320 | Open at 340px, with no control |
+| `resize-a-stacked-panel-by-keyboard` | this browser | Under `ospreyflow.layout-sizes`: No height of its own: the open panels share the column; a height is at least 48px | Open, sharing the column, with no control |
+| `resize-the-timeline-by-keyboard` | this browser | Under `ospreyflow.layout-sizes`: 130px plot, held between 96px and seven tenths of the window | Open at 130px (the default), with no control |
+| `close-and-open-the-details-panel-by-keyboard` | tab only | The canvas toolbar's *Details* open when the side panel is open (docked or overlaid) | Open, with no control |
+
+A stored value that is missing, corrupt or not of the shape expected is ignored, never an error: the normal state is
+used. Where the browser gives no storage (a private window), a change lasts for the page, in memory. The upper limits
+in the table (the timeline seven tenths of the window; the column leaving the canvas 320; a stacked panel the window's
+height) are computed by the store from the live window at each resize, never from the page's markup, which cannot
+follow a window that is resized after it is written; a bound a page passes can only lower them. Every write of a
+size goes through one function in the store, and **that function stores only the size the analyst's own act asked for**
+(a drag to a width, a key that moves a sash by a step, a typed size, Home's default; the owner, 25 November 2026). **A limit
+or a page's bound changes what is drawn, never what is stored:** the React workspace reads the same stored sizes, so a size
+lost to a small window or to one page's bound would be the analyst's own size lost for good. A kept size above today's limit
+is therefore drawn at the limit and left as it is kept; reading what is kept, drawing, a window resize and a resize
+call write nothing. A key that would change nothing on the screen (a grow key at the limit or the bound) stores nothing; a key
+that carries a sash past the limit stores the size it asked for (one step at most beyond what was drawn), which is drawn at the limit. A size still at its
+default (340px, 130px) that a small window cannot hold is shown at the window's limit and is not stored. Home is a reset: it
+stores the default (340px, 130px), which the sash draws held to the window's limit and the page's bound, and never stores the
+limit or the bound in its place, so a later page with no bound, or a reload in a roomy window, opens at the default.
 
 ### 2.0 The top bar (ADR-065; rebuilt by ADR-097 step 1)
 
