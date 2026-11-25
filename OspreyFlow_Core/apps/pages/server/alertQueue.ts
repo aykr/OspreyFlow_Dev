@@ -76,7 +76,9 @@ async function alertQueueGet(req: Request, res: Response): Promise<void> {
   }
   const asked: unknown = req.query["case"];
   const caseId = asked === undefined || asked === "" ? null : asked;
-  if (caseId !== null && (typeof caseId !== "string" || caseId.length > MAX_CASE_ID_CHARS)) {
+  // `.` and `..` are refused as a path nothing serves: `encodeURIComponent` leaves them as they are and the address is then resolved, so
+  // the read would go to another route of the Conduit (`/v1/investigations/alert-queue`, a case's own page, which writes an audit row).
+  if (caseId !== null && (typeof caseId !== "string" || caseId.length > MAX_CASE_ID_CHARS || caseId === "." || caseId === "..")) {
     notFound(res);
     return;
   }
