@@ -18,34 +18,45 @@ export const SHARED_SRC = join(__dirname, "..", "..", "..", "packages", "glass-s
 /** The roots the guards walk: the one list every copy guard and its reach test use. */
 export const ROOTS: readonly string[] = [SRC, SHARED_SRC];
 
-/** The walks made so far, by root (PL4h). Each guard file used to walk and read the whole source again in every test
- * (seven calls a file, 1.5 to 2 s alone and 5.4 to 7 s under a loaded server, past vitest's 5 s): a root is now walked
- * once per file and its list shared. A temporary copy of the shared package is entered here when it is made
- * (`copySharedPackage`), since its files are the package's own, so a plant's walk reads the same list rather than
- * walking the disc again. Nothing is cached across test files: each vitest file has its own module. */
+/** The walks made so far, by the roots walked (PL4h). Each guard file used to walk and read the whole source again in
+ * every test (seven calls a file, 1.5 to 2 s alone and 5.4 to 7 s under a loaded server, past vitest's 5 s): a list of
+ * roots is now walked once per file and its list shared. Nothing is kept across test files: each vitest file has its
+ * own module, so each pays the walk once, in the hook below. */
 const walks = new Map<string, readonly string[]>();
 
-function walked(root: string): readonly string[] {
-  let found = walks.get(root);
-  if (!found) {
-    found = filesUnder(root);
-    walks.set(root, found);
-  }
-  return found;
+/** `walk` made once for each list of roots: the first call walks, every later call returns a copy of the list it found.
+ * Only the roots' own listing is kept: what a test writes into a folder after its first walk is not listed again. */
+function walkedOnce(walk: (roots?: readonly string[]) => string[]): (roots?: readonly string[]) => string[] {
+  return (roots = ROOTS) => {
+    const key = roots.join("\0");
+    let found = walks.get(key);
+    if (!found) {
+      found = walk(roots);
+      walks.set(key, found);
+    }
+    return [...found];
+  };
 }
 
-// The one walk of the two real roots is paid here, in a hook of its own, not inside whichever test runs first. Its timeout is
-// explicit and explained (never raised for the suite or the config): the walk reads two folders of a few hundred files
-// (about 0.1 s alone), and a loaded server has made the same walk and the tests' reads take 5 times as long, so a minute
-// is far past the slowest figure seen and still ends a walk that hangs.
+/** The files under `roots` (by default both), skipping tests, test kits and generated types: the walk, made once for
+ * each list of roots (`walkedOnce`). */
+export const sourceFiles = walkedOnce(function sourceFiles(roots: readonly string[] = ROOTS): string[] {
+  return roots.flatMap((root) => filesUnder(root));
+});
+
+/** A fresh walk of `dir` on disc, never the shared one: for the tests that hold the shared one to what the disc says. */
+export function walkOnDisc(dir: string): string[] {
+  return filesUnder(dir);
+}
+
+// The one walk of the two real roots, and the one reading and parsing of every file in them, are paid here, in a hook of
+// their own, not inside whichever test runs first. Its timeout is explicit and explained (never raised for the suite
+// or the config): the walk and the parse read and parse two folders of a few hundred files (1.5 to 2 s alone), and a
+// loaded server has made the same work take 5.4 to 7 s, so a minute is far past the slowest figure seen and still
+// ends a walk that hangs. Every test after it reads the walk and the parsed texts from memory.
 beforeAll(() => {
-  sourceFiles();
+  for (const path of sourceFiles()) copyTexts(path, readFileSync(path, "utf-8"));
 }, 60_000);
-
-/** The files under `roots` (by default both), skipping tests, test kits and generated types. */
-export function sourceFiles(roots: readonly string[] = ROOTS): string[] {
-  return roots.flatMap((root) => walked(root));
-}
 
 /** The path as the guards print it: relative to its own root, the shared package's marked. */
 export function shown(path: string): string {
@@ -140,18 +151,19 @@ export const ADMIN_CLIENTS: readonly string[] = Object.entries(ADMIN_STEMS).flat
 /** The Conduit clients and the notice that live in the shared package: every file there under the folders the
  * clients came from, found on disc rather than named, so a client added later is walked and checked too. */
 export function movedClients(): string[] {
-  return sourceFiles([SHARED_SRC]).filter((path) => MOVED_FOLDERS.test(path));
+  // From the walk of both roots every test already shares, not a walk of the shared package alone (a second list of roots
+  // would be a second walk, PL4h): the shared package's files are the ones of that walk under `SHARED_SRC`.
+  return sourceFiles()
+    .filter((path) => path.startsWith(SHARED_SRC))
+    .filter((path) => MOVED_FOLDERS.test(path));
 }
 
-/** A temporary copy of the shared package, entered in `walks` as the package's own list moved under the copy (a plant only
- * appends a line to files that are there, so the copy has the files the package has), and a cleanup that forgets it. */
+/** A temporary copy of the shared package, walked on disc once when it is made and that list entered in `walks`, so a
+ * plant's own walk and tests read the copy's files as the disc lists them, and a cleanup that forgets it. */
 function copySharedPackage(): { root: string; remove: () => void } {
   const root = mkdtempSync(join(tmpdir(), "copy-guard-"));
   cpSync(SHARED_SRC, root, { recursive: true });
-  walks.set(
-    root,
-    walked(SHARED_SRC).map((path) => join(root, relative(SHARED_SRC, path))),
-  );
+  walks.set(root, filesUnder(root));
   return {
     root,
     remove: () => {
@@ -239,8 +251,22 @@ function filesUnder(dir: string): string[] {
 
 export type CopyText = { line: number; words: string; raw: string };
 
-/** Each piece of copy in `source`: its line, its words without name-like tokens, and its raw text. */
+const parsed = new Map<string, CopyText[]>();
+
+/** Each piece of copy in `source`: its line, its words without name-like tokens, and its raw text. Parsed once for each
+ * source and kind of file (`.tsx` or not) and shared (PL4h): the guards' plants copy a package whose files are mostly
+ * the very text already parsed, and the name does not change the reading but for the kind of file. */
 export function copyTexts(name: string, source: string): CopyText[] {
+  const key = `${name.endsWith(".tsx") ? "tsx" : "ts"}\0${source}`;
+  let found = parsed.get(key);
+  if (!found) {
+    found = parseCopyTexts(name, source);
+    parsed.set(key, found);
+  }
+  return found;
+}
+
+function parseCopyTexts(name: string, source: string): CopyText[] {
   const tree = ts.createSourceFile(
     name,
     source,
