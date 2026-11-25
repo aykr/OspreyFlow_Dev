@@ -454,9 +454,23 @@ describe("the alert monitoring figures (the govuk tree)", () => {
     const shortest = await v.get(`/reports?case=${CASE}&weeks=4`);
     expect(shortest.status).toBe(409);
     expect(words(shortest.text)).toContain("This is the shortest period.");
-    v.conduit.next = { status: 409, body: JSON.stringify({ error: "limit_exceeded", cap_kind: "customers", cap: 100, would_be: 120, options: ["shorter_period"] }) };
-    const customers = await v.get(`/reports?case=${CASE}`);
-    expect(words(customers.text)).toContain("This report would count 120 customers, past its limit of 100.");
+    v.conduit.bound = 1000;
+    // The customers' bound does not move with the period (the route counts every verifying document the reader can see): the fake answers
+    // it for every period, as the route does, so a link to a shorter period would answer the same.
+    v.conduit.customersOver = { cap: 100, wouldBe: 120 };
+    for (const query of [`case=${CASE}`, `case=${CASE}&weeks=4`]) {
+      const customers = await v.get(`/reports?${query}`);
+      expect(customers.status).toBe(409);
+      const said = words(customers.text);
+      expect(said).toContain("This report would count 120 customers, past its limit of 100.");
+      // No way out that cannot work: no link to a period, and no "shorter period" said as one.
+      const links = [...mainOf(customers.text).matchAll(/<a\b([^>]*)>([^<]*)<\/a>/g)].map((m) => attr(m[1] as string, "href")).filter((href) => String(href).startsWith("/reports"));
+      expect(links).toEqual([]);
+      expect(said).not.toContain("Choose a shorter period");
+      expect(said).not.toContain("This is the shortest period");
+      expect(said).toContain("A shorter period does not change this limit.");
+      expect(mainOf(customers.text)).not.toMatch(/<svg|<table/);
+    }
   });
 
   it("AM5: a case with no alerts in the period says so in words and draws no chart", async () => {

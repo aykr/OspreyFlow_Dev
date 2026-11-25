@@ -72,6 +72,9 @@ export interface FakeReportConduit {
   world: Map<string, WorldAlert[]>;
   /** The bound on visible alerts in a period (the real one is `ALERT_BOUND`); small here so a test can pass it. */
   bound: number;
+  /** The customers' bound, as a case with the `fibo` pack meets it: the same for every period (`_customers` pages through every document the
+   *  reader can see, with no date), so a shorter period never clears it. Past the alert bound's check, as the route computes them in that order. */
+  customersOver: { cap: number; wouldBe: number } | undefined;
   /** A path fragment that answers 500, to model a failing Conduit. */
   failing: Set<string>;
   /** The next report answer is this status with this body instead of the real rule's (a body the page must not trust). */
@@ -181,6 +184,7 @@ export async function fakeReportConduit(readers: Reader[]): Promise<FakeReportCo
     world: new Map(),
     bound: 1000,
     failing: new Set(),
+    customersOver: undefined,
     next: undefined,
     stop: () => new Promise((resolve) => server.close(() => resolve())),
   };
@@ -233,6 +237,10 @@ export async function fakeReportConduit(readers: Reader[]): Promise<FakeReportCo
     const raisedIn = seen.filter((a) => a.week >= since).length;
     if (raisedIn > fake.bound) {
       return reply(res, 409, { error: "limit_exceeded", cap_kind: "alerts", cap: fake.bound, would_be: raisedIn, options: ["shorter_period", "fewer_typologies"] });
+    }
+    if (fake.customersOver) {
+      const { cap, wouldBe } = fake.customersOver;
+      return reply(res, 409, { error: "limit_exceeded", cap_kind: "customers", cap, would_be: wouldBe, options: ["shorter_period", "fewer_typologies"] });
     }
     return reply(res, 200, figuresOf(seen, since, weeks, level));
   };
