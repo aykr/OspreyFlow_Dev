@@ -74,7 +74,7 @@ KEYBOARD_TESTS = {
 
 SECTION = "## Scenario AM"
 ID = re.compile(r"^AM\d+$")
-TITLE = re.compile(r"""\b(?:it|test)\(\s*(?:"|')(AM\d+): """)
+TITLE = re.compile(r"""\b(?:it|test)\(\s*(?:"|'|`)(AM\d+): """)
 PAGE_TEST_NAME = "alert-monitoring.test.ts"
 PATH = "/reports"
 
@@ -242,6 +242,8 @@ def function_problems(data: dict[str, Any]) -> list[str]:
         found.append("the figures row's scenario ids are not the section's rows")
     if figures["slice"] != "GR3":
         found.append(f"the figures row's slice is {figures['slice']!r}, not GR3")
+    if figures["route"] != PATH:
+        found.append(f"the figures row's route is {figures['route']!r}, not {PATH} (every page's row names its route: help.test.ts HP9)")
     dashboards = rows.get("reports-dashboards", {})
     if dashboards.get("slice") != "none named" or dashboards.get("route") or dashboards.get("scenario"):
         found.append("the dashboards row must be later: slice 'none named', no route, no scenario")
@@ -540,7 +542,20 @@ def _in_section(old: str, new: str) -> Callable[[dict[str, Any]], None]:
     def plant(data: dict[str, Any]) -> None:
         section = section_of(data["spec_08"])
         assert old in section, f"the plant's anchor {old!r} is not in the scenario AM section"
-        data["spec_08"] = data["spec_08"].replace(section, section.replace(old, new, 1), 1)
+        data["spec_08"] = data["spec_08"].replace(section, section.replace(old, new), 1)
+
+    return plant
+
+
+def _in_chart_rule(old: str, new: str) -> Callable[[dict[str, Any]], None]:
+    """A change inside spec/02's section 2.0f, never an earlier place that happens to hold the same words."""
+
+    def plant(data: dict[str, Any]) -> None:
+        start = data["spec_02"].index("### 2.0f ")
+        end = data["spec_02"].index("\n### ", start + 1)
+        section = data["spec_02"][start:end]
+        assert old in section, f"the plant's anchor {old!r} is not in section 2.0f"
+        data["spec_02"] = data["spec_02"][:start] + section.replace(old, new) + data["spec_02"][end:]
 
     return plant
 
@@ -558,10 +573,11 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
     ("a row run on the other tree", _in_section("| GOV.UK |", "| Default |"), scenario_problems, "GOV.UK tree's"),
     ("the 404 sentence left out", _in_section("404", "four hundred and four"), scenario_problems, "'404'"),
     ("words a source does not hold", _in_section("Raised each week", "Raised every week"), citation_problems, "does not hold"),
-    ("the chart rule left out of spec/02", _replace("spec_02", "no inline style", "any style"), spec_02_problems, "no inline style"),
-    ("the ruling left out of spec/02", _replace("spec_02", "table of the same figures", "table"), spec_02_problems, "same figures"),
+    ("the chart rule left out of spec/02", _in_chart_rule("no inline style", "any style"), spec_02_problems, "no inline style"),
+    ("the ruling left out of spec/02", _in_chart_rule("table of the same figures", "table"), spec_02_problems, "same figures"),
     ("the figures row with no scenario", _row("reports-figures", scenario=""), function_problems, "not AM ids"),
     ("the figures row on the wrong slice", _row("reports-figures", slice="R7"), function_problems, "not GR3"),
+    ("the figures row without its route", _row("reports-figures", route=""), function_problems, "not /reports"),
     ("the dashboards row given a slice", _row("reports-dashboards", slice="GR3"), function_problems, "must be later"),
     ("the dashboards row given a route", _row("reports-dashboards", route=PATH), function_problems, "must be later"),
     ("the page's path left out of the route list", lambda d: d["routes"].remove(PATH), route_problems, "does not hold"),

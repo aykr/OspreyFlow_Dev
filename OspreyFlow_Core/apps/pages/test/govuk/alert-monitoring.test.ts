@@ -119,7 +119,11 @@ async function visitOn(conduit: FakeReportConduit, reader: Reader, tree: "govuk"
 // ------------------------------------------------------------------------------------------------ reading a page
 
 const strip = (html: string): string => html.replace(/<!--[\s\S]*?-->/g, "");
-const attr = (tag: string, name: string): string | undefined => new RegExp(`\\s${name}="([^"]*)"`).exec(tag)?.[1];
+const unescaped = (text: string): string => text.replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
+const attr = (tag: string, name: string): string | undefined => {
+  const found = new RegExp(`\\s${name}="([^"]*)"`).exec(tag)?.[1];
+  return found === undefined ? undefined : unescaped(found);
+};
 const mainOf = (html: string): string => (/<main\b[^>]*>([\s\S]*?)<\/main>/.exec(strip(html))?.[1] as string | undefined) ?? "";
 const words = (html: string): string => textOf(mainOf(html)).replace(/&#39;/g, "'").replace(/\s+/g, " ").trim();
 const sameFor = (html: string, csrf: string): string => html.split(csrf).join("CSRF").replace(/nonce="[^"]*"/g, 'nonce="N"');

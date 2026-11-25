@@ -1,0 +1,451 @@
+/**
+ * The alert monitoring page's words, and the view it is drawn from (slice GR3a; ADR-152 decisions 8 and 10; FUNCTIONS row
+ * `reports-figures`; scenario AM). Plain words, British English.
+ *
+ * **Everything on the page is what the Conduit's report route sent for this reader, and nothing else.** `readReport` and
+ * `readLimit` check the route's answer is the shape the figures have and return `undefined` for anything else, so that a body that
+ * is not the figures is never drawn in part (rule 2). `monitoringView` only adds up rows the route sent (a week's total is its
+ * rows' sum, as the React board adds them) and says them in words; it computes no total of its own, no share of anything the
+ * route did not count, and nothing that depends on who is asking: that is the Conduit's, which counts as the reader (rule 3,
+ * `services/api/reports.py`).
+ *
+ * **The chart is plain SVG with classes** (`spec/02` section 2.0f, the owner's ruling of 24 November 2026). `chartOf` gives each
+ * bar its row, its geometry and its words: the largest figure is `WIDEST` wide and the others are in proportion. A class cannot say
+ * how long a bar is and a `style` attribute is refused (decision 8), so the length is the `width` attribute of the bar's `rect`.
+ *
+ * The few helpers below are written once more than `packages/glass-shared` has them, because the server's `NodeNext` build cannot
+ * import the shared package's extension-less source (see `studioWords.ts`); `test/server/alertMonitoringShared.test.ts` runs each
+ * on the same inputs as the shared one, so a copy that drifts is red.
+ */
+
+export const PERIODS = [4, 12, 26, 52] as const;
+export const DEFAULT_PERIOD = 12;
+
+/** The widest a bar is drawn, in the chart's own units: the largest figure is this wide and the rest are in proportion. */
+export const WIDEST = 240;
+const VIEW_WIDTH = 520;
+const LABEL_RIGHT = 220;
+const BAR_LEFT = 230;
+const ROW_HEIGHT = 28;
+const BAR_HEIGHT = 18;
+const TEXT_DROP = 13;
+
+// -------------------------------------------------------------------------------------------------- the shared package's, again
+
+const NUMBER = new Intl.NumberFormat("en-GB");
+const DAY = new Intl.DateTimeFormat("en-GB", { dateStyle: "long", timeZone: "UTC" });
+
+/** `packages/glass-shared/src/reports/packText.ts`'s `formatNumber`. */
+export function formatNumber(n: number): string {
+  return NUMBER.format(n);
+}
+
+/** `packText.ts`'s `plural`. */
+export function plural(n: number, one: string, many = `${one}s`): string {
+  return `${NUMBER.format(n)} ${n === 1 ? one : many}`;
+}
+
+/** `packText.ts`'s `formatDay`: "11 October 2026"; an unreadable value is shown as it came. */
+export function formatDay(iso: string): string {
+  const when = new Date(iso);
+  return Number.isNaN(when.getTime()) ? iso : DAY.format(when);
+}
+
+/** `alerts/names.ts`'s `TYPOLOGY_LABELS`. */
+const TYPOLOGY_LABELS: Record<string, string> = {
+  structuring: "Structuring",
+  rapid_movement: "Rapid movement",
+  circular_flow: "Circular flow",
+  kyc_screening: "KYC screening",
+  shared_attributes: "Shared contact details",
+  document_verification: "Unverified customer",
+  pattern: "Drawn pattern",
+  sentence: "Sentence rule",
+  high_risk_jurisdiction: "High-risk jurisdiction",
+  large_cash: "Large cash",
+  dormant_reactivated: "Dormant account reactivated",
+  velocity_rise: "Sudden rise in velocity",
+};
+
+/** `names.ts`'s `typologyLabel`. */
+export function typologyLabel(typology: string | null | undefined): string {
+  return (typology && TYPOLOGY_LABELS[typology]) || "Alert";
+}
+
+/** `alerts/closingReasons.ts`'s `CLOSING_REASONS`. */
+const CLOSING_REASONS: Record<string, string> = {
+  true_positive: "True match",
+  false_positive: "False positive",
+  duplicate: "Duplicate",
+  no_further_action: "No further action",
+  referred: "Referred",
+};
+
+/** `closingReasons.ts`'s `closingReasonLabel`: "True match"; an unknown value as itself, never hidden. */
+export function closingReasonLabel(reason: string | null | undefined): string {
+  return reason ? (CLOSING_REASONS[reason] ?? reason) : "";
+}
+
+/** `reports/figureParts.tsx`'s `GROUP_NAMES`. */
+const GROUP_NAMES: Record<string, string> = { hotlists: "Hotlists", monitors: "Monitors", analyst: "Raised by an analyst", drawn_items: "Drawn items" };
+
+/** `figureParts.tsx`'s `groupName`: a rule group in words, a typology rule by its typology and never a rule's own name. */
+export function groupName(label: string, typology: string): string {
+  if (label === "typology") return typologyLabel(typology || "other");
+  const named = GROUP_NAMES[label];
+  if (named) return named;
+  const words = label.replace(/_/g, " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+// -------------------------------------------------------------------------------------------------- the page's own words
+
+export const ALERT_MONITORING_WORDS = {
+  title: "Alert monitoring",
+  counted: "Counted for you: an alert concerning anything you cannot see is in no figure here.",
+  period: "Period",
+  periodLink: (weeks: number): string => `Last ${weeks} weeks`,
+  back: "Back to Home",
+  raised: (total: number, weeks: number): string => `${plural(total, "alert")} raised in the last ${plural(weeks, "week")}`,
+  countedOn: (day: string): string => `Counted on ${day}.`,
+  noAlerts: "No alerts were raised in this period.",
+  noClosed: "No alerts were closed in this period.",
+  tableFollows: "The same figures are in the table below.",
+  bars: {
+    week: {
+      id: "am-raised-each-week",
+      heading: "Raised each week",
+      caption: "Alerts raised each week",
+      columns: ["Week starting", "Alerts raised"],
+      title: "Bar chart: alerts raised each week",
+      desc: "One bar for each week of the period; the longest bar is the week with most alerts.",
+    },
+    rule: {
+      id: "am-raised-by-rule",
+      heading: "Raised by rule",
+      caption: "Alerts raised by rule",
+      columns: ["Rule", "Alerts raised"],
+      title: "Bar chart: alerts raised by rule",
+      desc: "One bar for each rule that raised an alert in the period; the longest bar is the rule that raised most.",
+    },
+    outcome: {
+      id: "am-closed-by-outcome",
+      heading: "Closed by outcome",
+      caption: "Alerts closed by outcome",
+      columns: ["Outcome", "Alerts closed"],
+      title: "Bar chart: alerts closed by outcome",
+      desc: "One bar for each outcome an alert was closed with in the period; the longest bar is the commonest outcome.",
+    },
+    time: {
+      id: "am-time-to-close",
+      heading: "Time to close",
+      caption: "Alerts closed by time taken",
+      columns: ["Time taken", "Alerts closed"],
+      title: "Bar chart: alerts closed by time taken",
+      desc: "One bar for each length of time an alert took to close; the longest bar is the commonest.",
+    },
+  },
+  hotlist: { id: "am-hotlist-matches", heading: "Hotlist matches", says: (n: number): string => `${plural(n, "match", "matches")} in the period` },
+  team: {
+    id: "am-team-view",
+    heading: "Team view",
+    caption: "Team view by rule",
+    columns: ["Rule", "Unassigned", "Mine", "Older than 7 days", "Closed as not of interest"],
+    noneClosed: "none closed",
+  },
+  held: {
+    id: "am-held-rows",
+    heading: "Held rows",
+    caption: "Held rows by what became of them",
+    columns: ["What became of them", "Rows"],
+    rows: ["Held", "Released", "Rejected"],
+  },
+  limit: {
+    title: "This report is too large to draw",
+    would: (n: number, what: "alerts" | "customers", cap: number): string => `This report would count ${formatNumber(n)} ${what}, past its limit of ${formatNumber(cap)}.`,
+    choose: "Choose a shorter period.",
+    shortest: "This is the shortest period.",
+  },
+  notFound: { title: "Case not found", message: "This case is not one you can open." },
+  unreadable: {
+    title: "The figures could not be read",
+    message: "The figures could not be read just now. Nothing has changed. Try again in a few minutes.",
+  },
+} as const;
+
+// -------------------------------------------------------------------------------------------------- what the route sends
+
+interface Count {
+  week_start: string;
+  label: string;
+  typology: string;
+  count: number;
+}
+
+interface Team {
+  label: string;
+  typology: string;
+  unassigned: number;
+  mine: number;
+  older: number;
+  closed: number;
+  notOfInterest: number;
+}
+
+/** What the report route sent that the page draws, checked: the same names as the Conduit's `ReportFigures`. */
+export interface Report {
+  weeks: number;
+  asOf: string | undefined;
+  total: number;
+  raised: Count[];
+  closed: Count[];
+  took: { label: string; value: number }[];
+  hotlists: number;
+  team: Team[];
+  held: { held: number; released: number; rejected: number } | null;
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
+const isCount = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && Number.isInteger(value) && value >= 0;
+const isText = (value: unknown): value is string => typeof value === "string";
+
+function listOf<T>(value: unknown, read: (item: unknown) => T | undefined): T[] | undefined {
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) return undefined;
+  const out: T[] = [];
+  for (const item of value) {
+    const checked = read(item);
+    if (checked === undefined) return undefined;
+    out.push(checked);
+  }
+  return out;
+}
+
+const weekCount = (item: unknown): Count | undefined =>
+  isRecord(item) && isText(item["week_start"]) && isText(item["label"]) && isCount(item["count"]) && (item["typology"] === undefined || item["typology"] === null || isText(item["typology"]))
+    ? { week_start: item["week_start"], label: item["label"], typology: isText(item["typology"]) ? item["typology"] : "", count: item["count"] }
+    : undefined;
+
+const optionalCount = (value: unknown): number | undefined => (value === undefined || value === null ? 0 : isCount(value) ? value : undefined);
+
+function teamRow(item: unknown): Team | undefined {
+  if (!isRecord(item) || !isText(item["label"])) return undefined;
+  if (item["typology"] !== undefined && item["typology"] !== null && !isText(item["typology"])) return undefined;
+  const numbers = ["unassigned", "mine", "older_than_week", "closed", "not_of_interest"].map((key) => optionalCount(item[key]));
+  if (numbers.some((n) => n === undefined)) return undefined;
+  const [unassigned, mine, older, closed, notOfInterest] = numbers as number[];
+  return { label: item["label"], typology: isText(item["typology"]) ? item["typology"] : "", unassigned: unassigned as number, mine: mine as number, older: older as number, closed: closed as number, notOfInterest: notOfInterest as number };
+}
+
+/** The route's figures, or `undefined` when the body is anything but them: a partial figure is never made from what could be read. */
+export function readReport(body: unknown, requested: number): Report | undefined {
+  if (!isRecord(body) || !isCount(body["alerts_total"]) || !isRecord(body["monitoring"])) return undefined;
+  const monitoring = body["monitoring"];
+  const raised = listOf(monitoring["raised_by_rule"], weekCount);
+  const closed = listOf(monitoring["closed_by_outcome"], weekCount);
+  const hotlists = listOf(monitoring["hotlist_matches"], weekCount);
+  const took = listOf(monitoring["time_to_close"], (item) => (isRecord(item) && isText(item["label"]) && isCount(item["value"]) ? { label: item["label"], value: item["value"] } : undefined));
+  const team = listOf(monitoring["team"], teamRow);
+  if (!raised || !closed || !hotlists || !took || !team) return undefined;
+  let held: Report["held"] = null;
+  const sent = body["held"];
+  if (sent !== undefined && sent !== null) {
+    if (!isRecord(sent) || !isCount(sent["held"]) || !isCount(sent["released"]) || !isCount(sent["rejected"])) return undefined;
+    held = { held: sent["held"], released: sent["released"], rejected: sent["rejected"] };
+  }
+  const weeks = isCount(body["period_weeks"]) && body["period_weeks"] > 0 ? body["period_weeks"] : requested;
+  return {
+    weeks,
+    asOf: isText(body["as_of"]) ? body["as_of"] : undefined,
+    total: body["alerts_total"],
+    raised,
+    closed,
+    took,
+    hotlists: hotlists.reduce((n, row) => n + row.count, 0),
+    team,
+    held,
+  };
+}
+
+export interface Limit {
+  what: "alerts" | "customers";
+  cap: number;
+  wouldBe: number;
+}
+
+/** The route's 409, or `undefined` when the body is not one. */
+export function readLimit(body: unknown): Limit | undefined {
+  if (!isRecord(body) || body["error"] !== "limit_exceeded") return undefined;
+  const kind = body["cap_kind"];
+  if ((kind !== "alerts" && kind !== "customers") || !isCount(body["cap"]) || !isCount(body["would_be"])) return undefined;
+  return { what: kind, cap: body["cap"], wouldBe: body["would_be"] };
+}
+
+// -------------------------------------------------------------------------------------------------- what the page draws
+
+export interface Bar {
+  label: string;
+  value: string;
+  width: number;
+  y: number;
+  labelY: number;
+  valueX: number;
+  textY: number;
+}
+
+export interface Chart {
+  title: string;
+  desc: string;
+  viewBox: string;
+  bars: Bar[];
+}
+
+export interface TableRow {
+  head: string;
+  cells: string[];
+}
+
+export interface Figure {
+  id: string;
+  heading: string;
+  caption: string;
+  columns: readonly string[];
+  rows: TableRow[];
+  /** The chart that comes before the table; absent for a table that is not a chart. */
+  chart: Chart | null;
+  /** Said instead of a chart and a table when there is nothing to count. */
+  empty: string | null;
+  /** A sentence under the heading (the hotlist matches). */
+  says: string | null;
+}
+
+export interface Period {
+  weeks: number;
+  text: string;
+  href: string | null;
+}
+
+export type MonitoringView =
+  | { kind: "figures"; headline: string; countedOn: string | null; periods: Period[]; nothing: string | null; figures: Figure[] }
+  | { kind: "limit"; sentence: string; periods: Period[] };
+
+/** `/reports?case=…&weeks=…`: the case is encoded as one piece. */
+export const periodHref = (caseId: string, weeks: number): string => `/reports?case=${encodeURIComponent(caseId)}&weeks=${weeks}`;
+
+/** A period asked for: one of the four, or the default. */
+export function periodOf(asked: string | undefined): number {
+  const weeks = Number(asked);
+  return (PERIODS as readonly number[]).includes(weeks) && /^\d+$/.test(asked ?? "") ? weeks : DEFAULT_PERIOD;
+}
+
+function periodsFor(caseId: string, current: number, only: (weeks: number) => boolean): Period[] {
+  return PERIODS.filter(only).map((weeks) => ({ weeks, text: ALERT_MONITORING_WORDS.periodLink(weeks), href: weeks === current ? null : periodHref(caseId, weeks) }));
+}
+
+/** The chart of a figure's rows: one bar for each, the largest `WIDEST` wide and the others in proportion to it. */
+export function chartOf(words: { title: string; desc: string }, rows: { label: string; count: number }[]): Chart {
+  const most = Math.max(1, ...rows.map((row) => row.count));
+  const bars = rows.map((row, i): Bar => {
+    const width = Math.round((row.count / most) * WIDEST);
+    const y = 4 + i * ROW_HEIGHT;
+    return { label: row.label, value: formatNumber(row.count), width, y, labelY: y + TEXT_DROP, valueX: BAR_LEFT + width + 6, textY: y + TEXT_DROP };
+  });
+  return {
+    title: words.title,
+    desc: `${words.desc} ${ALERT_MONITORING_WORDS.tableFollows}`,
+    viewBox: `0 0 ${VIEW_WIDTH} ${rows.length * ROW_HEIGHT + 8}`,
+    bars,
+  };
+}
+
+function figureOf(words: { id: string; heading: string; caption: string; columns: readonly string[]; title: string; desc: string }, rows: { label: string; count: number }[], none: string): Figure {
+  const empty = rows.every((row) => row.count === 0);
+  return {
+    id: words.id,
+    heading: words.heading,
+    caption: words.caption,
+    columns: words.columns,
+    rows: empty ? [] : rows.map((row) => ({ head: row.label, cells: [formatNumber(row.count)] })),
+    chart: empty ? null : chartOf(words, rows),
+    empty: empty ? none : null,
+    says: null,
+  };
+}
+
+const RANK: Record<string, number> = { typology: 0, hotlists: 1, monitors: 2 };
+const rankOf = (label: string): number => RANK[label] ?? 3;
+
+/** The report as a page: sections in the React board's order, each figure the sum of rows the route sent. */
+export function monitoringView(report: Report, caseId: string): MonitoringView {
+  const words = ALERT_MONITORING_WORDS;
+  const headline = words.raised(report.total, report.weeks);
+  const countedOn = report.asOf !== undefined && !Number.isNaN(new Date(report.asOf).getTime()) ? words.countedOn(formatDay(report.asOf)) : null;
+  const periods = periodsFor(caseId, report.weeks, () => true);
+  if (report.total === 0) {
+    return { kind: "figures", headline, countedOn, periods, nothing: words.noAlerts, figures: [] };
+  }
+  const weeks = new Map<string, number>();
+  for (const row of report.raised) weeks.set(row.week_start, (weeks.get(row.week_start) ?? 0) + row.count);
+  const week = [...weeks].sort(([a], [b]) => a.localeCompare(b)).map(([start, count]) => ({ label: formatDay(start), count }));
+
+  const groups = new Map<string, { label: string; typology: string; count: number }>();
+  for (const row of report.raised) {
+    const key = `${row.label}:${row.typology}`;
+    const seen = groups.get(key) ?? { label: row.label, typology: row.typology, count: 0 };
+    seen.count += row.count;
+    groups.set(key, seen);
+  }
+  const byRule = [...groups.values()]
+    .sort((a, b) => rankOf(a.label) - rankOf(b.label) || a.typology.localeCompare(b.typology) || a.label.localeCompare(b.label))
+    .map((g) => ({ label: groupName(g.label, g.typology), count: g.count }));
+
+  const outcomes = new Map<string, number>();
+  for (const row of report.closed) outcomes.set(row.label, (outcomes.get(row.label) ?? 0) + row.count);
+  const outcome = [...outcomes].map(([label, count]) => ({ label: closingReasonLabel(label === "closed" ? null : label) || "Closed, no outcome", count }));
+
+  const time = report.took.map((row) => ({ label: row.label.charAt(0).toUpperCase() + row.label.slice(1), count: row.value }));
+
+  const figures: Figure[] = [
+    figureOf(words.bars.week, week, words.noAlerts),
+    figureOf(words.bars.rule, byRule, words.noAlerts),
+    figureOf(words.bars.outcome, outcome, words.noClosed),
+    figureOf(words.bars.time, time, words.noClosed),
+    { id: words.hotlist.id, heading: words.hotlist.heading, caption: "", columns: [], rows: [], chart: null, empty: null, says: words.hotlist.says(report.hotlists) },
+  ];
+  if (report.team.length > 0) {
+    const team = [...report.team]
+      .sort((a, b) => rankOf(a.label) - rankOf(b.label) || a.typology.localeCompare(b.typology) || a.label.localeCompare(b.label))
+      .map((t): TableRow => ({
+        head: groupName(t.label, t.typology),
+        cells: [
+          formatNumber(t.unassigned),
+          formatNumber(t.mine),
+          formatNumber(t.older),
+          t.closed === 0 ? words.team.noneClosed : `${Math.round((t.notOfInterest / t.closed) * 100)}% of ${formatNumber(t.closed)}`,
+        ],
+      }));
+    figures.push({ id: words.team.id, heading: words.team.heading, caption: words.team.caption, columns: words.team.columns, rows: team, chart: null, empty: null, says: null });
+  }
+  // Only when the route sent them: for a Viewer it sends none, and nothing here says there are any.
+  if (report.held !== null) {
+    const h = report.held;
+    figures.push({
+      id: words.held.id,
+      heading: words.held.heading,
+      caption: words.held.caption,
+      columns: words.held.columns,
+      rows: [h.held, h.released, h.rejected].map((n, i): TableRow => ({ head: words.held.rows[i] as string, cells: [formatNumber(n)] })),
+      chart: null,
+      empty: null,
+      says: null,
+    });
+  }
+  return { kind: "figures", headline, countedOn, periods, nothing: null, figures };
+}
+
+/** A report past its bound, in words: the numbers are the route's, and the way out is a link to each shorter period. */
+export function limitView(limit: Limit, caseId: string, current: number): MonitoringView {
+  const periods = periodsFor(caseId, current, (weeks) => weeks < current);
+  const words = ALERT_MONITORING_WORDS.limit;
+  return { kind: "limit", sentence: `${words.would(limit.wouldBe, limit.what, limit.cap)} ${periods.length > 0 ? words.choose : words.shortest}`, periods };
+}
