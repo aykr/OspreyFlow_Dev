@@ -41741,6 +41741,43 @@ keyboard). The Conduit's and the Glass's cases were shown red first and their pl
 scan of each new state ran in the orchestrator's slot 9 on 15 November 2026, with the registry's and the every-harness
 list's diffs applied to the working tree: their first run found two live regions at once while **Add** was out
 (fixed), then 19 of 19 and 60 of 60.
+
+### ADR-135, Amendment 15 (24 November 2026) — the Conduit reads the gateway's engine tokens by a read-only role on two columns, to remove a killed Add's orphaned token; amends Amendment 2 decision 3
+
+Status: written 24 November 2026 by the v0.7.0 slice line's conductor, on the owner's word in chat (24 November 2026,
+about 23:55 UTC), for slice AD1c (the key review's open items). AD1c's round 3 found that the brief's complete way
+to find an orphaned engine token cannot be built: it reads the gateway's own database, and the Conduit has no
+login there (Amendment 2 decision 3: the gateway's own `litellm` database and role, so that "the Conduit's database
+login cannot read the encrypted keys"; `harness/render.py` blanks `OSPREY_LITELLM_DB_PASSWORD` for every service
+but the gateway and its `litellm-db` step). The owner chose the builder's option 1, a read-only role, with five
+conditions, which are this amendment's decisions. It **amends Amendment 2 decision 3** by one exception, decision 1
+below. Everything else in decision 3 stands: the Conduit's own login still reaches no `litellm` table.
+
+1. **One read-only role on the gateway's database, `SELECT` on exactly two columns of the token table:** `token` and
+   `metadata` of `"LiteLLM_VerificationToken"`, and nothing else (no other column, no other table, no sequence, no
+   function, no write). The grant is by column, so the database itself refuses everything else. A query the Conduit
+   builds names the two columns, never `*`. **Planted faults (rule 15), each red by the database's own refusal on a
+   real PostgreSQL, not by a check in the Conduit:** a read of any other column of the token table (`key_name`
+   first), a read of any other table in that database, and any write (`INSERT`, `UPDATE`, `DELETE`) as the role.
+2. **The token column must hold the stored hash, not a usable key, confirmed first.** Before any code, the builder
+   confirms from the gateway's own schema and code, at the version this deployment pins, that `token` holds the
+   hash the gateway stores, and that nothing read from it can be used to call the gateway. If it does not, or this
+   cannot be shown, the builder stops and the question goes to the owner; this amendment is then not built.
+3. **The role's password follows the owner's key rules:** generated at render, never shown, printed, logged or
+   echoed back (in no command output, error or audit row); given to the Conduit alone, under its own variable name;
+   blanked for every other service in the render, on every profile that renders the gateway (the cluster profile's
+   chart too). A test fails if any other service is given it.
+4. **Created by the gateway's own database setup:** the one-shot `litellm-db` step creates the role and its grant,
+   idempotently, beside the gateway's own role (Amendment 2 decision 3). No other service creates or changes it. The
+   orphan sweep that reads it is audited without any token value: the audit names the engine and that a token was
+   removed, never the token, its hash or its metadata's secret parts.
+5. **Nothing changes on the demo.** The demo server and its deployment are not rendered again, migrated or touched
+   by this change; it reaches a deployment only through the owner's own upgrade.
+
+**Why:** a killed **Add** (Amendment 14) can leave a token on the gateway for an engine the Conduit never recorded.
+The audit and `--engine` route finds only engines something named, so a token for an engine nothing named survives
+a plain `clear-orphans` run; the owner ruled that route out for key handling. Reading the token table by column
+finds every token tagged `osprey_engine` without giving the Conduit a way to read a key.
 ### ADR-152, Amendment 1 (20 November 2026) — a clean GOV.UK install: the React workspace leaves a GOV.UK deployment by itself once every function has its page, and the `pages` image is scanned for React — Accepted by the owner, 20 November 2026
 
 Status: **Accepted by the owner, 20 November 2026**, as redrafted the same day under his rulings 1 to 7 of 20
