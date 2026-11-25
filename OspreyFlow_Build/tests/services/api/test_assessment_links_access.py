@@ -60,6 +60,7 @@ OFFICIAL_READER = Principal(id="analyst-official", clearance="OFFICIAL", org_uni
 VISIBLE = "node-visible-official"
 HIDDEN = "node-hidden-secret"
 NOWHERE = "node-that-does-not-exist"
+OTHER_CASE = "case-another-investigation"
 
 _RANK = {"OFFICIAL": 0, "SECRET": 1, "TOP SECRET": 2}
 
@@ -182,10 +183,10 @@ def _save_gap(world: _World, who: Principal, links: list[str]) -> Any:
     )
 
 
-def _save_judgement(world: _World, who: Principal, supporting: list[str]) -> Any:
+def _save_judgement(world: _World, who: Principal, supporting: list[str], case: str = CASE) -> Any:
     return world.as_(who).post(
-        f"/v1/investigations/{CASE}/judgements",
-        json={"investigation_id": CASE, "statement": "The subject is the organiser.", "probability_band": "likely", "supporting": supporting},
+        f"/v1/investigations/{case}/judgements",
+        json={"investigation_id": case, "statement": "The subject is the organiser.", "probability_band": "likely", "supporting": supporting},
     )
 
 
@@ -201,8 +202,8 @@ def _save_assumption(world: _World, who: Principal, links: list[str]) -> Any:
     )
 
 
-def _judgement_ids(world: _World, who: Principal) -> list[str]:
-    listed = world.as_(who).get(f"/v1/investigations/{CASE}/judgements")
+def _judgement_ids(world: _World, who: Principal, case: str = CASE) -> list[str]:
+    listed = world.as_(who).get(f"/v1/investigations/{case}/judgements")
     assert listed.status_code == 200, listed.text
     return [j["id"] for j in listed.json()["judgements"]]
 
@@ -430,3 +431,129 @@ def test_a_save_refusal_names_only_what_the_saver_sent_and_treats_absent_and_hid
     assert hidden.json()["detail"].replace(HIDDEN, "X") == absent.json()["detail"].replace(NOWHERE, "X")
     # Nothing was written by either refusal.
     assert world.pool.tables.get("intelligence_gaps", {}) == {}
+
+
+def _assumption_refusal_problems(world: _World, hidden_judgement: str) -> list[str]:
+    """What the assumption save's refusal must be, as a function the real route and each planted one go through: a judgement
+    hidden from the saver and an id that names none are both refused alike, naming only what was sent, and nothing is stored."""
+    hidden = _save_assumption(world, OFFICIAL_READER, [hidden_judgement])
+    absent = _save_assumption(world, OFFICIAL_READER, ["judgement-that-does-not-exist"])
+    found: list[str] = []
+    if (hidden.status_code, absent.status_code) != (422, 422):
+        found.append(f"the save answered {hidden.status_code} and {absent.status_code}, not 422 and 422")
+        return found + (["a refused link was stored"] if world.pool.tables.get("assumptions", {}) else [])
+    if hidden.json().get("error") != "unverifiable_link" or absent.json().get("error") != "unverifiable_link":
+        found.append("the refusal is not `unverifiable_link`")
+    if hidden.json().get("link_ids") != [hidden_judgement] or absent.json().get("link_ids") != ["judgement-that-does-not-exist"]:
+        found.append("the refusal names something other than the ids the saver sent")
+    if hidden.json()["detail"].replace(hidden_judgement, "X") != absent.json()["detail"].replace("judgement-that-does-not-exist", "X"):
+        found.append("a hidden judgement and an absent one were refused in different words")
+    if world.pool.tables.get("assumptions", {}):
+        found.append("a refused link was stored")
+    return found
+
+
+def test_an_assumption_save_refusal_names_only_what_the_saver_sent_and_stores_nothing(world: _World) -> None:
+    """The write side's invariant for assumptions, as `..._treats_absent_and_hidden_alike` holds it for gaps (rule 3): the
+    refusal is 422 `unverifiable_link` naming only the ids sent, a hidden judgement and an absent one are refused alike, and
+    nothing is written (so a SECRET reader of the case is never later served a link the OFFICIAL saver could not confirm)."""
+    hidden = _save_judgement(world, SECRET_EDITOR, [VISIBLE, HIDDEN]).json()["id"]
+    assert hidden not in _judgement_ids(world, OFFICIAL_READER)  # the precondition: hidden from the saver
+    assert _assumption_refusal_problems(world, hidden) == []
+    assert world.pool.tables.get("assumptions", {}) == {}
+    assert world.as_(SECRET_EDITOR).get(f"/v1/investigations/{CASE}/assumptions").json()["assumptions"] == []
+
+
+def test_an_assumption_cannot_link_a_judgement_of_another_case(world: _World) -> None:
+    """spec/03 line 633: another case's judgement is refused with the absent and the hidden. The judgement is one the saver is
+    shown, in the case it belongs to (the precondition), so a check by id or by unit alone would accept it here."""
+    other = _save_judgement(world, OFFICIAL_READER, [VISIBLE], case=OTHER_CASE)
+    assert other.status_code == 201, other.text
+    elsewhere = other.json()["id"]
+    assert elsewhere in _judgement_ids(world, OFFICIAL_READER, OTHER_CASE)
+    assert elsewhere not in _judgement_ids(world, OFFICIAL_READER, CASE)
+    saved = _save_assumption(world, OFFICIAL_READER, [elsewhere])
+    assert saved.status_code == 422, f"an assumption linking another case's judgement was stored: {saved.status_code} {saved.text}"
+    assert saved.json()["error"] == "unverifiable_link" and saved.json()["link_ids"] == [elsewhere]
+    assert world.pool.tables.get("assumptions", {}) == {}
+    # The control: a judgement of this case, shown to the same saver, is accepted.
+    here = _save_judgement(world, OFFICIAL_READER, [VISIBLE]).json()["id"]
+    assert _save_assumption(world, OFFICIAL_READER, [here]).status_code == 201
+
+
+def _case_scope_problems(world: _World) -> list[str]:
+    other = _save_judgement(world, OFFICIAL_READER, [VISIBLE], case=OTHER_CASE).json()["id"]
+    saved = _save_assumption(world, OFFICIAL_READER, [other])
+    return [] if saved.status_code == 422 else [f"another case's judgement was accepted: {saved.status_code}"]
+
+
+def _gap_refusal_problems(world: _World) -> list[str]:
+    saved = _save_gap(world, OFFICIAL_READER, [HIDDEN])
+    found = [] if saved.status_code == 422 else [f"the save answered {saved.status_code}, not 422"]
+    if world.pool.tables.get("intelligence_gaps", {}):
+        found.append("a refused link was stored")
+    return found
+
+
+# ------------------------------------------------------------------------------------------------ planted faults on the write side (rule 15)
+
+
+def test_a_save_that_checks_its_links_after_storing_them_is_found(world: _World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The order fault: `save_assumption_route` calls `confirm_assumption_links` before `assumptions_store.save`. Planted at that
+    call site, the confirmation runs only after the row is stored: it still answers 422, and only the stored row shows it."""
+    import services.api.app as conduit
+    from services.api.assessments import confirm_assumption_links, new_assumption
+
+    hidden = _save_judgement(world, SECRET_EDITOR, [VISIBLE, HIDDEN]).json()["id"]
+    assert _assumption_refusal_problems(world, hidden) == []
+
+    async def planted(judgements: Any, investigation_id: str, principal: Principal, graph: Any, links: list[str]) -> None:
+        await world.assumptions.save(
+            new_assumption(investigation_id=investigation_id, statement="x", if_false_impact="y", linked_judgements=links), principal
+        )
+        await confirm_assumption_links(judgements, investigation_id, principal, graph, links)
+
+    monkeypatch.setattr(conduit, "confirm_assumption_links", planted)
+    assert _assumption_refusal_problems(world, hidden) == ["a refused link was stored"]
+
+
+def test_an_assumption_save_that_confirms_nothing_is_found(world: _World, monkeypatch: pytest.MonkeyPatch) -> None:
+    import services.api.app as conduit
+
+    hidden = _save_judgement(world, SECRET_EDITOR, [VISIBLE, HIDDEN]).json()["id"]
+    assert _assumption_refusal_problems(world, hidden) == []
+
+    async def planted(*_: Any) -> None:
+        return None
+
+    monkeypatch.setattr(conduit, "confirm_assumption_links", planted)
+    problems = _assumption_refusal_problems(world, hidden)
+    assert problems == ["the save answered 201 and 201, not 422 and 422", "a refused link was stored"]
+
+
+def test_a_gap_save_that_confirms_nothing_is_found(world: _World, monkeypatch: pytest.MonkeyPatch) -> None:
+    import services.api.app as conduit
+
+    assert _gap_refusal_problems(world) == []
+
+    async def planted(*_: Any) -> None:
+        return None
+
+    monkeypatch.setattr(conduit, "confirm_gap_links", planted)
+    assert _gap_refusal_problems(world) == ["the save answered 201, not 422", "a refused link was stored"]
+
+
+def test_a_judgement_filter_that_ignores_the_case_is_found(world: _World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The plant inside the filter's own decision (`visible_judgement_ids`): it also counts the judgements of the other case,
+    as a check by owning unit alone would. The case-scope test finds it; the real filter does not."""
+    import services.api.assessments as assessments
+
+    assert _case_scope_problems(world) == []
+    real = assessments.visible_judgement_ids
+
+    async def planted(store: Any, investigation_id: str, principal: Principal, graph: Any) -> set[str]:
+        return await real(store, investigation_id, principal, graph) | await real(store, OTHER_CASE, principal, graph)
+
+    monkeypatch.setattr(assessments, "visible_judgement_ids", planted)
+    found = _case_scope_problems(world)
+    assert len(found) == 1 and found[0].startswith("another case's judgement was accepted: 201")
