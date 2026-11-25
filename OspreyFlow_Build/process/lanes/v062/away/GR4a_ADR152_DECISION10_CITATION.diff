@@ -1,0 +1,14 @@
+--- a/OspreyFlow_Build/spec/06_DECISIONS.md
++++ b/OspreyFlow_Build/spec/06_DECISIONS.md
+@@ -41130,8 +41130,9 @@
+       the mart may still run on a GOV.UK deployment, for a department's own BI tool (answer 13).
+     - **"Build a report" on the GOV.UK theme** is Trends and Packs as pages, and one new page, the **board**:
+       a person arranges saved trends to view together. A board is a pack of trend items shown together on one
+-      page (a pack item can already name a saved trend, `services/api/app.py:19494`; packs already order,
+-      withhold and refuse items), so it needs **no new Conduit route** (answer 14). No new kinds of figure.
++      page (a pack item can already name a saved trend, `packages/schemas/packs.py:128`, added through
++      `services/api/app.py:19762`; packs already order, withhold and refuse items), so it needs **no new
++      Conduit route** (answer 14). No new kinds of figure.
+ 
+ 11. **Exceptions to "the Conduit and the Vault do not change"** (F1). Each is built with its access-control
+     test first (rule 4), shown red before it is relied on (rule 15). X1 and X2 come from the front end; X3 to

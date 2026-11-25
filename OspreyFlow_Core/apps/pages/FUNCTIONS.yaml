@@ -291,7 +291,7 @@ functions:
     name: "Reports: Reports and Figures views, trends, packs, published and data feeds"
     where: "apps/workspace/src/reports/ (includes reportsTestKit.ts 145)"
     slice: "GR3"
-    scenario: ""
+    scenario: "TS1, TS2, TS3, TS4, TS5, TS6, TS7, TS8, TS9, TS10, TS11, TS12, TS13, TS14, TS15"
     route: ""
     status: "planned"
   # The other half of the old `reports` row (the owner, 24 November 2026): the dashboards are later, and no slice has them yet.
