@@ -3,6 +3,10 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 25 November 2026, about 19:50 UTC: "take your recommended routes" (the owner, in chat)
+
+**PL4h: option (a)** (D225 item 3's structural round): every test in the two copy files that walks or parses gets an explicit, explained timeout, the plant tests included; nothing cached, nothing moved out of `sourceFiles`; the plant stands. Round 4 on `slices/PL4h_ROUND4_TABLE.md`. **AD1c: round 11 on the conductor's table** (already ruled at about 16:20). Both wait for the owner's add-round lines.
+
 ## 25 November 2026, about 16:25 UTC: GR1a as an away round (the owner, in chat)
 
 **GR1a runs as an away round on the server now**, on every proposal (a) of its draft (`slices/drafts_2026-11-25/GR1a.md`) and the owner's exception to start before GG2b. **The conductor does not start GR1 in the line:** it enters through its away branch, like GR4a, after the owner fetches it (its round 1 merges `away/GR1a`).
