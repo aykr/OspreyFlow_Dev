@@ -909,3 +909,134 @@ def test_the_realm_client_reads_derive_where_the_service_is_on() -> None:
     assert client["redirectUris"] == ["https://planted.example.org/session/callback"]
     assert client["webOrigins"] == ["https://planted.example.org"]
     assert client["attributes"]["post.logout.redirect.uris"] == "https://planted.example.org/"
+
+
+# ---- 9. the cluster's own list of published ports (PL7f round 5) --------------------------------
+
+#: Ports no other list names: not 80 or 8080 (`harness.site.PLAIN_HTTP_PORTS`, refused in every shape
+#: whatever the cluster's list says), not 443, and not a port the compose shapes publish.
+ONLY_THE_CLUSTERS_LIST = (9443, 8444)
+
+
+def _cluster_row_on(port: int) -> dict[str, Any]:
+    """The cluster's row for an origin on a port no table row names, taken from the table's own
+    cluster row on an extra port (`16-cluster-9443`) with only the port changed."""
+    row = dict(_row("16-cluster-9443"))
+    row["config"] = {**row["config"], "origin": f"https://osprey.example.org:{port}"}
+    return row
+
+
+def _derive_with_published(row: dict[str, Any], published: Callable[[list[Any]], list[Any]]) -> Any:
+    """`derive` for the row's cluster while `harness.cluster.proxy_ports`, the one list the load
+    balancer publishes its ports from (and the call `derive` makes: `cluster.proxy_ports(config)`),
+    returns `published(<what it really returns>)`: the list's own shape, a dict per port."""
+    from harness import cluster, page_addresses
+
+    config = config_of(row)
+    real = cluster.proxy_ports
+
+    def standing_in(given: Any) -> list[Any]:
+        return published(real(given))
+
+    with mock.patch.object(cluster, "proxy_ports", standing_in), tree_of(row):
+        return page_addresses.derive(config)
+
+
+def _port_refusal_findings(port: int, published: Callable[[list[Any]], list[Any]]) -> list[str]:
+    """What is wrong where an HTTPS origin on `port` is not refused as taken: the check the two
+    planted faults below are shown red against."""
+    from harness import page_addresses
+
+    got = _derive_with_published(_cluster_row_on(port), published)
+    if isinstance(got, page_addresses.Refusal) and got.key == "port_taken":
+        return []
+    return [f"an https origin on :{port} was {type(got).__name__}, not refused as a port taken"]
+
+
+def _adds(port: int) -> Callable[[list[Any]], list[Any]]:
+    return lambda real: [*real, {"port": port, "target": port}]
+
+
+@pytest.mark.parametrize("port", ONLY_THE_CLUSTERS_LIST)
+def test_a_port_only_the_clusters_list_names_is_free_until_the_list_names_it(port: int) -> None:
+    """The port is derived while nothing publishes it (so the refusal below is the list's, not the
+    port's own: no other list, no plain-HTTP fallthrough, names it)."""
+    from harness import page_addresses
+
+    got = _derive_with_published(_cluster_row_on(port), lambda real: real)
+    assert isinstance(got, page_addresses.PageAddresses), got
+    assert got.identity_port == port
+
+
+@pytest.mark.parametrize("port", ONLY_THE_CLUSTERS_LIST)
+def test_a_port_added_to_the_clusters_list_is_refused_as_taken(port: int) -> None:
+    """Rule 15's second paragraph: the cluster publishes only 80 (the plain-HTTP port, refused in
+    every shape anyway) and 443, so no real row can show the cluster's branch of `_taken_ports`
+    at work. A port planted in `harness.cluster.proxy_ports` itself, at the shape that function
+    returns, is refused: `derive` takes the cluster's taken ports from that list ("a port added
+    there is covered at once", `spec/05_DEPLOYMENT.md` section 2.8)."""
+    from harness import page_addresses
+
+    assert _port_refusal_findings(port, _adds(port)) == []
+    got = _derive_with_published(_cluster_row_on(port), _adds(port))
+    assert isinstance(got, page_addresses.Refusal)
+    assert f":{port}" in got.words and "pages.enabled" in got.words, got.words
+
+
+@pytest.mark.parametrize("port", ONLY_THE_CLUSTERS_LIST)
+def test_the_check_is_red_when_the_clusters_branch_of_the_taken_ports_is_removed(
+    port: int,
+) -> None:
+    """The fault the verifier found: the branch of `_taken_ports` that reads the cluster's list
+    taken out (the dict it returns is what it returns without that branch: the entries the
+    plain-HTTP fallthrough does not name are the branch's alone). Clean first, red with the branch
+    gone, clean again."""
+    from harness import page_addresses
+
+    real = page_addresses._taken_ports
+
+    def without_the_cluster_branch(config: Any) -> Any:
+        from harness.site import PLAIN_HTTP_PORTS
+
+        return {n: found for n, found in real(config).items() if n in PLAIN_HTTP_PORTS}
+
+    assert _port_refusal_findings(port, _adds(port)) == []
+    with mock.patch.object(page_addresses, "_taken_ports", without_the_cluster_branch):
+        found = _port_refusal_findings(port, _adds(port))
+    assert found and f":{port}" in found[0], found
+    assert _port_refusal_findings(port, _adds(port)) == []
+
+
+@pytest.mark.parametrize("port", ONLY_THE_CLUSTERS_LIST)
+def test_the_check_is_red_when_the_clusters_list_returns_nothing(port: int) -> None:
+    """The fault at the list itself: `harness.cluster.proxy_ports` returning an empty list. The
+    planted port is no longer named by it, so it is derived, and the check says so."""
+    assert _port_refusal_findings(port, _adds(port)) == []
+    found = _port_refusal_findings(port, lambda real: [])
+    assert found and f":{port}" in found[0], found
+
+
+def test_every_port_the_clusters_list_really_names_but_its_https_one_is_refused() -> None:
+    """The list as it really is: not empty, and each port in it other than 443 refused for an
+    HTTPS origin there (80 today). Shown red, in `test_the_real_list_check_is_red_for_an_empty_list`,
+    when the list is empty (a loop over nothing proves nothing)."""
+    assert _real_list_findings(lambda real: real) == []
+
+
+def _real_list_findings(published: Callable[[list[Any]], list[Any]]) -> list[str]:
+    from harness import cluster
+
+    config = config_of(_cluster_row_on(9443))
+    listed = published(cluster.proxy_ports(config))
+    ports = {entry["port"] for entry in listed} - {443}
+    if not ports:
+        return ["the cluster's list names no port but 443: nothing to refuse"]
+    found = []
+    for port in sorted(ports):
+        found += _port_refusal_findings(port, published)
+    return found
+
+
+def test_the_real_list_check_is_red_for_an_empty_list() -> None:
+    found = _real_list_findings(lambda real: [])
+    assert found == ["the cluster's list names no port but 443: nothing to refuse"], found
