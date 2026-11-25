@@ -150,8 +150,7 @@ describe("the Glass's copy names no client and no setting still to be confirmed"
       'const unsure = "an unconfirmed setting";',
       'const later = "a placeholder value";',
     ].join("\n");
-    expect(clientWords("Planted.tsx", planted).map((hit) => hit.line)).toEqual([1, 2, 3, 4, 6, 6, 9, 11, 12]);
-  });
+    expect(clientWords("Planted.tsx", planted).map((hit) => hit.line)).toEqual([1, 2, 3, 4, 6, 6, 9, 11, 12]);}, GUARD_TEST_TIMEOUT_MS);
 
   it("leaves alone what is not copy: names, keys, imports and comments", () => {
     const clean = [
@@ -162,6 +161,5 @@ describe("the Glass's copy names no client and no setting still to be confirmed"
       "const body = JSON.stringify({ client_id: id });",
       'const composition: string = "client_parity";',
     ].join("\n");
-    expect(clientWords("Clean.ts", clean)).toEqual([]);
-  });
+    expect(clientWords("Clean.ts", clean)).toEqual([]);}, GUARD_TEST_TIMEOUT_MS);
 });

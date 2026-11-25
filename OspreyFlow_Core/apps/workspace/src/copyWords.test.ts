@@ -178,8 +178,7 @@ describe("the Glass's copy says pipeline", () => {
       "const failed = (name: string) => `The recipes of ${name} could not be read`;",
       'const label = "Recipe";',
     ].join("\n");
-    expect(copyWords("Planted.tsx", planted).map((hit) => hit.line)).toEqual([4, 5, 9, 10, 11]);
-  });
+    expect(copyWords("Planted.tsx", planted).map((hit) => hit.line)).toEqual([4, 5, 9, 10, 11]);}, GUARD_TEST_TIMEOUT_MS);
 
   it("leaves alone what is not copy: identifiers, imports, comments, keys and routes", () => {
     const clean = [
@@ -190,6 +189,5 @@ describe("the Glass's copy says pipeline", () => {
       'const route = "POST /v1/ingest/recipes/{id}/run";',
       "const url = `${base}/v1/ingest/recipes/${recipeId}`;",
     ].join("\n");
-    expect(copyWords("Clean.ts", clean)).toEqual([]);
-  });
+    expect(copyWords("Clean.ts", clean)).toEqual([]);}, GUARD_TEST_TIMEOUT_MS);
 });
