@@ -90,8 +90,10 @@ from harness.keycloak_theme import (
 from harness.preflight.ports import parse_env_line
 from harness.profiles import postgres_connections_up_to_date
 from harness.render import (
+    GOVUK_IMAGE_TAG_SUFFIX,
     STATE_CONTAINER_PATH,
     STORE_VOLUMES,
+    GovukIdentityNeedsABuild,
     _render_compose,
     _render_versions_lock,
     load_config,
@@ -100,6 +102,7 @@ from harness.render import (
     render_ollama_download_script,
     render_ollama_pull_script,
     service_images,
+    wants_govuk_identity,
 )
 from harness.site import (
     LOOPBACK,
@@ -741,6 +744,51 @@ def _published_on_loopback(directory: Path) -> None:
         compose_path.write_text(text[:header_end] + body, encoding="utf-8")
 
 
+#: The workspace image's one build argument that the deployment's settings decide: whether the
+#: bundle holds GDS Transport (ADR-152 decision 14; `harness.render.compose_services`).
+_IDENTITY_ARGUMENT = "OSPREY_GOVUK_IDENTITY"
+
+
+def _identity_argument_moved(service: dict[str, Any], wanted: dict[str, Any]) -> bool:
+    """A service this checkout builds, that the deployment also builds, takes the render's value
+    of the GOV.UK identity argument and no other: the switch turned on adds it, the switch turned
+    off removes it, and an operator's own arguments stay as they were. Without this a stanza that
+    already had a `build` (and so was skipped whole) rebuilt the default image after the switch
+    changed, and the type fell back to arial in silence.
+
+    The image's tag goes with the argument (the workspace built with the identity is a different
+    image, so a different tag: `GOVUK_IMAGE_TAG_SUFFIX`), and only that suffix is touched: an
+    operator's own tag stays. True when it changed the stanza."""
+    held = service.get("build")
+    if not isinstance(held, dict) or not isinstance(wanted.get("build"), dict):
+        return False
+    changed = False
+    # The tag is the render's when the two differ by the suffix alone.
+    held_image, wanted_image = str(service.get("image") or ""), str(wanted.get("image") or "")
+    if (
+        wanted_image
+        and held_image != wanted_image
+        and held_image.removesuffix(GOVUK_IMAGE_TAG_SUFFIX)
+        == wanted_image.removesuffix(GOVUK_IMAGE_TAG_SUFFIX)
+    ):
+        service["image"] = wanted_image
+        changed = True
+    want = (wanted["build"].get("args") or {}).get(_IDENTITY_ARGUMENT)
+    held_args = held.get("args")
+    args: dict[str, Any] = dict(held_args) if isinstance(held_args, dict) else {}
+    if args.get(_IDENTITY_ARGUMENT) == want:
+        return changed
+    if want is None:
+        args = {k: v for k, v in args.items() if k != _IDENTITY_ARGUMENT}
+        if args:
+            held["args"] = args
+        else:
+            held.pop("args", None)
+    else:
+        held["args"] = {**args, _IDENTITY_ARGUMENT: want}
+    return True
+
+
 def _pins_moved(directory: Path) -> None:
     """A service built from no source here whose rendered image differs from the deployment's is
     moved to it, with the rendered values of its settings (a new version's launch options). Secrets
@@ -766,9 +814,17 @@ def _pins_moved(directory: Path) -> None:
     # looked "moved" to a registry image that does not exist (ADR-111 Amendment 4's refresh).
     config = _like_the_deployment(config, services, directory)
     images = service_images(config, build_context=_build_context(services))
+    # The refusal `render()` makes, said here too, as this pass does not go through it: a deployment
+    # that pulls the release's images cannot pass the switch, and its workspace image would be moved
+    # to a `-govuk` tag no release publishes (PL7c round 5). Raised before anything is changed.
+    if wants_govuk_identity(config) and not any(
+        i.service == "workspace" and i.building for i in images
+    ):
+        raise RefreshFailed(str(GovukIdentityNeedsABuild()))
     rendered = yaml.safe_load(_render_compose(config, images))["services"]
     moved: dict[str, str] = {}
     built_here: list[str] = []
+    switched: list[str] = []
     for name, wanted in rendered.items():
         service = services.get(name)
         if not isinstance(service, dict):
@@ -779,6 +835,8 @@ def _pins_moved(directory: Path) -> None:
             built_here.append(name)
             continue
         if "build" in wanted or "build" in service:
+            if _identity_argument_moved(service, wanted):
+                switched.append(name)
             continue
         if service.get("image") == wanted.get("image") or "image" not in wanted:
             continue
@@ -791,7 +849,7 @@ def _pins_moved(directory: Path) -> None:
         if "healthcheck" in wanted:
             service["healthcheck"] = wanted["healthcheck"]
         moved[name] = str(wanted["image"]).rsplit(":", 1)[1]
-    if not moved and not built_here:
+    if not moved and not built_here and not switched:
         return
     body = yaml.safe_dump(document, sort_keys=False, default_flow_style=False)
     compose_path.write_text(text[:header_end] + body, encoding="utf-8")
@@ -804,7 +862,7 @@ def _pins_moved(directory: Path) -> None:
             row["service"]: row
             for row in yaml.safe_load(
                 _render_versions_lock(
-                    [i for i in images if i.service in built_here],
+                    [i for i in images if i.service in (*built_here, *switched)],
                     lambda _image: None,
                     allow_unpinned=True,
                 )

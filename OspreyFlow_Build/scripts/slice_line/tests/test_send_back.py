@@ -62,11 +62,20 @@ def test_a_red_full_gate_records_the_failing_tests_as_findings_and_the_board_sho
     assert all(t in what for t in AD2_TESTS), what
     assert "schedule_preview_route" in what and "69 more items" in what      # the failing lines, not only names
     assert "ruff check" not in what and "....." not in what                   # not the whole log
-    board = sh([w["py"], str(w["lines"] / "board.py")], w["repo"], w["env"], check=False)
-    assert "refused by the gate: 3 tests" in board.stdout, board.stdout
-    status = (w["repo"] / "Claude outputs/ospreyflow_build_plan_2026-11-17/dashboard/status.js").read_text()
-    body = json.loads(status.split("window.OSPREY_STATUS = ", 1)[1].rstrip().rstrip(";"))
+    # AD2's tests are not in its own files: once, the conductor's to rerun (the owner, 23 and 24 November 2026)
+    body = board(w)
+    assert "refused by another test (test_admin_sections.py)" in body["builds"]["CO1"]["note"], body["builds"]["CO1"]
+    p = merge(w, gate="2", gate_log=AD2_LOG)                                   # the rerun: red again, as AD2's was
+    assert p.returncode == 1 and "full gate is red" in p.stderr, p.stderr
+    body = board(w)
     assert body["builds"]["CO1"]["state"] == "stopped" and "refused by the gate: 3 tests" in body["builds"]["CO1"]["note"]
+
+
+def board(w):
+    out = sh([w["py"], str(w["lines"] / "board.py")], w["repo"], w["env"], check=False)
+    assert out.returncode == 0, out.stdout + out.stderr
+    status = (w["repo"] / "Claude outputs/ospreyflow_build_plan_2026-11-17/dashboard/status.js").read_text()
+    return json.loads(status.split("window.OSPREY_STATUS = ", 1)[1].rstrip().rstrip(";"))
 
 
 def test_the_builders_prompt_carries_the_gates_findings(world):

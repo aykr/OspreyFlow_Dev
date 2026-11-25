@@ -472,10 +472,14 @@ rows:
     status: conditional
     owner_ruling: 21 November 2026, not a sovereignty gap
     note: >-
-      Today's build still holds the files: the workspace's `build` runs `sync_govuk_assets.mjs`
-      unconditionally, so they are in `public/assets/govuk/fonts` and in `dist/`. Taking them out of
-      the default build is the identity-switch slice after PL4's slice E (`slices/PL7c.md`), not this
-      register's; the gate does not fail on it.
+      The default build no longer holds the files (slice PL7c). The workspace's `build` still runs
+      `sync_govuk_assets.mjs`, but the step copies the faces only when `OSPREY_GOVUK_IDENTITY` is `1` or
+      `true`: the workspace image's build argument, which the renderer passes only for a deployment whose
+      `appearance.govuk_identity` is on. Off, `public/` and `dist/` hold the stylesheet with the face's
+      rules taken out and no font file. `tests/glass_trees/test_default_build_holds_no_gds_transport.py`
+      holds the claim (a default build's output holds no file this row marks conditional).
+      The image built with the switch on is its own image under its own tag (`-govuk`), so a default
+      deployment never runs it.
 
   - id: F4
     kind: font
@@ -494,6 +498,36 @@ rows:
       own. Read 21 November 2026.
     test: osi-software
     status: confirmed
+
+  # ---- code packages -------------------------------------------------------------------------------
+  # A package the code gate (`make licence-check`'s Python and Node halves) already reads for the licence it declares, whose
+  # use carries a condition worth writing down. The row is held to the manifests it names (`kind: package`, slice GR2a): each
+  # `named_in` file must pin the package at the row's version. It is not a model, a map, a font or an image, and the code names
+  # nothing of it the way the gate reads those, so it is exempt from "names something no code names" and from nothing else.
+
+  - id: P1
+    kind: package
+    name: "govuk-frontend"
+    pin: "govuk-frontend 6.6.0"
+    ships: >-
+      Not shipped by the pages service yet: `apps/pages` does not depend on it, and the GOV.UK tree takes its macros and styles with
+      the first page that needs them (ADR-152 decision 2: "govuk-frontend (GOV.UK tree only)"). Today it is a dependency of the React
+      workspace's GOV.UK look. The package's code is MIT. **The crown, the GOV.UK logotype and GDS Transport are used only under the
+      identity switch** (`appearance.govuk_identity`, ADR-152 decision 14), **on gov.uk addresses**: the crown and the logotype are
+      the Crown's marks, GDS Transport is restricted to services on GOV.UK domains (row F3), and none of them is shown by a service
+      with the switch off or on any other address (invariant I9; the owner's ruling of 24 November 2026).
+    named_in: [apps/workspace/package.json]
+    licence: MIT
+    where_read: >-
+      The installed package's own `package.json` (`"license": "MIT"`, `"version": "6.6.0"`, the one `package-lock.json` resolves),
+      read on 24 November 2026; and its LICENSE.txt at tag v6.6.0, "MIT, Crown Copyright (GDS)", which covers the code and says
+      nothing of the marks or the fonts (read on 21 November 2026, as row F3 records).
+    test: osi-software
+    status: confirmed
+    note: >-
+      The licence covers the package's code. The marks and the typeface are the Crown's and GDS's, and are used here only as the
+      identity switch allows, on gov.uk addresses (ADR-152 decision 14; `00_ARCHITECTURE.md` section 7, the ADR-132 addition and
+      the slice GR2a addition).
 
   # ---- base images --------------------------------------------------------------------------------
   # Each image's licence is the PROJECT's own, read from its licence file or label at the pin. A tag

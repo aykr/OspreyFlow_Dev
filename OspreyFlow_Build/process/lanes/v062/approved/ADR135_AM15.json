@@ -1,0 +1,9 @@
+{
+ "name": "ADR135_AM15",
+ "file": "OspreyFlow_Build/process/lanes/v062/slice-line/proposals/ADR135_AM15.diff",
+ "sha256": "7c4c78c8a9bfc00e1f0e27d2a78909825ed9a318fb27594bd474a983910c7f21",
+ "hash8": "7c4c78c8",
+ "date": "2026-11-25",
+ "at": "2026-11-25T04:56:25Z",
+ "by": "the conductor, on the owner's word in chat: approved: ADR135_AM15 7c4c78c8"
+}

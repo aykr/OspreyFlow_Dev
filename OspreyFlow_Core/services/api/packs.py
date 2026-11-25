@@ -322,6 +322,8 @@ async def export_pack(
         manifest_policy=policy,
         justification_given=bool(request.justification),
         originator_reference_given=bool(request.originator_reference),
+        subject_kind="pack",
+        subject_id=pack.id,
     )
     await ledger.record(entry)
     mark = PackExportMark(

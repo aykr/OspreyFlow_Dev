@@ -51,6 +51,11 @@ set -euo pipefail
 DIR="${OSPREY_LEASE_DIR:-$HOME/.ospreyflow}"
 TABLE="$(cd "$(dirname "$0")" && pwd)/lane_stacks.tsv"
 HOSTS="$(cd "$(dirname "$0")" && pwd)/lane_stack_hosts.tsv"
+# The owner's per-machine override (24 November 2026, the test server down): when $DIR/stack_hosts.tsv exists, it is
+# read in place of the tracked lane_stack_hosts.tsv (same columns; a stack it does not name runs on this machine).
+if [ -f "$DIR/stack_hosts.tsv" ]; then HOSTS="$DIR/stack_hosts.tsv"; fi
+# At most this many stacks up on this machine at once (the owner, 24 November 2026: stacks b to g may run here).
+LOCAL_STACKS_MOST=3
 PORTS="$(cd "$(dirname "$0")" && pwd)/lane_ports.tsv"   # each lane's Playwright port slot (T2)
 
 # A lane's Playwright port slot, by its exact row; a lane with none is "unlisted-<lane>", which
@@ -78,12 +83,25 @@ ports_line() {
   fi
   echo
 }
-# The ssh host a stack runs on (scripts/lane_stack_hosts.tsv), or nothing for one on this machine.
-host_of() { [ -f "$HOSTS" ] || return 0; grep -v '^#' "$HOSTS" | awk -F'\t' -v s="$1" '$1 == s { print $2; exit }'; }
+# The ssh host a stack runs on ($HOSTS: scripts/lane_stack_hosts.tsv, or the per-machine override), or nothing for one
+# on this machine.
+# (awk skips the comments itself: a file of comments alone, every stack here, is not a failed grep under pipefail.)
+host_of() { [ -f "$HOSTS" ] || return 0; awk -F'\t' -v s="$1" '!/^#/ && $1 == s { print $2; exit }' "$HOSTS"; }
 # docker for a stack: on its own host when it has one, here otherwise.
 docker_for() {
   local h; h="$(host_of "$1")"; shift
   if [ -n "$h" ]; then DOCKER_HOST="ssh://$h" docker "$@"; else docker "$@"; fi
+}
+# How many other stacks on this machine have a container running here; nothing printed when docker cannot say.
+local_up_others() {
+  local names s c n=0
+  names="$(docker ps --format '{{.Names}}' 2>/dev/null)" || return 1
+  for s in $STACKS; do
+    [ "$s" = "$1" ] && continue
+    [ -n "$(host_of "$s")" ] && continue
+    for c in $(containers_of "$s"); do if grep -qx "$c" <<< "$names"; then n=$((n + 1)); break; fi; done
+  done
+  echo "$n"
 }
 # Whether a stack may be leased on this machine: a local one not while no-local-stacks is there.
 offered() { [ ! -e "$DIR/no-local-stacks" ] || [ -n "$(host_of "$1")" ]; }
@@ -256,7 +274,7 @@ SESSION_ALIVE='osprey_session_alive() {
 # The host offline runs go to: $OSPREY_OFFLINE_HOST, or the first host lane_stack_hosts.tsv names.
 offline_host() {
   if [ -n "${OSPREY_OFFLINE_HOST:-}" ]; then echo "$OSPREY_OFFLINE_HOST"; return; fi
-  [ -f "$HOSTS" ] && grep -v '^#' "$HOSTS" | awk -F'\t' 'NF >= 2 { print $2; exit }'
+  [ -f "$HOSTS" ] && awk -F'\t' '!/^#/ && NF >= 2 { print $2; exit }' "$HOSTS"
 }
 tunnel_sock() { echo "$DIR/tunnel-$1.sock"; }
 # One ssh connection carrying each of a remote stack's ports to this machine's 127.0.0.1.
@@ -433,6 +451,13 @@ case "$cmd" in
     if [ "$cmd" = up ]; then verb=start; else verb=stop; fi
     read -r -a these <<< "$(containers_of "$s")"
     remote="$(host_of "$s")"
+    if [ "$cmd" = up ] && [ -z "$remote" ]; then
+      others="$(local_up_others "$s")" || { echo "docker could not say which stacks are up here: test stack $s not started." >&2; exit 1; }
+      if [ "$others" -ge "$LOCAL_STACKS_MOST" ]; then
+        echo "$others stacks are up on this machine already, the most at once ($LOCAL_STACKS_MOST): test stack $s not started; wait for one to go down." >&2
+        exit 1
+      fi
+    fi
     [ "$cmd" = down ] && [ -n "$remote" ] && tunnel_close "$s"
     docker_for "$s" "$verb" "${these[@]}" >/dev/null || { echo "docker could not $verb test stack $s." >&2; exit 1; }
     [ "$cmd" = up ] && { pg_connections "$s" || exit 1; }

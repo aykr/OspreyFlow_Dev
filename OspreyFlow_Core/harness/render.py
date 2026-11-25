@@ -280,6 +280,39 @@ _BANNER = (
 )
 
 
+class GovukIdentityNeedsABuild(RuntimeError):
+    """`appearance.govuk_identity: true` on a render that pulls the workspace image.
+
+    ADR-152 decision 14, invariant I9 (the owner's ruling of 21 November 2026): GDS Transport's
+    files are in the workspace image only when it was built for a deployment with the switch on
+    (`--build-arg OSPREY_GOVUK_IDENTITY=1`, which `compose_services` passes). The release's images
+    are default builds, so a render that pulls one has nowhere to pass the switch: the type would
+    fall back to arial in silence. Refused in words, at render, where it is known whether the
+    image is built or pulled: that is only decided after `--build` or `components.source_path`
+    has been applied, so the schema (which reads the file as written) cannot ask. A cloud
+    platform is not refused: it builds ours itself, with the argument
+    (`harness/cloud_platform/__init__.py`, `_Copies`)."""
+
+    def __init__(self) -> None:
+        super().__init__(
+            "refusing to render: appearance.govuk_identity is on, and this render pulls the "
+            "workspace image. The release's images are default builds and hold no GDS Transport, "
+            "which is licensed for services on GOV.UK domains only, so the type would fall back "
+            "to arial in silence. Build the workspace from a checkout (start --build, or "
+            "components.source_path) for the GOV.UK identity, or leave the switch off"
+        )
+
+
+#: Added to the workspace image's tag when the GOV.UK identity switch is on for the deployment:
+#: its image is a different image (it holds GDS Transport's files), so it is a different tag.
+GOVUK_IMAGE_TAG_SUFFIX = "-govuk"
+
+
+def wants_govuk_identity(config: OspreyConfig) -> bool:
+    """The switch is on for this deployment: it means something only under the GOV.UK brand."""
+    return config.appearance.brand == "govuk" and bool(config.appearance.govuk_identity)
+
+
 class MissingDockerfileError(RuntimeError):
     """Names every OspreyFlow-owned service whose Dockerfile is not at the declared
     `components.source_path`.
@@ -613,17 +646,27 @@ def service_images(config: OspreyConfig, *, build_context: str = "../../..") -> 
     sha = git_sha(Path(source_path)) if source_path is not None else git_sha()
 
     def _owned(service: str, dockerfile: str, **own: Any) -> ServiceImage:
+        # ADR-152 decision 14: the workspace built with the GOV.UK identity holds GDS Transport's
+        # files and the default build never does, so the two are not the same image and cannot
+        # share a tag: a local tag is one per machine, a registry's one per commit, and a start
+        # that does not rebuild runs whatever its tag last held (the default deployment would
+        # serve the face, or the GOV.UK one fall back to arial in silence). Every other
+        # deployment, and every other service, keeps the tag it had.
+        govuk = service == "workspace" and wants_govuk_identity(config)
+        kind = GOVUK_IMAGE_TAG_SUFFIX if govuk else ""
         if building:
             return ServiceImage(
                 service,
-                f"osprey/{service}:local",
+                f"osprey/{service}:local{kind}",
                 build_context=build_context,
                 dockerfile=dockerfile,
                 **own,
             )
         # ADR-114 Amendment 8: a user repository's release pushes to its own owner's registry.
         registry = os.environ.get("OSPREY_IMAGE_REGISTRY") or OWNED_IMAGE_REGISTRY
-        return ServiceImage(service, f"{registry}/{service}:{sha}", dockerfile=dockerfile, **own)
+        return ServiceImage(
+            service, f"{registry}/{service}:{sha}{kind}", dockerfile=dockerfile, **own
+        )
 
     # **These third-party references are verified to resolve, and that is not a given.** Two of the
     # eight written for Stage 2 §5a did not exist at all — `minio/minio:RELEASE.2024-10-13…` and
@@ -1051,7 +1094,14 @@ def compose_services(config: OspreyConfig, images: Sequence[ServiceImage]) -> di
             # built image has a stable local tag that `versions.lock` can name and that a later
             # `docker compose up` resolves without rebuilding. `dockerfile` is relative to
             # `context`, which is the repository root, so it stays repo-root-relative.
-            service["build"] = entry.build_stanza()
+            stanza: dict[str, Any] = dict(entry.build_stanza())
+            if entry.service == "workspace" and wants_govuk_identity(config):
+                # ADR-152 decision 14 (the owner's ruling of 21 November 2026): GDS Transport's
+                # files are in the workspace's bundle only for a deployment whose GOV.UK
+                # identity switch is on. Off, no `args` key is written, so a deployment that
+                # does not use it renders byte for byte what it did.
+                stanza["args"] = {"OSPREY_GOVUK_IDENTITY": "1"}
+            service["build"] = stanza
         if entry.owned and entry.reads_env_file:
             # Without this the deployment's own generated environment file is written and then
             # never reaches a container: the Conduit fail-fasts on a missing `OIDC_JWKS_URL` and
@@ -2109,6 +2159,10 @@ def render(
                 resolved_source_label=resolved_source_label,
             ),
         )
+    if wants_govuk_identity(config) and not any(
+        i.service == "workspace" and i.building for i in images
+    ):
+        raise GovukIdentityNeedsABuild
     if config.profile is Profile.CLUSTER:
         # 05 §3b: the chart's values, translated from the same services (`harness/cluster.py`).
         from harness.cluster import render_cluster

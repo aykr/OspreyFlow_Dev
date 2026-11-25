@@ -56,6 +56,7 @@ import { testClock } from "../support/clock.js";
 import type { TestClock } from "../support/clock.js";
 import { startFakeKeycloak } from "../support/fakeKeycloak.js";
 import type { FakeKeycloak } from "../support/fakeKeycloak.js";
+import { unusedFlowParts } from "../support/flowStubs.js";
 import { TEST_SESSION_SECRET, cookieFrom, csrfFromPage, request, setCookies } from "../support/http.js";
 import { generateSecret } from "../support/secret.js";
 
@@ -566,6 +567,7 @@ describe("a refused sign-in reports nothing: refused attempts stay in the identi
       async complete() {
         throw new IdentityProviderUnavailable("down");
       },
+      ...unusedFlowParts,
     };
     const r = await rig({ codeFlow: flow });
     const started = await request(r.app).get("/session/sign-in");
@@ -587,6 +589,7 @@ describe("the log says the class of a refusal, from a closed list, and never the
       async complete() {
         throw make(words);
       },
+      ...unusedFlowParts,
     };
     return { flow, words };
   }

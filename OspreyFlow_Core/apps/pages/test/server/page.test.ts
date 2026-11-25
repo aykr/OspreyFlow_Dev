@@ -98,6 +98,8 @@ describe("GET /healthz", () => {
       expire: boom("store.expire"),
       del: boom("store.del"),
       take: boom("store.take"),
+      listKeys: boom("store.listKeys"),
+      claim: boom("store.claim"),
     };
     const identityProvider: IdentityProvider = { signIn: boom("provider.signIn") };
     return { calls, store, identityProvider };

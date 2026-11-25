@@ -15,8 +15,9 @@ harness.json, written by the test itself (never the environment):
                                        work is gone is seen (run 7's race)
      "min_free": <bytes> | null,      the free-space floor for this test; null: protocol.py's own (40 GB),
                                        which a test must not rely on: the Mac's free space varies
-     "shield_settle": <seconds>,      how long a breach is checked again before the run is refused (default 0
-                                       here, so a refusal is seen at once; runner.py's own is 30)
+     "shield_wait": <seconds>,        how long a breach is checked again before the run is refused (default 0
+                                       here, so a refusal is seen at once; runner.py's own is 5 minutes)
+     "shield_recheck": <seconds>,     how often it is checked again meanwhile (default 0.05; runner.py's own 30)
      "summary_wait": <seconds> | null}  how long a starting job waits for the summary's model (015); null: runner.py's
 
 The job the direct launch starts runs through this wrapper again, with the same harness file, so it sees the same
@@ -81,7 +82,8 @@ if conf.get("slow_clean"):
     runner.clean_job = slow_clean
 if conf.get("min_free") is not None:
     runner.p.MIN_FREE_BYTES = int(conf["min_free"])
-runner.SHIELD_SETTLE_SECONDS = float(conf.get("shield_settle", 0))
+runner.SHIELD_WAIT_SECONDS = float(conf.get("shield_wait", 0))
+runner.SHIELD_RECHECK_SECONDS = float(conf.get("shield_recheck", 0.05))
 if conf.get("summary_wait") is not None:
     runner.SUMMARY_WAIT_SECONDS = float(conf["summary_wait"])
 sys.exit(runner.main([str(RUNNER), *sys.argv[3:]]))

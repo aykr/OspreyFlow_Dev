@@ -23,9 +23,9 @@ SLICE_PATTERN = "[A-Za-z0-9]{1,16}"
 #: How many slices one stack run tests (009: three to begin with), and so how many jobs run at once.
 MAX_STACK = 3
 MAX_JOBS = 3
-#: The only three commands the forced command accepts, whole: anchored, one space, nothing before or after.
-COMMAND = re.compile(r"\A(?:(run)|(result) (%s)|(stack)((?: %s){2,%d})|(summary) (%s))\Z" % (
-    ID_PATTERN, SLICE_PATTERN, MAX_STACK, ID_PATTERN))
+#: The only commands the forced command accepts, whole: anchored, one space, nothing before or after.
+COMMAND = re.compile(r"\A(?:(run)|(result) (%s)|(stack)((?: %s){2,%d})|(summary) (%s)"
+                     r"|(ask) (ports|ollama|shield))\Z" % (ID_PATTERN, SLICE_PATTERN, MAX_STACK, ID_PATTERN))
 
 #: How the runner, and the summary after it (010), find a failing test and a failing make target in a log.
 FAILED_TEST = re.compile(r"^(?:FAILED|ERROR) (\S+)|^\s*(?:FAIL|✘|×)\s+(\S+.*)$")
@@ -60,9 +60,8 @@ REASONS = ("empty", "newline", "shape", "busy", "bundle-empty", "bundle-too-larg
 
 
 def parse_command(received: str | None) -> tuple[str, str] | tuple[None, str]:
-    """('run', ''), ('result', <id>), ('stack', '<slice> <slice> ...') or ('summary', <id>), or (None, <reason
-    class>). `received` is
-    SSH_ORIGINAL_COMMAND, read once."""
+    """('run', ''), ('result', <id>), ('stack', '<slice> <slice> ...'), ('summary', <id>) or ('ask', ports|ollama|
+    shield), or (None, <reason class>). `received` is SSH_ORIGINAL_COMMAND, read once."""
     if not received:
         return None, "empty"
     if "\n" in received or "\r" in received:
@@ -74,6 +73,8 @@ def parse_command(received: str | None) -> tuple[str, str] | tuple[None, str]:
         return "run", ""
     if m.group(6):
         return "summary", m.group(7)
+    if m.group(8):
+        return "ask", m.group(9)
     if m.group(4):
         order = m.group(5).split()
         if len(set(order)) != len(order):

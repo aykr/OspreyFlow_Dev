@@ -30,6 +30,7 @@ from datetime import UTC, datetime, timedelta
 from services.api import reports
 
 from schemas.domain import Alert, AlertMode, QueuedAlert, ReportFigures
+from tests.services.api.report_store_fakes import UnlimitedReachAlerts
 
 NOW = datetime.now(UTC)
 START = (NOW - timedelta(weeks=12)).date()
@@ -144,18 +145,18 @@ async def test_the_report_counts_mine_as_the_reader_it_is_read_as(monkeypatch: o
 
     from schemas.domain import Principal
 
-    async def queue(*_args: object, **_kwargs: object) -> list[QueuedAlert]:
-        return ROWS
+    async def queue(*_args: object, **_kwargs: object) -> tuple[list[QueuedAlert], bool]:
+        return ROWS, False
 
     patch = pytest.MonkeyPatch()
-    patch.setattr(reports, "monitoring_queue", queue)
+    patch.setattr(reports, "monitoring_queue_and_left_out", queue)
     try:
         me = Principal(id="me", clearance="OFFICIAL", org_unit="unit-a")
         other = Principal(id="other", clearance="OFFICIAL", org_unit="unit-a")
         mine = {(t.label, t.typology): t.mine for t in (await reports.alert_report(
-            None, None, None, "case-1", me, today=NOW.date())).monitoring.team}  # type: ignore[arg-type]  # fmt: skip
+            UnlimitedReachAlerts(), None, None, "case-1", me, today=NOW.date())).monitoring.team}  # type: ignore[arg-type]  # fmt: skip
         theirs = {(t.label, t.typology): t.mine for t in (await reports.alert_report(
-            None, None, None, "case-1", other, today=NOW.date())).monitoring.team}  # type: ignore[arg-type]  # fmt: skip
+            UnlimitedReachAlerts(), None, None, "case-1", other, today=NOW.date())).monitoring.team}  # type: ignore[arg-type]  # fmt: skip
     finally:
         patch.undo()
     assert mine == {("typology", _S): 1, ("hotlists", ""): 1, ("monitors", ""): 0}

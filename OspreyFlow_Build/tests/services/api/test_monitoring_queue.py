@@ -307,6 +307,48 @@ async def test_an_alert_of_a_dataset_the_case_does_not_read_is_not_queued(stores
     assert await _queued_ids(alerts, "c", owner) == []
 
 
+async def test_left_out_on_the_borrowed_layer_is_the_readers_rights_and_not_the_cases_scope(
+    stores: Any,
+) -> None:
+    """SE8b, live (owed where the line's live step is off for builders): the flag a report's ledger
+    row takes from `AlertStore.left_out_on_borrowed_layer` is the real query's answer. The owner's
+    ruling of 23 November 2026 (option A): only the reader's rights set it. Two alerts of the
+    reader's own, one on `ds-1` and one on `ds-other`, read in a case that reads `ds-1`:
+
+    - the case borrows no layer: the alert on `ds-other` is not a figure of this case, and the flag
+      is false (the round-5 version said true: the case's scope read as the reader's rights);
+    - the case borrows `ds-other` read-only and the reader reads it (a level on the original): false;
+    - the case borrows it and the reader's read set leaves it out (no level): true, and the queue
+      lists one;
+    - no dataset limit: false, and no query;
+    - another person's alert on the borrowed layer is not the reader's to be refused: false.
+    Red with the old reach comparison (false case true), and with the parameter at the wrong
+    position (Postgres refuses it)."""
+    _, alerts = stores
+    owner = _person()
+    case = f"case-{new_id()}"
+    inside = _alert(f"monitor:{new_id()}", owner, team=owner.org_unit, referent_node_ids=["n-1"],
+                    dataset_id="ds-1")  # fmt: skip
+    outside = _alert(f"monitor:{new_id()}", owner, team=owner.org_unit, referent_node_ids=["n-2"],
+                     dataset_id="ds-other")  # fmt: skip
+    await alerts.save(inside)
+    await alerts.save(outside)
+
+    narrow = owner.model_copy(update={"datasets": ["ds-1"]})
+    assert {r.alert.id for r in await alerts.list_queue(case, narrow)} == {inside.id}
+    assert await alerts.left_out_on_borrowed_layer(case, narrow, None) is False
+    assert await alerts.left_out_on_borrowed_layer(case, narrow, "ds-other") is True
+
+    wide = owner.model_copy(update={"datasets": ["ds-1", "ds-other"]})
+    assert {r.alert.id for r in await alerts.list_queue(case, wide)} == {inside.id, outside.id}
+    assert await alerts.left_out_on_borrowed_layer(case, wide, "ds-other") is False
+    unlimited = owner.model_copy(update={"datasets": None})
+    assert await alerts.left_out_on_borrowed_layer(case, unlimited, "ds-other") is False
+
+    stranger = _person("unit-b")
+    assert await alerts.left_out_on_borrowed_layer(case, stranger, "ds-other") is False
+
+
 async def test_a_scheduled_runs_notice_is_never_queued(stores: Any) -> None:
     _, alerts = stores
     owner = _person()

@@ -19,6 +19,11 @@
     early_warning.py summary <id>             a red run's summary (010), as the server's `summary <id>` gives it: the
                                               failures' extract by script, the model's advice marked as advice;
                                               exit 0, non-zero when it cannot be fetched
+    early_warning.py ask ports|ollama|shield  the owner's read-only questions (24 November), as the server answers
+                                              them on one line: which ports in the ephemeral range other accounts
+                                              listen on, by uid and how long seen; whether Ollama has a model
+                                              loaded; whether the shield would hold now. The server changes nothing.
+                                              Exit 0, non-zero when there is no answer
     early_warning.py <slice> --trust <id>|auto --tree <hash>
                                               for the merge (009): ask the server itself for run <id>, never a note,
                                               and say in JSON whether it proves the candidate tree <hash>: every
@@ -87,6 +92,8 @@ The runner's result for one job (`result <id>`, as `fetch <id>` prints it), the 
     checks, passed_targets, failing {targets, tests}, not_run {targets, test_files, docker_skipped, mac_only,
     live_step}      what ran and how it ended; "not run" is never a pass
     duckdb_spatial  {status: installed | failed | not fetched, stage, reason, version, platform, sha256}
+    shield          only when the shield check waited for another account's listener and it went (the owner, 24
+                    November): what it found and how long it waited; the note says it
     runner_version  "ew-2"; seconds, finished, usage, steps, scan_rows, list_drift, lists_from, client_names, advice
 
 `result <stack_id>` gives {state, id, main, runner_version, stack: [each member job's result above, in merge order],
@@ -546,6 +553,8 @@ def note_text(slice_id: str, tip: str, data: dict | None, headline: str, why: st
         out.insert(out.index(f"- Main: `{d.get('main', '?')}`") + 1, "- Stack: candidate %d of %d, main + %s (merged in "
                    "that order)" % (d.get("position", len(stack)), d.get("of", len(stack)),
                                     " + ".join(f"{x['slice']} `{x['tip'][:10]}`" for x in stack)))
+    if d.get("shield"):  # the shield check waited for another account's listener, and it went (24 November)
+        out.insert(out.index(f"- Run id: `{jid or 'none'}`"), f"- Shield: {d['shield']}")
     if "duckdb_spatial" in d:  # what made the DuckDB tests' extension, or why not, in one line (006)
         out.insert(out.index(f"- Run id: `{jid or 'none'}`"), f"- DuckDB's spatial extension: {spatial_line(d['duckdb_spatial'])}")
     if headline == "NO RESULT" and jid:
@@ -894,6 +903,25 @@ def stack_notes(s: dict, found: list, ids: list, stack_id: str, order: list, ret
     return results
 
 
+def ask_cmd(argv: list) -> int:
+    """`early_warning.py ask ports|ollama|shield`: the runner's own answer line, unchanged."""
+    if len(argv) != 2 or argv[1] not in ("ports", "ollama", "shield"):
+        print("Refused: ask takes one of ports, ollama, shield.", file=sys.stderr)
+        return REFUSED_HERE
+    try:
+        s = load_setting()
+    except Refused as e:
+        print(f"Refused: {e}", file=sys.stderr)
+        return REFUSED_HERE
+    LAST_LINE[0] = ""
+    code, data = ssh(s, ["ask", argv[1]], timeout=120)
+    if data is None:
+        print(f"No answer: the server could not be reached or gave no answer (ssh exit {code}).", file=sys.stderr)
+        return NO_RESULT
+    print(LAST_LINE[0])
+    return REFUSED_THERE if data.get("state") != "done" else GREEN  # REFUSED_THERE: the runner refused it
+
+
 def fetch(argv: list) -> int:
     """`early_warning.py fetch <id>` (012 a): the runner's own result line for that run, unchanged, from the server.
     `early_warning.py summary <id>` (010): the same for the server's summary of a red run."""
@@ -924,6 +952,8 @@ def main(argv: list[str] | None = None) -> int:
         return fetch(argv)
     if argv[:1] == ["standing"]:
         return standing_cmd(argv)
+    if argv[:1] == ["ask"]:
+        return ask_cmd(argv)
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("slices", nargs="+", metavar="slice")
     ap.add_argument("--result", metavar="ID", help="poll a run already started")

@@ -3,12 +3,17 @@
  * in words, when `OSPREY_PAGES_SESSION_SECRET` is missing, empty or shorter than 32 characters; the
  * words name the setting and the rule and never include the value; and with 32 characters it starts.
  */
+import { request as httpRequest } from "node:http";
+
 import { afterEach, describe, expect, it } from "vitest";
 
 import { main } from "../../server/start.js";
 import type { Running } from "../../server/start.js";
 import { MemorySessionStore } from "../../server/sessionStore.js";
 import { captureOutput } from "../support/capture.js";
+import { startFakeKeycloak } from "../support/fakeKeycloak.js";
+import { request } from "../support/http.js";
+import { CLIENT_ID, ORIGIN, REDIRECT_URI, signInAs } from "../support/providerRig.js";
 import { generateSecret } from "../support/secret.js";
 
 const NAME = "OSPREY_PAGES_SESSION_SECRET";
@@ -110,5 +115,102 @@ describe("main starts with 32 characters", () => {
     const res = await fetch(`http://127.0.0.1:${result?.port}/`, { redirect: "manual" });
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe("/session/sign-in");
+  });
+});
+
+/**
+ * Round 3 of PL9b: the realm client registers `http://pages:8090/session/back-channel-logout` (`harness/realm.py`,
+ * `pages_backchannel_logout_url`), and Keycloak posts there from its own container, on the internal network: plain HTTP, no
+ * proxy in front (so no `X-Forwarded-Proto`), the Host the compose service name and port. The service's real listener, started
+ * as `main.ts` starts it, must answer that call: a genuine logout token ends the session it names, and anything else is refused
+ * in plain words with nothing ended. (The listener binds every interface: `start.ts` listens on `0.0.0.0` unless a test says
+ * otherwise, which is what the address needs.)
+ */
+describe("the back-channel logout address on the service's own listener", () => {
+  const PATH = "/session/back-channel-logout";
+
+  /** The call as Keycloak makes it: a bare form POST to the service's own address, with that address in `Host`. */
+  function fromKeycloak(port: number, body: string, contentType = "application/x-www-form-urlencoded"): Promise<{ status: number; type: string; text: string; headers: string[] }> {
+    return new Promise((resolve, reject) => {
+      const call = httpRequest(
+        { host: "127.0.0.1", port, path: PATH, method: "POST", headers: { host: "pages:8090", "content-type": contentType, "content-length": Buffer.byteLength(body) } },
+        (res) => {
+          const chunks: Buffer[] = [];
+          res.on("data", (chunk: Buffer) => chunks.push(chunk));
+          res.on("end", () =>
+            resolve({ status: res.statusCode ?? 0, type: String(res.headers["content-type"] ?? ""), text: Buffer.concat(chunks).toString("utf8"), headers: Object.keys(res.headers) }),
+          );
+        },
+      );
+      call.on("error", reject);
+      call.end(body);
+    });
+  }
+
+  async function started() {
+    const clientSecret = generateSecret();
+    const fake = await startFakeKeycloak({ clientId: CLIENT_ID, clientSecret, redirectUri: REDIRECT_URI });
+    const captured = captureOutput();
+    let result: Running | undefined;
+    try {
+      result = await main(
+        {
+          OSPREY_PAGES_PORT: "0",
+          OSPREY_PAGES_SESSION_SECRET: generateSecret(32),
+          OSPREY_PAGES_OIDC_ISSUER: fake.issuer,
+          OSPREY_PAGES_CLIENT_ID: CLIENT_ID,
+          OSPREY_PAGES_CLIENT_SECRET: clientSecret,
+          OSPREY_PAGES_PUBLIC_ORIGIN: ORIGIN,
+        },
+        { log: () => undefined, error: () => undefined, exit: () => undefined },
+        { store: new MemorySessionStore(), host: "0.0.0.0" },
+      );
+    } finally {
+      captured.restore();
+    }
+    if (!result) throw new Error("the service did not start");
+    running.push(result);
+    return { fake, port: result.port, base: `http://127.0.0.1:${result.port}`, stop: () => fake.stop() };
+  }
+
+  it("ends the session a genuine token names, from a call shaped as Keycloak's is", async () => {
+    const { fake, port, base, stop } = await started();
+    try {
+      const person = await signInAs({ fake, app: base });
+      const before = await request(base).get("/").set("Cookie", person.cookie);
+      expect(before.status, "the person is signed in").toBe(200);
+
+      const answer = await fromKeycloak(port, new URLSearchParams({ logout_token: await fake.logoutToken(person.sid) }).toString());
+      expect(answer.status).toBe(200);
+      expect(answer.text).toBe("");
+
+      const after = await request(base).get("/").set("Cookie", person.cookie);
+      expect(after.status, "the pages session ended").toBe(302);
+      expect(after.headers["location"]).toBe("/session/sign-in");
+    } finally {
+      await stop();
+    }
+  });
+
+  it("refuses an unsigned, a badly signed and a missing token in plain words, and ends nothing", async () => {
+    const { fake, port, base, stop } = await started();
+    try {
+      const person = await signInAs({ fake, app: base });
+      const bodies = [
+        new URLSearchParams({ logout_token: await fake.logoutToken(person.sid, { signedWith: "none" }) }).toString(),
+        new URLSearchParams({ logout_token: await fake.logoutToken(person.sid, { signedWith: "other" }) }).toString(),
+        new URLSearchParams({ logout_token: "not-a-token" }).toString(),
+        "",
+      ];
+      for (const body of bodies) {
+        const answer = await fromKeycloak(port, body);
+        expect({ status: answer.status, text: answer.text }).toEqual({ status: 400, text: "Refused" });
+        expect(answer.type).toMatch(/^text\/plain/);
+        expect(answer.headers).not.toContain("set-cookie");
+      }
+      expect((await request(base).get("/").set("Cookie", person.cookie)).status, "nothing ended").toBe(200);
+    } finally {
+      await stop();
+    }
   });
 });

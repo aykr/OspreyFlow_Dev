@@ -1741,6 +1741,30 @@ class AppearanceConfig(BaseModel):
         ),
     )
 
+    govuk_identity: bool = Field(
+        default=False,
+        # Left out of every dump while false, so a deployment that does not turn it on renders byte
+        # for byte what it did (the rendered `osprey.yaml` of every shape, and `/deployment.json`).
+        exclude_if=lambda on: on is False,
+        description=(
+            "Default: false. The GOV.UK identity switch (ADR-152 decision 14): whether, under "
+            "`brand: govuk`, the page shows the crown, the GOV.UK logotype and the GOV.UK typeface "
+            "(GDS Transport, which is licensed for services on GOV.UK domains only). Off, the "
+            "header carries the organisation's name and the type is the fallback stack; a build "
+            "holds no GDS Transport file. true or false, nothing else. It means nothing under "
+            "`ospreyflow`. The crown still shows only on a gov.uk address (ADR-132 Amendment 7)."
+        ),
+    )
+
+    @field_validator("govuk_identity", mode="before")
+    @classmethod
+    def _true_or_false(cls, value: object) -> object:
+        # A setting that brings a restricted typeface into a build is not guessed at: a quoted
+        # "true", 1 or "yes" is not a boolean here (the same strictness as `pages.enabled`).
+        if not isinstance(value, bool):
+            raise ValueError("appearance.govuk_identity must be true or false")
+        return value
+
     @field_validator("banner_text")
     @classmethod
     def _one_line(cls, value: str | None) -> str | None:
@@ -1751,10 +1775,13 @@ class AppearanceConfig(BaseModel):
 
     def told(self) -> dict[str, object]:
         """The section as the Glass and the sign-in page are told it: `banner_text` only when set,
-        so a deployment that names none renders byte for byte what it did (Amendment 7)."""
+        so a deployment that names none renders byte for byte what it did (Amendment 7), and
+        `govuk_identity` only when on."""
         dumped = self.model_dump()
         if self.banner_text is None:
             del dumped["banner_text"]
+        # `govuk_identity` is left out of the dump while it is false (the field's `exclude_if`):
+        # the Glass reads an absent key as off (ADR-152 decision 14).
         return dumped
 
 

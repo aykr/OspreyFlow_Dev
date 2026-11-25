@@ -1,0 +1,79 @@
+--- a/OspreyFlow_Build/Makefile
++++ b/OspreyFlow_Build/Makefile
+@@ -100,10 +100,13 @@
+ 
+ # ADR-115 (E1): the design detector against DESIGN.md §9, Core's DESIGN.md held to the contract, and
+ # no colour literal in the Glass that DESIGN.md does not hold. tests/test_design_check.py and
+-# tests/test_colour_drift_check.py hold the proof that each can fail.
++# tests/test_colour_drift_check.py hold the proof that each can fail. ADR-152 Amendment 4: no theme's
++# rule outside its own folder, against an allowlist that only shrinks (the theme-rule check);
++# tests/glass_trees/test_theme_rules.py holds its proof.
+ design-check:
+ 	$(IN_CORE) $(TOOLS) $(PY) -m tools.design_check
+ 	$(IN_CORE) $(TOOLS) $(PY) -m tools.colour_drift_check
++	$(IN_CORE) $(TOOLS) $(PY) -m tools.theme_rule_check
+ 	$(IN_CORE) node --test $(BUILD)/tests/keycloak_theme/*.test.mjs
+ 
+ # ADR-041: mechanical control for the fetch-then-check authorization bug class.
+diff --git a/OspreyFlow_Build/tests/glass_trees/test_design_gates_reach.py b/OspreyFlow_Build/tests/glass_trees/test_design_gates_reach.py
+index 1bb4308..004ed5f 100644
+--- a/OspreyFlow_Build/tests/glass_trees/test_design_gates_reach.py
++++ b/OspreyFlow_Build/tests/glass_trees/test_design_gates_reach.py
+@@ -29,6 +29,13 @@ Default tree's templates and the client modules. The same four gates read them,
+ `tools.layout.PAGES_COPY_ROOTS` gives, so a gate that drops one is red; `tests/glass_trees/test_pages_foundation.py`
+ holds that each gate reads a violation planted under each root.
+ 
++**The theme-rule check (slice PL12b).** `tools/theme_rule_check.py` reads `packages/design` (the
++three files in it included), the Glass's source and scripts, the shared package, the harness's source
++and the pages app, and refuses a scan root that is missing.
++`test_the_theme_rule_check_names_the_design_package_and_the_pages_roots` holds its roots to them,
++and `test_the_theme_rule_check_reads_packages_design` plants a brand rule in the copy of
++`packages/design` and shows it found there.
++
+ This file walks no part of the repository by `git ls-files`: it reads
+ `OspreyFlow_Core/packages/design/` only (copied, never written).
+ """
+@@ -40,7 +47,7 @@ from collections.abc import Callable
+ from pathlib import Path
+ 
+ import pytest
+-from tools import design_check, no_branches_check, ui_words_check
++from tools import design_check, no_branches_check, theme_rule_check, ui_words_check
+ from tools.layout import CORE
+ 
+ DESIGN = CORE / "packages" / "design"
+@@ -141,3 +148,34 @@ def test_each_gate_names_the_pages_roots() -> None:
+     for gate, roots in named.items():
+         assert set(PAGES_ROOTS) <= roots, f"{gate} does not read {sorted(set(PAGES_ROOTS) - roots)}"
+ 
++
++def test_the_theme_rule_check_names_the_design_package_and_the_pages_roots() -> None:
++    """The check's roots hold the three design files, the pages roots and every root the brief
++    names, and each is a folder that exists (a renamed root is an error in the tool, not blindness)."""
++    roots = [CORE / top for top in theme_rule_check.SCAN_ROOTS]
++    for name in THE_THREE:
++        assert _under(DESIGN / name, roots), f"theme_rule_check skips packages/design/{name}"
++    named = (
++        "apps/workspace/src",
++        "apps/workspace/scripts",
++        "apps/harness/src",
++        "packages/glass-shared/src",
++    )
++    for top in (*PAGES_ROOTS, *named):
++        assert _under(CORE / top, roots), f"theme_rule_check skips {top}"
++        assert (CORE / top).is_dir(), f"{top} is not a folder: the check is blind there"
++
++
++def test_the_theme_rule_check_reads_packages_design(planted: Path) -> None:
++    # The shape the real rules have: a brand block in a stylesheet of the design package's folder.
++    planted.write_text('[data-brand="govuk"] .planted { margin: 0; }\n', encoding="utf-8")
++    core = planted.parent.parent.parent  # the copy is `<tmp>/packages/design`: its root is `<tmp>`
++    for top in theme_rule_check.SCAN_ROOTS:  # the check refuses a root that is missing
++        (core / top).mkdir(parents=True, exist_ok=True)
++    for name in theme_rule_check.SIGN_IN_FILES:  # ... and a named sign-in file that is missing
++        (core / name).parent.mkdir(parents=True, exist_ok=True)
++        (core / name).write_text("", encoding="utf-8")
++    found = [f for f in theme_rule_check.find_theme_rules(core) if f.path.endswith(PLANT)]
++    assert [(f.path, f.key, f.kind) for f in found] == [
++        (f"packages/design/{PLANT}", '[data-brand="govuk"] .planted', "rule")
++    ]

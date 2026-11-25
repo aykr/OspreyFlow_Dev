@@ -41,3 +41,16 @@ The master-key rotation row (N6); the gateway's own behaviour; any change to the
 ## Never merge another part's unmerged tip (the owner, 23 November 2026)
 
 **Never merge another part's unmerged tip, or any branch but main, into your branch.** Take main in when the line tells you to, and nothing else. A part that did this (AD1b, with AD1a's tip) had the hook count the other part's tests as its own. If your part needs another part's change that has not merged, stop and tell the conductor.
+
+## Round 4 (the owner's ruling of 24 November 2026, in chat, about 23:55 UTC: option 1 of your round-3 report, as ADR-135 Amendment 15)
+
+**Your round-3 stop was right.** The owner chose option 1, a read-only role on the gateway's database. It is decided in **ADR-135 Amendment 15** (`spec/06_DECISIONS.md`, on main before this round starts): read it whole. Its five decisions are this round's conditions. In this order:
+
+1. **First, before any code:** confirm from the gateway's own schema and code, at the version the deployment pins, that `"LiteLLM_VerificationToken".token` holds the stored hash, not a usable key, and that nothing read from it can call the gateway. Say where you read it (file and line, or the pinned image's own schema). **If it does not, or you cannot show it, stop and say so: that question is the owner's.**
+2. **The role:** made by the one-shot `litellm-db` step, idempotently, beside the gateway's own role. `SELECT` on `token` and `metadata` of that one table, and nothing else. The Conduit's query names the two columns, never `*`. **Planted faults (rule 15), each red by the database's own refusal on a real PostgreSQL (a throwaway one under the stack lease, or the server's; never the owner's deployment or the demo):** reading `key_name` (and any other column of the table), reading any other table in that database, and `INSERT`, `UPDATE` and `DELETE` as the role.
+3. **Its password, by the owner's key rules:** generated at render; never shown, printed, logged or echoed back (no command output, error or audit row); given to the Conduit alone, under its own variable name; blanked for every other service in the render, on every profile that renders the gateway (the cluster chart too). A test fails if any other service is given it.
+4. **Then round 2's items 2, 3 and 4 (the round-3 verifier's three findings):** `clear_orphaned_tokens` finds candidates from every token tagged `osprey_engine` read through the role; the inverted assertion in `test_orphaned_engine_tokens_are_cleared.py` comes out (a plain run removes the re-rendered engine's token); `none_remains` checks every `osprey_engine`-tagged token the gateway fake holds. The fake refuses what the real database refuses (rule 15's second example): a read of any column but the two, and any write.
+5. **The sweep is audited without any token value:** the audit names the engine and that a token was removed; never the token, its hash or its metadata's secret parts.
+6. **Nothing changes on the demo.** No render, migration or touch of the demo server or its deployment.
+
+Every finding of this part names a key or a credential, so it is the owner's: none is accepted narrower.

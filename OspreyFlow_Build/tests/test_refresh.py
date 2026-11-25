@@ -350,6 +350,56 @@ def test_the_proxys_routing_table_is_brought_up_to_date_and_the_proxy_restarted(
     assert ["restart", "proxy"] in [call[-2:] for call in run.calls]
 
 
+@pytest.mark.parametrize("identity", [True, False])
+def test_a_govuk_deployment_whose_sign_in_theme_has_no_switch_key_gets_it_when_refreshed(
+    repo: Path, identity: bool
+) -> None:
+    """PL7c round 8 (the owner's ruling of 23 November 2026): a settings object with no `govukIdentity` key means off, so a
+    GOV.UK deployment made before the switch existed draws no GOV.UK identity until its theme is rewritten. Refresh is one of
+    the paths that rewrites it (`_theme_changed` writes whenever a file differs; `ospreyflow start --build` and `update`'s
+    files step both run it). The shape on disk: the settings line the renderer wrote before the switch, four keys. With the
+    identity on, the deployment is built from the checkout, which the pulled `local-lite` fixture is not (refresh refuses
+    the identity there in words), so that case runs the theme step refresh runs, `_theme_changed`; the off case runs the
+    whole `refresh.refresh`."""
+    import json
+
+    import yaml
+    from harness.keycloak_theme import GOVUK_CHROME_SCRIPT, login_theme_options
+
+    from schemas.deployment import OspreyConfig
+
+    out = _rendered(repo)
+    config_path = out / "osprey.yaml"
+    raw = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    raw["appearance"] = {
+        "brand": "govuk",
+        "service_name": "Prison Intelligence",
+        "govuk_identity": identity,
+    }
+    config_path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
+    # The theme as it was before this version: the chrome script's settings line holds no switch key.
+    write_login_theme(
+        out, tokens_css=TOKENS, **login_theme_options(OspreyConfig.model_validate(raw))
+    )
+    chrome = out / THEME_DIRECTORY / THEME_NAME / GOVUK_CHROME_SCRIPT
+    prefix = "window.OSPREY_GOVUK = "
+    line, _, rest = chrome.read_text(encoding="utf-8").partition("\n")
+    settings = json.loads(line.removeprefix(prefix).rstrip(";"))
+    assert settings.pop("govukIdentity") is identity
+    chrome.write_text(f"{prefix}{json.dumps(settings)};\n{rest}", encoding="utf-8")
+    assert "govukIdentity" not in chrome.read_text(encoding="utf-8").split("\n", 1)[0]
+
+    run = Recorder()
+    if identity:
+        assert refresh._theme_changed(out, repo) is True
+    else:
+        refresh.refresh(repo, run=run, register=Registrar())
+        assert "restart" in _subcommands(run.calls)  # Keycloak reads the theme at start
+
+    after = chrome.read_text(encoding="utf-8").split("\n", 1)[0].removeprefix(prefix).rstrip(";")
+    assert json.loads(after)["govukIdentity"] is identity
+
+
 # --- services a later render adds reach an existing deployment (ADR-098 decision 2) -------------
 
 
@@ -661,6 +711,140 @@ def test_a_deployment_built_from_source_moves_its_gateway_to_the_one_we_build(re
     # No secret is written or changed by it.
     env_after = (out / "deployment.env").read_text().splitlines()
     assert set(secrets_before.splitlines()) <= set(env_after)
+
+
+def _workspace_built_with(repo: Path, *, identity: bool) -> Path:
+    """A deployment built from source (`apply --build`: the copied `osprey.yaml` carries no `source_path`, the mode is
+    read from the Conduit's own `build`) whose compose file was rendered with the GOV.UK identity switch as given."""
+    import yaml
+
+    out = _gateway_before_pl13b(repo, from_source=True)
+    config = yaml.safe_load((out / "osprey.yaml").read_text())
+    config["appearance"] = {"brand": "govuk", "govuk_identity": identity}
+    (out / "osprey.yaml").write_text(yaml.safe_dump(config), encoding="utf-8")
+    return out
+
+
+def _workspace_build(out: Path) -> dict:
+    import yaml
+
+    return yaml.safe_load((out / "compose.yaml").read_text())["services"]["workspace"]["build"]
+
+
+def _workspace_image(out: Path) -> str:
+    import yaml
+
+    return yaml.safe_load((out / "compose.yaml").read_text())["services"]["workspace"]["image"]
+
+
+def _workspace_lock_tag(out: Path) -> str:
+    import yaml
+
+    rows = yaml.safe_load((out / "versions.lock").read_text())["images"]
+    return next(r["tag"] for r in rows if r["service"] == "workspace")
+
+
+def test_turning_the_identity_on_reaches_the_workspace_build_of_a_deployment_built_from_source(
+    repo: Path,
+) -> None:
+    """A finding of PL7c's round 3: `_pins_moved` skipped every service that already had a `build`, so the new argument
+    never reached the stanza, the default image was rebuilt and the type fell back to arial in silence."""
+    out = _workspace_built_with(repo, identity=True)
+    assert "args" not in _workspace_build(out)  # as the render before the switch left it
+
+    refresh.refresh(repo, run=Recorder(), register=Registrar())
+
+    assert _workspace_build(out)["args"] == {"OSPREY_GOVUK_IDENTITY": "1"}
+    # Round 4: the image is per deployment as the switch is, so the stanza's tag and the lock's row move with the argument
+    # (the tag the default build holds would otherwise be rebuilt over, or run, by a deployment that wants the other).
+    assert _workspace_image(out) == "osprey/workspace:local-govuk"
+    assert _workspace_lock_tag(out) == "local-govuk"
+
+
+def test_turning_the_identity_off_takes_the_argument_off_and_leaves_an_operators_own(
+    repo: Path,
+) -> None:
+    import yaml
+
+    out = _workspace_built_with(repo, identity=True)
+    refresh.refresh(repo, run=Recorder(), register=Registrar())
+    assert "OSPREY_GOVUK_IDENTITY" in _workspace_build(out)["args"]
+    document = yaml.safe_load((out / "compose.yaml").read_text())
+    document["services"]["workspace"]["build"]["args"]["OPERATOR_ARG"] = "kept"
+    text = (out / "compose.yaml").read_text()
+    (out / "compose.yaml").write_text(
+        text[: text.index("\nname:") + 1] + yaml.safe_dump(document, sort_keys=False)
+    )
+    config = yaml.safe_load((out / "osprey.yaml").read_text())
+    config["appearance"] = {"brand": "govuk", "govuk_identity": False}
+    (out / "osprey.yaml").write_text(yaml.safe_dump(config), encoding="utf-8")
+
+    refresh.refresh(repo, run=Recorder(), register=Registrar())
+
+    assert _workspace_build(out)["args"] == {"OPERATOR_ARG": "kept"}
+    assert _workspace_image(out) == "osprey/workspace:local"
+    assert _workspace_lock_tag(out) == "local"
+
+
+def test_a_deployment_with_the_identity_off_keeps_a_workspace_build_with_no_args_as_it_was(
+    repo: Path,
+) -> None:
+    out = _workspace_built_with(repo, identity=False)
+    before = (out / "compose.yaml").read_text()
+    refresh.refresh(repo, run=Recorder(), register=Registrar())
+    assert "args" not in _workspace_build(out)
+    assert "OSPREY_GOVUK_IDENTITY" not in (out / "compose.yaml").read_text()
+    assert before.count("workspace") == (out / "compose.yaml").read_text().count("workspace")
+
+
+def _pulled_with_identity(repo: Path, *, identity: bool) -> Path:
+    """A deployment installed from a release (no `build` on any service, so refresh keeps it in pull mode) whose
+    `osprey.yaml` has the GOV.UK identity switch as given."""
+    import yaml
+
+    out = _gateway_before_pl13b(repo, from_source=False)
+    config = yaml.safe_load((out / "osprey.yaml").read_text())
+    config["appearance"] = {"brand": "govuk", "govuk_identity": identity}
+    (out / "osprey.yaml").write_text(yaml.safe_dump(config), encoding="utf-8")
+    return out
+
+
+def test_refresh_refuses_in_words_a_pulled_deployment_with_the_identity_on(repo: Path) -> None:
+    """The finding of PL7c's round 5: refresh does not go through `render()`, so a deployment that pulls the release's
+    images with the switch on had its workspace image moved to `<sha>-govuk`, which no release publishes, and failed on
+    a missing image with none of the render's words. It says the render's words, and writes and runs nothing."""
+    out = _pulled_with_identity(repo, identity=True)
+    compose_before = (out / "compose.yaml").read_text()
+    lock_before = (out / "versions.lock").read_text()
+    recorder = Recorder()
+
+    with pytest.raises(refresh.RefreshFailed, match="appearance.govuk_identity is on"):
+        refresh.refresh(repo, run=recorder, register=Registrar())
+
+    assert recorder.calls == []
+    assert (out / "compose.yaml").read_text() == compose_before
+    assert (out / "versions.lock").read_text() == lock_before
+    assert "-govuk" not in compose_before + (out / "compose.yaml").read_text()
+
+
+def test_the_files_only_refresh_of_an_update_refuses_the_same_deployment_in_words(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """`ospreyflow update` runs `refresh --files-only`: its exit code is 1, with the words on stderr."""
+    out = _pulled_with_identity(repo, identity=True)
+    compose_before = (out / "compose.yaml").read_text()
+
+    code = refresh.main(["--files-only"], repo_root=repo)
+
+    assert code == 1
+    assert "appearance.govuk_identity is on" in capsys.readouterr().err
+    assert (out / "compose.yaml").read_text() == compose_before
+
+
+def test_a_pulled_deployment_with_the_identity_off_is_not_refused(repo: Path) -> None:
+    out = _pulled_with_identity(repo, identity=False)
+    refresh.refresh(repo, run=Recorder(), register=Registrar())
+    assert "-govuk" not in (out / "compose.yaml").read_text()
 
 
 def test_moving_the_gateway_twice_changes_nothing_the_second_time(repo: Path) -> None:

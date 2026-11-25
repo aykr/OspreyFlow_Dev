@@ -32,7 +32,7 @@ import ast
 import copy
 import json
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -539,9 +539,13 @@ class _Copies:
         ours_prefix: str,
         resolver: DigestResolver,
         profile: ProfileSettings | None = None,
+        build_args: Mapping[str, Mapping[str, str]] | None = None,
     ) -> None:
         self.registry, self.ours_prefix, self.resolver = registry, ours_prefix, resolver
         self.ours = (profile or load_profile()).ours
+        #: Arguments the deployment adds to an image of ours' build, by service: the GOV.UK
+        #: identity switch's, for the workspace (ADR-152 decision 14; `harness.render`).
+        self.build_args = build_args or {}
         self.plan: dict[str, dict[str, Any]] = {}
         self.unresolved: list[str] = []
 
@@ -569,8 +573,9 @@ class _Copies:
                     "built, so `ospreyflow images push` could not make its copy: add its "
                     "Dockerfile and context there"
                 )
+            args = {**built.build_args, **self.build_args.get(name, {})}
             entry = {"target": target, "dockerfile": built.dockerfile, "context": built.context,
-                     "build_args": dict(built.build_args)}  # fmt: skip
+                     "build_args": args}  # fmt: skip
             digest = self.resolver(target) or ""
             if not digest:
                 self.unresolved.append(target)
@@ -1144,7 +1149,7 @@ def render_cloud_platform(
     """`values.yaml`, `versions.lock` and `terraform/*.tf`."""
     from harness.cloud_platform.terraform import render_terraform
     from harness.cluster import render_cluster
-    from harness.render import UnpinnedImagesError, service_images
+    from harness.render import UnpinnedImagesError, service_images, wants_govuk_identity
     from harness.site import highest_marking, render_glass_settings
 
     _refuse(config)
@@ -1187,7 +1192,15 @@ def render_cloud_platform(
         ]) from None  # fmt: skip
     values = yaml.safe_load(rendered["values.yaml"].split("\n", 3)[-1])
     variables = managed_variables(config)
-    copies = _Copies(registry, ours_prefix, resolver, profile)
+    # The workspace image is built here, so the switch reaches it as the argument the Dockerfile
+    # reads: the same one `compose_services` writes for a build from a checkout.
+    copies = _Copies(
+        registry,
+        ours_prefix,
+        resolver,
+        profile,
+        {"workspace": {"OSPREY_GOVUK_IDENTITY": "1"}} if wants_govuk_identity(config) else None,
+    )
 
     workloads = [
         w for w in values["workloads"]

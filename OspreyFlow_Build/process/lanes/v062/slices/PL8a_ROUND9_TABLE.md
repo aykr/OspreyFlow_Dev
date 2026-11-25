@@ -1,0 +1,17 @@
+# PL8a: round 9, the one fix (24 November 2026, 10:55 UTC; the conductor, on the owner's add-round line)
+
+**The owner's rule (21 November 2026): no round from 5 on starts without a table of every open case.** One case is open; **every case of rounds 1 to 8 is closed.**
+
+| # | Case | Status at `650c976c41` |
+| --- | --- | --- |
+| **I** | **A sash whose `data-max` is below the default (340 for the column, 130 for the timeline) writes that bound to `ospreyflow.layout-sizes` on the attach's first draw, with no action by the analyst.** `holdToBounds` (`panelFrameAttach.ts` about lines 213 to 233) calls the writing setter with the page's bound (`setSideWidth(340, {maxPx: 320})`, about line 219; the timeline about lines 222 and 223); `apply` (`panelFrameStore.ts` about lines 349 to 355) compares only against the window's limits (`shownSizes(kept, limits)`), never against the page's `maxPx`, so `next` (320, or 100) differs from the shown size (340, 130) and the bound is written. This contradicts the sentence the slice added to `spec/02` ("only a size the analyst chose is stored"): the React workspace reads the same key, so one load of such a page would make its column open at 320 from then on. No test catches it: the round-6 cases attach with exactly these bounds but their `expectHeld` excuses 340 and 130 and accepts a stored 320 or 100; the round-8 block never sets a `data-max`. | **OPEN: this round, and nothing else.** |
+
+## The owner's ruling (24 November 2026, in chat)
+
+**"PL8a: option 2, my add-round line is in. Round 9 does only the fix you describe: a draw-time bound lowers what is shown and never calls a writing setter. Then it merges as built."**
+
+## What you do (and nothing else)
+
+1. **A page's bound lowers what is shown and never writes.** A bound met on a draw, a fit or a read (the attach's first draw, a resize, a `data-max` that changes) **lowers the size held in memory and drawn, and calls no setter that writes to `ospreyflow.layout-sizes`**; **an analyst's own action (a key press, Home, a drag, a programmatic set) is the only thing that writes, and it still stores the bound it is held to** (Home's storing of the bound, the test at about line 1661 of `panelFrameStore.test.ts`, stays intact). **The fix in the store's one writer or in how the attach asks it: your design, said in the report; do not add a second write path.**
+2. **Red first, on a real page's markup shape:** a roomy viewport `{windowHeight: 1200, workWidth: 1600}`, **empty storage**, a side sash `data-max="320"` and a timeline sash `data-max="100"`: **after the first draw, storage is still EMPTY, the drawn `aria-valuenow` is 320 and 100 and `aria-valuemax` the same, and a fresh store in a window with no such bound opens at 340 and 130.** Then an analyst's Home press stores the bound (the existing test). **Remove the existing `expectHeld` excuses for 340 and 130 where they accept a stored bound: a stored bound without an analyst action must now fail the case.** Add the case to the round-4 table's rows (a sash with a bound below the default, no action, storage empty).
+3. **Nothing else.** Re-run your slice's checks, the scan-map check and, by hand, `PYTHONPATH=../OspreyFlow_Build uv run --frozen python -m tools.design_check` and `tools.colour_drift_check` from `OspreyFlow_Core`. **A finding that names a key, a credential or a security rule is stopped and reported, never accepted narrower.**

@@ -110,6 +110,8 @@ export async function world(me: Person = person(), others: Person[] = [], option
               expire: (key, ttl) => inner.expire(key, ttl),
               del: (key) => inner.del(key),
               take: (key) => inner.take(key),
+              listKeys: (prefix) => inner.listKeys(prefix),
+              claim: (key, value, ttl) => inner.claim(key, value, ttl),
             };
           },
         }

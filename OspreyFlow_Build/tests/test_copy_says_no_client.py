@@ -45,7 +45,12 @@ WEIGHTS = CORE / "packages" / "ontology" / "weights"
 
 #: The pages service's copy, relative to the product folder: the Default tree's templates, the client modules, and the
 #: server's own views (ADR-152 decision 6).
-PAGES_COPY_ROOTS = ("apps/pages/tree-default", "apps/pages/modules", "apps/pages/server/views")
+PAGES_COPY_ROOTS = (
+    "apps/pages/tree-default",
+    "apps/pages/tree-govuk",
+    "apps/pages/modules",
+    "apps/pages/server/views",
+)
 
 
 def pages_copy_hits(core: Path = CORE, word: re.Pattern[str] = WORDS) -> list[str]:

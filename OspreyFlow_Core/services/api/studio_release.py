@@ -61,6 +61,7 @@ from schemas.release import (
 )
 from schemas.rights import Right, rights_for
 
+from .export import compute_handling_level
 from .ingest_sources import UPLOAD_SUBDIR, ingest_root
 from .list_connector import ListRows, ListStore
 from .sources import SourceStore
@@ -213,6 +214,10 @@ class ExportResult:
     files: dict[str, bytes]
     #: Published pipelines left out because their source is marked above the exporter's view.
     left_out: int
+    #: The highest source marking among the pipelines in the bundle (what the exporter may view and
+    #: so what left); `None` when it holds no pipeline, since only a pipeline carries a marking and
+    #: a model or a list has none to make up. What the ledger row records as the handling level.
+    marking: str | None = None
 
 
 class DraftHeld(Exception):
@@ -340,7 +345,12 @@ async def export_release(
         connections=names,
         secrets=secrets,
     )
-    return ExportResult(files=files, left_out=len(published) - len(viewable))
+    marking = (
+        compute_handling_level([resolve_source_handling(d) for d in viewable], scheme)
+        if viewable
+        else None
+    )
+    return ExportResult(files=files, left_out=len(published) - len(viewable), marking=marking)
 
 
 def _gate_draft(

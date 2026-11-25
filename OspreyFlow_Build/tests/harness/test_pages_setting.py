@@ -2292,7 +2292,9 @@ def a_partial_govuk_tree(root: Path, routes: list[str]) -> Iterator[None]:
         encoding="utf-8",
     )
     listed = "".join(f"  - {route}\n" for route in routes)
-    (root / "routes.yaml").write_text(f"routes:\n{listed}", encoding="utf-8")
+    # An empty list is written as the file's own `routes: []`: a bare `routes:` is no list.
+    text = f"routes:\n{listed}" if routes else "routes: []\n"
+    (root / "routes.yaml").write_text(text, encoding="utf-8")
     with (
         mock.patch.object(tree_parity, "FUNCTIONS", root / "FUNCTIONS.yaml"),
         mock.patch.object(tree_parity, "ROUTE_LIST", root / "routes.yaml"),
@@ -2319,9 +2321,28 @@ def test_a_govuk_function_with_its_page_is_routed_to_pages_and_the_rest_stays(
 
 
 @pytest.mark.parametrize("shape", ON_SHAPES)
-def test_with_no_function_page_yet_only_the_services_own_paths_go_to_pages(shape: str) -> None:
-    """The tree as the repository has it today (no route list): `pages`' own paths and nothing else."""
-    assert pages_paths(shape, _render(shape, "govuk", **_on(shape))) == OWN_PATHS
+def test_with_no_function_page_yet_only_the_services_own_paths_go_to_pages(
+    shape: str, tmp_path: Path
+) -> None:
+    """A tree whose route list is empty: `pages`' own paths and nothing else."""
+    with a_partial_govuk_tree(tmp_path, []):
+        files = _render(shape, "govuk", **_on(shape))
+        assert pages_paths(shape, files) == OWN_PATHS
+        assert has_a_workspace(shape, files)
+
+
+@pytest.mark.parametrize("shape", ON_SHAPES)
+def test_the_real_govuk_tree_routes_help_to_pages_and_not_the_home_page(shape: str) -> None:
+    """The tree as the repository has it now (its real `routes.yaml`, patched by nothing): the
+    Help page's path goes to `pages` beside the service's own, `/` is not routed (the tree switch
+    decides which tree draws it, not the front proxy: ADR-152 decision 7), and the workspace
+    stays. The Caddyfile's matcher (`_caddy_pages_paths`) is what `pages_paths` reads for both
+    shapes this case runs on."""
+    files = _render(shape, "govuk", **_on(shape))
+    routed = pages_paths(shape, files)
+    assert routed == OWN_PATHS | {"/help"}, routed
+    assert "/" not in routed and has_a_workspace(shape, files)
+    assert on_findings(shape, "govuk", files) == []
 
 
 @pytest.mark.parametrize("shape", ON_SHAPES)

@@ -14,24 +14,65 @@
  *   the provider chose to say; what is thrown, and so logged and shown, is a fixed reason of ours.
  *
  * The access token is kept whole as the bearer the Conduit will be sent (it verifies the audience itself); the
- * refresh token is kept for the renewal that PL9b builds. Neither is read, logged or put in an error here.
+ * refresh token is kept for the renewal (`refresh`, slice PL9b: the refresh grant at the token address, which is `openid-client`'s
+ * too). Neither is read, logged or put in an error here.
+ *
+ * Slice PL9b adds the three things a session's end needs from the provider: `refresh`, `endSessionUrl` (RP-initiated logout: the
+ * end-session address with the ID token as the hint and the registered return address) and `verifyLogoutToken` (every check the
+ * Back-Channel Logout specification asks of a logout token, each its own refusal).
  */
-import { createRemoteJWKSet, errors as joseErrors, jwtVerify } from "jose";
+import { createRemoteJWKSet, decodeProtectedHeader, errors as joseErrors, jwtVerify } from "jose";
 import * as client from "openid-client";
 
 import type { OidcSettings } from "./config.js";
-import { IdentityProviderRefused, IdentityProviderUnavailable } from "./identity.js";
-import type { CodeFlowProvider, PendingLogin, ProviderSession, RefusalReason } from "./identity.js";
+import { IdentityProviderRefused, IdentityProviderUnavailable, LogoutTokenRefused } from "./identity.js";
+import type {
+  CodeFlowProvider,
+  LogoutClaims,
+  LogoutRefusalReason,
+  PendingLogin,
+  ProviderSession,
+  RefusalReason,
+  RenewedTokens,
+} from "./identity.js";
 import { sameValue } from "./loginState.js";
 import { ABSOLUTE_SECONDS } from "./sessionPolicy.js";
 
 export const CALLBACK_PATH = "/session/callback";
+/** Where the provider sends its logout token (slice PL9b). The realm client registers `<origin>` and this (`harness/realm.py`). */
+export const BACKCHANNEL_LOGOUT_PATH = "/session/back-channel-logout";
+/** The event a logout token must carry in its `events` claim (OpenID Connect Back-Channel Logout 1.0, section 2.4). */
+export const BACKCHANNEL_LOGOUT_EVENT = "http://schemas.openid.net/event/backchannel-logout";
+/** A logout token older than this is refused, and a `jti` is remembered for this long and a little more (`app.ts`). */
+export const LOGOUT_TOKEN_MAX_AGE_SECONDS = 120;
 
 /** Seconds the provider gets to answer any one request before it counts as unreachable. */
 const REQUEST_TIMEOUT_SECONDS = 5;
 /** Keycloak signs with RS256 unless a realm says otherwise; a token signed any other way is refused. */
 const ID_TOKEN_ALGORITHMS = ["RS256"];
 const CLOCK_TOLERANCE_SECONDS = 5;
+/** A logout token is a few hundred characters; far more is not one. */
+const MAX_LOGOUT_TOKEN_CHARS = 8192;
+
+/** Which check a failed verification was, as a word of ours. The library's own message is never kept. */
+function logoutRefusalFor(error: unknown): LogoutRefusalReason {
+  if (error instanceof joseErrors.JWTExpired) return "age";
+  if (error instanceof joseErrors.JWTClaimValidationFailed) {
+    if (error.claim === "iss") return "issuer";
+    if (error.claim === "aud") return "audience";
+    if (error.claim === "exp" || error.claim === "nbf" || error.claim === "iat") return "age";
+    return "malformed";
+  }
+  if (
+    error instanceof joseErrors.JWSSignatureVerificationFailed ||
+    error instanceof joseErrors.JWKSNoMatchingKey ||
+    error instanceof joseErrors.JWKSMultipleMatchingKeys ||
+    error instanceof joseErrors.JOSEAlgNotAllowed
+  ) {
+    return "signature";
+  }
+  return "malformed";
+}
 
 export interface OidcFlowOptions {
   /** Milliseconds since the epoch, for the provider's session end. A test moves it by hand. */
@@ -96,6 +137,31 @@ function keySetFailed(error: unknown): boolean {
   });
 }
 
+/**
+ * The provider provably never saw the request: no connection was made, or a gateway in front of it said it had nothing to
+ * forward to. Only then may a refresh token be presented again. A time-out, a reset or a 500 may have been received and acted on.
+ */
+function notDelivered(error: unknown): boolean {
+  return causes(error).some((cause) => {
+    if (cause instanceof client.ResponseBodyError) return cause.status === 503;
+    if (cause instanceof Response) return cause.status === 503;
+    const code = (cause as { code?: unknown }).code;
+    return typeof code === "string" && NOT_DELIVERED_CODES.has(code);
+  });
+}
+
+const NOT_DELIVERED_CODES = new Set(["ECONNREFUSED", "ENOTFOUND", "EAI_AGAIN", "EHOSTUNREACH", "ENETUNREACH", "UND_ERR_CONNECT_TIMEOUT"]);
+
+/** The `exp` of a JWT, in milliseconds, or undefined for anything that is not one. Unverified: only used to date a token we were given. */
+function jwtExpiry(token: string): number | undefined {
+  try {
+    const payload = JSON.parse(Buffer.from(token.split(".")[1] ?? "", "base64url").toString("utf8")) as { exp?: unknown };
+    return typeof payload.exp === "number" && Number.isFinite(payload.exp) ? payload.exp * 1000 : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** What a failure of the exchange is: unreachable (503) or refused (403). The words are ours, never the library's. */
 function classify(error: unknown, refusal: string, reason: RefusalReason): IdentityProviderRefused | IdentityProviderUnavailable {
   if (isUnreachable(error)) return new IdentityProviderUnavailable("the identity provider could not be reached or failed");
@@ -133,7 +199,8 @@ export function createOidcFlow(settings: OidcSettings, options: OidcFlowOptions 
       });
     }
     return discovered.catch(() => {
-      throw new IdentityProviderUnavailable("the identity provider could not be reached or is not set up as expected");
+      // Discovery is a read: nothing of a token has been sent, so whatever was being done can be tried again.
+      throw new IdentityProviderUnavailable("the identity provider could not be reached or is not set up as expected", { notDelivered: true });
     });
   }
 
@@ -202,14 +269,107 @@ export function createOidcFlow(settings: OidcSettings, options: OidcFlowOptions 
       // that says nothing leaves only the service's own absolute lifetime.
       const lasts = tokens.refresh_token === undefined ? undefined : (tokens as { refresh_expires_in?: unknown })["refresh_expires_in"];
       const seconds = typeof lasts === "number" && Number.isFinite(lasts) && lasts > 0 ? lasts : ABSOLUTE_SECONDS;
+      const sid = claims["sid"];
+      const accessTokenExpiresAt = accessExpiry(tokens);
       return {
         subject,
         displayName: named,
         accessToken: tokens.access_token,
         refreshToken: tokens.refresh_token ?? "",
         idToken,
+        ...(accessTokenExpiresAt === undefined ? {} : { accessTokenExpiresAt }),
+        ...(typeof sid === "string" && sid !== "" ? { providerSessionId: sid } : {}),
         idpSessionExpiresAt: now() + Math.floor(seconds) * 1000,
       };
     },
+
+    async refresh(refreshToken: string): Promise<RenewedTokens> {
+      const { config } = await provider();
+      let tokens;
+      try {
+        tokens = await client.refreshTokenGrant(config, refreshToken);
+      } catch (error) {
+        if (notDelivered(error)) throw new IdentityProviderUnavailable("the identity provider could not be reached", { notDelivered: true });
+        throw classify(error, "the provider refused the refresh token, or its answer did not verify", "refused");
+      }
+      if (typeof tokens.access_token !== "string" || tokens.access_token === "") {
+        throw new IdentityProviderRefused("the answer carries no access token", "refused");
+      }
+      const accessTokenExpiresAt = accessExpiry(tokens);
+      const lasts = (tokens as { refresh_expires_in?: unknown })["refresh_expires_in"];
+      return {
+        accessToken: tokens.access_token,
+        ...(accessTokenExpiresAt === undefined ? {} : { accessTokenExpiresAt }),
+        ...(typeof tokens.refresh_token === "string" && tokens.refresh_token !== "" ? { refreshToken: tokens.refresh_token } : {}),
+        ...(typeof tokens.id_token === "string" && tokens.id_token !== "" ? { idToken: tokens.id_token } : {}),
+        ...(typeof lasts === "number" && Number.isFinite(lasts) && lasts > 0 ? { idpSessionExpiresAt: now() + Math.floor(lasts) * 1000 } : {}),
+      };
+    },
+
+    async endSessionUrl(idToken: string | undefined): Promise<string | undefined> {
+      const { config } = await provider();
+      if (!config.serverMetadata().end_session_endpoint) return undefined;
+      return client.buildEndSessionUrl(config, {
+        client_id: settings.clientId,
+        post_logout_redirect_uri: `${settings.publicOrigin}/`,
+        ...(idToken === undefined || idToken === "" ? {} : { id_token_hint: idToken }),
+      }).href;
+    },
+
+    async verifyLogoutToken(raw: string): Promise<LogoutClaims> {
+      if (typeof raw !== "string" || raw === "" || raw.length > MAX_LOGOUT_TOKEN_CHARS) throw new LogoutTokenRefused("malformed");
+      // The algorithm is read from the header first, so that `none`, a shared-secret algorithm and anything else but the realm's
+      // own is a refused signature however the library would go on to read it.
+      let algorithm: unknown;
+      try {
+        algorithm = decodeProtectedHeader(raw).alg;
+      } catch {
+        throw new LogoutTokenRefused("malformed");
+      }
+      if (!ID_TOKEN_ALGORITHMS.includes(algorithm as string)) throw new LogoutTokenRefused("signature");
+
+      const { config, jwks } = await provider();
+      let payload;
+      try {
+        ({ payload } = await jwtVerify(raw, jwks, {
+          issuer: config.serverMetadata().issuer,
+          audience: settings.clientId,
+          algorithms: ID_TOKEN_ALGORITHMS,
+          clockTolerance: CLOCK_TOLERANCE_SECONDS,
+          currentDate: new Date(now()),
+        }));
+      } catch (error) {
+        if (keySetFailed(error) || isUnreachable(error)) throw new IdentityProviderUnavailable("the identity provider's key set could not be had");
+        throw new LogoutTokenRefused(logoutRefusalFor(error));
+      }
+      // The event: an object under the one key the specification names. An ID token, an access token or a refresh token has none.
+      const events = payload["events"];
+      const event = typeof events === "object" && events !== null && !Array.isArray(events) ? (events as Record<string, unknown>)[BACKCHANNEL_LOGOUT_EVENT] : undefined;
+      if (typeof event !== "object" || event === null || Array.isArray(event)) throw new LogoutTokenRefused("event");
+      // A logout token never carries a nonce: one that does is an ID token in another shape.
+      if ("nonce" in payload) throw new LogoutTokenRefused("nonce");
+      const { sub, sid } = payload;
+      if ((sub !== undefined && typeof sub !== "string") || (sid !== undefined && typeof sid !== "string")) throw new LogoutTokenRefused("subject");
+      if ((sub === undefined || sub === "") && (sid === undefined || sid === "")) throw new LogoutTokenRefused("subject");
+      // Short-lived: issued within the last two minutes, and not in the future (the library checks `exp` when there is one).
+      const issued = payload.iat;
+      const current = Math.floor(now() / 1000);
+      if (typeof issued !== "number" || !Number.isFinite(issued)) throw new LogoutTokenRefused("age");
+      if (current - issued > LOGOUT_TOKEN_MAX_AGE_SECONDS || issued - current > CLOCK_TOLERANCE_SECONDS) throw new LogoutTokenRefused("age");
+      const jti = payload.jti;
+      if (typeof jti !== "string" || jti === "") throw new LogoutTokenRefused("jti");
+      return {
+        jti,
+        ...(sub === undefined || sub === "" ? {} : { sub }),
+        ...(sid === undefined || sid === "" ? {} : { sid }),
+      };
+    },
   };
+
+  /** When the access token ends, by the provider's `expires_in` and failing that by the token's own `exp`. */
+  function accessExpiry(tokens: { access_token: string; expires_in?: unknown }): number | undefined {
+    const life = tokens.expires_in;
+    if (typeof life === "number" && Number.isFinite(life) && life > 0) return now() + Math.floor(life) * 1000;
+    return jwtExpiry(tokens.access_token);
+  }
 }

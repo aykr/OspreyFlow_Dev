@@ -7,10 +7,14 @@ ADVICE ONLY. The Mac's merge run (merge_slice.py merge) stays the only gate to m
                                       is built as merge_slice.py builds it and checked in a detached job; prints
                                       {"state": "started", "id": <16 hex>} and returns at once
     (forced command)  result <id>     the job's result, or {"state": "running", "seconds": n}
+    (forced command)  ask ports|ollama|shield
+                                      read-only questions (the owner, 24 November): which ports in the ephemeral
+                                      range other accounts listen on, by uid and how long seen; whether Ollama has a
+                                      model loaded; whether the shield would hold now. Nothing is changed
     runner.py _job <id>               the job itself, as systemd-run starts it (never reachable over SSH: the
                                       forced command takes no arguments and reads only SSH_ORIGINAL_COMMAND)
 
-SSH_ORIGINAL_COMMAND is read once and matched whole against the two shapes in protocol.py; no part of it reaches a
+SSH_ORIGINAL_COMMAND is read once and matched whole against the shapes in protocol.py; no part of it reaches a
 shell (no subprocess here is started through a shell). It reads no other variable: no test switch, no work folder. Anything else is refused and logged in refusals.log by its reason
 class and its length, never its text.
 
@@ -62,9 +66,12 @@ SUMMARIES = HERE.parent / "summaries"
 #: once the model is unloaded. A starting job waits for that, at most SUMMARY_WAIT_SECONDS (two asks and the unload).
 MODEL_LOCK = HANDOFF / "model.lock"
 SUMMARY_WAIT_SECONDS = 15 * 60
-#: A breach is checked again for this long before the run is refused: a helper Ollama is closing may still listen
-#: for a moment after it says the model is gone. Nothing has run while it waits.
-SHIELD_SETTLE_SECONDS = 30
+#: The owner, 24 November: when the only thing the shield check finds is another account's listener, it is checked
+#: again every SHIELD_RECHECK_SECONDS for up to SHIELD_WAIT_SECONDS, and the run goes ahead if it has gone; the note
+#: says so. (015's 30-second settle, for a helper Ollama is closing, is the first of these checks.) Nothing has run
+#: while it waits.
+SHIELD_WAIT_SECONDS = 5 * 60
+SHIELD_RECHECK_SECONDS = 30
 _HELD = []  # the job's own hold on MODEL_LOCK, kept open until the job's process ends
 KEEP_JOBS = 40  # 009: a result is kept until the merge has asked for it by id, for several slices at once
 
@@ -379,13 +386,18 @@ class Stop(Exception):
 
 #: Where the kernel lists listening sockets, with each one's owner (Linux).
 PROC = Path("/proc/net")
+#: The breaches the last shield check found, as "uid:port", each with when a check first found it (seconds since the
+#: epoch). Kept across jobs, so a refusal says how long a listener has been there. A check keeps only what it finds
+#: itself: one not found again is dropped, and found later counts from then.
+SHIELD_SEEN = WORK / "shield-seen.json"
 #: The resolvers the shield allows DNS to: install.sh fills the shield's DNS rule from this file's nameserver lines.
 RESOLV = Path("/etc/resolv.conf")
 
 
 def foreign_listeners(own_uid: int) -> list:
-    """Every TCP socket another account is listening on, as (address, port), from /proc/net/tcp and tcp6. The
-    address is only connected to, never written anywhere (results carry ports alone)."""
+    """Every TCP socket another account is listening on, as (family, address, port, bound address, uid), from
+    /proc/net/tcp and tcp6; the uid is the socket's owner as the kernel lists it. The address is only connected to,
+    never written anywhere (results carry ports and uids alone). Nothing is read of any process."""
     found = []
     for name, family in (("tcp", socket.AF_INET), ("tcp6", socket.AF_INET6)):
         f = PROC / name
@@ -403,7 +415,7 @@ def foreign_listeners(own_uid: int) -> list:
             else:
                 bound = socket.inet_ntop(family, b"".join(raw[i:i + 4][::-1] for i in range(0, 16, 4)))
                 addr = "::1" if bound == "::" else bound
-            found.append((family, addr, int(hexport, 16), bound))
+            found.append((family, addr, int(hexport, 16), bound, int(parts[7])))
     return found
 
 
@@ -472,29 +484,170 @@ def wait_for_the_summary(log: Path) -> None:
             fh.write("\n$ (waited %d s for the summary to unload its model)\n" % waited)
 
 
-def settled_breaches() -> list:
-    """shield_breaches(), checked again for SHIELD_SETTLE_SECONDS while it finds any: only a breach that stays counts."""
-    end = time.monotonic() + SHIELD_SETTLE_SECONDS
-    while True:
+def in_words(seconds: float) -> str:
+    """A wait in plain words: 30 s, 4 min 30 s."""
+    s = int(round(seconds))
+    return "%d s" % s if s < 60 else "%d min %d s" % (s // 60, s % 60) if s % 60 else "%d min" % (s // 60)
+
+
+def shield_after_waiting() -> tuple:
+    """(the breaches that stayed, what the wait was in words, '' when there was none). When every breach is another
+    account's listener, it is checked again every SHIELD_RECHECK_SECONDS for up to SHIELD_WAIT_SECONDS, and gone
+    means the run goes ahead. Anything else the check finds (the sockets cannot be read) refuses at once."""
+    t0 = time.monotonic()
+    found = shield_breaches()
+    if not found or not all(b.startswith("port ") for b in found):
+        return found, ""
+    first = "; ".join(b.split(";")[0] + ")" for b in found)  # port and uid: the full words are in the refusal
+    while time.monotonic() - t0 < SHIELD_WAIT_SECONDS:
+        time.sleep(max(0.0, min(SHIELD_RECHECK_SECONDS, SHIELD_WAIT_SECONDS - (time.monotonic() - t0))))
         found = shield_breaches()
-        if not found or time.monotonic() >= end:
-            return found
-        time.sleep(3)
+        if not found or not all(b.startswith("port ") for b in found):
+            break
+    waited = in_words(time.monotonic() - t0)
+    if not found:
+        return [], ("the shield check found another account's listener (%s); checked again every %s, it had gone "
+                    "after %s, and the run went ahead" % (first, in_words(SHIELD_RECHECK_SECONDS), waited))
+    return found, "checked again every %s for %s, it stayed" % (in_words(SHIELD_RECHECK_SECONDS), waited)
 
 
-def shield_breaches() -> list:
+def remember_seen(found: list) -> dict:
+    """{(uid, port): when a check first found it} for this check's breaches, kept in SHIELD_SEEN, under its own lock
+    (three jobs may check at once). Without the data folder, or if it cannot be written, each counts from now."""
+    t = time.time()
+    try:
+        with SHIELD_SEEN.with_suffix(".lock").open("a") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            try:
+                old = json.loads(SHIELD_SEEN.read_text())
+            except (OSError, ValueError):
+                old = {}
+            if not isinstance(old, dict):
+                old = {}
+            kept = {}
+            for uid, port in found:
+                v = old.get("%d:%d" % (uid, port))
+                kept["%d:%d" % (uid, port)] = v if isinstance(v, (int, float)) and 0 < v <= t else t
+            part = SHIELD_SEEN.with_name("%s.%d.part" % (SHIELD_SEEN.name, os.getpid()))
+            part.write_text(json.dumps(kept, sort_keys=True))
+            os.replace(str(part), str(SHIELD_SEEN))
+    except OSError:
+        return {k: t for k in found}
+    return {(uid, port): kept["%d:%d" % (uid, port)] for uid, port in found}
+
+
+def recorded_since(found: list) -> dict:
+    """The record's {(uid, port): first found} for `found`, read only (the forced command's questions write nothing);
+    None for one no job's check has found."""
+    try:
+        old = json.loads(SHIELD_SEEN.read_text())
+    except (OSError, ValueError):
+        old = {}
+    out = {}
+    for uid, port in found:
+        v = old.get("%d:%d" % (uid, port)) if isinstance(old, dict) else None
+        out[(uid, port)] = v if isinstance(v, (int, float)) and v > 0 else None
+    return out
+
+
+def seen_words(since, now_: float) -> str:
+    if since is None:
+        return "not yet found by a job's shield check"
+    return "found by the runner's checks since %s, %s" % (time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime(since)),
+                                                           how_long(now_ - since))
+
+
+def how_long(seconds: float) -> str:
+    """A span in plain words: under a minute, 7 min, 6 h 48 min, 2 d 3 h."""
+    m = int(seconds) // 60
+    if m < 1:
+        return "under a minute"
+    if m < 60:
+        return "%d min" % m
+    if m < 48 * 60:
+        return "%d h %d min" % (m // 60, m % 60)
+    return "%d d %d h" % (m // (24 * 60), m // 60 % 24)
+
+
+def shield_breaches(record: bool = True) -> list:
     """The ports another account listens on that this account can reach: [] while the shield holds. Run inside every
-    job before anything else; a breach refuses the run (the owner's ruling: no code under test reaches the demo)."""
+    job before anything else; a breach refuses the run (the owner's ruling: no code under test reaches the demo).
+    Each says the port, its owner's uid, and since when the runner's checks have found it there. record=False (the
+    forced command's `ask shield`) reads the record without writing it."""
     if not (PROC / "tcp").exists():
         return ["the listening sockets cannot be read (%s): the shield cannot be checked" % PROC]
-    reached = []
+    reached = set()
     resolvers = allowed_resolvers()
-    for family, addr, port, bound in foreign_listeners(os.getuid()):
+    for family, addr, port, bound, uid in foreign_listeners(os.getuid()):
         if is_allowed_resolver(family, bound, port, resolvers):
             continue  # the shield lets DNS reach it by design (its DNS rule): not a breach
         if reachable(family, addr, port):
-            reached.append("port %d" % port)
-    return sorted(set(reached))
+            reached.add((uid, port))
+    found = sorted(reached, key=lambda k: (k[1], k[0]))
+    since = remember_seen(found) if record else recorded_since(found)
+    t = time.time()
+    return ["port %d (uid %d%s; %s)" % (port, uid, ", root" if uid == 0 else "", seen_words(since[(uid, port)], t))
+            for uid, port in found]
+
+
+#: The owner, 24 November: three read-only questions for the conductor, over the forced command. Each reads the
+#: kernel's socket lists, the system's port range and the runner's own record; none writes, stops, unloads, kills or
+#: installs anything, and none starts a job.
+EPHEMERAL = Path("/proc/sys/net/ipv4/ip_local_port_range")
+OLLAMA_PORT = 11434
+LOOPBACK = ("127.0.0.1", "::1")
+
+
+def ephemeral_range():
+    """(low, high) of the system's ephemeral ports, the range the job's shield leaves open on loopback; None unread."""
+    try:
+        lo, hi = (int(x) for x in EPHEMERAL.read_text().split())
+        return lo, hi
+    except (OSError, ValueError):
+        return None
+
+
+def ask(what: str) -> dict:
+    """`ask ports`, `ask ollama` or `ask shield`: the answer, ports and uids only (never an address or a process)."""
+    me, t = os.getuid(), time.time()
+    if not (PROC / "tcp").exists():
+        return {"state": "done", "ask": what, "words": "the listening sockets cannot be read (%s)" % PROC}
+    if what == "shield":
+        found = shield_breaches(record=False)
+        holds = not found
+        return {"state": "done", "ask": "shield", "holds": holds, "breaches": found,
+                "words": "the shield holds now: this account reaches no port another account listens on" if holds
+                else "the shield would not hold now: %s" % "; ".join(found)}
+    listeners = sorted({(port, uid, bound) for _, _, port, bound, uid in foreign_listeners(me)})
+    rng = ephemeral_range()
+    if what == "ports":
+        if rng is None:
+            return {"state": "done", "ask": "ports", "words": "the ephemeral range cannot be read (%s)" % EPHEMERAL}
+        mine = sorted({(uid, port) for port, uid, _ in listeners if rng[0] <= port <= rng[1]}, key=lambda k: (k[1], k))
+        since = recorded_since(mine)
+        rows = [{"port": port, "uid": uid, "seen": seen_words(since[(uid, port)], t)} for uid, port in mine]
+        return {"state": "done", "ask": "ports", "range": "%d-%d" % rng, "listeners": rows,
+                "words": ("no other account listens on a port in the ephemeral range %d-%d" % rng) if not rows else
+                "; ".join("port %d (uid %d%s; %s)" % (r["port"], r["uid"], ", root" if r["uid"] == 0 else "",
+                                                       r["seen"]) for r in rows)}
+    owners = sorted({uid for port, uid, _ in listeners if port == OLLAMA_PORT})
+    basis = ("read from the kernel's socket list, with no connection to Ollama (the shield refuses this account its "
+             "port): while a model is loaded, Ollama runs a helper that listens on a loopback port of its own, as "
+             "llama-server did on port 34041 on 23 November")
+    if not owners:
+        return {"state": "done", "ask": "ollama", "listening": False, "model_loaded": False, "basis": basis,
+                "words": "nothing listens on port %d: Ollama is not running here" % OLLAMA_PORT}
+    helpers = sorted({port for port, uid, bound in listeners if uid in owners and port != OLLAMA_PORT
+                      and bound in LOOPBACK and (rng is None or rng[0] <= port <= rng[1])})
+    who = ", ".join("uid %d" % u for u in owners)
+    words = ("Ollama listens on port %d (%s), and a helper of its account listens on port %s: a model is loaded"
+             % (OLLAMA_PORT, who, ", ".join(map(str, helpers))) if helpers else
+             "Ollama listens on port %d (%s), and no helper of its account listens: no model is loaded"
+             % (OLLAMA_PORT, who))
+    if 0 in owners:
+        words += " (Ollama runs as root here, so another root service on a loopback port would look the same)"
+    return {"state": "done", "ask": "ollama", "listening": True, "uid": owners, "model_loaded": bool(helpers),
+            "helper_ports": helpers, "basis": basis, "words": words}
 
 
 def ci_value(tree: Path, pattern: str, what: str) -> str:
@@ -880,10 +1033,15 @@ def run_job(jid: str) -> int:
               "client_names": "not run (no client-name list on this machine)"}
     try:
         wait_for_the_summary(log)
-        breaches = settled_breaches()
+        breaches, waited = shield_after_waiting()
+        if waited and not breaches:
+            result["shield"] = waited
+            with log.open("a") as fh:
+                fh.write("\n$ (%s)\n" % waited)
         if breaches:
             raise Stop("error", "the shield does not hold: this account reached %d port(s) another account listens on "
-                       "(%s); nothing was run" % (len(breaches), ", ".join(breaches[:10])))
+                       "(%s)%s; nothing was run" % (len(breaches), "; ".join(breaches[:10]),
+                                                    "; " + waited if waited else ""))
         if docker_reachable():
             raise Stop("error", "Docker's socket answers this account (%s): nothing was run" % ", ".join(docker_reachable()))
         make_tree(tree, meta["main"])
@@ -1018,6 +1176,8 @@ def main(argv: list) -> int:
         return do_run(received, arg.split())
     if verb == "summary":
         return do_summary(arg)
+    if verb == "ask":
+        return say(ask(arg), 0)
     return do_result(arg)
 
 

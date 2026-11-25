@@ -286,11 +286,19 @@ functions:
     scenario: "A13, A14, A15"
     route: ""
     status: "planned"
-  # The plan has not yet named a build for this row. C8, C11 and C12 (spec/08) are proposed, not owner-ruled.
-  - id: reports
-    name: "Reports: Reports and Figures views, trends, packs, published, data feeds, embedded dashboards, alert monitoring board"
+  # Split from the old `reports` row by the owner's ruling of 24 November 2026: the figures are slice GR3's. C8, C11 and C12 (spec/08) are proposed, not owner-ruled.
+  - id: reports-figures
+    name: "Reports: Reports and Figures views, trends, packs, published and data feeds"
     where: "apps/workspace/src/reports/ (includes reportsTestKit.ts 145)"
-    slice: "R7"
+    slice: "GR3"
+    scenario: ""
+    route: ""
+    status: "planned"
+  # The other half of the old `reports` row (the owner, 24 November 2026): the dashboards are later, and no slice has them yet.
+  - id: reports-dashboards
+    name: "Reports: embedded dashboards and the alert monitoring board"
+    where: "apps/workspace/src/reports/ (includes reportsTestKit.ts 145)"
+    slice: "none named"
     scenario: ""
     route: ""
     status: "planned"
@@ -318,13 +326,23 @@ functions:
     scenario: ""
     route: ""
     status: "planned"
-  # The plan has not yet named a build for this row; the inventory's own slice is kept.
-  - id: top-bar-home-help
-    name: "Top bar, context banner, Home, Welcome, Help"
-    where: "apps/workspace/src/shell/, apps/workspace/src/home/, apps/workspace/src/welcome/, apps/workspace/src/help/"
+  # Split from the old `top-bar-home-help` row by the owner's ruling of 24 November 2026: Help is slice GR2a's (the next row), and
+  # the top bar stays R1. The plan has not yet named a build for the rest of this row; the inventory's own slice is kept.
+  - id: top-bar-home
+    name: "Top bar, context banner, Home, Welcome"
+    where: "apps/workspace/src/shell/, apps/workspace/src/home/, apps/workspace/src/welcome/"
     slice: "R1 (header), R7"
     scenario: ""
     route: ""
+    status: "planned"
+  # The first page of the GOV.UK tree (slice GR2a). It has no React-first proof: the React page has no scenario, so scenario HP of
+  # spec/08 is written first and `apps/pages/test/govuk/help.test.ts` is the proof. No Default twin yet (the owner, 24 November 2026).
+  - id: help
+    name: "Help: the roles, teams and Authors, and what each right lets a person do"
+    where: "apps/workspace/src/help/RolesHelpPage.tsx, packages/glass-shared/src/help/roles.ts; GOV.UK page apps/pages/server/help.ts"
+    slice: "GR2a"
+    scenario: "HP1, HP2, HP3, HP4, HP5, HP6, HP7, HP8, HP9, HP10"
+    route: "/help"
     status: "planned"
   # The owner rules on this row line by line. The light/dark switch is a parity exception (a part of the row); the rest of the row stays a function.
   - id: govuk-frame

@@ -86,8 +86,17 @@ export interface OidcSettings {
   publicOrigin: string;
 }
 
+/**
+ * The trees the service can serve (ADR-152 decisions 6 and 7): one is chosen for the whole deployment, never per viewer.
+ * `default` is the Default theme's tree and the one a service with no setting serves; `govuk` is the GOV.UK tree's.
+ */
+export const PAGES_TREES = ["default", "govuk"] as const;
+export type PagesTree = (typeof PAGES_TREES)[number];
+
 export interface Config {
   port: number;
+  /** Which tree's templates and pages the service serves, from `OSPREY_PAGES_TREE`: the one place it is read. */
+  tree: PagesTree;
   /** Signs the session cookie. Never logged, and never in an error message; printed or turned into JSON it is "[redacted]". */
   sessionSecret: Secret;
   valkey: ValkeySettings;
@@ -271,8 +280,23 @@ function oidcSettings(env: NodeJS.ProcessEnv): OidcSettings | undefined {
   return { issuer: rawIssuer as string, clientId, clientSecret: new Secret(rawSecret as string), publicOrigin: origin.origin };
 }
 
+/**
+ * The tree, from `OSPREY_PAGES_TREE`: `default` or `govuk`, and `default` when the setting is not there. Any other value is
+ * refused in words, empty included (a setting that is there and says nothing is a renderer's mistake, not a choice), so that
+ * a typing slip never quietly serves the other tree. The one place the setting is read: everything else is handed `config.tree`.
+ */
+function treeSetting(env: NodeJS.ProcessEnv): PagesTree {
+  const raw = env["OSPREY_PAGES_TREE"];
+  if (raw === undefined) return "default";
+  const found = PAGES_TREES.find((tree) => tree === raw);
+  if (found !== undefined) return found;
+  const said = raw === "" ? "empty" : JSON.stringify(raw.length > 40 ? `${raw.slice(0, 40)}…` : raw);
+  throw new Error(`OSPREY_PAGES_TREE must be ${PAGES_TREES.join(" or ")} (or left out, which means default), not ${said}`);
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const secret = sessionSecret(env);
+  const tree = treeSetting(env);
   const rawDb = env["OSPREY_PAGES_VALKEY_DB"];
   const db = rawDb === undefined ? DEFAULT_PAGES_DB : wholeNumber("OSPREY_PAGES_VALKEY_DB", rawDb, MAX_DB);
   const conduitDb = Number(env["VALKEY_DB"] ?? "0") || 0;
@@ -288,6 +312,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const oidc = oidcSettings(env);
   return {
     sessionSecret: secret,
+    tree,
     port: wholeNumber("OSPREY_PAGES_PORT", env["OSPREY_PAGES_PORT"] ?? "8090", 65535),
     valkey: {
       host: env["VALKEY_HOST"] ?? "localhost",

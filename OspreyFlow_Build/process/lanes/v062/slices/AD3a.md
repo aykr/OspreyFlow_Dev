@@ -33,3 +33,8 @@ The two new tests; the existing `apps/pages` vitest files; `tests/glass_trees/te
 ## Out of scope
 
 The invite form and every write (a later slice); any other Admin section; any Conduit change; `apps/workspace`; the protected files. **A finding that names an access rule, a key, a credential or a security rule is stopped and reported, never accepted narrower.**
+
+## Round 4 (the owner's send-back line, 25 November 2026: a test your branch leaves red)
+
+**Your tip fails `OspreyFlow_Build/tests/harness/test_pages_setting.py::test_the_real_govuk_tree_routes_help_to_pages_and_not_the_home_page`** (about line 2352): "Extra items in the left set: '/admin/people'" (the conductor ran it on `7a3c712`). The test pins the paths the front proxy routes to the page service on the govuk brand, for `small` and `cluster`, from the real `tree-govuk/routes.yaml` through `harness/pages_service.py` `route_paths()`. **Add `/admin/people` there, with its docstring's words, and run that file before you stop** (it is not in your frozen checks; the merge's full gate runs it). When you take main in, keep every other part's path (GR3a adds `/reports`).
+**Also close the round-3 verifier's one gap if it is small:** the fixture Conduit lets through a `POST /v1/admin/people` body the real route refuses (`InviteInput` also requires `clearance` and `org_unit`); make the fixture refuse it as the real route does (rule 15). Nothing else.

@@ -549,6 +549,10 @@ export type Phase = "alpha" | "beta" | "live" | "none";
  */
 export type BannerText = string | null;
 /**
+ * Default: false. The GOV.UK identity switch (ADR-152 decision 14): whether, under `brand: govuk`, the page shows the crown, the GOV.UK logotype and the GOV.UK typeface (GDS Transport, which is licensed for services on GOV.UK domains only). Off, the header carries the organisation's name and the type is the fallback stack; a build holds no GDS Transport file. true or false, nothing else. It means nothing under `ospreyflow`. The crown still shows only on a gov.uk address (ADR-132 Amendment 7).
+ */
+export type GovukIdentity = boolean;
+/**
  * Default: false. Whether this deployment runs the page service, the server-rendered pages. The setting exists and is off; it is not for use yet, and nothing is switched on by it for a deployment you run. true or false, nothing else.
  */
 export type Enabled = boolean;
@@ -1081,6 +1085,7 @@ export interface AppearanceConfig {
   organisation?: Organisation;
   phase?: Phase;
   banner_text?: BannerText;
+  govuk_identity?: GovukIdentity;
 }
 /**
  * Whether the deployment runs the page service (ADR-152 Amendment 3, 21 November 2026): the
