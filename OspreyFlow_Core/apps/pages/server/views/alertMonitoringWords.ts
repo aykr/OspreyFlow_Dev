@@ -145,6 +145,13 @@ export const ALERT_MONITORING_WORDS = {
       desc: "One bar for each length of time an alert took to close; the longest bar is the commonest.",
     },
   },
+  open: {
+    id: "am-open-alerts",
+    heading: "Alerts",
+    says: (n: number): string => `${plural(n, "alert")} open`,
+    caption: "Open alerts by source and age",
+    columns: ["Source", "Under a day", "1 to 7 days", "7 to 30 days", "Over 30 days"],
+  },
   hotlist: { id: "am-hotlist-matches", heading: "Hotlist matches", says: (n: number): string => `${plural(n, "match", "matches")} in the period` },
   team: {
     id: "am-team-view",
@@ -182,6 +189,17 @@ interface Count {
   count: number;
 }
 
+/** The four age bands of `open_by_source`, in the order of the table's columns (`AgeBand` in `schemas/domain.py`). */
+const AGE_BANDS = ["under a day", "1 to 7 days", "7 to 30 days", "over 30 days"] as const;
+type Age = (typeof AGE_BANDS)[number];
+
+interface OpenCount {
+  label: string;
+  typology: string;
+  age: Age;
+  count: number;
+}
+
 interface Team {
   label: string;
   typology: string;
@@ -202,6 +220,8 @@ export interface Report {
   closed: Count[];
   took: { label: string; value: number }[];
   hotlists: number;
+  /** The alerts still open, by rule group and age band, as the route counted them for this reader (whenever they were raised). */
+  open: OpenCount[];
   team: Team[];
   held: { held: number; released: number; rejected: number } | null;
 }
@@ -229,6 +249,11 @@ const weekCount = (item: unknown): Count | undefined =>
 
 const optionalCount = (value: unknown): number | undefined => (value === undefined || value === null ? 0 : isCount(value) ? value : undefined);
 
+const openCount = (item: unknown): OpenCount | undefined =>
+  isRecord(item) && isText(item["label"]) && isCount(item["count"]) && (AGE_BANDS as readonly unknown[]).includes(item["age"]) && (item["typology"] === undefined || item["typology"] === null || isText(item["typology"]))
+    ? { label: item["label"], typology: isText(item["typology"]) ? item["typology"] : "", age: item["age"] as Age, count: item["count"] }
+    : undefined;
+
 function teamRow(item: unknown): Team | undefined {
   if (!isRecord(item) || !isText(item["label"])) return undefined;
   if (item["typology"] !== undefined && item["typology"] !== null && !isText(item["typology"])) return undefined;
@@ -251,7 +276,8 @@ export function readReport(body: unknown, requested: number): Report | undefined
   const hotlists = listOf(monitoring["hotlist_matches"], weekCount);
   const took = listOf(monitoring["time_to_close"], (item) => (isRecord(item) && isText(item["label"]) && isCount(item["value"]) ? { label: item["label"], value: item["value"] } : undefined));
   const team = listOf(monitoring["team"], teamRow);
-  if (!raised || !closed || !hotlists || !took || !team) return undefined;
+  const open = listOf(monitoring["open_by_source"], openCount);
+  if (!raised || !closed || !hotlists || !took || !team || !open) return undefined;
   let held: Report["held"] = null;
   const sent = body["held"];
   if (sent !== undefined && sent !== null) {
@@ -267,6 +293,7 @@ export function readReport(body: unknown, requested: number): Report | undefined
     closed,
     took,
     hotlists: hotlists.reduce((n, row) => n + row.count, 0),
+    open,
     team,
     held,
   };
@@ -412,7 +439,25 @@ export function monitoringView(report: Report, caseId: string): MonitoringView {
 
   const time = report.took.map((row) => ({ label: row.label.charAt(0).toUpperCase() + row.label.slice(1), count: row.value }));
 
+  // The open alerts, as the board's *Alerts* panel draws them: the count in words and a table of source by age, groups in the order the
+  // route sent them, a cell the sum of the rows the route sent for it. Drawn whatever the period holds (the route counts them over every
+  // alert the reader may see, `_panel_figures`); with none open, the count alone, as the board does.
+  const sources = [...new Map(report.open.map((c) => [`${c.label}:${c.typology}`, c])).values()];
+  const cell = (key: string, age: Age): number => report.open.filter((c) => `${c.label}:${c.typology}` === key && c.age === age).reduce((n, c) => n + c.count, 0);
+  const openRows = sources.map((c): TableRow => ({ head: groupName(c.label, c.typology), cells: AGE_BANDS.map((age) => formatNumber(cell(`${c.label}:${c.typology}`, age))) }));
+  const openTotal = report.open.reduce((n, c) => n + c.count, 0);
+
   const figures: Figure[] = [
+    {
+      id: words.open.id,
+      heading: words.open.heading,
+      caption: words.open.caption,
+      columns: words.open.columns,
+      rows: openRows,
+      chart: null,
+      empty: null,
+      says: words.open.says(openTotal),
+    },
     ...(nothing === null ? [figureOf(words.bars.week, week, words.noAlerts), figureOf(words.bars.rule, byRule, words.noAlerts)] : []),
     figureOf(words.bars.outcome, outcome, words.noClosed),
     figureOf(words.bars.time, time, words.noClosed),

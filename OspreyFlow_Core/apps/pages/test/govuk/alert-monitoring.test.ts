@@ -555,7 +555,7 @@ describe("the alert monitoring figures (the govuk tree)", () => {
       "typology:structuring:under a day:1",
     ]);
     const html = (await v.get(`/reports?case=${CASE}&weeks=52`)).text;
-    expect(words(html)).toContain("4 alerts open");
+    expect(words(html)).toContain("5 alerts open");
     expect(figuresOnPage(html)["Open alerts by source and age"]).toEqual([
       ["Monitors", "0", "0", "1", "2"],
       ["Structuring", "1", "1", "0", "0"],

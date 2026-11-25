@@ -546,6 +546,8 @@ def test_the_period_bounds_what_was_raised_and_not_what_was_closed_or_waiting(mo
         team = {(t["label"], t["typology"]): t for t in monitoring["team"]}
         assert team[("typology", "structuring")]["unassigned"] == 1, "an open alert raised long ago is in the team view"
         assert team[("typology", "structuring")]["closed"] == 1
+        # The open alerts are counted over the same rows: the one still open, raised a year ago, is in the period's figures all the same.
+        assert monitoring["open_by_source"] == [{"label": "typology", "typology": "structuring", "age": "over 30 days", "count": 1}]
     finally:
         app.dependency_overrides.clear()
 
