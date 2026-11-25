@@ -196,6 +196,7 @@ interface Team {
 export interface Report {
   weeks: number;
   asOf: string | undefined;
+  /** The alerts raised in the period, of every kind: the sum of the rows of `raised_by_rule`, never the route's `alerts_total` (typology alerts alone). */
   total: number;
   raised: Count[];
   closed: Count[];
@@ -237,7 +238,11 @@ function teamRow(item: unknown): Team | undefined {
   return { label: item["label"], typology: isText(item["typology"]) ? item["typology"] : "", unassigned: unassigned as number, mine: mine as number, older: older as number, closed: closed as number, notOfInterest: notOfInterest as number };
 }
 
-/** The route's figures, or `undefined` when the body is anything but them: a partial figure is never made from what could be read. */
+/**
+ * The route's figures, or `undefined` when the body is anything but them: a partial figure is never made from what could be read.
+ * `alerts_total` is checked and not drawn: the route counts typology alerts alone in it ("as they always have", `schemas/domain.py`), and
+ * the page's count of alerts raised is that of `monitoring.raised_by_rule`, which counts every kind, as the React board's is.
+ */
 export function readReport(body: unknown, requested: number): Report | undefined {
   if (!isRecord(body) || !isCount(body["alerts_total"]) || !isRecord(body["monitoring"])) return undefined;
   const monitoring = body["monitoring"];
@@ -257,7 +262,7 @@ export function readReport(body: unknown, requested: number): Report | undefined
   return {
     weeks,
     asOf: isText(body["as_of"]) ? body["as_of"] : undefined,
-    total: body["alerts_total"],
+    total: raised.reduce((n, row) => n + row.count, 0),
     raised,
     closed,
     took,
