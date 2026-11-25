@@ -63,6 +63,8 @@ SECTION = "## Scenario TS"
 ID = re.compile(r"^TS\d+$")
 TITLE = re.compile(r"""\b(?:it|test)\(\s*(?:"|')(TS\d+): """)
 PAGE_TEST_NAME = "pack-trends.test.ts"
+#: I21's test, under the name the owner's approved diff gives it in the decision log (25 November 2026, answer 3): "board" stays out of this page.
+I21_TEST = "test_trends_shown_together_show_a_trend_its_viewer_can_no_longer_read_as_withheld_not_as_missing_data"
 PATH = "/packs/trends"
 ROW = "reports-figures"
 EXPECTED_IDS = [f"TS{n}" for n in range(1, 16)]
@@ -194,6 +196,10 @@ def scenario_problems(data: dict[str, Any]) -> list[str]:
         for row_id in ids:
             if row_id not in rows:
                 found.append(f"the owner's case {case!r} has no scenario {row_id}")
+    if f'it("{I21_TEST}"' not in data["page_test"]:
+        found.append(f"{PAGE_TEST_NAME} has no case named {I21_TEST}, the name the decision log gives I21's test")
+    if I21_TEST not in section:
+        found.append(f"the scenario does not name I21's test, {I21_TEST}")
     named_in_tests = set(TITLE.findall(data["page_test"]))
     for row_id in sorted(set(rows) - named_in_tests):
         found.append(f"{row_id} names {PAGE_TEST_NAME} but no case of it is titled {row_id}")
@@ -216,6 +222,9 @@ def prose_problems(data: dict[str, Any]) -> list[str]:
         ("the stored order", "in the pack's stored order"),
         ("the refusal", "a 404 with the very same page as a path nothing serves"),
         ("I21", "never draws an empty chart for it"),
+        ("the address the owner kept", "the owner's answer of 25 November 2026 keeps this address"),
+        ("the one shared sentence, never a placeholder", "never a placeholder in a withheld item's place"),
+        ("the Editor reading confirmed", "the owner confirmed this reading on 25 November 2026"),
         ("read-only", "read-only"),
         ("the drawing board kept apart", "no code, route or word of it reuses the drawing board's names"),
         ("the filtering rule", "filters nothing after the answer comes"),
@@ -457,6 +466,11 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
     ("the strict reading left out", _in_section("**Reads strictly.**", "**Reads.**"), prose_problems, "reads strictly"),
     ("scripts off left out", _in_section("**Works with scripts off.**", "**Works.**"), prose_problems, "scripts off"),
     ("I21 left out", _in_section("never draws an empty chart for it", "draws it"), prose_problems, "I21"),
+    ("the address left waiting on the owner", _in_section("the owner's answer of 25 November 2026 keeps this address", "the address waits on his word"), prose_problems, "address the owner kept"),
+    ("a placeholder in a withheld item's place", _in_section("never a placeholder in a withheld item's place", "a placeholder in its place"), prose_problems, "placeholder"),
+    ("the Editor reading left unconfirmed", _in_section("the owner confirmed this reading on 25 November 2026", "the builder's reading"), prose_problems, "Editor reading"),
+    ("I21's test renamed in the page test", _replace("page_test", f'it("{I21_TEST}"', 'it("test_a_board_shows_a_trend"'), scenario_problems, "has no case named"),
+    ("I21's test not named in the scenario", _in_section(I21_TEST, "test_the_withheld_one"), scenario_problems, "does not name I21's test"),
     ("the snapshots ruling left out", _in_section("the pack's own snapshots", "the trends' live figures"), prose_problems, "snapshots"),
     ("words a source does not hold", _in_section('`services/api/packs.py` "ORDER BY position"', '`services/api/packs.py` "ORDER BY title"'), citation_problems, "does not hold"),
     ("a field left out that the type no longer has", _field_gone("PackItem", "added_by"), census_problems, "no field added_by"),
