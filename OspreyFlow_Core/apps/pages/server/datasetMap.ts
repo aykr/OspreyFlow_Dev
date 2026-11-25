@@ -20,7 +20,7 @@
  * The order is "runs after" links, stored and versioned by the Conduit. The "Runs after" column is drawn only when an order is stored
  * (never an empty column); the form carries the number of the order the page read (`expected_version`, 0 when none) and the
  * anti-forgery token, and a save made over an order that has moved on is refused by the Conduit, said, and shown again with what was
- * ticked. A cycle is refused there, in the Conduit's own words naming the pipelines in it. No script is needed. No suggestion of an
+ * ticked. A cycle among the pipelines the person can see is refused there, in the Conduit's own words naming the pipelines in it. No script is needed. No suggestion of an
  * order is made or drawn (rule 5).
  */
 import type { Request, Response } from "express";

@@ -516,8 +516,12 @@ async def plan_import(
                 f"itself, directly or through the others: {quoted}"
             )
         else:
+            # The pipelines the order relates: those that run after something and those only ever
+            # run after (the links are keyed by the first kind alone, so counting them would leave
+            # the second kind out).
+            related = {p for pipeline, after in links.items() for p in (pipeline, *after)}
             notes.append(
-                f"the run order among {len(links)} of its pipelines is written as a new version "
+                f"the run order among {len(related)} of its pipelines is written as a new version "
                 "of this dataset's order, with the pipelines as drafts: it is saved under your "
                 "name, and a pipeline is not run until it is deployed"
             )

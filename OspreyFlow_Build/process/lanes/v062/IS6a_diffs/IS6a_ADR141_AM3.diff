@@ -1,7 +1,7 @@
 diff --git a/OspreyFlow_Build/spec/06_DECISIONS.md b/OspreyFlow_Build/spec/06_DECISIONS.md
 --- a/OspreyFlow_Build/spec/06_DECISIONS.md
 +++ b/OspreyFlow_Build/spec/06_DECISIONS.md
-@@ -42083,3 +42083,65 @@
+@@ -42083,3 +42083,68 @@
  allowlist); the fonts test applied to the theme folder's list (a face not in either list); the default build's output holds no GDS Transport
  file and no GOV.UK token or font once the move has landed, and holds them when the identity is on; the re-recorded baseline differs from the old only
  in GOV.UK files; and a deployment with the GOV.UK brand and the switch off refuses to start.
@@ -22,12 +22,15 @@ diff --git a/OspreyFlow_Build/spec/06_DECISIONS.md b/OspreyFlow_Build/spec/06_DE
 +3. **What the order is stored as**: "runs after" links, `{pipeline: [the pipelines it runs after]}`, not a list. Amendment 2 point 2 says
 +   a failure stops only what depends on it, directly or through another, and "the rest carry on": that is a graph. A list has no cycle
 +   to refuse; links do.
-+4. **A cycle is refused on save** (ruling 3), 422 `run_order_cycle`, in words naming the pipelines in it by the name the Studio shows
-+   (a pipeline in a strongly connected component of two or more, or one that runs after itself; one that only runs after a cycle is not
-+   named). **It is looked for among the pipelines the saver may see, and only those**: refusing a link because a path exists through a
-+   pipeline the saver may not see would tell them that such a path exists (rule 3). A cycle that closes only through hidden pipelines
-+   can therefore be stored; the whole-dataset load, which reads the order whole, never runs a pipeline that is in a cycle. *This is a
-+   rule-3 decision and is the owner's.*
++4. **A cycle among the pipelines the saver can see is refused on save** (ruling 3), 422 `run_order_cycle`, in words naming the
++   pipelines in it by the name the Studio shows (a pipeline in a strongly connected component of two or more, or one that runs after
++   itself; one that only runs after a cycle is not named). **A cycle that closes only through a pipeline hidden from the saver is
++   stored, and the saver is told nothing of it**: no refusal, no other wording, count or timing, because refusing it would tell them
++   that a hidden pipeline and a path through it exist (access rule 3); the save's answer is the one they would have had with no such
++   path. **A stored order whose links make a cycle is not run**: it is refused at the run, in words to whoever runs it or can see every
++   pipeline in it, never to a person who cannot see one of them; the part that runs the order owns that rule and its test (no code runs
++   an order yet). *This is the owner's ruling of 25 November 2026, option (a), and amends his ruling 3 of 24 November for that case
++   only.*
 +5. **An undeployed pipeline may be in the order** (ruling 3). The page shows it "not deployed"; the run's report, in the later slice,
 +   says "not run: not deployed".
 +6. **Versioned** (ruling 6): a number per save (the first is 1; none stored is 0), kept with who saved it and when, every version kept
@@ -61,7 +64,7 @@ diff --git a/OspreyFlow_Build/spec/06_DECISIONS.md b/OspreyFlow_Build/spec/06_DE
 +`tests/services/api/test_dataset_run_order.py` (a stale number saved; a number the route read for itself; a save with none; a cycle
 +saved, a diamond refused, a bystander named; a pipeline that is not the saver's named, or refused in words that tell reasons apart; a
 +reader or a saver without the right, or a stranger, told anything; a hidden pipeline named, counted or implied; a save that loses links
-+the saver cannot see; a refusal that tells a saver of a path through pipelines they cannot see; two saves of one number both landing);
++the saver cannot see; a cycle that closes through a hidden pipeline refused, or answered differently from a save with no such path, or a cycle among visible pipelines not refused or naming a hidden one; two saves of one number both landing);
 +`tests/services/api/test_studio_release_routes.py` and `tests/ingest/test_release_bundle.py` (the order exported, imported as a new
 +version joined to the existing one, a link to a pipeline not carried never named, a cycle refused, an order that moved under the
 +import not overwritten); `tests/services/api/test_route_rights.py` (each route names `edit_pipelines`);

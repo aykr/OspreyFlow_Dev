@@ -277,9 +277,14 @@ screen.
   that needs no script. It posts the order as ticked with **the number of the order it read** (0 when none is stored), the case, the
   dataset and the anti-forgery token. A save is a new version of the order (a number per save, with who saved it and when), and **the
   expected number is required on save**: a save made over an order that has moved on is refused, said, and the page shows the order as it
-  now is with what was ticked kept, never a silent overwrite. **A cycle is refused on save**, in the Conduit's words naming the
-  pipelines in it (a pipeline that must run after itself, directly or through others); an order that only closes a cycle through
-  pipelines the saver may not see is not refused for it, because refusing it would tell them such a path exists (rule 3). Saving the
+  now is with what was ticked kept, never a silent overwrite. **A cycle among the pipelines the saver can see is refused on save**,
+  in the Conduit's words naming the pipelines in it (a pipeline that must run after itself, directly or through others). **A cycle that
+  closes only through a pipeline hidden from the saver is stored, and the saver is told nothing of it**: no refusal, no other wording,
+  count or timing, because refusing it would tell them that a hidden pipeline and a path through it exist (access rule 3); the save's
+  answer is the one they would have had with no such path (the owner's ruling of 25 November 2026, option (a), which amends his ruling 3
+  of 24 November, "a cycle is refused on save, naming its pipelines", for that case only). **A stored order whose links make a cycle is
+  not run**: whoever runs it, or can see every pipeline in it, is told so in words naming them, and a person who cannot see one of them
+  is never told (rule 3). The part that runs the order owns that rule and its test; no code runs an order yet. Saving the
   order runs nothing: it is not the run (the whole-dataset load is a later slice), the scheduler's job file is decided with the
   scheduler slice, and the cover for a scheduled load is the owner's with options before its own slice (ADR-141 Amendment 2 point 5).
 - **The release carries it.** A dataset's release export carries the order among the pipelines the release carries (a link to a pipeline it

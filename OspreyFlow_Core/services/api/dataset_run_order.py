@@ -15,10 +15,10 @@ run after itself, directly or through others) is possible, and refused.
   order has moved on (`refuse_a_stale_number`), never a silent overwrite. On Postgres the number
   is the key (`dataset_id`, `version`) and the check runs under the dataset's lock, so two saves
   of one number cannot both land.
-- **A cycle is refused on save, in words naming the pipelines in it** (`pipelines_in_a_cycle`, by
-  Tarjan's strongly connected components: a pipeline is in a cycle when it is in a component of
-  two or more, or links to itself). The saver is told the names the Studio shows (the label), and
-  no pipeline that only hangs off a cycle.
+- **A cycle among the pipelines the saver can see is refused on save, in words naming the
+  pipelines in it** (`pipelines_in_a_cycle`, by Tarjan's strongly connected components: a
+  pipeline is in a cycle when it is in a component of two or more, or links to itself). The saver
+  is told the names the Studio shows (the label), and no pipeline that only hangs off a cycle.
 - **An undeployed pipeline may be in the order**: the Studio shows it "not deployed", and a later
   load says "not run: not deployed".
 - **A saver names only the pipelines of this dataset they may see** (`StudioRecipeStore.list_all`,
@@ -33,11 +33,14 @@ run after itself, directly or through others) is possible, and refused.
 - **A save keeps what the saver cannot see.** A save replaces the links among the pipelines the
   saver sees; a link that names a pipeline they cannot see stays as it was, so another unit's
   order is not undone by a save that never showed it.
-- **A cycle is looked for among what the saver sees, and only that.** Refusing a link because a
-  path exists through a pipeline the saver cannot see would tell them that such a path exists
-  (rule 3: a path through nodes they may not see). So a cycle that only closes through hidden
-  pipelines is not refused; the run, which reads the order whole, never runs a pipeline that is
-  in a cycle.
+- **A cycle is looked for among what the saver sees, and only that** (the owner's ruling of 25
+  November 2026, option a, which amends his ruling 3 of 24 November for this case only). Refusing
+  a link because a path exists through a pipeline the saver cannot see would tell them that such
+  a path exists (rule 3: a path through nodes they may not see). So a cycle that only closes
+  through a hidden pipeline is stored, and the saver is told nothing of it: no refusal, no other
+  wording, count or timing (the check never runs over the merged links). The part that runs the
+  order, a later one, owns refusing to run a stored cycle, in words to whoever runs it or can see
+  every pipeline in it, and its test; nothing here runs an order.
 """
 
 from __future__ import annotations

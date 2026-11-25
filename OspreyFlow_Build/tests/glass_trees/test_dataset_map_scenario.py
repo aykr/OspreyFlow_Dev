@@ -234,7 +234,19 @@ def problems(
             ("Edit pipelines", "the right that reads and sets the order"),
             ("the number of the order it read", "the number the form carries"),
             ("expected number is required on save", "that the expected number is required"),
-            ("A cycle is refused on save", "that a cycle is refused on save"),
+            (
+                "A cycle among the pipelines the saver can see is refused on save",
+                "that a cycle among the pipelines the saver can see is refused on save",
+            ),
+            (
+                "closes only through a pipeline hidden from the saver is stored, and the saver is told nothing of it",
+                "that a cycle through a hidden pipeline is stored and the saver told nothing",
+            ),
+            (
+                "A stored order whose links make a cycle is not run",
+                "that a stored cycle is not run, and who is told",
+            ),
+            ("25 November 2026", "the owner's ruling of 25 November 2026 on the hidden path"),
             ("not deployed", "that an undeployed pipeline may be in the order"),
             ("release export carries the order", "that a release carries the order"),
             ("24 November 2026", "the owner's rulings of 24 November 2026"),

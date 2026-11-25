@@ -3776,8 +3776,8 @@ async def _model_refused_handler(request: Request, exc: TargetModelRefused) -> J
 @app.exception_handler(RunOrderRefused)
 async def _run_order_refused_handler(request: Request, exc: RunOrderRefused) -> JSONResponse:
     """A save of a dataset's run order refused in words, before anything was written (IS6a): a
-    stale number is 409, an order that cannot be (a cycle, a pipeline the saver may not name) is
-    422."""
+    stale number is 409, an order that cannot be (a cycle among the pipelines the saver sees, a
+    pipeline the saver may not name) is 422."""
     return JSONResponse(status_code=exc.status, content={"error": exc.error, "detail": str(exc)})
 
 
