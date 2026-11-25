@@ -1,0 +1,9 @@
+{#- The GOV.UK tree's Home: a stub, as the Default tree's is, so that the tree switch decides which tree serves `/` and no other
+    path is added for it (the owner, 24 November 2026). The GOV.UK Home page is a later part (slice GR3's Home and its scenario). -#}
+{% extends "layout.njk" %}
+{% set title = "Home" %}
+{% set page = "home" %}
+{% block content %}
+<h1>Home</h1>
+<p>Signed in as <strong>{{ displayName }}</strong>.</p>
+{% endblock %}

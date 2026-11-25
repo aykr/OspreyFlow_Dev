@@ -5,7 +5,12 @@
  *   row is a page nobody planned;
  * - `path` is a plain path (no pattern), not one the server owns, and claimed by no other page;
  * - `methods` are the methods the page answers, and no others (a method not listed is a page that is not there);
- * - `handler` builds the page's view model and renders its template.
+ * - `handler` builds the page's view model and renders its template;
+ * - `trees` names the tree or trees that serve the page (ADR-152 decision 7; slice GR2a). Every tree's pages are in the one list
+ *   (`pageList.ts`), and the service registers the ones that name the tree it was started with (`OSPREY_PAGES_TREE`). A page that
+ *   names none is the Default tree's, as every page was before there was a second tree. A GOV.UK page may exist before its
+ *   Default twin (the owner, 24 November 2026): the twin is the same id and path with the other tree named, and the id and the
+ *   path belong to one page *in a tree*, so the two may share them.
  *
  * The server registers every page through `registerPages`, which checks the list when the app is made, so a mistake is a
  * refusal to start, in words, and never a route that quietly does the wrong thing. Every page route sits behind the
@@ -16,6 +21,9 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { RequestHandler, Router } from "express";
 
+import { PAGES_TREES } from "./config.js";
+import type { PagesTree } from "./config.js";
+
 export type PageMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 export interface PageModule {
@@ -23,6 +31,8 @@ export interface PageModule {
   path: string;
   methods: readonly PageMethod[];
   handler: RequestHandler;
+  /** The tree or trees that serve the page: the Default tree's alone when left out. */
+  trees?: readonly PagesTree[];
   /**
    * The page takes a browser's file upload as a `multipart/form-data` POST (slice IS5a). Its handler must read the body
    * with `readUploadForm` (`upload.ts`), which checks the anti-forgery token as the form's first part before any file is
@@ -62,12 +72,38 @@ export function functionIdsFromFile(file: string = FUNCTIONS_FILE): ReadonlySet<
   return ids;
 }
 
+/** The trees a page is served by: the Default tree's alone when it names none. */
+export function treesOf(page: PageModule): readonly PagesTree[] {
+  return page.trees ?? ["default"];
+}
+
+/** Whether `tree` serves `page`. */
+export function servedBy(page: PageModule, tree: PagesTree): boolean {
+  return treesOf(page).includes(tree);
+}
+
 function owned(path: string): boolean {
   return path === "/" || OWNED.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
 }
 
-/** Throws, in words, for the first fault in the list. */
+/** Throws, in words, for the first fault in the list: each tree's pages are checked as a list of their own. */
 function check(pages: readonly PageModule[], known: ReadonlySet<string>): void {
+  for (const page of pages) {
+    const where = `the page ${JSON.stringify(page.id)} at ${JSON.stringify(page.path)}`;
+    const trees: readonly unknown[] = treesOf(page);
+    if (trees.length === 0) {
+      throw new PageRegistrationError(`${where} names no tree: name ${PAGES_TREES.join(" or ")}, or leave \`trees\` out for the default tree.`);
+    }
+    for (const tree of trees) {
+      if (!PAGES_TREES.some((name) => name === tree)) {
+        throw new PageRegistrationError(`${where} names the tree ${JSON.stringify(tree)}, which the service does not have: use ${PAGES_TREES.join(" or ")}.`);
+      }
+    }
+  }
+  for (const tree of PAGES_TREES) checkTree(pages.filter((page) => servedBy(page, tree)), known);
+}
+
+function checkTree(pages: readonly PageModule[], known: ReadonlySet<string>): void {
   const byPath = new Map<string, PageModule>();
   const byId = new Map<string, PageModule>();
   for (const page of pages) {
@@ -124,13 +160,15 @@ const signedIn: RequestHandler = (req, res, next) => {
 };
 
 /**
- * Checks the list now and returns the function that mounts it. The router it is given is the one behind the headers, the
- * session and the anti-forgery check.
+ * Checks the whole list now (every tree's pages, each tree's as a list of its own) and returns the function that mounts the
+ * pages `tree` serves, and no others: a route a tree has no page for is not registered, so it answers as a path nothing serves,
+ * as it did before there was a second tree. The router it is given is the one behind the headers, the session and the
+ * anti-forgery check.
  */
-export function registerPages(pages: readonly PageModule[], known?: ReadonlySet<string>): (router: Router) => void {
+export function registerPages(pages: readonly PageModule[], known?: ReadonlySet<string>, tree: PagesTree = "default"): (router: Router) => void {
   check(pages, known ?? (pages.length > 0 ? functionIdsFromFile() : new Set()));
   return (router) => {
-    for (const page of pages) {
+    for (const page of pages.filter((candidate) => servedBy(candidate, tree))) {
       for (const method of page.methods) {
         router[method.toLowerCase() as "get" | "post" | "put" | "patch" | "delete"](page.path, signedIn, page.handler);
       }

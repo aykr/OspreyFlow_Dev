@@ -110,6 +110,7 @@ export async function main(
     identityProvider: deps.identityProvider ?? unconfiguredProvider,
     ...(assets ? { assets } : {}),
     pages: PAGES,
+    tree: config.tree,
     ...(codeFlow ? { codeFlow } : {}),
     sessionSecret: config.sessionSecret.reveal(),
     ...(deps.clock ? { clock: deps.clock } : {}),

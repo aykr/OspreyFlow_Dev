@@ -1,0 +1,34 @@
+{#- The GOV.UK tree's layout (ADR-152 decisions 6, 7 and 13; slice GR2a). The frame a page of this tree stands in, kept to what the
+    specification names: a skip link first, a banner landmark holding the product's name and the sign-out form, the page's own content
+    in the one main landmark, and the page's data block and scripts. There is no script or style in it, no footer and no
+    GOV.UK identity: the crown, the GOV.UK logotype and the GOV.UK typeface are shown only with `appearance.govuk_identity` on and on a
+    gov.uk address (decision 14), a switch this tree does not have yet, so none of them is here. The stylesheet is `packages/design`'s, built,
+    as the Default tree's is, until the GOV.UK tree has stylesheets of its own (it will use govuk-frontend's macros and styles when a
+    page first needs them; the package is in the licence register, and is not a dependency of this service yet). -#}
+<!doctype html>
+<html lang="en-GB" data-tree="govuk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+{% if csrfToken %}<meta name="csrf-token" content="{{ csrfToken }}">{% endif %}
+<title>{% block title %}{{ title }}{% endblock %} · OspreyFlow</title>
+{% if stylesheet %}<link rel="stylesheet" href="{{ stylesheet }}">{% endif %}
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to main content</a>
+<header class="app-header">
+<span class="brand-mark__name">OspreyFlow</span>
+{% if csrfToken %}<div class="app-header__account"><form method="post" action="/session/sign-out">
+<input type="hidden" name="_csrf" value="{{ csrfToken }}">
+<button type="submit" class="btn">Sign out</button>
+</form></div>
+{% endif %}</header>
+<main id="main" tabindex="-1">
+{% block content %}{% endblock %}
+</main>
+{#- The data block a page's interactive module reads (ADR-152 decision 1). It is data, not code: nothing here needs a script to run. -#}
+{% block page_data %}<script type="application/json" id="page-data" nonce="{{ cspNonce }}">{"page":"{{ page }}"}</script>{% endblock %}
+{#- A page's modules go here, each a script element whose src is asset('modules/NAME.ts'), a file the build made. Never inline code. -#}
+{% block scripts %}{% endblock %}
+</body>
+</html>

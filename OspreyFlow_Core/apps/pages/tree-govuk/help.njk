@@ -1,0 +1,65 @@
+{#- Help: the roles, the places, the levels in a case, teams and Authors, and what each right lets a person do (slice GR2a; scenario HP).
+    Static words from the shared package, complete without a script: headings, a captioned table for the roles and one for the rights
+    (a column header is a th with scope col, the first cell of a row a th with scope row), definition lists for the places and the
+    levels, a list of the section links, and one way back. No form, no control and no call of its own. -#}
+{% extends "layout.njk" %}
+{% block content %}
+<h1>{{ words.title }}</h1>
+<p>{{ words.lede }}</p>
+<nav aria-label="{{ words.contents }}">
+<ul>
+<li><a href="#{{ words.places.id }}">{{ words.places.heading }}</a></li>
+<li><a href="#{{ words.roles.id }}">{{ words.roles.heading }}</a></li>
+<li><a href="#{{ words.levels.id }}">{{ words.levels.heading }}</a></li>
+<li><a href="#{{ words.teams.id }}">{{ words.teams.heading }}</a></li>
+<li><a href="#{{ words.rights.id }}">{{ words.rights.heading }}</a></li>
+</ul>
+</nav>
+<section aria-labelledby="{{ words.places.id }}">
+<h2 id="{{ words.places.id }}">{{ words.places.heading }}</h2>
+<dl>
+{% for place in help.places %}<div><dt>{{ place.name }}</dt><dd>{{ place.says }}</dd></div>
+{% endfor %}</dl>
+</section>
+<section aria-labelledby="{{ words.roles.id }}">
+<h2 id="{{ words.roles.id }}">{{ words.roles.heading }}</h2>
+<table class="table">
+<caption class="caption">{{ words.roles.caption }}</caption>
+<thead>
+<tr>{% for column in words.roles.columns %}<th scope="col">{{ column }}</th>{% endfor %}
+</tr>
+</thead>
+<tbody>
+{% for role in help.roles %}<tr><th scope="row">{{ role.name }}</th><td>{{ role.says }}</td><td>{{ role.places }}</td>
+</tr>
+{% endfor %}</tbody>
+</table>
+</section>
+<section aria-labelledby="{{ words.levels.id }}">
+<h2 id="{{ words.levels.id }}">{{ words.levels.heading }}</h2>
+<dl>
+{% for level in help.levels %}<div><dt>{{ level.name }}</dt><dd>{{ level.says }}</dd></div>
+{% endfor %}</dl>
+</section>
+<section aria-labelledby="{{ words.teams.id }}">
+<h2 id="{{ words.teams.id }}">{{ words.teams.heading }}</h2>
+<ul>
+{% for sentence in help.teams %}<li>{{ sentence }}</li>
+{% endfor %}</ul>
+</section>
+<section aria-labelledby="{{ words.rights.id }}">
+<h2 id="{{ words.rights.id }}">{{ words.rights.heading }}</h2>
+<table class="table">
+<caption class="caption">{{ words.rights.caption }}</caption>
+<thead>
+<tr>{% for column in words.rights.columns %}<th scope="col">{{ column }}</th>{% endfor %}
+</tr>
+</thead>
+<tbody>
+{% for right in help.rights %}<tr><th scope="row">{{ right.name }}</th><td>{{ right.says }}</td>
+</tr>
+{% endfor %}</tbody>
+</table>
+</section>
+<p><a href="/">{{ words.back }}</a></p>
+{% endblock %}

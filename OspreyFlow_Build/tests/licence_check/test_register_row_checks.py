@@ -120,12 +120,14 @@ def test_a_status_outside_the_three_is_flagged(
 
 
 @pytest.mark.parametrize("kind", ["model", "Image", "", None])
-def test_a_kind_outside_the_four_is_flagged(
+def test_a_kind_outside_the_five_is_flagged(
     real_rows: list[dict[str, Any]], named: list[reg.Named], kind: str | None
 ) -> None:
     rows = _planted(real_rows, "W1", lambda r: r.update(kind=kind))
     found = _found(rows, named)
-    assert any("W1" in v and "is not one of weight, map-data, font, image" in v for v in found)
+    assert any(
+        "W1" in v and "is not one of weight, map-data, font, image, package" in v for v in found
+    )
 
 
 def test_a_conditional_row_that_says_nothing_of_where_it_was_read_is_flagged(
@@ -156,3 +158,67 @@ def test_a_row_that_lacks_a_column_is_flagged(
         rows = _planted(real_rows, "W1", lambda r, c=column: r.pop(c))
         found = _found(rows, named)
         assert any(f"no {column} column" in v for v in found), (column, found)
+
+
+# --- the `package` kind (slice GR2a): `govuk-frontend`, held to the manifest it names, not the code
+
+
+def test_the_real_register_has_the_govuk_frontend_package_row(
+    real_rows: list[dict[str, Any]],
+) -> None:
+    row = next(r for r in real_rows if r["id"] == "P1")
+    assert (row["kind"], row["name"], row["licence"], row["test"]) == (
+        "package",
+        "govuk-frontend",
+        "MIT",
+        "osi-software",
+    )
+
+
+@pytest.mark.parametrize(
+    ("what", "change", "says"),
+    [
+        (
+            "a version the manifest does not pin",
+            lambda r: r.update(pin="govuk-frontend 6.5.0"),
+            "pin differs — apps/workspace/package.json does not pin 'govuk-frontend' at '6.5.0'",
+        ),
+        (
+            "another name than the manifest's",
+            lambda r: r.update(name="govuk-frontend-x"),
+            "does not pin 'govuk-frontend-x' at '6.6.0'",
+        ),
+        ("no version in the pin", lambda r: r.update(pin="govuk-frontend"), "as 'name 1.2.3'"),
+        ("no manifest to hold it to", lambda r: r.update(named_in=[]), "names no manifest"),
+        (
+            "a manifest that is not a file",
+            lambda r: r.update(named_in=["apps/workspace/package.json", "apps/none/package.json"]),
+            "named_in 'apps/none/package.json' is not a file",
+        ),
+        (
+            "a test that does not fit a package",
+            lambda r: r.update(test="open-data"),
+            "a package row cannot pass by the test open-data",
+        ),
+    ],
+)
+def test_a_package_row_is_held_to_its_manifest_and_to_its_kind(
+    real_rows: list[dict[str, Any]],
+    named: list[reg.Named],
+    what: str,
+    change: Callable[[dict[str, Any]], None],
+    says: str,
+) -> None:
+    assert _found(real_rows, named) == []
+    found = _found(_planted(real_rows, "P1", change), named)
+    assert any("P1" in v and says in v for v in found), (what, found)
+
+
+def test_only_a_package_row_is_exempt_from_naming_something_in_the_code(
+    real_rows: list[dict[str, Any]], named: list[reg.Named]
+) -> None:
+    """The exemption is the kind's, not the name's: the same row as a font names nothing the code does."""
+    found = _found(_planted(real_rows, "P1", lambda r: r.update(kind="font")), named)
+    assert any(
+        "P1" in v and "names something no code names" in v for v in found
+    ), found

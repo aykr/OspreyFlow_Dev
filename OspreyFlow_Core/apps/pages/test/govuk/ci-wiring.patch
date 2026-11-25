@@ -1,6 +1,6 @@
 --- a/.github/workflows/ci.yml
 +++ b/.github/workflows/ci.yml
-@@ -1296,6 +1296,22 @@
+@@ -1296,6 +1296,37 @@
        - run: npx playwright test --config map-verify/playwright.config.ts -g "contrast floor"
          working-directory: OspreyFlow_Core/apps/workspace
 
@@ -19,6 +19,21 @@
 +      - run: npx playwright install --with-deps chromium
 +        working-directory: OspreyFlow_Core/apps/pages
 +      - run: npm run test:govuk --workspace apps/pages
++
++  # ADR-152 decisions 6 and 12 and `CLAUDE.md` rule 13 (slices IS5a and GR2a): the server-rendered pages' own keyboard runners, one
++  # folder per tree. Playwright against the real pages server started inside each case (a free port, the in-memory store, the assets
++  # built to a scratch folder), so it needs no Valkey, no stack and no Python. `npm run test:keyboard` runs the Default tree's
++  # walkthrough (`apps/pages/keyboard/`) and then the GOV.UK tree's, with scripts on and with scripts switched off (`apps/pages/test/govuk/`).
++  pages-keyboard:
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++      - uses: actions/setup-node@v4
++        with: { node-version: "22" }
++      - run: npm ci
++      - run: npx playwright install --with-deps chromium
++        working-directory: OspreyFlow_Core/apps/pages
++      - run: npm run test:keyboard --workspace apps/pages
 +
    # `06_DECISIONS.md` ADR-049 Stage 2 §6 part A, amendment 21 — the setup screens' own keyboard
    # spec, against a real `harness.webapp` server (`apps/harness/keyboard/playwright.config.ts`'s

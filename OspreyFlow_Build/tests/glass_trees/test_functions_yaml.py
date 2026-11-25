@@ -3,15 +3,18 @@
 Amendment 1 says the GOV.UK tree is *complete* when every row of `FUNCTIONS.yaml` has its page, less the
 owner-agreed lines of `PARITY_EXCEPTIONS.yaml`. It names no schema; the owner accepted these columns.
 
-  FUNCTIONS.yaml            functions: one row per function, 47 in all (the 46 rows of the front-end
-                            inventory, part B, and the sign-in page's GOV.UK assets)
+  FUNCTIONS.yaml            functions: one row per function, 49 in all (the 46 rows of the front-end
+                            inventory, part B, the sign-in page's GOV.UK assets, and the three rows the
+                            owner's rulings of 24 November 2026 added by splitting two: `top-bar-home-help`
+                            into `top-bar-home` and `help`, and `reports` into `reports-figures` and
+                            `reports-dashboards`; slice GR2a)
                             id, name, where, slice, scenario, route, status
   PARITY_EXCEPTIONS.yaml    exceptions: id, reason, scope, agreed
 
 Which test fails if the invariant is broken (rule 12):
 
 * a function dropped from the list (the tree would be "complete" with a function never built)
-      -> `test_the_real_files_hold_47_functions` and `test_a_row_removed_is_caught` (an ordinary row, which
+      -> `test_the_real_files_hold_49_functions` and `test_a_row_removed_is_caught` (an ordinary row, which
          has no exception line, so the count in `check` is the only thing that can find it)
 * two rows with one id           -> `test_a_duplicate_id_is_caught`
 * an exception that excuses nothing real (a typo, or a function since removed)
@@ -61,7 +64,7 @@ SCOPES = (WHOLE, PART, SCRIPTS_OFF)
 SCRIPTS_OFF_CLASS = ("scripts-off-resize", "scripts-off-reorder", "scripts-off-drawn-canvas")
 
 SLUG = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
-EXPECTED_FUNCTIONS = 47
+EXPECTED_FUNCTIONS = 49
 
 # Functions with no spec/08 scenario today (ADR-152 decision 12: each gets one before its page is built).
 # The list may only shrink: a new function with none fails the test. A slice that writes a scenario removes
@@ -78,10 +81,11 @@ KNOWN_WITHOUT_SCENARIO = {
     "ask-chat",
     "drawing-boards",
     "matrix-ownership",
-    "reports",
+    "reports-figures",
+    "reports-dashboards",
     "admin",
     "needs-you",
-    "top-bar-home-help",
+    "top-bar-home",
     "govuk-frame",
     "panel-frames",
     "sign-in-session",
@@ -190,7 +194,7 @@ def test_the_real_files_have_no_problem() -> None:
     assert check(*real_documents()) == []
 
 
-def test_the_real_files_hold_47_functions() -> None:
+def test_the_real_files_hold_49_functions() -> None:
     functions_doc, _ = real_documents()
     rows = functions_doc["functions"]
     assert len(rows) == EXPECTED_FUNCTIONS
@@ -277,7 +281,7 @@ def test_a_whole_function_row_removed_leaves_its_exception_naming_nothing() -> N
     functions_doc["functions"] = [row for row in functions_doc["functions"] if row["id"] != "app-shell"]
     problems = check(functions_doc, exceptions_doc)
     assert any("exception app-shell names no function" in problem for problem in problems)
-    assert any("not the 47 of the inventory" in problem for problem in problems)
+    assert any("not the 49 of the inventory" in problem for problem in problems)
 
 
 def test_a_duplicate_id_is_caught() -> None:
