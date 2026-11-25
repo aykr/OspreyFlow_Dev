@@ -329,8 +329,10 @@ def test_the_real_list_queries_are_the_ones_the_pool_models(world: _World) -> No
         "INSERT assumptions",
         "SELECT * FROM assumptions WHERE investigation_id = $1 AND owning_unit = $2 ORDER BY created_at",
     ]
-    # And the graph was never asked about a gap's links or an assumption's: no visibility step ran on either read.
-    assert world.graph.asked == []
+    # The visibility step runs, through the graph, as the person: the saver's link is confirmed as the saver, and the reader's
+    # list is checked as the reader. (Before the fix of 25 November 2026 this list was empty: the graph was never asked about
+    # a gap's links on either side, which was the fault itself.)
+    assert world.graph.asked == [(VISIBLE, SECRET_EDITOR.id), (VISIBLE, OFFICIAL_READER.id)]
 
 
 def test_the_graph_stand_in_refuses_above_clearance_and_unknown_ids() -> None:
@@ -341,3 +343,90 @@ def test_the_graph_stand_in_refuses_above_clearance_and_unknown_ids() -> None:
     assert asyncio.run(graph.get_node(HIDDEN, OFFICIAL_READER)) is None
     assert asyncio.run(graph.get_node(HIDDEN, SECRET_EDITOR)) is not None
     assert asyncio.run(graph.get_node(NOWHERE, SECRET_EDITOR)) is None
+
+
+# ------------------------------------------------------------------------------------------------ planted faults at the real call site (rule 15)
+
+
+def _gaps_problems(world: _World) -> list[str]:
+    """What the gap read test checks, as a function the real route and each planted one go through."""
+    listed = world.as_(OFFICIAL_READER).get(f"/v1/investigations/{CASE}/gaps")
+    found = [] if listed.status_code == 200 else [f"the read answered {listed.status_code}"]
+    if HIDDEN in listed.text:
+        found.append("the OFFICIAL reader was sent the SECRET node's id")
+    if VISIBLE not in listed.text:
+        found.append("the visible link was dropped")
+    return found
+
+
+def _assumptions_problems(world: _World, hidden_judgement: str, shown_judgement: str) -> list[str]:
+    listed = world.as_(OFFICIAL_READER).get(f"/v1/investigations/{CASE}/assumptions")
+    found = [] if listed.status_code == 200 else [f"the read answered {listed.status_code}"]
+    if hidden_judgement in listed.text:
+        found.append("the OFFICIAL reader was sent the id of a judgement hidden from them")
+    if shown_judgement not in listed.text:
+        found.append("the visible judgement's link was dropped")
+    return found
+
+
+def test_a_hidden_link_put_back_at_the_gaps_routes_call_site_is_found(world: _World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The real `list_gaps_route` calls `list_visible_gaps` (`services/api/app.py`): wrapped so that it puts back the one hidden
+    link the real filter removed, the check that finds nothing in the real route finds it."""
+    import services.api.app as conduit
+    from services.api.assessments import list_visible_gaps
+
+    assert _save_gap(world, SECRET_EDITOR, [VISIBLE, HIDDEN]).status_code == 201
+    assert _gaps_problems(world) == []
+
+    async def planted(store: Any, investigation_id: str, principal: Principal, graph: Any) -> Any:
+        real = await list_visible_gaps(store, investigation_id, principal, graph)
+        return [g.model_copy(update={"linked_entities": [*g.linked_entities, HIDDEN]}) for g in real]
+
+    monkeypatch.setattr(conduit, "list_visible_gaps", planted)
+    assert _gaps_problems(world) == ["the OFFICIAL reader was sent the SECRET node's id"]
+
+
+def test_a_hidden_link_put_back_at_the_assumptions_routes_call_site_is_found(world: _World, monkeypatch: pytest.MonkeyPatch) -> None:
+    import services.api.app as conduit
+    from services.api.assessments import list_visible_assumptions
+
+    hidden = _save_judgement(world, SECRET_EDITOR, [VISIBLE, HIDDEN]).json()["id"]
+    shown = _save_judgement(world, SECRET_EDITOR, [VISIBLE]).json()["id"]
+    assert _save_assumption(world, SECRET_EDITOR, [hidden, shown]).status_code == 201
+    assert _assumptions_problems(world, hidden, shown) == []
+
+    async def planted(store: Any, judgements: Any, investigation_id: str, principal: Principal, graph: Any) -> Any:
+        real = await list_visible_assumptions(store, judgements, investigation_id, principal, graph)
+        return [a.model_copy(update={"linked_judgements": [*a.linked_judgements, hidden]}) for a in real]
+
+    monkeypatch.setattr(conduit, "list_visible_assumptions", planted)
+    assert _assumptions_problems(world, hidden, shown) == ["the OFFICIAL reader was sent the id of a judgement hidden from them"]
+
+
+def test_a_filter_that_lets_one_hidden_node_through_is_found(world: _World, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The plant inside the real filter's own decision (`_reference_visible`), for the hidden node alone: the gap read is red,
+    and nothing else changes (the visible link is still sent)."""
+    import services.api.assessments as assessments
+
+    real = assessments._reference_visible
+
+    async def planted(graph: Any, principal: Principal, ref_id: str) -> bool:
+        return True if ref_id == HIDDEN else await real(graph, principal, ref_id)
+
+    assert _save_gap(world, SECRET_EDITOR, [VISIBLE, HIDDEN]).status_code == 201
+    assert _gaps_problems(world) == []
+    monkeypatch.setattr(assessments, "_reference_visible", planted)
+    assert _gaps_problems(world) == ["the OFFICIAL reader was sent the SECRET node's id"]
+
+
+def test_a_save_refusal_names_only_what_the_saver_sent_and_treats_absent_and_hidden_alike(world: _World) -> None:
+    """Rule 3 on the write side: refusing a hidden node and an absent one in different words would tell the saver which ids
+    are real. Both are 422 `unverifiable_link`, naming only the ids the saver sent, with the same detail shape."""
+    hidden = _save_gap(world, OFFICIAL_READER, [HIDDEN])
+    absent = _save_gap(world, OFFICIAL_READER, [NOWHERE])
+    assert (hidden.status_code, absent.status_code) == (422, 422)
+    assert hidden.json()["error"] == absent.json()["error"] == "unverifiable_link"
+    assert hidden.json()["link_ids"] == [HIDDEN] and absent.json()["link_ids"] == [NOWHERE]
+    assert hidden.json()["detail"].replace(HIDDEN, "X") == absent.json()["detail"].replace(NOWHERE, "X")
+    # Nothing was written by either refusal.
+    assert world.pool.tables.get("intelligence_gaps", {}) == {}
