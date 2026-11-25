@@ -2910,3 +2910,63 @@ def test_a_written_default_port_forgotten_is_red(off_capture: dict[str, Any]) ->
     found = off_differences(planted, key)
     assert any("compose.yaml" in line for line in found), found
     assert any("deployment.env" in line for line in found), found
+
+
+def _pages_client_differences(planted: dict[str, Any], key: str) -> list[str]:
+    return [line for line in off_differences(planted, key) if "pages_client" in line]
+
+
+@pytest.mark.parametrize(
+    "key",
+    [
+        "small https://osprey.example.org:443",
+        "small https://OSPREY.Example.ORG",
+        "cluster https://osprey.example.org:443",
+        "cluster https://OSPREY.Example.ORG",
+        "small+tls https://osprey.example.org:443",
+    ],
+)
+def test_off_the_page_services_sign_in_client_is_what_main_registered(
+    key: str, off_capture: dict[str, Any]
+) -> None:
+    """The page service's own client, registered through the admin API on every deployment that
+    holds its secret (the setting on or off), is in the capture: its redirect, web origin and
+    post-logout address are the origin as written, as main registered them. Without this a change
+    to the `else` branch of `realm.pages_client` fails nothing (the verifier's finding, PL7f
+    round 5)."""
+    assert "pages_client" in OFF_REFERENCE["cases"][key], key
+    assert off_differences(off_capture, key) == []
+
+
+@pytest.mark.parametrize(
+    ("key", "plant"),
+    [
+        ("small https://OSPREY.Example.ORG", "sites"),
+        ("small https://osprey.example.org:443", "normalised"),
+        ("cluster https://OSPREY.Example.ORG", "sites"),
+        ("cluster https://osprey.example.org:443", "normalised"),
+    ],
+)
+def test_a_pages_client_origin_normalised_with_the_setting_off_is_red(key: str, plant: str) -> None:
+    """Planted at the call site `realm.pages_client` has (rule 15): its setting-off branch asks
+    `page_addresses.client_origin`, and the fault answers with the Glass's address from `sites`
+    (the host in lower case) or with `derive`'s form (lower case and no default port), neither of
+    which is what main registered. The capture names the page service's client; with the real
+    function it is clean."""
+    from harness import page_addresses
+    from harness.site import sites
+
+    from tests.harness import pages_off_capture
+
+    def answer(config: Any) -> str:
+        if plant == "sites":
+            return sites(config).glass
+        scheme, host, port = page_addresses.parse_origin(config)
+        return f"{scheme}://{host}" + (
+            f":{port}" if port != page_addresses.default_port(scheme) else ""
+        )
+
+    with mock.patch.object(page_addresses, "client_origin", answer):
+        planted = json.loads(json.dumps(pages_off_capture.capture(), sort_keys=True, default=str))
+    found = _pages_client_differences(planted, key)
+    assert found, f"{plant}: nothing named the page service's client for {key}"

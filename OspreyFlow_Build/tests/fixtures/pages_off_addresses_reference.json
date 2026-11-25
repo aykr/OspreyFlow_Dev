@@ -89,6 +89,97 @@
     "https://id.osprey.example.org/realms/osprey/broker//endpoint",
     "https://id.osprey.example.org/realms/osprey/broker//endpoint/logout_response"
    ],
+   "pages_client": {
+    "attributes": {
+     "backchannel.logout.revoke.offline.tokens": "false",
+     "backchannel.logout.session.required": "true",
+     "backchannel.logout.url": "http://pages:8090/session/back-channel-logout",
+     "pkce.code.challenge.method": "S256",
+     "post.logout.redirect.uris": "https://osprey.example.org/",
+     "use.refresh.tokens": "true"
+    },
+    "clientAuthenticatorType": "client-secret",
+    "clientId": "osprey-pages",
+    "directAccessGrantsEnabled": false,
+    "enabled": true,
+    "frontchannelLogout": false,
+    "implicitFlowEnabled": false,
+    "name": "Pages (server-rendered tree)",
+    "protocol": "openid-connect",
+    "protocolMappers": [
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "clearance",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "clearance"
+      },
+      "name": "clearance",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "org_unit",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "org_unit"
+      },
+      "name": "org_unit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "receivable_handling_codes",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "receivable_handling_codes"
+      },
+      "name": "receivable_handling_codes",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "roles",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "roles"
+      },
+      "name": "roles",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "id.token.claim": "false",
+       "included.custom.audience": "osprey-conduit"
+      },
+      "name": "audience-conduit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-audience-mapper"
+     }
+    ],
+    "publicClient": false,
+    "redirectUris": [
+     "https://osprey.example.org/session/callback"
+    ],
+    "serviceAccountsEnabled": false,
+    "standardFlowEnabled": true,
+    "webOrigins": [
+     "https://osprey.example.org"
+    ]
+   },
    "render": {
     "values.yaml": [
      "  - host: osprey.example.org",
@@ -196,6 +287,97 @@
     "https://id.osprey.example.org:443/realms/osprey/broker//endpoint",
     "https://id.osprey.example.org:443/realms/osprey/broker//endpoint/logout_response"
    ],
+   "pages_client": {
+    "attributes": {
+     "backchannel.logout.revoke.offline.tokens": "false",
+     "backchannel.logout.session.required": "true",
+     "backchannel.logout.url": "http://pages:8090/session/back-channel-logout",
+     "pkce.code.challenge.method": "S256",
+     "post.logout.redirect.uris": "https://osprey.example.org:443/",
+     "use.refresh.tokens": "true"
+    },
+    "clientAuthenticatorType": "client-secret",
+    "clientId": "osprey-pages",
+    "directAccessGrantsEnabled": false,
+    "enabled": true,
+    "frontchannelLogout": false,
+    "implicitFlowEnabled": false,
+    "name": "Pages (server-rendered tree)",
+    "protocol": "openid-connect",
+    "protocolMappers": [
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "clearance",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "clearance"
+      },
+      "name": "clearance",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "org_unit",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "org_unit"
+      },
+      "name": "org_unit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "receivable_handling_codes",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "receivable_handling_codes"
+      },
+      "name": "receivable_handling_codes",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "roles",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "roles"
+      },
+      "name": "roles",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "id.token.claim": "false",
+       "included.custom.audience": "osprey-conduit"
+      },
+      "name": "audience-conduit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-audience-mapper"
+     }
+    ],
+    "publicClient": false,
+    "redirectUris": [
+     "https://osprey.example.org:443/session/callback"
+    ],
+    "serviceAccountsEnabled": false,
+    "standardFlowEnabled": true,
+    "webOrigins": [
+     "https://osprey.example.org:443"
+    ]
+   },
    "render": {
     "values.yaml": [
      "  - host: osprey.example.org",
@@ -303,6 +485,97 @@
     "https://id.OSPREY.Example.ORG/realms/osprey/broker//endpoint",
     "https://id.OSPREY.Example.ORG/realms/osprey/broker//endpoint/logout_response"
    ],
+   "pages_client": {
+    "attributes": {
+     "backchannel.logout.revoke.offline.tokens": "false",
+     "backchannel.logout.session.required": "true",
+     "backchannel.logout.url": "http://pages:8090/session/back-channel-logout",
+     "pkce.code.challenge.method": "S256",
+     "post.logout.redirect.uris": "https://OSPREY.Example.ORG/",
+     "use.refresh.tokens": "true"
+    },
+    "clientAuthenticatorType": "client-secret",
+    "clientId": "osprey-pages",
+    "directAccessGrantsEnabled": false,
+    "enabled": true,
+    "frontchannelLogout": false,
+    "implicitFlowEnabled": false,
+    "name": "Pages (server-rendered tree)",
+    "protocol": "openid-connect",
+    "protocolMappers": [
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "clearance",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "clearance"
+      },
+      "name": "clearance",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "org_unit",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "org_unit"
+      },
+      "name": "org_unit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "receivable_handling_codes",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "receivable_handling_codes"
+      },
+      "name": "receivable_handling_codes",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "roles",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "roles"
+      },
+      "name": "roles",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "id.token.claim": "false",
+       "included.custom.audience": "osprey-conduit"
+      },
+      "name": "audience-conduit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-audience-mapper"
+     }
+    ],
+    "publicClient": false,
+    "redirectUris": [
+     "https://OSPREY.Example.ORG/session/callback"
+    ],
+    "serviceAccountsEnabled": false,
+    "standardFlowEnabled": true,
+    "webOrigins": [
+     "https://OSPREY.Example.ORG"
+    ]
+   },
    "render": {
     "values.yaml": [
      "  CORS_ALLOWED_ORIGINS: https://osprey.example.org",
@@ -418,6 +691,97 @@
     "https://id.osprey.example.org/realms/osprey/broker//endpoint",
     "https://id.osprey.example.org/realms/osprey/broker//endpoint/logout_response"
    ],
+   "pages_client": {
+    "attributes": {
+     "backchannel.logout.revoke.offline.tokens": "false",
+     "backchannel.logout.session.required": "true",
+     "backchannel.logout.url": "http://pages:8090/session/back-channel-logout",
+     "pkce.code.challenge.method": "S256",
+     "post.logout.redirect.uris": "https://osprey.example.org/",
+     "use.refresh.tokens": "true"
+    },
+    "clientAuthenticatorType": "client-secret",
+    "clientId": "osprey-pages",
+    "directAccessGrantsEnabled": false,
+    "enabled": true,
+    "frontchannelLogout": false,
+    "implicitFlowEnabled": false,
+    "name": "Pages (server-rendered tree)",
+    "protocol": "openid-connect",
+    "protocolMappers": [
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "clearance",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "clearance"
+      },
+      "name": "clearance",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "org_unit",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "org_unit"
+      },
+      "name": "org_unit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "receivable_handling_codes",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "receivable_handling_codes"
+      },
+      "name": "receivable_handling_codes",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "roles",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "roles"
+      },
+      "name": "roles",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "id.token.claim": "false",
+       "included.custom.audience": "osprey-conduit"
+      },
+      "name": "audience-conduit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-audience-mapper"
+     }
+    ],
+    "publicClient": false,
+    "redirectUris": [
+     "https://osprey.example.org/session/callback"
+    ],
+    "serviceAccountsEnabled": false,
+    "standardFlowEnabled": true,
+    "webOrigins": [
+     "https://osprey.example.org"
+    ]
+   },
    "render": {
     "values.yaml": [
      "  CORS_ALLOWED_ORIGINS: https://osprey.example.org",
@@ -533,6 +897,97 @@
     "https://id.osprey.example.org:443/realms/osprey/broker//endpoint",
     "https://id.osprey.example.org:443/realms/osprey/broker//endpoint/logout_response"
    ],
+   "pages_client": {
+    "attributes": {
+     "backchannel.logout.revoke.offline.tokens": "false",
+     "backchannel.logout.session.required": "true",
+     "backchannel.logout.url": "http://pages:8090/session/back-channel-logout",
+     "pkce.code.challenge.method": "S256",
+     "post.logout.redirect.uris": "https://osprey.example.org:443/",
+     "use.refresh.tokens": "true"
+    },
+    "clientAuthenticatorType": "client-secret",
+    "clientId": "osprey-pages",
+    "directAccessGrantsEnabled": false,
+    "enabled": true,
+    "frontchannelLogout": false,
+    "implicitFlowEnabled": false,
+    "name": "Pages (server-rendered tree)",
+    "protocol": "openid-connect",
+    "protocolMappers": [
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "clearance",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "clearance"
+      },
+      "name": "clearance",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "org_unit",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "org_unit"
+      },
+      "name": "org_unit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "receivable_handling_codes",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "receivable_handling_codes"
+      },
+      "name": "receivable_handling_codes",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "roles",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "roles"
+      },
+      "name": "roles",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "id.token.claim": "false",
+       "included.custom.audience": "osprey-conduit"
+      },
+      "name": "audience-conduit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-audience-mapper"
+     }
+    ],
+    "publicClient": false,
+    "redirectUris": [
+     "https://osprey.example.org:443/session/callback"
+    ],
+    "serviceAccountsEnabled": false,
+    "standardFlowEnabled": true,
+    "webOrigins": [
+     "https://osprey.example.org:443"
+    ]
+   },
    "render": {
     "values.yaml": [
      "  CORS_ALLOWED_ORIGINS: https://osprey.example.org:443",
@@ -648,6 +1103,97 @@
     "https://id.osprey.example.org:9443/realms/osprey/broker//endpoint",
     "https://id.osprey.example.org:9443/realms/osprey/broker//endpoint/logout_response"
    ],
+   "pages_client": {
+    "attributes": {
+     "backchannel.logout.revoke.offline.tokens": "false",
+     "backchannel.logout.session.required": "true",
+     "backchannel.logout.url": "http://pages:8090/session/back-channel-logout",
+     "pkce.code.challenge.method": "S256",
+     "post.logout.redirect.uris": "https://osprey.example.org:9443/",
+     "use.refresh.tokens": "true"
+    },
+    "clientAuthenticatorType": "client-secret",
+    "clientId": "osprey-pages",
+    "directAccessGrantsEnabled": false,
+    "enabled": true,
+    "frontchannelLogout": false,
+    "implicitFlowEnabled": false,
+    "name": "Pages (server-rendered tree)",
+    "protocol": "openid-connect",
+    "protocolMappers": [
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "clearance",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "clearance"
+      },
+      "name": "clearance",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "org_unit",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "org_unit"
+      },
+      "name": "org_unit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "receivable_handling_codes",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "receivable_handling_codes"
+      },
+      "name": "receivable_handling_codes",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "roles",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "roles"
+      },
+      "name": "roles",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "id.token.claim": "false",
+       "included.custom.audience": "osprey-conduit"
+      },
+      "name": "audience-conduit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-audience-mapper"
+     }
+    ],
+    "publicClient": false,
+    "redirectUris": [
+     "https://osprey.example.org:9443/session/callback"
+    ],
+    "serviceAccountsEnabled": false,
+    "standardFlowEnabled": true,
+    "webOrigins": [
+     "https://osprey.example.org:9443"
+    ]
+   },
    "render": {
     "values.yaml": [
      "  CORS_ALLOWED_ORIGINS: https://osprey.example.org:9443",
@@ -763,6 +1309,97 @@
     "http://id.Reference.OspreyFlow.localhost:8081/realms/osprey/broker//endpoint",
     "http://id.Reference.OspreyFlow.localhost:8081/realms/osprey/broker//endpoint/logout_response"
    ],
+   "pages_client": {
+    "attributes": {
+     "backchannel.logout.revoke.offline.tokens": "false",
+     "backchannel.logout.session.required": "true",
+     "backchannel.logout.url": "http://pages:8090/session/back-channel-logout",
+     "pkce.code.challenge.method": "S256",
+     "post.logout.redirect.uris": "http://Reference.OspreyFlow.localhost:8081/",
+     "use.refresh.tokens": "true"
+    },
+    "clientAuthenticatorType": "client-secret",
+    "clientId": "osprey-pages",
+    "directAccessGrantsEnabled": false,
+    "enabled": true,
+    "frontchannelLogout": false,
+    "implicitFlowEnabled": false,
+    "name": "Pages (server-rendered tree)",
+    "protocol": "openid-connect",
+    "protocolMappers": [
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "clearance",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "clearance"
+      },
+      "name": "clearance",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "org_unit",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "org_unit"
+      },
+      "name": "org_unit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "receivable_handling_codes",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "receivable_handling_codes"
+      },
+      "name": "receivable_handling_codes",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "roles",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "roles"
+      },
+      "name": "roles",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "id.token.claim": "false",
+       "included.custom.audience": "osprey-conduit"
+      },
+      "name": "audience-conduit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-audience-mapper"
+     }
+    ],
+    "publicClient": false,
+    "redirectUris": [
+     "http://Reference.OspreyFlow.localhost:8081/session/callback"
+    ],
+    "serviceAccountsEnabled": false,
+    "standardFlowEnabled": true,
+    "webOrigins": [
+     "http://Reference.OspreyFlow.localhost:8081"
+    ]
+   },
    "render": {
     "Caddyfile": [
      "http://reference.ospreyflow.localhost {",
@@ -884,6 +1521,97 @@
     "http://id.reference.ospreyflow.localhost/realms/osprey/broker//endpoint",
     "http://id.reference.ospreyflow.localhost/realms/osprey/broker//endpoint/logout_response"
    ],
+   "pages_client": {
+    "attributes": {
+     "backchannel.logout.revoke.offline.tokens": "false",
+     "backchannel.logout.session.required": "true",
+     "backchannel.logout.url": "http://pages:8090/session/back-channel-logout",
+     "pkce.code.challenge.method": "S256",
+     "post.logout.redirect.uris": "http://reference.ospreyflow.localhost/",
+     "use.refresh.tokens": "true"
+    },
+    "clientAuthenticatorType": "client-secret",
+    "clientId": "osprey-pages",
+    "directAccessGrantsEnabled": false,
+    "enabled": true,
+    "frontchannelLogout": false,
+    "implicitFlowEnabled": false,
+    "name": "Pages (server-rendered tree)",
+    "protocol": "openid-connect",
+    "protocolMappers": [
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "clearance",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "clearance"
+      },
+      "name": "clearance",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "org_unit",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "org_unit"
+      },
+      "name": "org_unit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "receivable_handling_codes",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "receivable_handling_codes"
+      },
+      "name": "receivable_handling_codes",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "roles",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "roles"
+      },
+      "name": "roles",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "id.token.claim": "false",
+       "included.custom.audience": "osprey-conduit"
+      },
+      "name": "audience-conduit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-audience-mapper"
+     }
+    ],
+    "publicClient": false,
+    "redirectUris": [
+     "http://reference.ospreyflow.localhost/session/callback"
+    ],
+    "serviceAccountsEnabled": false,
+    "standardFlowEnabled": true,
+    "webOrigins": [
+     "http://reference.ospreyflow.localhost"
+    ]
+   },
    "render": {
     "Caddyfile": [
      "http://reference.ospreyflow.localhost {",
@@ -1005,6 +1733,97 @@
     "http://id.reference.ospreyflow.localhost:80/realms/osprey/broker//endpoint",
     "http://id.reference.ospreyflow.localhost:80/realms/osprey/broker//endpoint/logout_response"
    ],
+   "pages_client": {
+    "attributes": {
+     "backchannel.logout.revoke.offline.tokens": "false",
+     "backchannel.logout.session.required": "true",
+     "backchannel.logout.url": "http://pages:8090/session/back-channel-logout",
+     "pkce.code.challenge.method": "S256",
+     "post.logout.redirect.uris": "http://reference.ospreyflow.localhost:80/",
+     "use.refresh.tokens": "true"
+    },
+    "clientAuthenticatorType": "client-secret",
+    "clientId": "osprey-pages",
+    "directAccessGrantsEnabled": false,
+    "enabled": true,
+    "frontchannelLogout": false,
+    "implicitFlowEnabled": false,
+    "name": "Pages (server-rendered tree)",
+    "protocol": "openid-connect",
+    "protocolMappers": [
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "clearance",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "clearance"
+      },
+      "name": "clearance",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "org_unit",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "org_unit"
+      },
+      "name": "org_unit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "receivable_handling_codes",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "receivable_handling_codes"
+      },
+      "name": "receivable_handling_codes",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "roles",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "roles"
+      },
+      "name": "roles",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "id.token.claim": "false",
+       "included.custom.audience": "osprey-conduit"
+      },
+      "name": "audience-conduit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-audience-mapper"
+     }
+    ],
+    "publicClient": false,
+    "redirectUris": [
+     "http://reference.ospreyflow.localhost:80/session/callback"
+    ],
+    "serviceAccountsEnabled": false,
+    "standardFlowEnabled": true,
+    "webOrigins": [
+     "http://reference.ospreyflow.localhost:80"
+    ]
+   },
    "render": {
     "Caddyfile": [
      "http://reference.ospreyflow.localhost {",
@@ -1126,6 +1945,97 @@
     "http://id.reference.ospreyflow.localhost:8081/realms/osprey/broker//endpoint",
     "http://id.reference.ospreyflow.localhost:8081/realms/osprey/broker//endpoint/logout_response"
    ],
+   "pages_client": {
+    "attributes": {
+     "backchannel.logout.revoke.offline.tokens": "false",
+     "backchannel.logout.session.required": "true",
+     "backchannel.logout.url": "http://pages:8090/session/back-channel-logout",
+     "pkce.code.challenge.method": "S256",
+     "post.logout.redirect.uris": "http://reference.ospreyflow.localhost:8081/",
+     "use.refresh.tokens": "true"
+    },
+    "clientAuthenticatorType": "client-secret",
+    "clientId": "osprey-pages",
+    "directAccessGrantsEnabled": false,
+    "enabled": true,
+    "frontchannelLogout": false,
+    "implicitFlowEnabled": false,
+    "name": "Pages (server-rendered tree)",
+    "protocol": "openid-connect",
+    "protocolMappers": [
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "clearance",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "clearance"
+      },
+      "name": "clearance",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "org_unit",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "org_unit"
+      },
+      "name": "org_unit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "receivable_handling_codes",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "receivable_handling_codes"
+      },
+      "name": "receivable_handling_codes",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "roles",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "roles"
+      },
+      "name": "roles",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "id.token.claim": "false",
+       "included.custom.audience": "osprey-conduit"
+      },
+      "name": "audience-conduit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-audience-mapper"
+     }
+    ],
+    "publicClient": false,
+    "redirectUris": [
+     "http://reference.ospreyflow.localhost:8081/session/callback"
+    ],
+    "serviceAccountsEnabled": false,
+    "standardFlowEnabled": true,
+    "webOrigins": [
+     "http://reference.ospreyflow.localhost:8081"
+    ]
+   },
    "render": {
     "Caddyfile": [
      "http://reference.ospreyflow.localhost {",
@@ -1247,6 +2157,97 @@
     "https://id.Reference.OspreyFlow.localhost/realms/osprey/broker//endpoint",
     "https://id.Reference.OspreyFlow.localhost/realms/osprey/broker//endpoint/logout_response"
    ],
+   "pages_client": {
+    "attributes": {
+     "backchannel.logout.revoke.offline.tokens": "false",
+     "backchannel.logout.session.required": "true",
+     "backchannel.logout.url": "http://pages:8090/session/back-channel-logout",
+     "pkce.code.challenge.method": "S256",
+     "post.logout.redirect.uris": "https://Reference.OspreyFlow.localhost/",
+     "use.refresh.tokens": "true"
+    },
+    "clientAuthenticatorType": "client-secret",
+    "clientId": "osprey-pages",
+    "directAccessGrantsEnabled": false,
+    "enabled": true,
+    "frontchannelLogout": false,
+    "implicitFlowEnabled": false,
+    "name": "Pages (server-rendered tree)",
+    "protocol": "openid-connect",
+    "protocolMappers": [
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "clearance",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "clearance"
+      },
+      "name": "clearance",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "org_unit",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "org_unit"
+      },
+      "name": "org_unit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "receivable_handling_codes",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "receivable_handling_codes"
+      },
+      "name": "receivable_handling_codes",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "roles",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "roles"
+      },
+      "name": "roles",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "id.token.claim": "false",
+       "included.custom.audience": "osprey-conduit"
+      },
+      "name": "audience-conduit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-audience-mapper"
+     }
+    ],
+    "publicClient": false,
+    "redirectUris": [
+     "https://Reference.OspreyFlow.localhost/session/callback"
+    ],
+    "serviceAccountsEnabled": false,
+    "standardFlowEnabled": true,
+    "webOrigins": [
+     "https://Reference.OspreyFlow.localhost"
+    ]
+   },
    "render": {
     "Caddyfile": [
      "https://reference.ospreyflow.localhost {",
@@ -1368,6 +2369,97 @@
     "https://id.reference.ospreyflow.localhost/realms/osprey/broker//endpoint",
     "https://id.reference.ospreyflow.localhost/realms/osprey/broker//endpoint/logout_response"
    ],
+   "pages_client": {
+    "attributes": {
+     "backchannel.logout.revoke.offline.tokens": "false",
+     "backchannel.logout.session.required": "true",
+     "backchannel.logout.url": "http://pages:8090/session/back-channel-logout",
+     "pkce.code.challenge.method": "S256",
+     "post.logout.redirect.uris": "https://reference.ospreyflow.localhost/",
+     "use.refresh.tokens": "true"
+    },
+    "clientAuthenticatorType": "client-secret",
+    "clientId": "osprey-pages",
+    "directAccessGrantsEnabled": false,
+    "enabled": true,
+    "frontchannelLogout": false,
+    "implicitFlowEnabled": false,
+    "name": "Pages (server-rendered tree)",
+    "protocol": "openid-connect",
+    "protocolMappers": [
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "clearance",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "clearance"
+      },
+      "name": "clearance",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "org_unit",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "org_unit"
+      },
+      "name": "org_unit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "receivable_handling_codes",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "receivable_handling_codes"
+      },
+      "name": "receivable_handling_codes",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "roles",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "roles"
+      },
+      "name": "roles",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "id.token.claim": "false",
+       "included.custom.audience": "osprey-conduit"
+      },
+      "name": "audience-conduit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-audience-mapper"
+     }
+    ],
+    "publicClient": false,
+    "redirectUris": [
+     "https://reference.ospreyflow.localhost/session/callback"
+    ],
+    "serviceAccountsEnabled": false,
+    "standardFlowEnabled": true,
+    "webOrigins": [
+     "https://reference.ospreyflow.localhost"
+    ]
+   },
    "render": {
     "Caddyfile": [
      "https://reference.ospreyflow.localhost {",
@@ -1489,6 +2581,97 @@
     "https://id.reference.ospreyflow.localhost:443/realms/osprey/broker//endpoint",
     "https://id.reference.ospreyflow.localhost:443/realms/osprey/broker//endpoint/logout_response"
    ],
+   "pages_client": {
+    "attributes": {
+     "backchannel.logout.revoke.offline.tokens": "false",
+     "backchannel.logout.session.required": "true",
+     "backchannel.logout.url": "http://pages:8090/session/back-channel-logout",
+     "pkce.code.challenge.method": "S256",
+     "post.logout.redirect.uris": "https://reference.ospreyflow.localhost:443/",
+     "use.refresh.tokens": "true"
+    },
+    "clientAuthenticatorType": "client-secret",
+    "clientId": "osprey-pages",
+    "directAccessGrantsEnabled": false,
+    "enabled": true,
+    "frontchannelLogout": false,
+    "implicitFlowEnabled": false,
+    "name": "Pages (server-rendered tree)",
+    "protocol": "openid-connect",
+    "protocolMappers": [
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "clearance",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "clearance"
+      },
+      "name": "clearance",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "org_unit",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "org_unit"
+      },
+      "name": "org_unit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "receivable_handling_codes",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "receivable_handling_codes"
+      },
+      "name": "receivable_handling_codes",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "roles",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "roles"
+      },
+      "name": "roles",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "id.token.claim": "false",
+       "included.custom.audience": "osprey-conduit"
+      },
+      "name": "audience-conduit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-audience-mapper"
+     }
+    ],
+    "publicClient": false,
+    "redirectUris": [
+     "https://reference.ospreyflow.localhost:443/session/callback"
+    ],
+    "serviceAccountsEnabled": false,
+    "standardFlowEnabled": true,
+    "webOrigins": [
+     "https://reference.ospreyflow.localhost:443"
+    ]
+   },
    "render": {
     "Caddyfile": [
      "https://reference.ospreyflow.localhost {",
@@ -1613,6 +2796,97 @@
     "https://id.OSPREY.Example.ORG/realms/osprey/broker//endpoint",
     "https://id.OSPREY.Example.ORG/realms/osprey/broker//endpoint/logout_response"
    ],
+   "pages_client": {
+    "attributes": {
+     "backchannel.logout.revoke.offline.tokens": "false",
+     "backchannel.logout.session.required": "true",
+     "backchannel.logout.url": "http://pages:8090/session/back-channel-logout",
+     "pkce.code.challenge.method": "S256",
+     "post.logout.redirect.uris": "https://OSPREY.Example.ORG/",
+     "use.refresh.tokens": "true"
+    },
+    "clientAuthenticatorType": "client-secret",
+    "clientId": "osprey-pages",
+    "directAccessGrantsEnabled": false,
+    "enabled": true,
+    "frontchannelLogout": false,
+    "implicitFlowEnabled": false,
+    "name": "Pages (server-rendered tree)",
+    "protocol": "openid-connect",
+    "protocolMappers": [
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "clearance",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "clearance"
+      },
+      "name": "clearance",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "org_unit",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "org_unit"
+      },
+      "name": "org_unit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "receivable_handling_codes",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "receivable_handling_codes"
+      },
+      "name": "receivable_handling_codes",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "roles",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "roles"
+      },
+      "name": "roles",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "id.token.claim": "false",
+       "included.custom.audience": "osprey-conduit"
+      },
+      "name": "audience-conduit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-audience-mapper"
+     }
+    ],
+    "publicClient": false,
+    "redirectUris": [
+     "https://OSPREY.Example.ORG/session/callback"
+    ],
+    "serviceAccountsEnabled": false,
+    "standardFlowEnabled": true,
+    "webOrigins": [
+     "https://OSPREY.Example.ORG"
+    ]
+   },
    "render": {
     "Caddyfile": [
      "https://osprey.example.org {",
@@ -1734,6 +3008,97 @@
     "https://id.osprey.example.org/realms/osprey/broker//endpoint",
     "https://id.osprey.example.org/realms/osprey/broker//endpoint/logout_response"
    ],
+   "pages_client": {
+    "attributes": {
+     "backchannel.logout.revoke.offline.tokens": "false",
+     "backchannel.logout.session.required": "true",
+     "backchannel.logout.url": "http://pages:8090/session/back-channel-logout",
+     "pkce.code.challenge.method": "S256",
+     "post.logout.redirect.uris": "https://osprey.example.org/",
+     "use.refresh.tokens": "true"
+    },
+    "clientAuthenticatorType": "client-secret",
+    "clientId": "osprey-pages",
+    "directAccessGrantsEnabled": false,
+    "enabled": true,
+    "frontchannelLogout": false,
+    "implicitFlowEnabled": false,
+    "name": "Pages (server-rendered tree)",
+    "protocol": "openid-connect",
+    "protocolMappers": [
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "clearance",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "clearance"
+      },
+      "name": "clearance",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "org_unit",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "org_unit"
+      },
+      "name": "org_unit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "receivable_handling_codes",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "receivable_handling_codes"
+      },
+      "name": "receivable_handling_codes",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "roles",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "roles"
+      },
+      "name": "roles",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "id.token.claim": "false",
+       "included.custom.audience": "osprey-conduit"
+      },
+      "name": "audience-conduit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-audience-mapper"
+     }
+    ],
+    "publicClient": false,
+    "redirectUris": [
+     "https://osprey.example.org/session/callback"
+    ],
+    "serviceAccountsEnabled": false,
+    "standardFlowEnabled": true,
+    "webOrigins": [
+     "https://osprey.example.org"
+    ]
+   },
    "render": {
     "Caddyfile": [
      "https://osprey.example.org {",
@@ -1855,6 +3220,97 @@
     "https://id.osprey.example.org:443/realms/osprey/broker//endpoint",
     "https://id.osprey.example.org:443/realms/osprey/broker//endpoint/logout_response"
    ],
+   "pages_client": {
+    "attributes": {
+     "backchannel.logout.revoke.offline.tokens": "false",
+     "backchannel.logout.session.required": "true",
+     "backchannel.logout.url": "http://pages:8090/session/back-channel-logout",
+     "pkce.code.challenge.method": "S256",
+     "post.logout.redirect.uris": "https://osprey.example.org:443/",
+     "use.refresh.tokens": "true"
+    },
+    "clientAuthenticatorType": "client-secret",
+    "clientId": "osprey-pages",
+    "directAccessGrantsEnabled": false,
+    "enabled": true,
+    "frontchannelLogout": false,
+    "implicitFlowEnabled": false,
+    "name": "Pages (server-rendered tree)",
+    "protocol": "openid-connect",
+    "protocolMappers": [
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "clearance",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "clearance"
+      },
+      "name": "clearance",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "org_unit",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "org_unit"
+      },
+      "name": "org_unit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "receivable_handling_codes",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "receivable_handling_codes"
+      },
+      "name": "receivable_handling_codes",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "roles",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "roles"
+      },
+      "name": "roles",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "id.token.claim": "false",
+       "included.custom.audience": "osprey-conduit"
+      },
+      "name": "audience-conduit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-audience-mapper"
+     }
+    ],
+    "publicClient": false,
+    "redirectUris": [
+     "https://osprey.example.org:443/session/callback"
+    ],
+    "serviceAccountsEnabled": false,
+    "standardFlowEnabled": true,
+    "webOrigins": [
+     "https://osprey.example.org:443"
+    ]
+   },
    "render": {
     "Caddyfile": [
      "https://osprey.example.org {",
@@ -1976,6 +3432,97 @@
     "https://id.osprey.example.org:9443/realms/osprey/broker//endpoint",
     "https://id.osprey.example.org:9443/realms/osprey/broker//endpoint/logout_response"
    ],
+   "pages_client": {
+    "attributes": {
+     "backchannel.logout.revoke.offline.tokens": "false",
+     "backchannel.logout.session.required": "true",
+     "backchannel.logout.url": "http://pages:8090/session/back-channel-logout",
+     "pkce.code.challenge.method": "S256",
+     "post.logout.redirect.uris": "https://osprey.example.org:9443/",
+     "use.refresh.tokens": "true"
+    },
+    "clientAuthenticatorType": "client-secret",
+    "clientId": "osprey-pages",
+    "directAccessGrantsEnabled": false,
+    "enabled": true,
+    "frontchannelLogout": false,
+    "implicitFlowEnabled": false,
+    "name": "Pages (server-rendered tree)",
+    "protocol": "openid-connect",
+    "protocolMappers": [
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "clearance",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "clearance"
+      },
+      "name": "clearance",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "org_unit",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "org_unit"
+      },
+      "name": "org_unit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "receivable_handling_codes",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "receivable_handling_codes"
+      },
+      "name": "receivable_handling_codes",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "roles",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "roles"
+      },
+      "name": "roles",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "id.token.claim": "false",
+       "included.custom.audience": "osprey-conduit"
+      },
+      "name": "audience-conduit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-audience-mapper"
+     }
+    ],
+    "publicClient": false,
+    "redirectUris": [
+     "https://osprey.example.org:9443/session/callback"
+    ],
+    "serviceAccountsEnabled": false,
+    "standardFlowEnabled": true,
+    "webOrigins": [
+     "https://osprey.example.org:9443"
+    ]
+   },
    "render": {
     "Caddyfile": [
      "https://osprey.example.org {",
@@ -2097,6 +3644,97 @@
     "https://id.OSPREY.Example.ORG/realms/osprey/broker//endpoint",
     "https://id.OSPREY.Example.ORG/realms/osprey/broker//endpoint/logout_response"
    ],
+   "pages_client": {
+    "attributes": {
+     "backchannel.logout.revoke.offline.tokens": "false",
+     "backchannel.logout.session.required": "true",
+     "backchannel.logout.url": "http://pages:8090/session/back-channel-logout",
+     "pkce.code.challenge.method": "S256",
+     "post.logout.redirect.uris": "https://OSPREY.Example.ORG/",
+     "use.refresh.tokens": "true"
+    },
+    "clientAuthenticatorType": "client-secret",
+    "clientId": "osprey-pages",
+    "directAccessGrantsEnabled": false,
+    "enabled": true,
+    "frontchannelLogout": false,
+    "implicitFlowEnabled": false,
+    "name": "Pages (server-rendered tree)",
+    "protocol": "openid-connect",
+    "protocolMappers": [
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "clearance",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "clearance"
+      },
+      "name": "clearance",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "org_unit",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "org_unit"
+      },
+      "name": "org_unit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "receivable_handling_codes",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "receivable_handling_codes"
+      },
+      "name": "receivable_handling_codes",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "roles",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "roles"
+      },
+      "name": "roles",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "id.token.claim": "false",
+       "included.custom.audience": "osprey-conduit"
+      },
+      "name": "audience-conduit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-audience-mapper"
+     }
+    ],
+    "publicClient": false,
+    "redirectUris": [
+     "https://OSPREY.Example.ORG/session/callback"
+    ],
+    "serviceAccountsEnabled": false,
+    "standardFlowEnabled": true,
+    "webOrigins": [
+     "https://OSPREY.Example.ORG"
+    ]
+   },
    "render": {
     "Caddyfile": [
      "https://osprey.example.org {",
@@ -2218,6 +3856,97 @@
     "https://id.osprey.example.org/realms/osprey/broker//endpoint",
     "https://id.osprey.example.org/realms/osprey/broker//endpoint/logout_response"
    ],
+   "pages_client": {
+    "attributes": {
+     "backchannel.logout.revoke.offline.tokens": "false",
+     "backchannel.logout.session.required": "true",
+     "backchannel.logout.url": "http://pages:8090/session/back-channel-logout",
+     "pkce.code.challenge.method": "S256",
+     "post.logout.redirect.uris": "https://osprey.example.org/",
+     "use.refresh.tokens": "true"
+    },
+    "clientAuthenticatorType": "client-secret",
+    "clientId": "osprey-pages",
+    "directAccessGrantsEnabled": false,
+    "enabled": true,
+    "frontchannelLogout": false,
+    "implicitFlowEnabled": false,
+    "name": "Pages (server-rendered tree)",
+    "protocol": "openid-connect",
+    "protocolMappers": [
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "clearance",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "clearance"
+      },
+      "name": "clearance",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "org_unit",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "org_unit"
+      },
+      "name": "org_unit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "receivable_handling_codes",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "receivable_handling_codes"
+      },
+      "name": "receivable_handling_codes",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "roles",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "roles"
+      },
+      "name": "roles",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "id.token.claim": "false",
+       "included.custom.audience": "osprey-conduit"
+      },
+      "name": "audience-conduit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-audience-mapper"
+     }
+    ],
+    "publicClient": false,
+    "redirectUris": [
+     "https://osprey.example.org/session/callback"
+    ],
+    "serviceAccountsEnabled": false,
+    "standardFlowEnabled": true,
+    "webOrigins": [
+     "https://osprey.example.org"
+    ]
+   },
    "render": {
     "Caddyfile": [
      "https://osprey.example.org {",
@@ -2339,6 +4068,97 @@
     "https://id.osprey.example.org:443/realms/osprey/broker//endpoint",
     "https://id.osprey.example.org:443/realms/osprey/broker//endpoint/logout_response"
    ],
+   "pages_client": {
+    "attributes": {
+     "backchannel.logout.revoke.offline.tokens": "false",
+     "backchannel.logout.session.required": "true",
+     "backchannel.logout.url": "http://pages:8090/session/back-channel-logout",
+     "pkce.code.challenge.method": "S256",
+     "post.logout.redirect.uris": "https://osprey.example.org:443/",
+     "use.refresh.tokens": "true"
+    },
+    "clientAuthenticatorType": "client-secret",
+    "clientId": "osprey-pages",
+    "directAccessGrantsEnabled": false,
+    "enabled": true,
+    "frontchannelLogout": false,
+    "implicitFlowEnabled": false,
+    "name": "Pages (server-rendered tree)",
+    "protocol": "openid-connect",
+    "protocolMappers": [
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "clearance",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "clearance"
+      },
+      "name": "clearance",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "org_unit",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "org_unit"
+      },
+      "name": "org_unit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "receivable_handling_codes",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "receivable_handling_codes"
+      },
+      "name": "receivable_handling_codes",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "roles",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "roles"
+      },
+      "name": "roles",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "id.token.claim": "false",
+       "included.custom.audience": "osprey-conduit"
+      },
+      "name": "audience-conduit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-audience-mapper"
+     }
+    ],
+    "publicClient": false,
+    "redirectUris": [
+     "https://osprey.example.org:443/session/callback"
+    ],
+    "serviceAccountsEnabled": false,
+    "standardFlowEnabled": true,
+    "webOrigins": [
+     "https://osprey.example.org:443"
+    ]
+   },
    "render": {
     "Caddyfile": [
      "https://osprey.example.org {",
@@ -2460,6 +4280,97 @@
     "https://id.osprey.example.org:9443/realms/osprey/broker//endpoint",
     "https://id.osprey.example.org:9443/realms/osprey/broker//endpoint/logout_response"
    ],
+   "pages_client": {
+    "attributes": {
+     "backchannel.logout.revoke.offline.tokens": "false",
+     "backchannel.logout.session.required": "true",
+     "backchannel.logout.url": "http://pages:8090/session/back-channel-logout",
+     "pkce.code.challenge.method": "S256",
+     "post.logout.redirect.uris": "https://osprey.example.org:9443/",
+     "use.refresh.tokens": "true"
+    },
+    "clientAuthenticatorType": "client-secret",
+    "clientId": "osprey-pages",
+    "directAccessGrantsEnabled": false,
+    "enabled": true,
+    "frontchannelLogout": false,
+    "implicitFlowEnabled": false,
+    "name": "Pages (server-rendered tree)",
+    "protocol": "openid-connect",
+    "protocolMappers": [
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "clearance",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "clearance"
+      },
+      "name": "clearance",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "org_unit",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "false",
+       "user.attribute": "org_unit"
+      },
+      "name": "org_unit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "receivable_handling_codes",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "receivable_handling_codes"
+      },
+      "name": "receivable_handling_codes",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "claim.name": "roles",
+       "id.token.claim": "true",
+       "jsonType.label": "String",
+       "multivalued": "true",
+       "user.attribute": "roles"
+      },
+      "name": "roles",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-usermodel-attribute-mapper"
+     },
+     {
+      "config": {
+       "access.token.claim": "true",
+       "id.token.claim": "false",
+       "included.custom.audience": "osprey-conduit"
+      },
+      "name": "audience-conduit",
+      "protocol": "openid-connect",
+      "protocolMapper": "oidc-audience-mapper"
+     }
+    ],
+    "publicClient": false,
+    "redirectUris": [
+     "https://osprey.example.org:9443/session/callback"
+    ],
+    "serviceAccountsEnabled": false,
+    "standardFlowEnabled": true,
+    "webOrigins": [
+     "https://osprey.example.org:9443"
+    ]
+   },
    "render": {
     "Caddyfile": [
      "https://osprey.example.org {",

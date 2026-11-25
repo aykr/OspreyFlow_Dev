@@ -70,7 +70,8 @@ def raw_of(shape: str, origin: str) -> dict[str, Any]:
 
 def capture() -> dict[str, Any]:
     """For each shape and origin: the address fields of `sites`, the Glass's sign-in client, the
-    organisation's redirect addresses, the sign-in page's Glass origin, and every line of every
+    page service's sign-in client (registered through the admin API on every deployment whose
+    `deployment.env` holds its secret, the setting on or off), the organisation's redirect addresses, the sign-in page's Glass origin, and every line of every
     rendered file that holds the deployment's host (compose, env file, Caddyfile, realm, runbook,
     Glass settings, chart values), in either case."""
     from harness import keycloak_theme, realm
@@ -100,6 +101,7 @@ def capture() -> dict[str, Any]:
                     names.dashboards,
                 ],  # fmt: skip
                 "glass_client": realm.glass_client(config),
+                "pages_client": realm.pages_client(config),
                 "organisation_redirect_uris": list(realm.organisation_redirect_uris(config)),
                 "theme_glass_origin": keycloak_theme.login_theme_options(config)["glass_origin"],
             }
