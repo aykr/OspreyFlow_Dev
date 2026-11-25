@@ -630,10 +630,10 @@ POST   /v1/documents/{id}/reextract     re-run with a different model version
 
 POST   /v1/investigations/{id}/judgements
 GET    /v1/investigations/{id}/judgements   list visible judgements — ADR-046's own hide-in-full rule applies
-POST   /v1/investigations/{id}/gaps
-GET    /v1/investigations/{id}/gaps         list
-POST   /v1/investigations/{id}/assumptions
-GET    /v1/investigations/{id}/assumptions  list
+POST   /v1/investigations/{id}/gaps         a linked entity the saver cannot confirm as a node they may see is refused, 422 `unverifiable_link` naming only the ids they sent; an absent node and one they may not see are refused alike
+GET    /v1/investigations/{id}/gaps         list, with only the linked entities this reader may see: one they may not is absent, with no count and no placeholder (rule 3, as ADR-046 hides a judgement), checked through `GraphPort.get_node` as the reader
+POST   /v1/investigations/{id}/assumptions  a linked judgement the saver is not shown in this case (absent, another case's, or hidden from them by ADR-046) is refused, 422 `unverifiable_link`, alike
+GET    /v1/investigations/{id}/assumptions  list, with only the linked judgements this reader is shown by `GET .../judgements`: one hidden from them is absent, with no count and no placeholder
 GET    /v1/investigations/{id}/links/{edge}/notes   notes on one link, newest first — 404 `link_not_found` unless the link is in the working set and the caller may see it (ADR-075)
 POST   /v1/investigations/{id}/links/{edge}/notes   add a note (`{"body": "..."}`), 201; 422 `invalid_note` for empty or over 4,000 characters
 PUT    /v1/investigations/{id}/links/{edge}/notes/{note}      change the caller's own note; 403 `note_not_yours` for anyone else's
