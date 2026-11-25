@@ -119,6 +119,8 @@ KIND_ACTIONS: dict[str, tuple[str, ...]] = {
         "update_studio_recipe_pipeline",
         "update_studio_recipe_pipeline_yaml",
         "update_studio_recipe_row_template",
+        # IS6a: the dataset's run order saved (the dataset and the number, none of its pipelines).
+        "save_run_order",
         # L1.7 (ADR-141 decision 11): a deployed pipeline handed to an orchestrator's client, and
         # taken back.
         "mark_pipeline_owned_externally",

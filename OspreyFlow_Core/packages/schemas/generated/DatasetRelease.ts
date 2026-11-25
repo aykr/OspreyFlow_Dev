@@ -6,10 +6,11 @@ export type Name = string;
 export type Version = string;
 export type DomainModel = string;
 export type Pipelines = string[];
+export type RunOrder = string | null;
 export type ReferenceLists = string[];
 export type Connections = string[];
 export type Path = string;
-export type Role = "domain_model" | "pipeline" | "reference_list" | "list_rows";
+export type Role = "domain_model" | "pipeline" | "reference_list" | "list_rows" | "run_order";
 export type Sha256 = string;
 export type Files = ReleaseFile[];
 
@@ -30,6 +31,7 @@ export interface ReleaseSpec {
   domain_model: DomainModel;
   packs?: Packs;
   pipelines?: Pipelines;
+  run_order?: RunOrder;
   reference_lists?: ReferenceLists;
   connections?: Connections;
   files?: Files;

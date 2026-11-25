@@ -50,8 +50,10 @@ EXCEPTION_COLUMNS = ("id", "reason", "scope", "agreed")
 
 # `status`: a function nobody has built a GOV.UK page for is `planned`; the owner has not yet ruled on a
 # line of the frame row and the status bar (`owner to rule`); a function that is wholly a parity exception
-# is `parity exception`.
-STATUSES = ("planned", "owner to rule", "parity exception")
+# is `parity exception`; a function whose Default-tree page is built, with its scenario passing, is `built`
+# (the owner's ruling of 24 November 2026, item 7 of IS6: its GOV.UK page is a later build, so its route stays
+# empty and the GOV.UK tree is not complete for it). A `built` row has a scenario.
+STATUSES = ("planned", "owner to rule", "parity exception", "built")
 
 # `scope`: a whole function the GOV.UK tree leaves out; one named part of a function (the rest stays a
 # function); a behaviour that needs scripts, excused for the scripts-off case only.
@@ -145,6 +147,8 @@ def check(functions_doc: Any, exceptions_doc: Any) -> list[str]:
                 problems.append(f"function {row['id']} has an empty {column}")
         if row["status"] not in STATUSES:
             problems.append(f"function {row['id']} has status {row['status']!r}, not one of {STATUSES}")
+        if row["status"] == "built" and not row["scenario"].strip():
+            problems.append(f"function {row['id']} is built but names no scenario (ADR-152 decision 12)")
         if row["route"] and not row["scenario"]:
             problems.append(f"function {row['id']} has a route but no scenario (ADR-152 decision 12)")
 
@@ -342,6 +346,20 @@ def test_a_malformed_row_is_caught(mutate: Any, expected: str) -> None:
     functions_doc, exceptions_doc = planted()
     mutate(functions_doc["functions"][0])
     assert any(expected in problem for problem in check(functions_doc, exceptions_doc))
+
+
+def test_a_built_row_names_its_scenario_and_only_the_dataset_map_is_built() -> None:
+    functions_doc, exceptions_doc = planted()
+    rows = {r["id"]: r for r in functions_doc["functions"]}
+    # Built so far: the dataset map (IS3 with IS6a's order), on the owner's ruling of 24 November 2026.
+    assert {i for i, r in rows.items() if r["status"] == "built"} == {"studio-dataset-map"}
+    assert rows["studio-dataset-map"]["scenario"] and rows["studio-dataset-map"]["route"] == ""
+    # Red: a built row with no scenario is caught, and "done" is still not a status.
+    rows["studio-dataset-map"]["scenario"] = ""
+    assert any(
+        "studio-dataset-map is built but names no scenario" in p
+        for p in check(functions_doc, exceptions_doc)
+    )
 
 
 def test_a_whole_exception_that_keeps_a_route_is_caught() -> None:

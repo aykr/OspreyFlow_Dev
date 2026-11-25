@@ -56,3 +56,21 @@ A first attempt typed the pin with `Control+A`, which on macOS moves to the star
 "3": the cases now use `ControlOrMeta+A`.
 
 Green run, 23 November 2026: 6 passed (Chromium).
+
+## The dataset map's order form (slice IS6a, 24 November 2026)
+
+`studio-dataset-map.spec.ts`: DK1 and DO1 (the tab order through the page, now ending in the order form's tick boxes and its button),
+DK2 and DO2 (the edit action end to end: Space ticks a link, Tab reaches *Save the run order*, Enter saves it; the fake Conduit holds
+version 1 and the page has its "Runs after" column), DK3 and DO3 (a cycle saved from the keyboard is refused in words naming its
+pipelines, the tick is still there and nothing is saved), each with scripts and with scripts switched off, in the same runner (no new
+job). DK1 and DO1 were red before the page changed (they said there was no "runs after" text anywhere), as the spec required.
+
+Rule 15: shown red against a fault planted in the page's own template, then green again.
+
+| Planted fault (restored after) | Red | Green after |
+| --- | --- | --- |
+| *Save the run order* made a `type="button"` instead of a submit | DK2, DK3, DO2, DO3 (Enter saves nothing) | all six |
+| each tick box's label pointed at another id (`for="x-…"`) | all six (no tick box is found by its name) | all six |
+| each tick box made `tabindex="-1"` | all six (the tab order loses its stops) | all six |
+
+Green run, 24 November 2026: 6 passed (Chromium).

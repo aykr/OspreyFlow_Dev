@@ -39,6 +39,7 @@ from services.ingest.release import (
     build_bundle,
     pipeline_for,
     read_bundle,
+    released_run_order,
 )
 from services.ingest.staging import ObjectStorageConfig
 
@@ -61,6 +62,11 @@ from schemas.release import (
 )
 from schemas.rights import Right, rights_for
 
+from .dataset_run_order import (
+    RunOrderRefused,
+    RunOrderStore,
+    pipelines_in_a_cycle,
+)
 from .export import compute_handling_level
 from .ingest_sources import UPLOAD_SUBDIR, ingest_root
 from .list_connector import ListRows, ListStore
@@ -306,6 +312,7 @@ async def export_release(
     sources: SourceStore,
     scheme: HandlingScheme,
     secrets: Sequence[str],
+    run_orders: RunOrderStore | None = None,
 ) -> ExportResult:
     live = await models.live(dataset_id)
     if live is None:
@@ -336,6 +343,14 @@ async def export_release(
     for source in await sources.list_for(dataset_id):
         if source.location in reads:
             names.add((await sources.connection(source.connection_id)).name)
+    # The order among the pipelines the bundle carries, as the exporter's own listing gave them
+    # (IS6a): a link to a pipeline the bundle does not carry is left out, never named.
+    stored_order = None if run_orders is None else await run_orders.current(dataset_id)
+    run_order = (
+        None
+        if stored_order is None
+        else released_run_order(viewable, stored_order.runs_after, stored_order.version)
+    )
     files = build_bundle(
         name=metadata.name,
         version=metadata.version,
@@ -344,6 +359,7 @@ async def export_release(
         lists=lists,
         connections=names,
         secrets=secrets,
+        run_order=run_order,
     )
     marking = (
         compute_handling_level([resolve_source_handling(d) for d in viewable], scheme)
@@ -487,6 +503,29 @@ async def plan_import(
         refused.extend(f"the pipeline {name!r}: {p}" for p in problems)
         items.append(ReleaseImportItem(role="pipeline", name=name, action="new_draft"))
 
+    if bundle.run_order is not None:
+        links = {link.pipeline: list(link.after) for link in bundle.run_order.runs_after}
+        labels = {p.pipeline_id: p.label for p in bundle.pipelines}
+        in_cycle = sorted(
+            {labels[p] for p in pipelines_in_a_cycle(links) if p in labels}, key=str.casefold
+        )
+        if in_cycle:
+            quoted = ", ".join(f"“{name}”" for name in in_cycle)
+            refused.append(
+                "the run order in the bundle would make each of these pipelines run after "
+                f"itself, directly or through the others: {quoted}"
+            )
+        else:
+            # The pipelines the order relates: those that run after something and those only ever
+            # run after (the links are keyed by the first kind alone, so counting them would leave
+            # the second kind out).
+            related = {p for pipeline, after in links.items() for p in (pipeline, *after)}
+            notes.append(
+                f"the run order among {len(related)} of its pipelines is written as a new version "
+                "of this dataset's order, with the pipelines as drafts: it is saved under your "
+                "name, and a pipeline is not run until it is deployed"
+            )
+
     here = {c.name for c in await sources.connections()}
     missing = sorted(set(bundle.manifest.spec.connections) - here)
     return ImportPlan(
@@ -517,6 +556,7 @@ async def apply_import(
     recipes: StudioRecipeStore,
     rows_kept: ListRows,
     replace_own_draft: int | None = None,
+    run_orders: RunOrderStore | None = None,
 ) -> tuple[list[str], bool]:
     """Writes the plan's drafts; returns the new pipeline drafts' ids, and whether the importer's
     own open draft was replaced (as the write found it, for the audit). Never called for a dry run
@@ -569,12 +609,53 @@ async def apply_import(
                 unmapped_fields=[],
             )
         made.append(draft.recipe_id)
+    if run_orders is not None and bundle.run_order is not None:
+        await _write_run_order(
+            bundle,
+            [p.pipeline_id for p in planned.pipelines],
+            made,
+            run_orders,
+            dataset_id,
+            principal,
+        )
     # Last, since a version's rows are never replaced: a failure above leaves drafts to discard,
     # never list rows kept under a version nothing imported names (the lane review, item 22).
     for reference in planned.own_lists:
         rows: list[dict[str, object]] = [dict(r) for r in bundle.list_rows[reference.name]]
         await asyncio.to_thread(rows_kept.write, reference, rows)
     return made, open_model is not None
+
+
+async def _write_run_order(
+    bundle: Bundle,
+    exported_ids: Sequence[str],
+    made: Sequence[str],
+    run_orders: RunOrderStore,
+    dataset_id: str,
+    principal: Principal,
+) -> None:
+    """The bundle's order as a new version of the dataset's: its pipelines are the drafts just
+    made (each by the id its file had), joined to whatever links the dataset already holds. The
+    new drafts have no links yet, so the two never meet and no cycle can come of the join. A save
+    that lost a race with another person's is read again and made again, three times at most."""
+    assert bundle.run_order is not None
+    new_id = dict(zip(exported_ids, made, strict=True))
+    added = {
+        new_id[link.pipeline]: [new_id[q] for q in link.after]
+        for link in bundle.run_order.runs_after
+    }
+    for attempt in range(3):
+        stored = await run_orders.current(dataset_id)
+        merged = {p: list(a) for p, a in (stored.runs_after if stored else {}).items()}
+        merged.update(added)
+        try:
+            await run_orders.save(
+                dataset_id, merged, principal, expected_version=stored.version if stored else 0
+            )
+            return
+        except RunOrderRefused:
+            if attempt == 2:
+                raise
 
 
 def bundle_from_text(files: Mapping[str, str]) -> Bundle:

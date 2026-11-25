@@ -50,6 +50,7 @@ from schemas.release import DatasetRelease  # noqa: E402
 from schemas.rights import ALL_MODELS as RIGHTS_MODELS  # noqa: E402
 from schemas.rule_editor import ALL_MODELS as RULE_EDITOR_MODELS  # noqa: E402
 from schemas.rule_standards import ALL_MODELS as RULE_STANDARDS_MODELS  # noqa: E402
+from schemas.run_order import ALL_MODELS as RUN_ORDER_MODELS  # noqa: E402
 from schemas.screening import ALL_MODELS as SCREENING_MODELS  # noqa: E402
 from schemas.search import ALL_MODELS as SEARCH_MODELS  # noqa: E402
 from schemas.sentences import ALL_MODELS as SENTENCE_MODELS  # noqa: E402
@@ -97,6 +98,7 @@ ALL_MODELS: tuple[type[BaseModel], ...] = (
     *OWNERSHIP_MODELS,
     *OPERATIONS_MODELS,
     *RELEASE_MODELS,
+    *RUN_ORDER_MODELS,
     *QUESTION_MODELS,
     *SEARCH_MODELS,
     *BATCH_EXPANSION_MODELS,

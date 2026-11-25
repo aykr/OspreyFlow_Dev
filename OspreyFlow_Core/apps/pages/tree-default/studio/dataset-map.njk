@@ -1,24 +1,50 @@
-{#- Studio › the dataset map (slice IS3; ADR-140 Amendment 22 items 1 and 8): a read-only table of the pipelines that load the
-    dataset, in the Studio's frame. Complete without a script: a table with a caption and header cells, no control of its own.
-    The page draws no column for the order pipelines run in and no line; that is IS6's, drawn only once the order is stored. -#}
+{#- Studio › the dataset map (slice IS3; ADR-140 Amendment 22 items 1 and 8) and the order pipelines run in (slice IS6a; ADR-141 Amendment 2
+    point 6): a table of the pipelines that load the dataset, in the Studio's frame, and a plain form that sets what each runs after.
+    Complete without a script: a table with a caption and header cells, and a form of labelled tick boxes with the anti-forgery token, the
+    case, the dataset and the number of the order the page read. The "Runs after" column is drawn only when an order is stored (dm.drawsOrder),
+    never an empty one; a pipeline that is not deployed is named so in words. No line between pipelines, and no word on what the order should be. -#}
 {% extends "studio/frame.njk" %}
 {% block place %}
+{% if problem %}<p role="alert">{{ problem }}</p>{% endif %}
 {% if dm.kind == "table" %}
 <section class="studio-dataset-map" aria-labelledby="dataset-map-heading">
 <h2 id="dataset-map-heading">{{ mapWords.heading }}</h2>
 <p>{{ mapWords.intro }}</p>
+{% if notice %}<p role="status">{{ notice }}</p>{% endif %}
+{% if dm.orderProblem %}<p role="alert">{{ dm.orderProblem }}</p>{% endif %}
 <table class="table">
 <caption class="caption">{{ dm.caption }}</caption>
 <thead>
-<tr>{% for column in mapWords.columns %}<th scope="col">{{ column }}</th>{% endfor %}
+<tr>{% for column in dm.columns %}<th scope="col">{{ column }}</th>{% endfor %}
 </tr>
 </thead>
 <tbody>
-{% for row in dm.rows %}<tr><th scope="row">{{ row.name }}</th><td>{{ row.status }}</td><td>{{ row.version }}</td><td>{{ row.stages }}</td>
+{% for row in dm.rows %}<tr><th scope="row">{{ row.name }}</th><td>{{ row.status }}</td><td>{{ row.version }}</td><td>{{ row.stages }}</td>{% if dm.drawsOrder %}<td>{{ row.runsAfter }}</td>{% endif %}
 </tr>
 {% endfor %}</tbody>
 </table>
 <p class="caption">{{ mapWords.sorted }}</p>
+{% if dm.orderLine %}<p class="caption">{{ dm.orderLine }}</p>{% endif %}
+{% if dm.form %}
+<section aria-labelledby="run-order-heading">
+<h3 id="run-order-heading">{{ mapWords.orderHeading }}</h3>
+<p>{{ mapWords.orderIntro }}</p>
+<form method="post" action="/studio/dataset-map">
+<input type="hidden" name="_csrf" value="{{ csrfToken }}">
+<input type="hidden" name="case" value="{{ f.caseId }}">
+<input type="hidden" name="dataset" value="{{ f.datasetId }}">
+<input type="hidden" name="expected_version" value="{{ dm.form.expected }}">
+{% for set in dm.form.fieldsets %}<fieldset>
+<legend>{{ set.legend }}</legend>
+{% for choice in set.choices %}<p>
+<input type="checkbox" id="{{ choice.id }}" name="link" value="{{ choice.value }}"{% if choice.checked %} checked{% endif %}>
+<label for="{{ choice.id }}">{{ choice.label }}</label>
+</p>
+{% endfor %}</fieldset>
+{% endfor %}<button type="submit" class="btn btn--primary">{{ mapWords.save }}</button>
+</form>
+</section>
+{% endif %}
 </section>
 {% elif dm.kind == "empty" %}
 <section class="studio-dataset-map" aria-labelledby="dataset-map-heading">

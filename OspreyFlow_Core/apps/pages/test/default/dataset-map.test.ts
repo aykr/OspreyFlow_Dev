@@ -1,6 +1,7 @@
 /**
  * The Studio's dataset map as a server-rendered page, Default tree (slice IS3; ADR-140 Amendment 22 items 1 and 8; ADR-141
- * Amendment 2; ADR-152 decisions 6, 7, 12 and 13; FUNCTIONS row `studio-dataset-map`).
+ * Amendment 2; ADR-152 decisions 6, 7, 12 and 13; FUNCTIONS row `studio-dataset-map`), and the order pipelines run in (slice IS6a,
+ * 24 November 2026: the owner's rulings on the IS6 draft; DM2 and DM11 to DM14 are changed with the spec and DM15 to DM24 are new).
  *
  * There is no React dataset map to read the behaviour from (`FUNCTIONS.yaml` says so), so each case's id is a scenario of
  * `spec/08_ACCEPTANCE_SCENARIOS.md` ("Scenario DM"), written from the ADR text, the prototype's Pipelines list and the owner's
@@ -9,7 +10,16 @@
  * two in step.
  *
  * Which test fails if the invariant is broken (rule 12):
- *  - a "runs after" column, an empty column, a suggestion or a line               -> DM2
+ *  - a "runs after" column with no order stored, an empty column, a suggestion or a line -> DM2, DM14, DM16
+ *  - the order not drawn when stored, or an undeployed pipeline not said so       -> DM15
+ *  - a form with no label, no token, no number, or that needs a script            -> DM12, DM17
+ *  - a save that sends another order than ticked, or another number than read     -> DM18
+ *  - a cycle saved, or its pipelines not named, or the ticks lost                 -> DM19
+ *  - an order that moved on overwritten, or its refusal not said                  -> DM20
+ *  - a save for a person without the right, or a dataset not theirs, carried out  -> DM21
+ *  - a form that is not the page's own carried to the Conduit                     -> DM22
+ *  - an order that could not be read drawn as none, or a failed save as saved     -> DM23
+ *  - a pipeline the reader may not see named, counted or implied                  -> DM24
  *  - a pipeline of another dataset (or one placed in none) in the table          -> DM7
  *  - a count, a name or a title that belongs to what the reader may not see       -> DM8
  *  - "no such dataset" and "not allowed" worded or drawn differently              -> DM8
@@ -21,6 +31,7 @@
  */
 import { afterEach, describe, expect, it } from "vitest";
 
+import { ORDER_WORDS, openedWords } from "../support/fakeConduit.js";
 import { ALL_RIGHTS, CASE_ID, DATASET, DATASET_NAME, caseRow, person, textOf, world } from "../support/studioWorld.js";
 import type { World } from "../support/studioWorld.js";
 import { request } from "../support/http.js";
@@ -119,9 +130,11 @@ function tableOf(html: string): Table | null {
 }
 
 const HEADERS = ["Pipeline", "Status", "Version", "Stages"];
+/** With an order stored: the same and one more. */
+const HEADERS_WITH_ORDER = [...HEADERS, "Runs after"];
 
 /** Every fault in a page's table, in words: the same function reads the real page and each planted one. */
-function tableProblems(html: string): string[] {
+function tableProblems(html: string, headers: string[] = HEADERS): string[] {
   const found: string[] = [];
   const table = tableOf(html);
   if (table === null) return ["there is no table"];
@@ -130,9 +143,9 @@ function tableProblems(html: string): string[] {
   for (const cell of table.head) {
     if (cell.tag !== "th" || !/\bscope="col"/.test(cell.attrs)) found.push(`the header ${JSON.stringify(cell.text)} is not a th with scope="col"`);
     if (cell.text === "") found.push("a column has an empty header");
-    if (/\bruns?\s+after\b|\bsuggest|\bdepends?\b|\bafter\b/i.test(cell.text)) found.push(`a column is named ${JSON.stringify(cell.text)}: the order of runs is IS6's`);
+    if (/\bsuggest|\brecommend/i.test(cell.text)) found.push(`a column is named ${JSON.stringify(cell.text)}: no suggestion of an order is made`);
   }
-  if (table.head.map((c) => c.text).join("|") !== HEADERS.join("|")) found.push(`the columns are ${JSON.stringify(table.head.map((c) => c.text))}, not ${JSON.stringify(HEADERS)}`);
+  if (table.head.map((c) => c.text).join("|") !== headers.join("|")) found.push(`the columns are ${JSON.stringify(table.head.map((c) => c.text))}, not ${JSON.stringify(headers)}`);
   for (const [i, row] of table.rows.entries()) {
     if (row.length !== table.head.length) found.push(`row ${i + 1} has ${row.length} cells under ${table.head.length} headers`);
     const first = row[0];
@@ -178,6 +191,78 @@ function controlProblems(html: string): string[] {
 
 const NAMES = (html: string): string[] => (tableOf(html)?.rows ?? []).map((r) => r[0]?.text ?? "");
 
+// ------------------------------------------------------------------------------------------------ the order form
+
+interface Box {
+  id: string;
+  name: string;
+  value: string;
+  checked: boolean;
+  labelFor: string;
+  label: string;
+}
+interface Group {
+  legend: string;
+  boxes: Box[];
+}
+
+/** The page's one POST form, its inside; null when there is none. */
+const formOf = (html: string): string | null => /<form method="post" action="\/studio\/dataset-map">([\s\S]*?)<\/form>/.exec(strip(html))?.[1] ?? null;
+const hiddenOf = (form: string): Record<string, string> =>
+  Object.fromEntries([...form.matchAll(/<input type="hidden" name="([^"]+)" value="([^"]*)">/g)].map((m) => [m[1] as string, m[2] as string]));
+const groupsOf = (form: string): Group[] =>
+  [...form.matchAll(/<fieldset>\s*<legend>([\s\S]*?)<\/legend>([\s\S]*?)<\/fieldset>/g)].map((m) => ({
+    legend: textOf(m[1] as string),
+    boxes: [...(m[2] as string).matchAll(/<input type="checkbox" id="([^"]+)" name="([^"]+)" value="([^"]*)"( checked)?>\s*<label for="([^"]+)">([\s\S]*?)<\/label>/g)].map((b) => ({
+      id: b[1] as string,
+      name: b[2] as string,
+      value: b[3] as string,
+      checked: b[4] !== undefined,
+      labelFor: b[5] as string,
+      label: textOf(b[6] as string),
+    })),
+  }));
+
+/** Every fault in the order form: the same function reads the real page and each planted one. */
+function formProblems(html: string): string[] {
+  const form = formOf(html);
+  if (form === null) return ["there is no order form"];
+  const found: string[] = [];
+  const hidden = hiddenOf(form);
+  for (const name of ["_csrf", "case", "dataset", "expected_version"]) if (!hidden[name]) found.push(`the form has no ${name}`);
+  if (hidden["expected_version"] !== undefined && !/^\d+$/.test(hidden["expected_version"])) found.push("the form's number is not a whole number");
+  const groups = groupsOf(form);
+  if (groups.length === 0) found.push("the form has no group of tick boxes");
+  for (const group of groups) {
+    if (group.legend === "") found.push("a group has no legend");
+    if (group.boxes.length === 0) found.push(`the group ${JSON.stringify(group.legend)} has no tick box`);
+    for (const box of group.boxes) {
+      if (box.name !== "link") found.push(`a tick box is named ${JSON.stringify(box.name)}, not link`);
+      if (box.labelFor !== box.id || box.label === "") found.push(`a tick box ${JSON.stringify(box.id)} has no label of its own`);
+    }
+  }
+  if (!/<button type="submit"[^>]*>\s*\S[\s\S]*?<\/button>/.test(form)) found.push("the form has no submit button with words");
+  return found;
+}
+
+const link = (pipeline: string, after: string): string => `${encodeURIComponent(pipeline)}|${encodeURIComponent(after)}`;
+const SAVED_AT = "2026-11-20T09:30:00Z";
+const SAVED_WORDS = "20 November 2026 at 09:30 UTC";
+const ORDERED = [
+  recipe({ recipe_id: "r-visits", label: "Visits" }),
+  recipe({ recipe_id: "r-calls", label: "Calls", version: 1, status: "draft" }),
+  recipe({ recipe_id: "r-report", label: "Report", version: 2 }),
+];
+/** The Conduit holds this order for the dataset: its number, who saved it and the links, whoever may see their pipelines. */
+function seed(w: World, version: number, runsAfter: Record<string, string[]>, by = "analyst-1"): void {
+  w.conduit.orders.set(DATASET, { version, saved_by: by, saved_at: SAVED_AT, runs_after: runsAfter });
+}
+const MAP = "/studio/dataset-map";
+/** The form as the page draws it, posted as a browser would, with the tick boxes named. */
+const save = (w: World, expected: string, ticked: [string, string][], over: [string, string][] = []): ReturnType<World["postPairs"]> =>
+  w.postPairs(MAP, [["case", CASE_ID], ["dataset", DATASET], ["expected_version", expected], ...over, ...ticked.map(([a, b]): [string, string] => ["link", link(a, b)])]);
+const puts = (w: World): { path: string; method: string; headers: Record<string, unknown>; body: string }[] => w.conduit.calls.filter((c) => c.method === "PUT");
+
 describe("the dataset map (Scenario DM)", () => {
   it("DM1: the dataset's pipelines are a table with a caption, column headers and one row header per pipeline, drawn on the server", async () => {
     const w = await make(person({ pipelines: [recipe(), recipe({ recipe_id: "r-calls", label: "Calls", version: 1, status: "draft" })] }));
@@ -196,16 +281,17 @@ describe("the dataset map (Scenario DM)", () => {
     expect(res.text).not.toMatch(/<script[^>]*src="[^"]*dataset-map/);
   });
 
-  it("DM2: there are four columns and no 'runs after' column, no empty column, no suggestion and no line", async () => {
+  it("DM2: with no order stored there are four columns, and no 'runs after' column, no empty column, no hint of an order, no suggestion and no line", async () => {
     const w = await make(person({ pipelines: [recipe(), recipe({ recipe_id: "r-calls", label: "Calls", version: 1, status: "draft" })] }));
     const res = await w.get(PATH);
     const table = tableOf(res.text);
     expect(table?.head.map((c) => c.text)).toEqual(HEADERS);
     for (const row of table?.rows ?? []) expect(row).toHaveLength(4);
-    const place = textOf(placeOf(res.text));
-    expect(place).not.toMatch(/runs? after|suggest|depends on|must run|run order|order of runs/i);
+    // Nothing of an order is in the table or beside it: no column, no line saying a version, no suggestion; the only words of
+    // "runs after" are the form's own legends, which set it.
+    expect(textOf(tableOf(res.text) ? (/<table\b[\s\S]*?<\/table>/.exec(strip(res.text))?.[0] ?? "") : "")).not.toMatch(/runs? after|suggest|depends on|must run|run order|order of runs|nothing/i);
+    expect(textOf(placeOf(res.text))).not.toMatch(/suggest|recommend|Run order version|none (?:is|has been) (?:stored|saved)/i);
     expect(res.text).not.toMatch(/<(?:svg|canvas|line|polyline)\b/i);
-    expect(placeOf(res.text)).not.toMatch(/<(?:form|input|select|button|textarea)\b/i);
     expect(tableProblems(res.text)).toEqual([]);
   });
 
@@ -373,6 +459,8 @@ describe("the dataset map (Scenario DM)", () => {
     await w.get(PATH).set("X-CSRF-Token", w.signed.csrf).set("Origin", "https://evil.test");
     const asked = w.conduit.calls.filter((c) => c.path.endsWith("/ingest/recipe-registry"));
     expect(asked.map((c) => [c.method, c.path])).toEqual([["GET", `/v1/investigations/${CASE_ID}/ingest/recipe-registry`]]);
+    // The stored order, once, from the dataset's own route.
+    expect(w.conduit.calls.filter((c) => c.path.includes("/run-order")).map((c) => [c.method, c.path])).toEqual([["GET", `/v1/datasets/${DATASET}/run-order`]]);
     expect(w.conduit.calls.length).toBeGreaterThan(0);
     for (const call of w.conduit.calls) {
       expect(call.method).toBe("GET");
@@ -398,15 +486,20 @@ describe("the dataset map (Scenario DM)", () => {
     expect(bare.conduit.calls.filter((c) => c.path.includes("recipe-registry"))).toEqual([]);
   });
 
-  it("DM12: the page needs no script and adds no action beyond links: no handler, no tab stop above 0, no control without a label, no inline script or style", async () => {
+  it("DM12: the page needs no script: no handler, no tab stop above 0, no control without a label, no inline script or style", async () => {
     const w = await make(person({ pipelines: [recipe(), recipe({ recipe_id: "r2", label: "Calls", status: "draft" })] }));
     for (const path of [PATH, `${PATH}&dataset=no-such-dataset`, "/studio/dataset-map"]) {
       const res = await w.get(path);
       expect(controlProblems(res.text), path).toEqual([]);
     }
     const res = await w.get(PATH);
-    // Beyond the frame's own controls (the dataset switch, a GET form with a button), the place adds no control at all.
-    expect(placeOf(res.text)).not.toMatch(/<(?:form|input|select|button|textarea|a)\b/i);
+    // Beyond the frame's own controls (the dataset switch, a GET form with a button), the place's controls are the order form's
+    // alone: one POST form, tick boxes and a submit button; no link, no select, no text field.
+    const place = placeOf(res.text);
+    expect(place.match(/<form\b/g)).toHaveLength(1);
+    expect(place).not.toMatch(/<(?:select|textarea|a)\b/i);
+    expect([...place.matchAll(/<input type="([a-z]+)"/g)].every((m) => m[1] === "hidden" || m[1] === "checkbox")).toBe(true);
+    expect(formProblems(res.text)).toEqual([]);
     // The frame's switch still works from this page: a GET form to this path, with a labelled select.
     expect(res.text).toMatch(/<form method="get" action="\/studio\/dataset-map"/);
     expect(res.text).toMatch(/<label[^>]*>\s*(?:<span[^>]*>)?Dataset/);
@@ -415,13 +508,20 @@ describe("the dataset map (Scenario DM)", () => {
     expect(res.text).not.toMatch(/Content-Security-Policy[^>]*unsafe-inline/i);
   });
 
-  it("DM13: the page is the service's own: registered under /studio, a GET only, and the answer is HTML with the service's headers", async () => {
+  it("DM13: the page is the service's own: registered under /studio, a GET and its form's POST only, and the answer is HTML with the service's headers", async () => {
     const w = await make(person({ pipelines: [recipe()] }));
     const res = await w.get(PATH);
     expect(res.headers["content-type"]).toMatch(/^text\/html/);
     expect(res.headers["content-security-policy"]).toMatch(/default-src 'self'/);
-    const post = await w.post("/studio/dataset-map", { case: CASE_ID });
-    expect(post.status).toBe(404);
+    // A method the page does not list is a page that is not there.
+    for (const method of ["put", "delete", "patch"] as const) {
+      const other = await request(w.app)[method]("/studio/dataset-map").set("Cookie", w.signed.cookie).set("X-CSRF-Token", w.signed.csrf);
+      expect(other.status, method).toBe(404);
+    }
+    // The POST is the form's: with no anti-forgery token it is refused before the page, and nothing is sent to the Conduit.
+    const forged = await w.post("/studio/dataset-map", { case: CASE_ID }, false);
+    expect(forged.status).toBe(403);
+    expect(puts(w)).toEqual([]);
     const noCases = await make(person({ cases: [], pipelines: [recipe()] }));
     const empty = await noCases.get(PATH);
     expect(empty.text).not.toContain("<table");
@@ -434,16 +534,18 @@ describe("the dataset map (Scenario DM)", () => {
     const real = (await w.get(PATH)).text;
     expect(tableProblems(real)).toEqual([]);
     expect(controlProblems(real)).toEqual([]);
+    expect(formProblems(real)).toEqual([]);
 
-    // A fifth column named "Runs after", as IS6 will add it: found by name and by count.
+    // A fifth column named "Runs after" with no order stored: found by name and by count.
     const withColumn = real
       .replace("</tr>\n</thead>", '<th scope="col">Runs after</th></tr>\n</thead>')
       .replace(/<\/tr>(?=\s*(?:<tr|<\/tbody>))/g, "<td>Visits</td></tr>");
     expect(withColumn).not.toBe(real);
     expect(tableProblems(withColumn).join("; ")).toMatch(/Runs after/);
-    // The same column with nothing in it.
+    // The same column with nothing in it, and a column of another name.
     const emptyColumn = real.replace(/<\/tr>(?=\s*(?:<tr|<\/tbody>))/g, "<td></td></tr>").replace("</tr>\n</thead>", '<th scope="col"></th></tr>\n</thead>');
     expect(tableProblems(emptyColumn).join("; ")).toMatch(/empty header|empty cell/);
+    expect(tableProblems(real.replace(">Stages<", ">Depends on<")).join("; ")).toMatch(/Depends on/);
     // A header that is no longer a column header, a table with no caption, a row that does not start with a row header.
     expect(tableProblems(real.replace(/<th scope="col">/, "<th>")).join("; ")).toMatch(/scope="col"/);
     expect(tableProblems(real.replace(/<caption\b[^>]*>[\s\S]*?<\/caption>/, "")).join("; ")).toMatch(/no caption/);
@@ -461,5 +563,302 @@ describe("the dataset map (Scenario DM)", () => {
     expect(controlProblems(real.replace("</main>", "<script>run()</script></main>")).join("; ")).toMatch(/inline script/);
     expect(controlProblems(real.replace("<table", '<table style="width:9px"')).join("; ")).toMatch(/style attribute/);
     expect(controlProblems(real.replace("</main>", "<a>words</a></main>")).join("; ")).toMatch(/no href/);
+    // The form's checks: a tick box with no label of its own, a form with no token, no number, no button. Each is the real form
+    // with one thing changed inside it (the frame has forms of its own, whose parts must not be the ones changed).
+    const inForm = (change: (form: string) => string): string => real.replace(formOf(real) as string, change(formOf(real) as string));
+    expect(formProblems(inForm((f) => f.replace(/<label for="[^"]+">/, '<label for="elsewhere">'))).join("; ")).toMatch(/no label of its own/);
+    expect(formProblems(inForm((f) => f.replace(/<input type="hidden" name="_csrf"[^>]*>/, ""))).join("; ")).toMatch(/no _csrf/);
+    expect(formProblems(inForm((f) => f.replace(/<input type="hidden" name="expected_version"[^>]*>/, ""))).join("; ")).toMatch(/no expected_version/);
+    expect(formProblems(inForm((f) => f.replace(/(name="expected_version" value=")\d+"/, '$1one"'))).join("; ")).toMatch(/not a whole number/);
+    expect(formProblems(inForm((f) => f.replace(/<button type="submit"[^>]*>[\s\S]*?<\/button>/, ""))).join("; ")).toMatch(/no submit button/);
+    expect(formProblems(inForm((f) => f.replace(/name="link"/, 'name="order"'))).join("; ")).toMatch(/not link/);
+    expect(formProblems(inForm((f) => f.replace(/<fieldset>\s*<legend>[\s\S]*?<\/legend>/, "<fieldset><legend></legend>"))).join("; ")).toMatch(/no legend/);
+  });
+
+  it("DM15: with an order stored the table has a fifth column, Runs after, naming what each pipeline runs after, and not deployed in words, with the version, who and when", async () => {
+    const w = await make(person({ pipelines: ORDERED }));
+    seed(w, 3, { "r-calls": ["r-visits"], "r-report": ["r-visits", "r-calls"] });
+    const res = await w.get(PATH);
+    expect(res.status).toBe(200);
+    expect(tableProblems(res.text, HEADERS_WITH_ORDER)).toEqual([]);
+    const rows = tableOf(res.text)?.rows ?? [];
+    // Sorted by name: each pipeline's own after-list is sorted by name too; one that is not deployed (Calls is a draft) says so.
+    expect(rows.map((r) => [r[0]?.text, r[4]?.text])).toEqual([
+      ["Calls", "Visits"],
+      ["Report", "Calls (not deployed), Visits"],
+      ["Visits", "Nothing"],
+    ]);
+    expect(textOf(placeOf(res.text))).toContain(`Run order version 3, saved by analyst-1 on ${SAVED_WORDS}.`);
+    // A pipeline that is not deployed may be in the order and is said so in the form's labels too.
+    const labels = groupsOf(formOf(res.text) ?? "").flatMap((g) => g.boxes.map((b) => b.label));
+    expect(labels).toContain("Calls (not deployed)");
+    expect(labels).not.toContain("Visits (not deployed)");
+    // The order's column draws no line and no suggestion.
+    expect(textOf(placeOf(res.text))).not.toMatch(/suggest|recommend/i);
+    expect(res.text).not.toMatch(/<(?:svg|canvas|line|polyline)\b/i);
+  });
+
+  it("DM16: an order with nothing to say about these pipelines draws no column, no sentence about none, and still the form", async () => {
+    const orders: Record<string, string[]>[] = [{}, { "r-ghost": ["r-visits"], "r-visits": ["r-ghost"] }];
+    for (const links of orders) {
+      const w = await make(person({ pipelines: ORDERED, orderScope: "none" }));
+      seed(w, 2, links);
+      const res = await w.get(PATH);
+      expect(tableOf(res.text)?.head.map((c) => c.text), JSON.stringify(links)).toEqual(HEADERS);
+      expect(tableProblems(res.text)).toEqual([]);
+      expect(textOf(placeOf(res.text))).not.toMatch(/ghost|none (?:is|has been) (?:stored|saved)|no order/i);
+      expect(formProblems(res.text)).toEqual([]);
+      // Nothing ticked: no stored link is among these pipelines.
+      expect(groupsOf(formOf(res.text) ?? "").flatMap((g) => g.boxes).some((b) => b.checked)).toBe(false);
+    }
+  });
+
+  it("DM17: the order form has a group of tick boxes for each pipeline, labelled, ticked as stored, and carries the token, the case, the dataset and the number read", async () => {
+    const w = await make(person({ pipelines: ORDERED }));
+    seed(w, 3, { "r-calls": ["r-visits"], "r-report": ["r-visits", "r-calls"] });
+    const res = await w.get(PATH);
+    expect(formProblems(res.text)).toEqual([]);
+    const form = formOf(res.text) as string;
+    expect(hiddenOf(form)).toEqual({ _csrf: w.signed.csrf, case: CASE_ID, dataset: DATASET, expected_version: "3" });
+    const groups = groupsOf(form);
+    expect(groups.map((g) => g.legend)).toEqual(["Calls runs after", "Report runs after", "Visits runs after"]);
+    // Every other pipeline is a tick box of each group, and none is its own; each is ticked as the order stores it.
+    const ticked = groups.flatMap((g, i) => g.boxes.filter((b) => b.checked).map((b) => [i, b.value]));
+    expect(groups.every((g) => g.boxes.length === 2)).toBe(true);
+    expect(ticked).toEqual([
+      [0, link("r-calls", "r-visits")],
+      [1, link("r-report", "r-calls")],
+      [1, link("r-report", "r-visits")],
+    ]);
+    expect(new Set(groups.flatMap((g) => g.boxes.map((b) => b.id))).size).toBe(6);
+    // No order yet: the number is 0 and nothing is ticked. One pipeline has nothing to put in order: no form. None: no table.
+    const fresh = await make(person({ pipelines: ORDERED }));
+    const none = await fresh.get(PATH);
+    expect(hiddenOf(formOf(none.text) as string)["expected_version"]).toBe("0");
+    expect(groupsOf(formOf(none.text) as string).flatMap((g) => g.boxes).some((b) => b.checked)).toBe(false);
+    const single = await make(person({ pipelines: [recipe()] }));
+    expect(formOf((await single.get(PATH)).text)).toBeNull();
+    const empty = await make(person({ pipelines: [] }));
+    expect(formOf((await empty.get(PATH)).text)).toBeNull();
+  });
+
+  it("DM18: a save sends the order as ticked and the number read, as the person, then says the new version; ticking nothing clears the links", async () => {
+    const w = await make(person({ pipelines: ORDERED }));
+    seed(w, 3, { "r-calls": ["r-visits"] });
+    const res = await save(w, "3", [["r-report", "r-visits"], ["r-report", "r-calls"], ["r-calls", "r-visits"]]);
+    expect(res.status).toBe(200);
+    const sent = puts(w);
+    expect(sent.map((c) => [c.method, c.path])).toEqual([["PUT", `/v1/datasets/${DATASET}/run-order`]]);
+    const call = sent[0] as (typeof sent)[number];
+    expect(call.headers["authorization"]).toBe(`Bearer ${w.me.token}`);
+    for (const header of ["cookie", "x-csrf-token", "origin"]) expect(call.headers[header]).toBeUndefined();
+    expect(JSON.parse(call.body)).toEqual({
+      expected_version: 3,
+      entries: [
+        { pipeline_id: "r-report", runs_after: ["r-visits", "r-calls"] },
+        { pipeline_id: "r-calls", runs_after: ["r-visits"] },
+      ],
+    });
+    const text = textOf(placeOf(res.text));
+    expect(text).toContain("The run order is saved as version 4.");
+    expect(text).toContain("Run order version 4, saved by analyst-1 on");
+    expect(w.conduit.orders.get(DATASET)?.version).toBe(4);
+    expect(tableProblems(res.text, HEADERS_WITH_ORDER)).toEqual([]);
+    expect((tableOf(res.text)?.rows ?? []).map((r) => [r[0]?.text, r[4]?.text])).toEqual([
+      ["Calls", "Visits"],
+      ["Report", "Calls (not deployed), Visits"],
+      ["Visits", "Nothing"],
+    ]);
+    // The form is drawn again for the new number, ticked as saved.
+    expect(hiddenOf(formOf(res.text) as string)["expected_version"]).toBe("4");
+    // Ticking nothing clears the order's links: an empty save, a new number, and the column goes (no empty column).
+    const cleared = await save(w, "4", []);
+    expect(cleared.status).toBe(200);
+    expect(JSON.parse((puts(w)[1] as (typeof sent)[number]).body)).toEqual({ expected_version: 4, entries: [] });
+    expect(w.conduit.orders.get(DATASET)?.version).toBe(5);
+    expect(tableOf(cleared.text)?.head.map((c) => c.text)).toEqual(HEADERS);
+    expect(textOf(placeOf(cleared.text))).toContain("The run order is saved as version 5.");
+  });
+
+  it("DM19: a cycle is refused in the Conduit's words naming the pipelines in it, the order is shown as stored with the ticks kept, and nothing is saved", async () => {
+    const w = await make(person({ pipelines: ORDERED }));
+    seed(w, 3, { "r-calls": ["r-visits"] });
+    const res = await save(w, "3", [["r-visits", "r-calls"], ["r-calls", "r-visits"], ["r-report", "r-visits"]]);
+    expect(res.status).toBe(422);
+    const place = placeOf(res.text);
+    expect(place).toMatch(/<p role="alert">[^<]*“Calls”, “Visits”/);
+    expect(textOf(place)).toContain(ORDER_WORDS.cycle(["Calls", "Visits"]));
+    // Named by the labels the Studio shows, never an identifier, and not the pipeline that only runs after the cycle.
+    expect(textOf(place)).not.toContain("“Report”");
+    expect(place).not.toMatch(/r-visits|r-calls/.exec(textOf(place))?.[0] ?? "$^");
+    // Nothing was saved; the table is the stored order, and what was ticked is ticked.
+    expect(w.conduit.orders.get(DATASET)?.version).toBe(3);
+    expect((tableOf(res.text)?.rows ?? []).map((r) => [r[0]?.text, r[4]?.text])).toEqual([
+      ["Calls", "Visits"],
+      ["Report", "Nothing"],
+      ["Visits", "Nothing"],
+    ]);
+    const ticked = groupsOf(formOf(res.text) as string).flatMap((g) => g.boxes.filter((b) => b.checked).map((b) => b.value));
+    expect(ticked.sort()).toEqual([link("r-calls", "r-visits"), link("r-report", "r-visits"), link("r-visits", "r-calls")].sort());
+    // A pipeline after itself is a cycle too.
+    const self = await save(w, "3", [["r-report", "r-report"]]);
+    expect(self.status).toBe(422);
+    expect(textOf(placeOf(self.text))).toContain(ORDER_WORDS.cycle(["Report"]));
+  });
+
+  it("DM20: an order that has moved on since the page was read is refused, said, shown as it now is with the ticks kept, and nothing is overwritten", async () => {
+    const w = await make(person({ pipelines: ORDERED }));
+    seed(w, 3, { "r-calls": ["r-visits"] }, "bob-2");
+    const res = await save(w, "2", [["r-report", "r-visits"]]);
+    expect(res.status).toBe(409);
+    const text = textOf(placeOf(res.text));
+    expect(text).toContain("The run order was changed by someone else since you read it");
+    // In the Conduit's own words: the number meant, the number it is now, who and when, and to read it again.
+    expect(text).toContain(ORDER_WORDS.stale(2, 3, "bob-2", openedWords(SAVED_AT)));
+    expect(w.conduit.orders.get(DATASET)).toMatchObject({ version: 3, runs_after: { "r-calls": ["r-visits"] } });
+    // The order as it now is, the form for its number, and what was ticked kept.
+    expect(hiddenOf(formOf(res.text) as string)["expected_version"]).toBe("3");
+    const ticked = groupsOf(formOf(res.text) as string).flatMap((g) => g.boxes.filter((b) => b.checked).map((b) => b.value));
+    expect(ticked).toEqual([link("r-report", "r-visits")]);
+    // The number from the future is as stale as one from the past; the number it is now saves.
+    expect((await save(w, "9", [["r-report", "r-visits"]])).status).toBe(409);
+    expect((await save(w, "3", [["r-report", "r-visits"]])).status).toBe(200);
+    expect(w.conduit.orders.get(DATASET)?.version).toBe(4);
+  });
+
+  it("DM21: a save by a person without the right, for a dataset that is not theirs or after the sign-in ended is answered as the read is, and saves nothing", async () => {
+    const hidden = [recipe({ label: "Secret pipeline" }), recipe({ recipe_id: "r-two", label: "Second secret", status: "draft" })];
+    // No right to edit pipelines: the Conduit refuses the registry; the page says the one sentence and sends nothing.
+    const noRight = await make(person({ rights: ALL_RIGHTS.filter((r) => r !== "edit_pipelines"), pipelines: hidden }));
+    seed(noRight, 1, { "r-two": ["r-visits"] });
+    const byRight = await save(noRight, "1", [["r-two", "r-visits"]]);
+    // A case that is not theirs: no dataset to save for.
+    const other = await make(person({ pipelines: hidden }));
+    seed(other, 1, { "r-two": ["r-visits"] });
+    const notTheirs = await other.postPairs(MAP, [["case", "case-not-theirs"], ["dataset", DATASET], ["expected_version", "1"], ["link", link("r-two", "r-visits")]]);
+    // The Conduit no longer opens the dataset after the page was drawn (their access changed): refused at the save, the same words.
+    const changed = await make(person({ pipelines: hidden, datasetsDenied: [DATASET] }));
+    seed(changed, 1, { "r-two": ["r-visits"] });
+    const byDataset = await save(changed, "1", [["r-two", "r-visits"]]);
+    for (const [page, w] of [[byRight, noRight], [notTheirs, other], [byDataset, changed]] as const) {
+      expect(page.status).toBe(page === notTheirs ? 200 : 403);
+      expect(textOf(placeOf(page.text))).toContain(REFUSED);
+      expect(page.text).not.toContain("<table");
+      for (const named of ["Secret pipeline", "Second secret", "r-two", "r-visits", "edit_pipelines", "Missing right"]) expect(page.text).not.toContain(named);
+      expect(textOf(placeOf(page.text))).not.toMatch(/\d/);
+      expect(w.conduit.orders.get(DATASET)?.version).toBe(1);
+    }
+    // The first two never asked the Conduit to save; the third was refused there (404, as for a dataset that does not exist).
+    expect(puts(noRight)).toEqual([]);
+    expect(puts(other)).toEqual([]);
+    expect(puts(changed).length).toBeLessThanOrEqual(1);
+    // The read of the order is refused for the same reason (the dataset is no longer theirs): the one sentence, no table, no name.
+    const read = await changed.get(PATH);
+    expect(read.status).toBe(403);
+    expect(textOf(placeOf(read.text))).toContain(REFUSED);
+    for (const named of ["<table", "Secret pipeline", "Second secret", "r-two"]) expect(read.text).not.toContain(named);
+    // The sign-in has ended: the words that it has, and nothing saved or named.
+    const ended = await make(person({ pipelines: hidden }));
+    seed(ended, 1, { "r-two": ["r-visits"] });
+    ended.conduit.people.delete(ended.me.token);
+    const gone = await save(ended, "1", [["r-two", "r-visits"]]);
+    expect(gone.text).toContain("Your session has ended");
+    expect(puts(ended)).toEqual([]);
+    expect(gone.text).not.toContain("Secret pipeline");
+    expect(ended.conduit.orders.get(DATASET)?.version).toBe(1);
+  });
+
+  it("DM22: a form that is not the page's own is refused and nothing is sent to the Conduit", async () => {
+    const w = await make(person({ pipelines: ORDERED }));
+    seed(w, 3, { "r-calls": ["r-visits"] });
+    const ok: [string, string][] = [["case", CASE_ID], ["dataset", DATASET], ["expected_version", "3"], ["link", link("r-report", "r-visits")]];
+    const without = (name: string): [string, string][] => ok.filter(([key]) => key !== name);
+    const bad: [string, [string, string][]][] = [
+      ["no number", without("expected_version")],
+      ["a number that is not whole", [...without("expected_version"), ["expected_version", "1.5"]]],
+      ["a negative number", [...without("expected_version"), ["expected_version", "-1"]]],
+      ["a word for a number", [...without("expected_version"), ["expected_version", "three"]]],
+      ["a tick box that is not a pair", [...without("link"), ["link", "garbage"]]],
+      ["a tick box of three parts", [...without("link"), ["link", "a|b|c"]]],
+      ["a tick box with an empty part", [...without("link"), ["link", "|r-visits"]]],
+      ["a tick box with a broken escape", [...without("link"), ["link", "%E0%A4%A|r-visits"]]],
+    ];
+    for (const [what, pairs] of bad) {
+      const res = await w.postPairs(MAP, pairs);
+      expect(res.status, what).toBe(400);
+      expect(textOf(placeOf(res.text)), what).toContain("That request was not understood. Nothing has changed.");
+    }
+    // A form for another dataset is not this page's: the number it carries is for another order.
+    const elsewhere = await w.postPairs(MAP, [...without("dataset"), ["dataset", "some-other-dataset"]]);
+    expect(elsewhere.status).toBe(409);
+    expect(textOf(placeOf(elsewhere.text))).toContain("That form was for another dataset. Nothing has changed.");
+    expect(elsewhere.text).not.toContain("some-other-dataset");
+    // No anti-forgery token: refused before the page is reached.
+    expect((await w.postPairs(MAP, ok, false)).status).toBe(403);
+    expect((await w.postPairs(MAP, ok, "not-the-token")).status).toBe(403);
+    expect(puts(w)).toEqual([]);
+    expect(w.conduit.orders.get(DATASET)?.version).toBe(3);
+    // Control: the same form with every part right is carried out.
+    expect((await w.postPairs(MAP, ok)).status).toBe(200);
+    expect(puts(w)).toHaveLength(1);
+  });
+
+  it("DM23: an order that could not be read is said in an alert, never drawn as none, with no column and no form; a save that could not be made says so and keeps the ticks", async () => {
+    const w = await make(person({ pipelines: ORDERED }));
+    seed(w, 3, { "r-calls": ["r-visits"] });
+    w.conduit.failing.add("/run-order");
+    const res = await w.get(PATH);
+    expect(res.status).toBe(502);
+    expect(placeOf(res.text)).toMatch(/role="alert"[^>]*>[^<]*run order of this dataset could not be read just now/);
+    // The pipelines were read, so they are drawn; the order is not drawn at all, and not as none stored.
+    expect(tableOf(res.text)?.head.map((c) => c.text)).toEqual(HEADERS);
+    expect(formOf(res.text)).toBeNull();
+    expect(textOf(placeOf(res.text))).not.toMatch(/Run order version|saved by/);
+    // A save that failed at the store: said, nothing saved, and the form is there with the ticks kept.
+    const v = await make(person({ pipelines: ORDERED }));
+    seed(v, 3, { "r-calls": ["r-visits"] });
+    v.conduit.failNextOrderSave = true;
+    const failed = await save(v, "3", [["r-report", "r-visits"]]);
+    expect(failed.status).toBe(502);
+    expect(placeOf(failed.text)).toMatch(/role="alert"[^>]*>[^<]*could not be saved just now\. Nothing has changed/);
+    expect(textOf(placeOf(failed.text))).not.toContain("The run order is saved");
+    expect(v.conduit.orders.get(DATASET)?.version).toBe(3);
+    const ticked = groupsOf(formOf(failed.text) as string).flatMap((g) => g.boxes.filter((b) => b.checked).map((b) => b.value));
+    expect(ticked).toEqual([link("r-report", "r-visits")]);
+    // The order's own failure at the page's save is the same: said, never a saved number.
+    w.conduit.failing.add("/run-order");
+    const down = await save(w, "3", [["r-report", "r-visits"]]);
+    expect(down.status).toBe(502);
+    expect(textOf(placeOf(down.text))).toContain("could not be saved just now");
+  });
+
+  it("DM24: a pipeline the reader may not see, or a link that names one, is not named, counted or implied", async () => {
+    // A Conduit that sent every link it holds (the fault): the page draws only what its own table holds.
+    const w = await make(person({ pipelines: ORDERED, orderScope: "none" }));
+    seed(w, 5, {
+      "r-calls": ["r-visits", "r-ghost-of-another-unit"],
+      "r-ghost-of-another-unit": ["r-visits", "r-calls"],
+      "r-report": ["r-ghost-of-another-unit"],
+      // A link of a pipeline to itself is no order: drawn as running after nothing.
+      "r-visits": ["r-visits"],
+    });
+    const res = await w.get(PATH);
+    expect(tableProblems(res.text, HEADERS_WITH_ORDER)).toEqual([]);
+    // A pipeline left with only a link it may not see runs after "Nothing": never "after something unnamed".
+    expect((tableOf(res.text)?.rows ?? []).map((r) => [r[0]?.text, r[4]?.text])).toEqual([
+      ["Calls", "Visits"],
+      ["Report", "Nothing"],
+      ["Visits", "Nothing"],
+    ]);
+    expect(res.text).not.toContain("ghost");
+    const place = textOf(placeOf(res.text));
+    expect(place).not.toMatch(/\b\d+ (?:pipelines?|links?|of|more|hidden|others?|not shown|left out)\b/i);
+    expect(place).not.toMatch(/unnamed|another unit|you may not|hidden/i);
+    // The form carries no identifier of a pipeline the table does not hold.
+    expect(formOf(res.text)).not.toMatch(/ghost/);
+    // A save never sends a link to a pipeline the page does not hold either: only what its own form could tick.
+    const sent = await save(w, "5", [["r-report", "r-visits"]]);
+    expect(sent.status).toBe(200);
+    expect(puts(w).map((c) => c.body).join("")).not.toMatch(/ghost/);
   });
 });
