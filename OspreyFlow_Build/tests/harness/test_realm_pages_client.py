@@ -423,15 +423,15 @@ def test_the_back_channel_check_fails_for_each_plant(shape: str) -> None:
 def test_the_other_shapes_refuse_the_service() -> None:
     """The shapes without a back-channel address to check say so: the page service is refused there,
     in words, so no realm client for it is registered with an address nobody checked."""
-    from harness import pages_service
+    from harness import page_addresses
 
     from schemas.deployment import Profile
 
     # The cloud-platform shape: the refusal the render calls first (its settings file is not read here,
     # so the profile is set on a valid cluster configuration).
     cloud = _on_config("cluster").model_copy(update={"profile": Profile.CLOUD_PLATFORM})
-    with pytest.raises(pages_service.PageServiceNotOnThisShape):
-        pages_service.refuse_on_cloud_platform(cloud)
+    with pytest.raises(page_addresses.PageServiceNotOnThisShape):
+        page_addresses.require(cloud)
     # Local-lite: its plain-HTTP address is no issuer the service accepts.
     lite = OspreyConfig.model_validate(
         {
@@ -440,8 +440,8 @@ def test_the_other_shapes_refuse_the_service() -> None:
             **PAGES_ON,
         }
     )
-    with pytest.raises(pages_service.PageServiceNeedsHttps):
-        pages_service.refuse_sign_in_without_https(lite)
+    with pytest.raises(page_addresses.PageServiceNeedsHttps):
+        page_addresses.require(lite)
 
 
 def test_an_existing_deployments_realm_document_is_unchanged() -> None:

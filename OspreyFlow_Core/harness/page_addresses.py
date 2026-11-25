@@ -253,6 +253,8 @@ _NUMBER_LAST = re.compile(r"[0-9]+|0[xX][0-9a-fA-F]*")
 #: The names Caddy signs itself, with its own internal authority, rather than ask a public one
 #: (certmagic's `SubjectIsInternal`, with an IP address, which no public authority signs for).
 _INTERNAL_SUFFIXES = (".localhost", ".local", ".internal", ".home.arpa")
+#: The cluster's load balancer's HTTPS port: the one published port an HTTPS origin may be on.
+_CLUSTER_HTTPS_PORT = 443
 
 
 # ---- the one normaliser: the origin, the identity name and the dashboards' name ---------------
@@ -274,10 +276,56 @@ def default_port(scheme: str) -> int:
     return 443 if scheme == "https" else 80
 
 
-def address(scheme: str, host: str, port: int) -> str:
-    """`<scheme>://<host>`, with the port only where it is not the scheme's own: the form the
-    service accepts (`raw === new URL(raw).origin`) and a browser sends."""
-    return f"{scheme}://{host}" + (f":{port}" if port != default_port(scheme) else "")
+def written_port(config: OspreyConfig) -> int | None:
+    """The port `network.public_origin` names, or None where it names none."""
+    return urlsplit(config.network.public_origin.rstrip("/")).port
+
+
+def keeps_the_written_port(config: OspreyConfig) -> bool:
+    """Whether an origin written with its scheme's default port (`https://host:443`) keeps it in the
+    addresses the deployment writes: **only with the page service off.** Off, nothing derives an
+    address for the service and every rendered file is what it was before PL7f (ADR-152
+    Amendment 3 item 2; the release note says so; `test_pages_setting.py` pins it against main's
+    own render): Keycloak's issuer, the env file's origins and the Glass's identity provider keep
+    the `:443`. On, `derive` hands the service the origin the way its own check wants it
+    (`raw === new URL(raw).origin`, which drops the default port) and every address agrees."""
+    from harness import pages_service
+
+    return written_port(config) is not None and not pages_service.enabled(config)
+
+
+def address(config: OspreyConfig, scheme: str, host: str, port: int) -> str:
+    """`<scheme>://<host>`, with the port only where it is not the scheme's own (the form the
+    service accepts and a browser sends), or where the setting is off and the origin wrote it
+    (`keeps_the_written_port`)."""
+    shown = port != default_port(scheme) or keeps_the_written_port(config)
+    return f"{scheme}://{host}" + (f":{port}" if shown else "")
+
+
+def client_origin(config: OspreyConfig) -> str:
+    """The origin the Glass's and the page service's sign-in clients, and the sign-in page's link
+    back, are given: the origin as `derive` reads it where the service is on (the string it builds
+    its callback from, matched exactly), and the origin as written, untouched, where it is off (what
+    the clients registered before PL7f: the setting off changes nothing)."""
+    from harness import pages_service
+
+    if pages_service.enabled(config):
+        return address(config, *parse_origin(config))
+    return config.network.public_origin
+
+
+def broker_identity(config: OspreyConfig) -> str:
+    """The identity address the organisation's provider is told to send people back to
+    (`harness.realm.organisation_redirect_uris`): `<scheme>://id.<host>[:port]` as `address` writes
+    it where the service is on; as it was written before PL7f (the origin's own authority, case and
+    all) where it is off."""
+    from harness import pages_service
+
+    if pages_service.enabled(config):
+        scheme, host, port = parse_origin(config)
+        return address(config, scheme, identity_name(host), port)
+    origin = urlsplit(config.network.public_origin)
+    return f"{origin.scheme}://id.{origin.netloc}"
 
 
 def identity_name(host: str) -> str:
@@ -387,17 +435,25 @@ def _needs_https(config: OspreyConfig) -> Refusal | None:
 
 def _taken_ports(config: OspreyConfig) -> dict[int, tuple[ProxyPort | None, str]]:
     """Every number the front proxy uses, other than its own HTTPS port, by the entry that uses it:
-    the list `harness.site.proxy_ports` publishes (so a port added there is covered at once), and
-    the ports the proxy serves plain HTTP on in some shape or other, in every shape."""
+    the list the shape publishes its ports from (`harness.site.proxy_ports` for the compose shapes,
+    `harness.cluster.proxy_ports` for the load balancer's: so a port added there is covered at
+    once), and the ports the proxy serves plain HTTP on in some shape or other, in every shape."""
     from harness.site import PLAIN_HTTP_PORTS, proxy_ports
 
     taken: dict[int, tuple[ProxyPort | None, str]] = {}
-    for entry in proxy_ports(config):
-        if entry.origin:
-            continue
-        for number in (entry.container, entry.host):
-            if number is not None:
-                taken.setdefault(number, (entry, entry.use))
+    if config.profile is Profile.CLUSTER:
+        from harness import cluster
+
+        for published in cluster.proxy_ports(config):
+            if published["port"] != _CLUSTER_HTTPS_PORT:
+                taken.setdefault(published["port"], (None, "the load balancer's plain-HTTP port"))
+    elif config.profile in (Profile.LOCAL_LITE, Profile.SMALL):
+        for entry in proxy_ports(config):
+            if entry.origin:
+                continue
+            for number in (entry.container, entry.host):
+                if number is not None:
+                    taken.setdefault(number, (entry, entry.use))
     for number, use in PLAIN_HTTP_PORTS.items():
         taken.setdefault(number, (None, use))
     return taken
@@ -410,10 +466,10 @@ def _port_taken(config: OspreyConfig) -> Refusal | None:
     (round 9 of PL7a2b). The ports are every one `harness.site.proxy_ports` lists but the proxy's
     own HTTPS port (where the origin's port is that one, no listener is added); the plain-HTTP
     ports, 80 and 8080, count in every shape: an HTTPS origin on a plain-HTTP port is refused
-    whichever certificate it has (the owner, 24 November 2026). A shape with no proxy of this kind
-    (a cluster's, with no alias and no doors) has none to clash with."""
-    if config.profile not in (Profile.LOCAL_LITE, Profile.SMALL):
-        return None
+    whichever certificate it has (the owner, 24 November 2026), in the cluster's load balancer too
+    (PL7f round 4: it publishes 80 for Caddy's plain-HTTP listener, which an HTTPS identity
+    address on :80 would never reach). The cloud-platform shape is refused earlier
+    (`_on_cloud_platform`)."""
     names = _sites(config)
     if names.scheme != "https":
         return None

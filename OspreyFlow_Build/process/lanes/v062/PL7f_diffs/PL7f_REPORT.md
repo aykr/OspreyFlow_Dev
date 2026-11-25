@@ -159,6 +159,8 @@ would write **with the refusal taken out** (refused rows: the pure round-9 plant
 | 16-cluster-9443 (case 16) | cluster, `https://osprey.example.org:9443` | origin `https://osprey.example.org:9443`; issuer `https://id.osprey.example.org:9443/realms/osprey`; alias `id.osprey.example.org`; port 9443; extra listener None; trust none | valid / valid |
 | 16-cluster-explicit-443 (case 16) | cluster, `https://osprey.example.org:443` | origin `https://osprey.example.org`; issuer `https://id.osprey.example.org/realms/osprey`; alias `id.osprey.example.org`; port 443; extra listener None; trust none | valid / valid |
 | 16-cluster-ip (case 16) | cluster, `https://10.1.2.3` | **refuse** `needs_origin` | - |
+| 12-cluster-plain-http-port (case 12, round 4) | cluster, `https://osprey.example.org:80` | **refuse** `port_taken` | - |
+| 19-cluster-8080 (case 19, round 4) | cluster, `https://osprey.example.org:8080` | **refuse** `port_taken` | - |
 | 17-cloud-platform (case 17) | cloud-platform, `https://osprey.example.org` | **refuse** `cloud_platform` | - |
 | 17-cloud-platform-poc (case 17) | cloud-platform-poc, `https://osprey.example.org` | **refuse** `cloud_platform` | - |
 | 18-govuk-cutover-setting-off (case 18) | small, `https://osprey.example.org` | **refuse** `cutover` | - |
@@ -178,7 +180,9 @@ Readings of the table that the owner should confirm (none is a guess about sign-
   case 8 is a local-lite row; the small plain-HTTP row is the schema's refusal.
 * **Case 16**: a cluster always has a managed cache (the schema refuses a cluster without `external.valkey`), so there is
   no "without a managed cache" configuration; the rows are the cluster as the schema allows it. A cluster has no
-  alias, no extra listener and no doors, so no port can clash.
+  alias, no extra listener and no doors; **round 4 corrects the reading "so no port can clash"**: its load balancer
+  publishes 80 (Caddy's plain-HTTP listener) and 443, and an HTTPS origin on 80 or 8080 is refused there too
+  (rows `12-cluster-plain-http-port` and `19-cluster-8080`).
 * **Case 19 with ACME, and case 12 with the plain-HTTP port in every shape.** Port 80 and 8080 are refused whichever
   certificate the deployment has. The real Caddy **accepts** two of those Caddyfiles (ACME on 8080, own certificate on 80
   with the redirect): the refusals are the owner's policy, not Caddy's, and the Caddy test says so. Two origins the old
@@ -252,3 +256,50 @@ about what Keycloak would publish if it were handed `:443`, because it never is.
 (the conductor's fallback), it is one refusal in `derive` and the rows 7 and 8 flipped in the table. Backlog line, for the
 conductor: measure against a real Keycloak whether a hostname written with `:443` publishes `:443` in `iss`, so the deployment
 can say whether a written default port may ever be passed through.
+
+
+## Round 4 (25 November 2026): the cluster's port refusal, and the setting-off render restored
+
+**1. The port refusal holds in every shape.** `_port_taken` no longer returns early for a cluster. Its list of
+ports comes from the one place that publishes them for that shape: `harness.cluster.proxy_ports` (renamed from the private
+`_proxy_ports`, the same function the chart's workload ports are written from: 80 and 443), beside the compose
+shapes' `harness.site.proxy_ports`; the plain-HTTP ports 80 and 8080 count in every shape. Red first (commit `24a2572`):
+two table rows, `12-cluster-plain-http-port` and `19-cluster-8080`, failed `test_derive_returns_what_the_table_says` and
+`test_a_refused_case_is_refused_by_the_render_in_the_same_words` (derived where the table says refused). Green after.
+`test_a_cluster_proxy_has_no_identity_listener_to_clash` took `:8080` for its origin and now takes `:9443`: with the refusal
+in place `:8080` is the case it used to prove was *not* refused, and that reading was wrong.
+
+**Left for the owner (not changed, nothing asked):** the verifier's second remark, that row `16-cluster-9443` is derived
+(issuer `https://id.osprey.example.org:9443/realms/osprey`) while the cluster's load balancer publishes 80 and 443 only and a
+cluster has no alias or extra listener, so nothing in the cluster render listens on 9443. The same is true of the Glass's own
+address on a cluster written with another port (`proxy_ports` ignores the origin's port for HTTPS), so it is older than this part.
+Decision wanted: refuse a cluster HTTPS origin on any port but 443 (one more line in `_taken_ports`), or leave it.
+
+**2. The setting-off render is exactly what main rendered.** The cause: `site.sites()` built every address through the one
+normaliser, which drops a written default port and lower-cases the host, with the setting off as well as on; and the Glass client,
+the sign-in theme's Glass origin and the organisation's redirect addresses stopped reading the origin as written. Measured
+by taking the tree of commit `a03f026` (main before this part) out of git and rendering 22 shapes and origins with both trees
+(`pages_off_capture.py`): the compose shapes changed `KC_HOSTNAME`, the env file's `OSPREY_IDENTITY_ORIGIN`,
+`OSPREY_GLASS_ORIGIN`, `OSPREY_DASHBOARDS_ORIGIN` and `CORS_ALLOWED_ORIGINS`, `glass.json`'s `identity_provider` and the
+runbook's addresses for a written `:443` (and `:80` on plain HTTP); the cluster and the cloud platform changed the chart's
+origins; every shape changed the Glass client's redirect, web origin and post-logout address, the organisation's redirect addresses
+and the theme's Glass origin for an upper-case host or a written default port. **Fix:** `page_addresses.keeps_the_written_port`
+(true only with the setting off) is read by `page_addresses.address`, the one place `sites()` writes an address from;
+`client_origin` and `broker_identity` hand the realm and the theme the origin as written where the setting is off, and the
+derived one where it is on. It did not need to undo anything the setting-on cases need: with the setting on nothing changes
+(every earlier table row and the Caddy test are as before).
+
+**The pin.** `tests/fixtures/pages_off_addresses_reference.json` holds, for each of 22 shape-and-origin cases (default port
+written and not, upper-case host, another port, own certificate, all the shapes), the address fields of `sites`, the
+Glass client, the organisation's redirect addresses, the theme's Glass origin and every rendered line that holds the host. It
+was made by `tests/harness/pages_off_capture.py` run against `OspreyFlow_Core` taken out of git at `a03f026`; the test
+`test_the_off_reference_is_what_the_commit_renders` takes the commit out of git again and fails if the file is not what it renders
+(skipped in words only in a clone that lacks the commit, where the file stays the pin), and
+`test_off_every_identity_and_sign_in_address_is_what_main_rendered` compares this checkout's render with the file, case by case.
+Red first (same commit): 11 of 22 cases failed for exactly the differences above. `test_a_written_default_port_forgotten_is_red`
+plants the old normaliser at `page_addresses.address` and shows `compose.yaml` and `deployment.env` named.
+Where each place that writes the public origin now reads: `site.sites`, `realm._glass_client`,
+`realm.pages_client`, `realm.organisation_redirect_uris`, `keycloak_theme.login_theme_options` all read `page_addresses`.
+
+**Also found and fixed:** `test_realm_pages_client.py::test_the_other_shapes_refuse_the_service` still named the refusals that
+round 1 moved out of `pages_service`; it was outside the checks list and failed since then. It calls `page_addresses.require`.

@@ -55,7 +55,8 @@ class Sites:
 
 def sites(config: OspreyConfig) -> Sites:
     """Every address of the deployment, made from `page_addresses.parse_origin`'s one reading of
-    `network.public_origin`: the scheme's default port is never written (PL7f round 2)."""
+    `network.public_origin`: with the page service on the scheme's default port is never written
+    (PL7f round 2); with it off a port the origin wrote is kept, as it always was (round 4)."""
     scheme, host, port = page_addresses.parse_origin(config)
     identity_host = page_addresses.identity_name(host)
     dashboards_host = page_addresses.dashboards_name(host)
@@ -63,9 +64,9 @@ def sites(config: OspreyConfig) -> Sites:
         scheme,
         host,
         port,
-        page_addresses.address(scheme, host, port),
-        page_addresses.address(scheme, identity_host, port),
-        page_addresses.address(scheme, dashboards_host, port),
+        page_addresses.address(config, scheme, host, port),
+        page_addresses.address(config, scheme, identity_host, port),
+        page_addresses.address(config, scheme, dashboards_host, port),
         identity_host,
         dashboards_host,
     )

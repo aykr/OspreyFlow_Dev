@@ -1879,12 +1879,14 @@ def test_the_clash_check_is_red_when_the_refusal_is_taken_out(case: str, brand: 
 @pytest.mark.parametrize("brand", BRANDS)
 def test_a_cluster_proxy_has_no_identity_listener_to_clash(brand: str) -> None:
     """The cluster's proxy is rendered with no alias and no doors, so it gets no second identity
-    address, whatever port the origin carries: nothing is refused there."""
+    address, whatever port the origin carries. (A port the load balancer's Caddy serves as plain
+    HTTP, 80 or 8080, is refused in the cluster too: PL7f round 4, the table's cluster rows 12 and
+    19; 9443 is not one of them.)"""
     from harness.site import render_caddyfile
     from schemas.deployment import OspreyConfig
 
     raw = ref.raw_config("cluster")
-    raw["network"]["public_origin"] = "https://osprey.example.org:8080"
+    raw["network"]["public_origin"] = "https://osprey.example.org:9443"
     raw["appearance"] = {**raw.get("appearance", {}), "brand": brand}
     raw["pages"] = {"enabled": True}
     text = render_caddyfile(OspreyConfig.model_validate(raw), doors=False)

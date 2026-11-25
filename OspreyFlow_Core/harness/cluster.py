@@ -305,9 +305,11 @@ class _Pins:
         return f"{image}@{digest}"
 
 
-def _proxy_ports(config: OspreyConfig) -> list[dict[str, int]]:
+def proxy_ports(config: OspreyConfig) -> list[dict[str, int]]:
     """The load balancer answers on the address's port, and reaches the port Caddy listens on: 80
-    and 443 for HTTPS; on plain HTTP, Caddy runs unprivileged on `PROXY_HTTP_PORT`."""
+    and 443 for HTTPS; on plain HTTP, Caddy runs unprivileged on `PROXY_HTTP_PORT`. The one place
+    that lists the cluster's published ports: `harness.page_addresses` refuses a page-service origin
+    on any of them but the HTTPS one (PL7f round 4)."""
     from harness.site import PROXY_HTTP_PORT, sites
 
     names = sites(config)
@@ -552,7 +554,7 @@ def render_cluster(
         workload["kind"] = "StatefulSet" if name in STATEFUL else "Deployment"
         workload["replicas"] = counts.get(name, 1)
         if name == "proxy":
-            workload["ports"] = _proxy_ports(config)
+            workload["ports"] = proxy_ports(config)
         elif name in PORTS:
             workload["ports"] = [{"port": port, "target": port} for port in PORTS[name]]
         if name in CLAIMS:
