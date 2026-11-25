@@ -98,3 +98,26 @@ routes.
 
 Arranging (if 1(a)); creating, editing or publishing packs; new kinds of figure; any new Conduit route; the drawing
 board.
+
+## Round 1 (D247; the conductor, 25 November 2026): merge `away/GR4a` first, then the owner's four answers
+
+**Your first step: merge the local branch `away/GR4a` into your branch** (the owner fetched it from server-backup; his one
+exception to the 23 November rule, for D246's away rounds only). Keep both sides where main has moved since (GR3a and
+AD3a's route lists: `routes.yaml`, `pageList.ts`, the HP9 and AP pins, `test_tree_parity.py`, `test_pages_setting.py`,
+`spec/08`'s `reports-figures` row). The away round's report is `process/lanes/v062/away/GR4a_AWAY_REPORT.md` on that
+branch: read it whole. Its two wrapper-made failures (`assetsTraversal.test.ts`, `foundation.test.ts`,
+`test_stack_lease.py`) came from the away round's sandbox, not the change: show them green here.
+
+**The owner's answers to its four questions (25 November 2026, about 13:55 UTC):**
+1. **Keep the address `/packs/trends?case=…&pack=…`** (a page's path is a plain path; the pack routes need the case as
+   well as the pack). This replaces ruling 4's `/packs/{pack_id}/trends`; the words "Trends shown together" stand.
+2. **Keep the one shared withheld sentence, above the trends, never a placeholder in a withheld item's place** (rule 3:
+   the Conduit sends no place for a withheld item, and a placeholder would say where one was).
+3. **I21's test is renamed in the decision log** to `test_trends_shown_together_show_a_trend_its_viewer_can_no_longer_read_as_withheld_not_as_missing_data`,
+   by the owner's approved diff `ADR152_I21_ROW` (do not edit `spec/06` yourself). **Write the test under that exact
+   name**, red first against a page that drops the withheld sentence or draws an empty chart in its place, and make the
+   scenario test check that the name exists.
+4. **Confirmed:** an Editor (the right to record assessments) sees the working pack; everyone else, the newest
+   published version; anyone who may read neither gets the same 404 as a pack that does not exist.
+
+Then run the frozen checks and finish green as any round. Nothing beyond the away branch, these four and the conflicts.

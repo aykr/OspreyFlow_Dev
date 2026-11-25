@@ -3,6 +3,10 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 25 November 2026, about 13:55 UTC: GR4a's away round and its four questions (the owner, in chat)
+
+**GR4a's away round is done** (its table green; its report in `away/GR4a_AWAY_REPORT.md` on the branch); the owner fetched it as the local branch `away/GR4a`. **His answers:** (1) keep `/packs/trends?case=…&pack=…`; (2) keep the one shared withheld sentence, never a placeholder (rule 3); (3) rename I21's test in the decision log (the conductor proposes the diff, `ADR152_I21_ROW`, for his approval); (4) confirmed: an Editor sees the working pack, everyone else the newest published version. **GR4a starts as D247 says (round 1 merges `away/GR4a`) first thing at 19:30, not before:** apply_53 is running and the Mac goes offline at 14:30.
+
 ## 25 November 2026, about 13:30 UTC: AD1c's PUBLIC defaults, option (a) (the owner, in chat)
 
 **AD1c (a), one more round closing both:** each database the render makes takes CONNECT and TEMPORARY from PUBLIC and grants CONNECT to its own role(s) alone (`litellm` to the gateway's role and the reader); EXECUTE on functions taken from PUBLIC in `litellm`; planted faults refused by the database itself; on a managed server a revoke the login may not make is said in words and never stops the gateway; **and the reader's verifier command run in the pinned image on the server's container checks** (patch 52). Amendment 15 decision 1 stands as written. **Point 2, amended about 13:40 UTC:** do not wait on the server's container checks (patch 52's server half is installed tonight); **use D234's pattern**: exempt in `tests/local_docker_guard.py` exactly this test's one command (`docker run --rm --network none`, the pinned `postgres:16.4` image), named by the test, a planted second command refused; it moves to the server's checks when 52 is live and the exemption comes out. **Planted faults for every revoke.**
