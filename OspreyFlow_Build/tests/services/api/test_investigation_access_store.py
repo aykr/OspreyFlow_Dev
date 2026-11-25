@@ -817,9 +817,12 @@ async def test_a_dashboard_reads_the_case_it_was_granted_and_no_other(
 
     from schemas.domain import ReportFigures
 
-    async def _figures(*_: Any, **__: Any) -> ReportFigures:
+    # `_case_report`'s own shape: the figures, and whether they were lowered for this reader. Held
+    # to its return annotation by `test_case_report_stand_ins.py`.
+    async def _figures(*_: Any, **__: Any) -> tuple[ReportFigures, bool]:
         now = datetime.now(UTC)
-        return ReportFigures(period_weeks=12, as_of=now.date(), generated_at=now, alerts_total=0)
+        figures = ReportFigures(period_weeks=12, as_of=now.date(), generated_at=now, alerts_total=0)
+        return figures, False
 
     a = await store.create(AUTHOR, name="A")
     b = await store.create(AUTHOR, name="B")
@@ -839,7 +842,7 @@ async def test_a_dashboard_reads_the_case_it_was_granted_and_no_other(
     app.dependency_overrides[get_audit] = lambda: _Ledger()
     app.dependency_overrides[get_export_ledger] = lambda: _Ledger()
     original = (app_module._case_report, app_module.reports_module.feed_rows)
-    app_module._case_report = _figures  # type: ignore[assignment]
+    app_module._case_report = _figures  # no `ignore`: a type checker run here sees the shape
     app_module.reports_module.feed_rows = lambda _figures: []  # type: ignore[assignment]
     try:
         transport = httpx.ASGITransport(app=app)
