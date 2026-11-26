@@ -930,7 +930,7 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
     ),
     (
         "a census name for no field",
-        _replace("words", '"may_draw", "may_promote"]', '"may_draw", "may_promote", "may_share"]'),
+        _replace("words", '"grading_grades", "may_promote"]', '"grading_grades", "may_promote", "may_share"]'),
         census_problems,
         "BoardOpened.may_share, which the model does not have",
     ),

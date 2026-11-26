@@ -756,7 +756,8 @@ describe("making, sharing and deleting a drawing board on the GOV.UK tree (scena
       const w = await world({ rights: ["investigate"] });
       const real = await make(w, "x");
       expect(cannotProblems(real)).toEqual([]);
-      expect(cannotProblems({ status: 403, text: real.text.replace(CANNOT, LEVEL_REFUSAL.detail) })).not.toEqual([]);
+      // Everywhere it is said, the page's `<title>` first among them: the plant must reach the main landmark the check reads.
+      expect(cannotProblems({ status: 403, text: real.text.replaceAll(CANNOT, LEVEL_REFUSAL.detail) })).not.toEqual([]);
       expect(cannotProblems({ status: 403, text: real.text.replace("</main>", "<p>right_required draw_on_boards</p></main>") })).not.toEqual([]);
       const unknown = await getAs(w, NOWHERE);
       expect(notFoundProblems({ status: 403, text: real.text.replace(CANNOT, NOT_CREATOR.detail) }, unknown)).not.toEqual([]);

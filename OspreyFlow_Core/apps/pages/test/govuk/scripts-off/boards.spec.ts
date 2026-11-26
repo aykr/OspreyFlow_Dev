@@ -1,11 +1,12 @@
 // The GOV.UK tree's boards page with scripts switched off (slice GG4a; ADR-152 decision 6 and invariant I4; `CLAUDE.md` rule 13; scenario
-// BD15): the same pages, the same stops in the same order, and each link still does what it says, because the page needs no script.
+// BD15), and its three writes (slice GG4c; BD29): the same pages, the same stops in the same order, and each link and form still does
+// what it says, because the page needs no script.
 // `../keyboard/boards.spec.ts` is the same walk with scripts on.
 import { expect, test } from "@playwright/test";
 
 import { buildScratchAssets, tabOrder, viaProxy } from "../helpServer.js";
 import type { Assets } from "../helpServer.js";
-import { BOARD_TAB_ORDER, LIST_TAB_ORDER, QUAY_PATH, openBoards, withBoards } from "../boardsServer.js";
+import { BOARD_TAB_ORDER, DRAWS, DRAW_LIST_TAB_ORDER, EMPTY_PATH, LIST_TAB_ORDER, QUAY_PATH, openBoards, withBoards } from "../boardsServer.js";
 
 let assets: Assets;
 test.beforeAll(async () => {
@@ -51,5 +52,28 @@ test.describe("the boards page with scripts switched off", () => {
       await page.keyboard.press("Enter");
       await expect(page.getByRole("heading", { level: 1 })).toHaveText("Home");
     });
+  });
+
+  test("BO3: a board is made, shared and deleted by its forms, each by Enter, with no script", async ({ page }) => {
+    await withBoards(assets, async (base) => {
+      await openBoards(page, base);
+      expect(await tabOrder(page)).toEqual(DRAW_LIST_TAB_ORDER);
+      await page.getByRole("textbox", { name: "Board name" }).focus();
+      await page.keyboard.type("Supply routes");
+      await page.keyboard.press("Enter");
+      await expect(page.getByRole("heading", { level: 1 })).toHaveText("Supply routes");
+      await openBoards(page, base, EMPTY_PATH);
+      await page.getByRole("button", { name: "Share with the case" }).focus();
+      await page.keyboard.press("Enter");
+      await expect(page.getByRole("definition").first()).toHaveText("Shared with the case");
+      await page.getByRole("link", { name: "Delete this board" }).focus();
+      await page.keyboard.press("Enter");
+      await expect(page.getByRole("heading", { level: 1 })).toHaveText("Delete this board?");
+      await page.getByRole("button", { name: "Delete board" }).focus();
+      await page.keyboard.press("Enter");
+      await expect(page.getByRole("alert")).toContainText("The board was deleted.");
+      await expect(page.getByRole("link", { name: "Supply routes" })).toBeVisible();
+      await expect(page.getByRole("link", { name: "Empty start" })).toHaveCount(0);
+    }, DRAWS);
   });
 });
