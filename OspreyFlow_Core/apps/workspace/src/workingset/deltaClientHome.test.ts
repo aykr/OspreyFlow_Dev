@@ -2,45 +2,44 @@
 // (ADR-152 decision 6, I11). A copy left in the workspace, or an importer still reaching a workspace copy, would
 // type-check and pass every other suite, and the two copies would then drift apart unseen; this is the case
 // that fails. Only the integration test stays here (it starts a real Conduit), importing the package's client.
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+// The whole of `apps/workspace` is walked, with no list of folders: a list leaves out the folder nobody added to it.
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
 const WORKSPACE = new URL("../../", import.meta.url).pathname;
-const SCANNED = ["src", "keyboard", "a11y", "perf", "live", "map-verify", "export-capture"];
-const SOURCE = /\.(ts|tsx|mts|cts|js|mjs)$/;
+// Installed packages and built output: the only folders that hold no source of the workspace's own.
+const NOT_SOURCE = new Set(["node_modules", "dist"]);
+const SOURCE = /\.(ts|tsx|mts|cts|js|jsx|mjs|cjs)$/;
 // An import, re-export or dynamic import of a module named `deltaClient` by a relative path: the package's is
 // reached by its name, `@ospreyflow/glass-shared`, and never by a path.
-const RELATIVE_IMPORT = /(?:from\s+|import\s*\(\s*|import\s+)["'](\.{1,2}\/[^"']*\/)?\.{0,2}\/?deltaClient(?:\.ts)?["']/;
+const IMPORT_FORM = /(?:from\s+|import\s*\(\s*|import\s+)/;
+const CLIENT_PATH = /["'](\.{1,2}\/[^"']*\/)?\.{0,2}\/?deltaClient(?:\.(?:ts|tsx|mts|cts|js|jsx|mjs|cjs))?["']/;
+const RELATIVE_IMPORT = new RegExp(IMPORT_FORM.source + CLIENT_PATH.source);
 
 function walk(dir: string, out: string[] = []): string[] {
-  let names: string[];
-  try {
-    names = readdirSync(dir);
-  } catch {
-    return out;
-  }
-  for (const name of names) {
-    if (name === "node_modules" || name === "dist") continue;
-    const path = join(dir, name);
-    if (statSync(path).isDirectory()) walk(path, out);
-    else if (SOURCE.test(name)) out.push(path);
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (NOT_SOURCE.has(entry.name)) continue;
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) walk(path, out);
+    else if (SOURCE.test(entry.name)) out.push(path);
   }
   return out;
 }
 
-// This file is left out of the scan: its third case holds the stale shapes as strings, on purpose.
+// This file is left out of the scan: its last two cases hold the stale shapes as strings, on purpose.
 const SELF = relative(WORKSPACE, new URL(import.meta.url).pathname);
 function sourceFiles(root: string): string[] {
-  return SCANNED.flatMap((d) => walk(join(root, d)))
+  return walk(root)
     .map((p) => relative(root, p))
     .filter((f) => f !== SELF);
 }
 
 function copiesIn(files: string[]): string[] {
-  return files.filter((f) => /(^|\/)(deltaClient|deltaOps)(\.[a-z]+)*\.(ts|tsx)$/.test(f));
+  // `files` holds source files only, so any extensions after either name make it a copy (`.ts`, `.test.js`).
+  return files.filter((f) => /(^|\/)(deltaClient|deltaOps)(\.[a-z]+)+$/.test(f));
 }
 
 function relativeImportersIn(root: string, files: string[]): string[] {
