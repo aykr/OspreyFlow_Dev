@@ -325,10 +325,11 @@ function scriptsOffProblems(html: string): string[] {
   for (const s of page.matchAll(/<script\b([^>]*)>/g)) {
     if (attr(s[1] as string, "type") !== "application/json") found.push(`a script element that is not a data block: <script${s[1] as string}>`);
   }
-  if (/\son[a-z]+\s*=/i.test(page)) found.push("an event-handler attribute");
-  if (/\sstyle\s*=/i.test(page)) found.push("an inline style attribute");
+  // Inside a tag only: a text that says "onerror=" is drawn escaped, as words, and is no attribute (DR14).
+  if (/<[^>]*\son[a-z]+\s*=/i.test(page)) found.push("an event-handler attribute");
+  if (/<[^>]*\sstyle\s*=/i.test(page)) found.push("an inline style attribute");
   if (/<style\b/i.test(page)) found.push("a style element");
-  if (/javascript:/i.test(page)) found.push("a javascript: address");
+  if (/<[^>]*javascript:/i.test(page)) found.push("a javascript: address");
   for (const t of page.matchAll(/\stabindex="(-?\d+)"/g)) if (Number(t[1]) > 0) found.push(`a tab stop of ${t[1] as string}`);
   return found;
 }
@@ -339,7 +340,8 @@ const refusalProblems = (refused: { status: number; text: string }, unknown: { s
 
 /** Graph ids and Conduit words the page must never show, in any text or attribute (DR13). */
 const GRAPH_IDS = DOCS.flatMap((d) => [...d.spans.map((s) => s.node_id), d.sender_id, d.recipient_id, d.edge_id, d.event_id]).filter((id): id is string => id !== null);
-const NEVER = [...GRAPH_IDS, "document_not_found", "investigation_not_found", "right_required", "investigate", "data-node", UNIT, "not have access", "Brook Vale"];
+// (The hidden span's words, "Brook Vale", are in the text the reader may read: only its mark is withheld, which DR1 checks.)
+const NEVER = [...GRAPH_IDS, "document_not_found", "investigation_not_found", "right_required", "investigate", "data-node", UNIT, "not have access"];
 const neverProblems = (html: string): string[] => NEVER.filter((word) => strip(html).includes(word)).map((word) => `the page shows ${JSON.stringify(word)}`);
 
 // ------------------------------------------------------------------------------------------------ what the page should draw
@@ -929,7 +931,10 @@ describe("one document of a case in the reader, on the GOV.UK tree (scenario DR)
       expect(scriptsOffProblems(ledger.replace("<a ", '<a onclick="x()" '))).not.toEqual([]);
       // Markup written unescaped: the real page's escaped text given back raw is seen by the same checks.
       const markup = (await getAs(w, pageOf(CASE, MARKUP.id))).text;
-      expect(scriptsOffProblems(markup.replace("&lt;script&gt;alert(1)&lt;/script&gt;", "<script>alert(1)</script>"))).not.toEqual([]);
+      // (The span marks "<script>", so the anchor is the text after it; the plant must change the page, or it proves nothing.)
+      const raw = markup.replace("&lt;img src=x onerror=y&gt;", "<img src=x onerror=y>");
+      expect(raw).not.toBe(markup);
+      expect(scriptsOffProblems(raw)).not.toEqual([]);
     });
 
     it("DR19: the census fails for a left-out field claimed as drawn, and a drawn field claimed as left out", async () => {

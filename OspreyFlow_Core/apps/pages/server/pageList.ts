@@ -8,15 +8,17 @@
  * (`trees`, the Default tree's alone when left out), and the service mounts the ones that name the tree it was started with
  * (`OSPREY_PAGES_TREE`). Help (slice GR2a) is the first page of the GOV.UK tree, and has no Default twin yet; the Admin People list
  * (slice AD3a) is the second, the first section of the `admin` row; the reader's cases and one case's page (slice GR1a) the third, the
- * first part of the `cases-and-views` row.
+ * first part of the `cases-and-views` row; one document of a case in the reader (slice GG3b) the fourth, the first part of the
+ * `documents` row.
  * `tree-govuk/routes.yaml` lists the paths of the pages that name `govuk`, and `test/govuk/help.test.ts` holds the two in step.
  */
 import type { PageModule } from "./pages.js";
 import { adminPeople } from "./adminPeople.js";
 import { casesPage } from "./cases.js";
+import { documentPage } from "./document.js";
 import { studioDatasetMap } from "./datasetMap.js";
 import { help } from "./help.js";
 import { studioModel } from "./model.js";
 import { studioFrame, studioReleases } from "./studio.js";
 
-export const PAGES: readonly PageModule[] = [studioFrame, studioReleases, studioDatasetMap, studioModel, help, adminPeople, casesPage];
+export const PAGES: readonly PageModule[] = [studioFrame, studioReleases, studioDatasetMap, studioModel, help, adminPeople, casesPage, documentPage];
