@@ -63,7 +63,7 @@ before and after on the same machine, equal (I11).
 | # | Case | Expected | The planted fault that shows it red |
 | --- | --- | --- | --- |
 | 1 | The package exports the client | `import { connectDeltaClient } from "@ospreyflow/glass-shared"` type-checks and runs | today's package (red as it stands) |
-| 2 | The moved unit tests | green in the package's own suite | a test left behind in the workspace that no suite runs (the file-coverage check finds it) |
+| 2 | The moved unit tests | green in the package's own suite | a test left behind in the workspace with its old import (corrected by Q2 (a), 26 November 2026: the workspace's vitest run and the guard test `deltaClientHome.test.ts` catch it; `test_file_coverage_check` reads no TypeScript) |
 | 3 | No React and no drawing library in the package | `no_react_check.mjs` and `version_isolation_check.mjs` green | a planted `import "react"` in the moved file |
 | 4 | The workspace's importers | `App.tsx` and the harness import from the package; no file under `apps/workspace/src/workingset/deltaClient*` left but the integration test | a stale relative import kept beside the new one (two copies) |
 | 5 | Gap detection unchanged | the out-of-order delta dropped and a resync asked, as before | the sequence check removed in the move (the moved test turns red) |
