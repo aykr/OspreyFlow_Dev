@@ -858,6 +858,15 @@ M = [
  ('tests/test_gates.py', '    p = subprocess.run(["git", "-C", str(top), "show", f"HEAD:{rel.as_posix()}"], capture_output=True, text=True)\n    if p.returncode != 0:', '    p = subprocess.run(["cat", str(top / rel)], capture_output=True, text=True)\n    if p.returncode != 0:', 'test_world_owner_files'),
  ('tests/test_gates.py', '        raise AssertionError(f"{rel} is not committed at HEAD: a test world takes the owner\'s files as committed only")', '        return (top / rel).read_text()', 'test_world_owner_files and (not_committed)'),
  ('tests/test_readme_citations.py', '            if not (top / cited).is_file():', '            if False:', 'test_readme_citations and (not_there_is_named)'),
+ ('build_server/runner.py', '    try:\n        env = seat_env()\n    except Stop as e:\n        return refuse(e.verdict, words=e.words)\n', '    env = {k: v for k, v in os.environ.items() if k in KEPT}\n', 'test_seat_env_socket and (own_path or never_starts)'),
+ ('build_server/runner.py', '    if p.returncode != 0:\n        raise Stop("no-own-environment"', '    if False:\n        raise Stop("no-own-environment"', 'test_seat_env_socket and (never_starts)'),
+ ('build_server/runner.py', '    if not env.get("PATH"):\n        raise Stop("no-own-environment"', '    if False:\n        raise Stop("no-own-environment"', 'test_seat_env_socket and (never_starts)'),
+ ('build_server/runner.py', '        if eq and k in KEPT and not v.startswith("$\'"):', '        if eq and not v.startswith("$\'"):', 'test_seat_env_socket and (own_path)'),
+ ('build_server/runner.py', '    return [TMUX, "-L", SEAT_SOCKET, *args]', '    return [TMUX, *args]', 'test_seat_env_socket and (own_tmux_server or gone_from_its_own_server)'),
+ ('build_server/runner.py', 'seat_tmux("new-session"', '[TMUX, "new-session"', 'test_seat_env_socket and (own_tmux_server)'),
+ ('build_server/runner.py', 'seat_tmux("has-session"', '[TMUX, "has-session"', 'test_seat_env_socket and (own_tmux_server or gone_from_its_own_server)'),
+ ('build_server/runner.py', 'seat_tmux("kill-session"', '[TMUX, "kill-session"', 'test_seat_env_socket and (own_tmux_server)'),
+ ('build_server/runner.py', '"--", "/usr/bin/env", "-i",\n                                 *("%s=%s" % kv for kv in sorted(env.items())), *SEAT_WORKER', '"--", *SEAT_WORKER', 'test_seat_env_socket and (another_environment)'),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.

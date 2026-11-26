@@ -11,7 +11,9 @@ verbs in all:
                                       017-2: one tar on standard input, of exactly in.bundle (main and lane/slice-<ID>)
                                       and order.json (the seat, part, round, prompt, model, effort, account and the
                                       records it reads); the seat's trees made in this account's clone, the seat run
-                                      in a detached tmux session (seat-<ID>-<seat>), one seat per part; prints
+                                      in a detached tmux session (seat-<ID>-<seat>) on the seats' own tmux server
+                                      (tmux -L ospreyflow-seats), with the account's own environment, one seat
+                                      per part; prints
                                       {"state": "started", "slice", "seat", "id"} and returns at once
     (forced command)  status <ID> builder|verifier
                                       the seat's state (none, running, done, failed, stopped), its id, tip, main,
@@ -96,6 +98,14 @@ TARGET_SECONDS = 3600
 SYSTEM_SOCKETS = ("/var/run/docker.sock", "/run/docker.sock")
 #: What a job keeps of its caller's environment; DOCKER_HOST is set by the job itself.
 KEPT = ("PATH", "HOME", "LANG", "XDG_RUNTIME_DIR", "USER", "LOGNAME")
+#: A seat's environment (demo-server, 26 November 2026): the build account's own, as a job's is, never the SSH
+#: session's (whose PATH lacks ~/.local/bin, where uv and trivy are). It is read from the account's user manager, the
+#: environment systemd-run gives a job, and only KEPT of it is kept. A seat does not start without its PATH.
+OWN_ENV = ["systemctl", "--user", "show-environment"]
+#: A seat's tmux server: its own socket, never the account's default server, which the away sessions share
+#: (demo-server, 26 November 2026). Watched from root: sudo -u ospreyflow_build tmux -L ospreyflow-seats ls.
+TMUX = "tmux"
+SEAT_SOCKET = "ospreyflow-seats"
 
 
 class Stop(Exception):
@@ -240,6 +250,31 @@ def seat_session(slice_id: str, seat: str) -> str:
     return "seat-%s-%s" % (slice_id, seat)
 
 
+def seat_tmux(*args: str) -> list:
+    """A tmux command on the seats' own server (SEAT_SOCKET), never the account's default one."""
+    return [TMUX, "-L", SEAT_SOCKET, *args]
+
+
+def seat_env() -> dict:
+    """The build account's own environment for a seat (OWN_ENV, its user manager's), KEPT of it only. Raises Stop
+    when it cannot be read or names no PATH: a seat never starts with the SSH session's."""
+    try:
+        p = subprocess.run(OWN_ENV, capture_output=True, text=True, timeout=30,
+                           env={k: v for k, v in os.environ.items() if k in KEPT})
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise Stop("no-own-environment", "the account's own environment could not be read (%s)" % type(e).__name__)
+    if p.returncode != 0:
+        raise Stop("no-own-environment", "the account's own environment could not be read (exit %d)" % p.returncode)
+    env = {}
+    for line in p.stdout.splitlines():
+        k, eq, v = line.partition("=")
+        if eq and k in KEPT and not v.startswith("$'"):
+            env[k] = v
+    if not env.get("PATH"):
+        raise Stop("no-own-environment", "the account's own environment names no PATH")
+    return env
+
+
 def seat_alive(slice_id: str, seat: str) -> bool:
     """The seat's session is running: its tmux session (or, launched directly, its process group)."""
     if LAUNCH == "direct":
@@ -251,8 +286,8 @@ def seat_alive(slice_id: str, seat: str) -> bool:
             return True
         except OSError:
             return False
-    return subprocess.run(["tmux", "has-session", "-t", "=" + seat_session(slice_id, seat)], stdout=subprocess.DEVNULL,
-                          stderr=subprocess.DEVNULL).returncode == 0
+    return subprocess.run(seat_tmux("has-session", "-t", "=" + seat_session(slice_id, seat)),
+                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
 
 
 def read_json(p: Path):
@@ -313,6 +348,10 @@ def do_start(slice_id: str, seat: str) -> int:
     for other in SEAT_KINDS:
         if seat_alive(slice_id, other):
             return refuse("seat-running", words="the %s of %s is running" % (other, slice_id))
+    try:
+        env = seat_env()
+    except Stop as e:
+        return refuse(e.verdict, words=e.words)
     d = seat_dir(slice_id, seat)
     d.mkdir(parents=True, exist_ok=True)
     rid = secrets.token_hex(8)
@@ -371,20 +410,22 @@ def do_start(slice_id: str, seat: str) -> int:
         if (d / f).exists():
             (d / f).unlink()
     set_status(slice_id, seat, state="running", id=rid, tip=tip, main=main, started=now(), finished=None)
-    launch_seat(slice_id, seat)
+    launch_seat(slice_id, seat, env)
     return say({"state": "started", "slice": slice_id, "seat": seat, "id": rid}, 0)
 
 
-def launch_seat(slice_id: str, seat: str) -> None:
-    env = {k: v for k, v in os.environ.items() if k in KEPT}
+def launch_seat(slice_id: str, seat: str, env: dict) -> None:
+    """The seat started with exactly env (seat_env: the account's own), in its own tmux server. `env -i` sets it
+    whatever environment that server was started with."""
     out = subprocess.DEVNULL
     if LAUNCH == "direct":
         p = subprocess.Popen([*SEAT_WORKER, slice_id, seat], env=env, stdin=out, stdout=out, stderr=out,
                              start_new_session=True)
         (seat_dir(slice_id, seat) / "pid.json").write_text(json.dumps({"pid": p.pid}))
     else:
-        subprocess.run(["tmux", "new-session", "-d", "-s", seat_session(slice_id, seat), "--",
-                        *SEAT_WORKER, slice_id, seat], env=env, stdin=out, stdout=out, stderr=out)
+        subprocess.run(seat_tmux("new-session", "-d", "-s", seat_session(slice_id, seat), "--", "/usr/bin/env", "-i",
+                                 *("%s=%s" % kv for kv in sorted(env.items())), *SEAT_WORKER, slice_id, seat),
+                       env=env, stdin=out, stdout=out, stderr=out)
 
 
 def run_seat(slice_id: str, seat: str) -> int:
@@ -442,7 +483,7 @@ def seat_stop(slice_id: str, seat: str) -> int:
             except OSError:
                 pass
     else:
-        subprocess.run(["tmux", "kill-session", "-t", "=" + seat_session(slice_id, seat)], stdout=subprocess.DEVNULL,
+        subprocess.run(seat_tmux("kill-session", "-t", "=" + seat_session(slice_id, seat)), stdout=subprocess.DEVNULL,
                        stderr=subprocess.DEVNULL)
     return say({"state": "stopped", "slice": slice_id, "seat": seat, "id": st.get("id")}, 0)
 
