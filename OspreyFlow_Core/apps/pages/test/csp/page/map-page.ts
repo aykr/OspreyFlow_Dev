@@ -1,5 +1,5 @@
 // The strict-policy run's test page (slice GG5a), bundled by `mapServer.ts`'s own esbuild call. Never a product module: it is
-// not in `apps/pages/modules/`, so `scripts/assets.mjs` never sees it and its drawing allowlist stays empty (ADR-152 decision 9).
+// not in `apps/pages/modules/`, so `apps/pages/scripts/assets.mjs` never sees it and its drawing allowlist stays empty (ADR-152 decision 9).
 //
 // It does what a map page does and nothing more: names MapLibre's worker on the page's own origin before any map is made, as
 // `apps/workspace/src/map/maplibreWorker.ts` does (`setWorkerUrl`, once); registers the `pmtiles://` protocol, as the

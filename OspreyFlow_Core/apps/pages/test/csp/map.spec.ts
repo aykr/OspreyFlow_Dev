@@ -66,14 +66,26 @@ test.afterAll(async () => {
 
 // ------------------------------------------------------------------------------------------------------------ recording
 
+/** What these functions reach in the browser (the document or a worker), typed here: this folder's Node `tsconfig` has no DOM
+ * library, and the page's own types live with the page (`page/map-page.ts`, which has its own). */
+interface InBrowser {
+  __CSP__?: unknown[];
+  __MAP_STATE__?: { version: string; loaded: boolean; idle: boolean; errors: string[] };
+  __MAP__?: { once(event: "render", listener: () => void): unknown; triggerRepaint(): void };
+  addEventListener(
+    type: "securitypolicyviolation",
+    listener: (e: { effectiveDirective: string; violatedDirective: string; blockedURI: string; sourceFile: string; lineNumber: number }) => void,
+  ): void;
+  requestAnimationFrame(callback: () => void): number;
+}
+
 /** Installed in the document before any of its own script runs, and in each worker as soon as it is seen. */
-function recordViolations(where: "document" | "worker"): void {
-  const scope = globalThis as unknown as { __CSP__?: unknown[]; addEventListener: typeof addEventListener };
+function recordViolations(where: string): void {
+  const scope = globalThis as unknown as InBrowser;
   if (scope.__CSP__) return;
   const seen: unknown[] = [];
   scope.__CSP__ = seen;
-  scope.addEventListener("securitypolicyviolation", (event) => {
-    const e = event as SecurityPolicyViolationEvent;
+  scope.addEventListener("securitypolicyviolation", (e) => {
     seen.push({ where, directive: e.effectiveDirective || e.violatedDirective, blocked: e.blockedURI, source: e.sourceFile, line: e.lineNumber });
   });
 }
@@ -130,27 +142,29 @@ async function openMap(page: Page, browser: string, request: PageRequest): Promi
   const response = await page.goto(server.pageUrl(request));
   const received = (await response?.headerValue("content-security-policy")) ?? "";
   await page
-    .waitForFunction(() => window.__MAP_STATE__?.idle === true, undefined, { timeout: READY_MS })
+    .waitForFunction(() => (globalThis as unknown as InBrowser).__MAP_STATE__?.idle === true, undefined, { timeout: READY_MS })
     .catch(() => undefined);
   // Late reports: a worker's refusal or the last tile's error event.
   await page.waitForTimeout(750);
 
-  const state = await page.evaluate(() => ({
-    version: window.__MAP_STATE__?.version ?? "",
-    loaded: window.__MAP_STATE__?.loaded ?? false,
-    idle: window.__MAP_STATE__?.idle ?? false,
-    errors: window.__MAP_STATE__?.errors ?? [],
-    csp: ((globalThis as unknown as { __CSP__?: Violation[] }).__CSP__ ?? []) as Violation[],
-  }));
+  const state = await page.evaluate(() => {
+    const scope = globalThis as unknown as InBrowser;
+    return {
+      version: scope.__MAP_STATE__?.version ?? "",
+      loaded: scope.__MAP_STATE__?.loaded ?? false,
+      idle: scope.__MAP_STATE__?.idle ?? false,
+      errors: scope.__MAP_STATE__?.errors ?? [],
+      csp: (scope.__CSP__ ?? []) as Violation[],
+    };
+  });
   const violations: Violation[] = [...state.csp];
   for (const worker of workers) {
     const inWorker = await worker
-      .evaluate(() => ((globalThis as unknown as { __CSP__?: unknown[] }).__CSP__ ?? []) as unknown[])
+      .evaluate(() => (globalThis as unknown as InBrowser).__CSP__ ?? [])
       .catch(() => [] as unknown[]);
     violations.push(...(inWorker as Violation[]));
   }
-  // The picture, read until every layer shows or the time is up: WebKit can present a frame without every tile in it after
-  // `idle` has fired (measured: the land cover drawn and the water not, then both a moment later), as GG6's spec also polls.
+  // The picture, read until every layer shows or the time is up, as GG6's spec also polls.
   phase = "screenshot";
   let drawn = { water: 0, landcover: 0, raster: 0 };
   if (state.idle) {
@@ -161,8 +175,9 @@ async function openMap(page: Page, browser: string, request: PageRequest): Promi
       await page.evaluate(
         () =>
           new Promise<void>((done) => {
-            const map = window.__MAP__!;
-            map.once("render", () => requestAnimationFrame(() => done()));
+            const scope = globalThis as unknown as InBrowser;
+            const map = scope.__MAP__!;
+            map.once("render", () => scope.requestAnimationFrame(() => done()));
             map.triggerRepaint();
           }),
       );
@@ -463,7 +478,7 @@ test("planted: a browser without createImageBitmap: the image fallback asks for 
   // makes an `<img>` from `URL.createObjectURL(blob)` (`arrayBufferToImage`). Both browsers have `createImageBitmap`, so the
   // page above needs no `blob:`; this takes it away to show the branch that would.
   await page.addInitScript(() => {
-    delete (window as unknown as { createImageBitmap?: unknown }).createImageBitmap;
+    delete (globalThis as unknown as { createImageBitmap?: unknown }).createImageBitmap;
   });
   const run = await openMap(page, browserName, FULL);
   record("no createImageBitmap", run);
@@ -473,10 +488,15 @@ test("planted: a browser without createImageBitmap: the image fallback asks for 
 
 test("planted: a page that adds a <style> element while it loads: refused and counted (the screenshot's own exception is that narrow)", async ({ page, browserName }) => {
   await page.addInitScript(() => {
-    document.addEventListener("DOMContentLoaded", () => {
-      const style = document.createElement("style");
+    interface Element {
+      textContent: string;
+      appendChild(child: Element): void;
+    }
+    const doc = (globalThis as unknown as { document: { head: Element; createElement(tag: string): Element; addEventListener(type: string, listener: () => void): void } }).document;
+    doc.addEventListener("DOMContentLoaded", () => {
+      const style = doc.createElement("style");
       style.textContent = "#map { outline: 0 }";
-      document.head.appendChild(style);
+      doc.head.appendChild(style);
     });
   });
   const run = await openMap(page, browserName, FULL);

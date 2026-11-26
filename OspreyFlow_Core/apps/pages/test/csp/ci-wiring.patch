@@ -1,0 +1,24 @@
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -1296,6 +1296,21 @@
+       - run: npx playwright test --config map-verify/playwright.config.ts -g "contrast floor"
+         working-directory: OspreyFlow_Core/apps/workspace
+
++  # ADR-152 decision 8 (slice GG5a; the owner's ruling on GG5a's draft, questions 2, 3 and 7 (a)): MapLibre 6.19 under the page
++  # service's own security policy, in Chromium and WebKit, and the standing test that no map request leaves the page's origin
++  # (`apps/pages/test/csp/map.spec.ts`). Playwright against a test-only page served by `securityHeaders()` and `assetsHandler()`
++  # on a free port, so it needs no stack, Valkey or Python. WebKit needs its system libraries, so `--with-deps` names both.
++  pages-csp:
++    runs-on: ubuntu-latest
++    steps:
++      - uses: actions/checkout@v4
++      - uses: actions/setup-node@v4
++        with: { node-version: "22" }
++      - run: npm ci
++      - run: npx playwright install --with-deps chromium webkit
++        working-directory: OspreyFlow_Core/apps/pages
++      - run: npm run test:csp --workspace apps/pages
++
+   # `06_DECISIONS.md` ADR-049 Stage 2 §6 part A, amendment 21 — the setup screens' own keyboard
+   # spec, against a real `harness.webapp` server (`apps/harness/keyboard/playwright.config.ts`'s
+   # own `webServer` array starts it alongside Vite). A separate job from `glass-perf-a11y-keyboard`

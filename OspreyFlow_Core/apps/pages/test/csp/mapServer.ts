@@ -222,7 +222,7 @@ interface Assets {
   workerBytes: Buffer;
 }
 
-/** The page's module and stylesheet, bundled by this test's own esbuild call with the options `scripts/assets.mjs` gives a
+/** The page's module and stylesheet, bundled by this test's own esbuild call with the options `apps/pages/scripts/assets.mjs` gives a
  * module (one ES module, ES2018, browser, minified, no splitting, no source map), and MapLibre's worker file copied beside them. */
 async function buildAssets(): Promise<Assets> {
   const dir = mkdtempSync(join(tmpdir(), "ospreyflow-pages-csp-assets-"));
