@@ -1,0 +1,13 @@
+--- the checkout as it is: exit 0
+PASS same drawing versions (I20): apps/workspace and apps/pages resolve one version of each drawing library they share
+--- planted: Sigma 3.1.0 nested under @sigma/node-border: exit 1
+FAIL same drawing versions (I20)
+  apps/workspace reaches two versions of sigma: 3.0.3 (node_modules/sigma) and 3.1.0 (node_modules/@sigma/node-border/node_modules/sigma)
+--- planted: GG2a's lockfile, sigma listed twice, the wrong entry first; round 1's script: exit 0
+PASS same drawing versions (I20): apps/workspace and apps/pages resolve one version of each drawing library they share
+--- the same files; this round's script: exit 1
+FAIL same drawing versions (I20)
+  apps/pages/VERSION_WINDOW.yaml: it lists sigma more than once: one entry for each library
+restored: package-lock.json 3ae975ce, VERSION_WINDOW.yaml af16dbe9
+--- the checkout as it is, restored: exit 0
+PASS same drawing versions (I20): apps/workspace and apps/pages resolve one version of each drawing library they share
