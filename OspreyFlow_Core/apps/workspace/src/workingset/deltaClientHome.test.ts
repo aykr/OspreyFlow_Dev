@@ -2,8 +2,9 @@
 // (ADR-152 decision 6, I11). A copy left in the workspace, or an importer still reaching a workspace copy, would
 // type-check and pass every other suite, and the two copies would then drift apart unseen; this is the case
 // that fails. Only the integration test stays here (it starts a real Conduit), importing the package's client.
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join, relative } from "node:path";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, relative } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
@@ -32,19 +33,62 @@ function walk(dir: string, out: string[] = []): string[] {
 
 // This file is left out of the scan: its third case holds the stale shapes as strings, on purpose.
 const SELF = relative(WORKSPACE, new URL(import.meta.url).pathname);
-const files = SCANNED.flatMap((d) => walk(join(WORKSPACE, d)))
-  .map((p) => relative(WORKSPACE, p))
-  .filter((f) => f !== SELF);
+function sourceFiles(root: string): string[] {
+  return SCANNED.flatMap((d) => walk(join(root, d)))
+    .map((p) => relative(root, p))
+    .filter((f) => f !== SELF);
+}
+
+function copiesIn(files: string[]): string[] {
+  return files.filter((f) => /(^|\/)(deltaClient|deltaOps)(\.[a-z]+)*\.(ts|tsx)$/.test(f));
+}
+
+function relativeImportersIn(root: string, files: string[]): string[] {
+  return files.filter((f) => RELATIVE_IMPORT.test(readFileSync(join(root, f), "utf8")));
+}
+
+const files = sourceFiles(WORKSPACE);
 
 describe("the delta client has one home, the shared package", () => {
   it("leaves no copy of the client or its unit tests in the workspace, only the integration test", () => {
-    const left = files.filter((f) => /(^|\/)(deltaClient|deltaOps)(\.[a-z]+)*\.(ts|tsx)$/.test(f));
-    expect(left).toEqual(["src/workingset/deltaClient.integration.test.ts"]);
+    expect(copiesIn(files)).toEqual(["src/workingset/deltaClient.integration.test.ts"]);
   });
 
   it("has no workspace file importing a deltaClient module by a relative path", () => {
-    const importers = files.filter((f) => RELATIVE_IMPORT.test(readFileSync(join(WORKSPACE, f), "utf8")));
-    expect(importers).toEqual([]);
+    expect(relativeImportersIn(WORKSPACE, files)).toEqual([]);
+  });
+
+  it("finds a stale copy or import wherever in the workspace it is left, a folder nobody has made yet included", () => {
+    const stale = 'import { connectDeltaClient } from "../src/workingset/deltaClient";\n';
+    const copies = [
+      "compute-tier1/deltaClient.js",
+      "deck-capture/deltaClient.ts",
+      "deltaOps.test.ts",
+      "scripts/deltaClient.cjs",
+      "test/deltaClient.jsx",
+    ];
+    const importers: Record<string, string> = {
+      "deck-capture/stale-harness.tsx": stale,
+      "map-build/stale.ts": 'export * from "../src/workingset/deltaClient.js";\n',
+      "a-folder-nobody-listed/deep/er/stale.mts": stale,
+      "stale.config.ts": 'const m = await import("./src/workingset/deltaClient");\n',
+    };
+    // Installed and built output is not the workspace's source.
+    const skipped = ["node_modules/some-package/deltaClient.ts", "map-build/dist/deltaClient.js"];
+
+    const root = mkdtempSync(join(tmpdir(), "delta-client-home-"));
+    try {
+      const planted = [...copies, ...skipped].map((f) => [f, "export {};\n"]).concat(Object.entries(importers));
+      for (const [file, text] of planted) {
+        mkdirSync(dirname(join(root, file!)), { recursive: true });
+        writeFileSync(join(root, file!), text!);
+      }
+      const found = sourceFiles(root);
+      expect(copiesIn(found).sort()).toEqual([...copies].sort());
+      expect(relativeImportersIn(root, found).sort()).toEqual(Object.keys(importers).sort());
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it("has a pattern that finds each shape of a stale import (so the case above can fail)", () => {
