@@ -9,4 +9,5 @@ routes:
   - /help
   - /admin/people
   - /reports
+  - /packs/trends
   - /cases

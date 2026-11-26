@@ -3,6 +3,38 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 26 November 2026, 13:26 UTC: the 62 hold cancelled; hand-backs together at about 17:30 (the owner, in chat)
+
+The hold for hand-back 62 is cancelled. GR4a merges, and merges and starts carry on as normal all afternoon. **No hand-back is applied until about 17:30 UTC**, when the owner applies 62, 63, 58, 59 and 60 together, with a warning first. **AD1c waits for 63** (its `lists.tsv` row) until then.
+
+## 26 November 2026, about 12:40 UTC: SE9e (a); the extract route; GG2a's add-round (the owner, in chat)
+
+- **SE9e: (a).** Refuse every recipe binding of `object_ref` and `media_kind` on a Document, at validation and at load; only the engine's own writes set them; case 3 becomes "refused" (the owner's word). The owner's SE9e clear-stop line is in.
+- **The ingest extract route** (a caller-chosen Document whose `properties_override` sets `object_ref`) is cut as its own security part before RL2: **SE9f**.
+- **GG2a:** the owner's add-round line is in; it is used after WS4a merges and GG2a takes main in (the version-window entry and I20's third test). If WS4a does not merge today, the conductor says so tomorrow and the owner writes a new dated line.
+
+## 26 November 2026, about 12:20 UTC: GG2a's Mac figures; Sigma 4 (the owner, in chat)
+
+The owner's Mac run (`~/gg2a-mac-gpu.jsonl`, 3 runs, Apple M3 Pro GPU, all passed): first frame 2,877 / 2,646 / 2,954 ms against 30,000; sweep 16.5 / 17.0 / 16.5 ms a frame; expansion of 500 nodes 555 / 602 / 684 ms against the Mac's 800. **Carry on with Sigma 4; no fallback.** GG2a merges after its verifier and a server green, writing the version-window entry and I20's third test (WS4a Q1 and Q5). Merges and starts resume.
+
+## 26 November 2026, 12:15 UTC: the owner's answers (security, WS4a, GR1e) (the owner, in chat)
+
+(The conductor's earlier headings today were not read from the clock and run about two hours ahead of UTC; from here every time is `date -u`.)
+
+- **GG3b Q1:** yes: a Conduit security part for the document-reader route's `sender_id`, `recipient_id` and `edge_id`, **before RL2**. **GG3b Q8:** (i) a PDF is served as a download (`Content-Disposition: attachment`), never shown in the page; (ii) yes, a security part: a recipe binds `object_ref` on a Document only to a file of the same dataset; (iii) the PID pack's picture references: a backlog bug. **GG4j:** a refusal names only the capped ceiling the board already sent that reader, never the real one. C040 noted.
+- **WS4a:** Q1 (a); Q2 (b), CI's reference set first, as a diff to the owner; Q3 (a), the same "ready" moment for both front ends in 0.7.0, **which replaces the 10:35 GG2a Q2 (a): GG2a needs no extra round**; Q4 (a) once WS4a adds a test for the release-local diff; Q5 with GG2a's merge. **Start WS4a.**
+- **GR1e:** GR1a Q1 is (a), the query form (ruled at 10:30). GR1e is accepted as built; its Q1 and Q2 (Conduit parts) go to the backlog after RL2.
+- **GG2a's Mac run:** the owner runs the command once at a quiet moment, and first says "quiet window". From then until "done", the conductor holds merges and the early warning's Mac-side steps.
+
+## 26 November 2026, about 13:40 UTC: "applied" (61); away rounds in; GG4b ruled (the owner, in chat)
+
+- **Hand-back 61 is on main (`b72aaba`):** the citation red and the beat race are fixed. Starts and merges resume in the conductor's order.
+- **Away branches on the Mac:** `away/GR1e`, `away/GG3b` and `away/WS4a` each come into the line like GR1a (round 1 merges the branch). **WS4a's questions go to the owner first; its start is held until the owner answers.** `away/GG4b` stopped at the owner's D268 stop before any code, so it has nothing to merge. `away/live-A` is evidence only. GG2c is still on the server.
+- **AD1c's `lists.tsv` row:** line-fix hands it in as a small hand-back after 62. If it qualifies for the conductor's apply-handback, the conductor applies it.
+- **GG4b (security), after its away stop:** questions 2 and 4 become **(b)**: on every read path that sends a drawn item, the cited document is re-read with the reader's principal; there is no recorded handling and no sweep. **A budget case for the working set with drawn items** is part of its table. **GG4b is built in the line, not away**, and is never accepted narrower. **Its ADR-143 amendment diff comes first, for the owner's approval.**
+- **The ceiling (GG4b question 5 (a)) is cut now as its own security slice.**
+- **C040 (re-marks outside the edit route) is raised to a security row, before RL2.**
+
 ## 26 November 2026, about 11:10 UTC: five away rounds; starts wait for 61 (the owner, in chat)
 
 Away on the server: GG2c, GR1e, and from about 10:45 GG4b, WS4a and GG3b. **No line builder starts for these five:** each comes in like GR1a when its report appears (round 1 merges the away branch). The line takes SE8g, AD1c, GR1a, GG4a, GA1a, GG3a, GR1b and GG4c, in that order, **once 61 lands.**

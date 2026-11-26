@@ -1,4 +1,4 @@
-// Builds the service: TypeScript to dist/, then the Help page's and the cases page's words bundled with the shared package, then what tsc copies no part of (each tree's templates and the
+// Builds the service: TypeScript to dist/, then the Help page's, the trends page's and the cases page's words bundled with the shared package, then what tsc copies no part of (each tree's templates and the
 // function list the route modules are checked against), then the browser assets (scripts/assets.mjs).
 // The compiler is the one installed for this workspace, found by path: never `npx`, which fetches a
 // package of that name from the registry when it is not installed (and `tsc` there is not TypeScript).
@@ -22,12 +22,13 @@ rmSync(out, { recursive: true, force: true });
 execFileSync(process.execPath, [tsc, "-p", "tsconfig.build.json", "--outDir", out], { cwd: root, stdio: "inherit" });
 cpSync(join(root, "tree-default"), join(out, "tree-default"), { recursive: true });
 cpSync(join(root, "tree-govuk"), join(out, "tree-govuk"), { recursive: true });
-// The two server files that import the shared package (`server/views/helpWords.ts`: the Help page's words are `roles.ts`'s, never
-// written again; `server/views/casesWords.ts`: the cases page says a level, a domain pack and a moment in the package's words, slice
-// GR1a) are bundled with the package's source, over what `tsc` wrote: `tsc` checks them against `server/types/glassShared.d.ts` and the
+// The three server files that import the shared package (`server/views/helpWords.ts`: the Help page's words are `roles.ts`'s, never
+// written again; `server/views/packTrendsWords.ts`: trends shown together say a pack and a trend in `packages/glass-shared/src/reports/packText.ts`'s words, slice GR4a;
+// `server/views/casesWords.ts`: the cases page says a level, a domain pack and a moment in the package's words, slice GR1a)
+// are bundled with the package's source, over what `tsc` wrote: `tsc` checks them against `server/types/glassShared.d.ts` and the
 // compiled service imports no workspace package at run time (the image's run-time stage holds none). Nothing else is bundled.
 await build({
-  entryPoints: [join(root, "server", "views", "helpWords.ts"), join(root, "server", "views", "casesWords.ts")],
+  entryPoints: [join(root, "server", "views", "helpWords.ts"), join(root, "server", "views", "packTrendsWords.ts"), join(root, "server", "views", "casesWords.ts")],
   outdir: join(out, "server", "views"),
   bundle: true,
   format: "esm",
