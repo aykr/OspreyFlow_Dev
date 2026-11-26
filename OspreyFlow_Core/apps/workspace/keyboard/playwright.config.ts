@@ -12,6 +12,9 @@ export default defineConfig({
   // `describe`/`it` are not this runner's globals — scoped here so the two suites never collide
   // over the same file.
   testMatch: /.*\.spec\.ts$/,
+  // The canvas-look comparison runs on its own (`canvas-compare.config.ts`, `npm run test:canvas-compare`): its
+  // references belong to one WebGL renderer, and it joins CI only once shown green there (slice WS4a).
+  testIgnore: /canvas-compare\.spec\.ts$/,
   timeout: 60_000,
   webServer: {
     command: `OSPREY_GOVUK_IDENTITY=1 node scripts/sync_govuk_assets.mjs && npx vite --port ${PORT} --strictPort`,

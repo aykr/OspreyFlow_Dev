@@ -39,7 +39,7 @@ if (dirty) {
   process.exit(2);
 }
 
-const run = spawnSync("npx", ["playwright", "test", "--config", "keyboard/playwright.config.ts", "keyboard/canvas-compare.spec.ts", "--workers=1"], {
+const run = spawnSync("npx", ["playwright", "test", "--config", "keyboard/canvas-compare.config.ts", "--workers=1"], {
   cwd: WORKSPACE,
   stdio: "inherit",
   env: { ...process.env, CANVAS_COMPARE_WRITE: "1", CANVAS_COMPARE_REASON: reason },

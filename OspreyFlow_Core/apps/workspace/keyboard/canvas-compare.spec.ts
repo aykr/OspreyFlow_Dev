@@ -19,12 +19,16 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { CEILING, FOLDER, compare, readReferences, toleranceRefusal, type Tolerance } from "./canvasCompare";
 import { layoutSettled } from "./layoutSettled";
+import { FIXTURE_FILE } from "./mapTilesFixture";
+import { FIXTURE_BEARER_TOKEN } from "./mapTilesToken";
 
 interface SceneCase {
   /** The reference's name (`canvas-compare/<name>.png`). */
   name: string;
-  /** The harness's scene. */
-  scene: string;
+  /** The harness's scene (`canvas-compare-harness.tsx`); none for the map. */
+  scene?: string;
+  /** The Map view on GG6's synthetic tiles (`map-tiles-harness.tsx`) in place of the graph canvas. */
+  map?: boolean;
   /** A zoom after the fit (1 is 100%; above 1 is zoomed out). */
   zoom?: number;
   /** A node the pointer rests on (its hover drawing). */
@@ -44,6 +48,9 @@ export const CASES: readonly SceneCase[] = [
   { name: "export", scene: "chain", exported: true },
   // ADR-119: one link between each pair of communities at the fitted view (`communityLinkLayer.ts`).
   { name: "communities", scene: "communities" },
+  // The Map view: MapLibre on GG6's synthetic PMTiles archive with the canvas's Sigma layer over it
+  // (`sigmaMaplibreLayer.ts`).
+  { name: "map", map: true },
 ];
 
 const WRITING = process.env.CANVAS_COMPARE_WRITE === "1";
@@ -65,19 +72,44 @@ async function frames(page: Page, count = 3): Promise<void> {
   );
 }
 
-/** Draws `c` and returns its picture as PNG bytes. */
-async function draw(page: Page, c: SceneCase): Promise<Buffer> {
-  await page.goto(`/keyboard/canvas-compare-harness.html?scene=${c.scene}`);
-  await page.waitForFunction(() => window.__COMPARE__ !== undefined);
-  expect(await page.evaluate(() => window.__COMPARE__!.facesLoaded), "the product's label face loaded").toBe(true);
-  // The references belong to one renderer (pixels differ between graphics stacks): drawn with another, this machine
-  // cannot judge the look against them, and says so rather than reporting a changed look.
-  const renderer = await page.evaluate(() => window.__COMPARE__!.renderer);
+/** The references belong to one WebGL renderer (pixels differ between graphics stacks): drawn with another, this
+ * machine cannot judge the look against them, and says so rather than reporting a changed look. Writing, it records
+ * the renderer for the command (`renderer.txt`). */
+async function checkRenderer(page: Page): Promise<void> {
+  const renderer = await page.evaluate(() => {
+    const gl = document.createElement("canvas").getContext("webgl");
+    if (!gl) return "no WebGL";
+    const named = gl.getExtension("WEBGL_debug_renderer_info");
+    return String(named ? gl.getParameter(named.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+  });
   if (WRITING) writeFileSync(new URL("renderer.txt", FOLDER), `${renderer}\n`);
   else {
     const made = readReferences([]).record?.machine?.webgl;
     expect(renderer, `the references were made with the WebGL renderer ${made}; make a set of this machine's own to compare here`).toBe(made);
   }
+}
+
+/** The picture inside `box` once it has stopped changing: two alike, half a second apart. A node's drawing
+ * (`@sigma/node-image`) arrives a frame or more after the node, and a map's tiles after its style. */
+async function settledShot(page: Page, box: { x: number; y: number; width: number; height: number }, name: string): Promise<Buffer> {
+  const shot = () => page.screenshot({ clip: box, animations: "disabled", caret: "hide" });
+  let last = await shot();
+  for (let i = 0; i < 20; i++) {
+    await page.waitForTimeout(500);
+    const now = await shot();
+    if (now.equals(last)) return now;
+    last = now;
+  }
+  throw new Error(`the ${name} scene never stopped changing`);
+}
+
+/** Draws `c` and returns its picture as PNG bytes. */
+async function draw(page: Page, c: SceneCase): Promise<Buffer> {
+  if (c.map) return drawMap(page);
+  await page.goto(`/keyboard/canvas-compare-harness.html?scene=${c.scene}`);
+  await page.waitForFunction(() => window.__COMPARE__ !== undefined);
+  expect(await page.evaluate(() => window.__COMPARE__!.facesLoaded), "the product's label face loaded").toBe(true);
+  await checkRenderer(page);
   const canvas = page.getByRole("application", { name: "Network canvas" });
   await expect(canvas).toHaveAttribute("data-canvas-state", "drawn");
   const ids = await page.evaluate(() => window.__COMPARE__!.nodeIds);
@@ -122,33 +154,57 @@ async function draw(page: Page, c: SceneCase): Promise<Buffer> {
   }
   await page.waitForTimeout(400);
   await frames(page);
-  // The picture once it has stopped changing: a node's drawing (`@sigma/node-image`) arrives a frame or more after
-  // the node, so the first frame after a fit need not be the scene. Two pictures alike, half a second apart.
-  const shot = () => page.screenshot({ clip: box, animations: "disabled", caret: "hide" });
-  let last = await shot();
-  for (let i = 0; i < 20; i++) {
-    await page.waitForTimeout(500);
-    const now = await shot();
-    if (now.equals(last)) {
-      if (!c.exported) return now;
-      const base64 = await page.evaluate(async () => {
-        const blob = await window.__CANVAS__!.exportImage({
-          osprey_mark: "OspreyFlow",
-          investigation_id: "canvas-compare",
-          exported_at: "2026-11-26T00:00:00Z",
-          resolution_threshold: 0.95,
-          handling_level: "OFFICIAL",
-        });
-        const bytes = new Uint8Array(await blob.arrayBuffer());
-        let text = "";
-        for (const b of bytes) text += String.fromCharCode(b);
-        return btoa(text);
-      });
-      return Buffer.from(base64, "base64");
+  const picture = await settledShot(page, box, c.name);
+  if (!c.exported) return picture;
+  const base64 = await page.evaluate(async () => {
+    const blob = await window.__CANVAS__!.exportImage({
+      osprey_mark: "OspreyFlow",
+      investigation_id: "canvas-compare",
+      exported_at: "2026-11-26T00:00:00Z",
+      resolution_threshold: 0.95,
+      handling_level: "OFFICIAL",
+    });
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    let text = "";
+    for (const b of bytes) text += String.fromCharCode(b);
+    return btoa(text);
+  });
+  return Buffer.from(base64, "base64");
+}
+
+/** The Map view's scene (`map-tiles-harness.tsx`, GG6): MapLibre drawing the synthetic PMTiles archive, with the canvas's
+ * Sigma layer bound over it (`src/map/sigmaMaplibreLayer.ts`) and three located nodes. The archive is served as
+ * `map-tiles.spec.ts` serves it: ranged, and only with the harness's bearer token. Returns the frame's settled
+ * picture. */
+async function drawMap(page: Page): Promise<Buffer> {
+  const archive = readFileSync(FIXTURE_FILE);
+  await page.route("**/fixture/map-tiles.pmtiles", async (route) => {
+    if (route.request().headers()["authorization"] !== `Bearer ${FIXTURE_BEARER_TOKEN}`) {
+      await route.fulfill({ status: 401, contentType: "application/json", body: '{"detail":"Not authenticated"}' });
+      return;
     }
-    last = now;
-  }
-  throw new Error(`the ${c.name} scene never stopped changing`);
+    const common = { "accept-ranges": "bytes", etag: '"gg6-fixture"', "content-type": "application/octet-stream" };
+    const range = /^bytes=(\d+)-(\d*)$/.exec(route.request().headers()["range"] ?? "");
+    if (!range) return route.fulfill({ status: 200, headers: common, body: archive });
+    const start = Number(range[1]);
+    const end = Math.min(range[2] === "" ? archive.length - 1 : Number(range[2]), archive.length - 1);
+    await route.fulfill({
+      status: 206,
+      headers: { ...common, "content-range": `bytes ${start}-${end}/${archive.length}` },
+      body: archive.subarray(start, end + 1),
+    });
+  });
+  // No glyphs, as in `map-tiles.spec.ts`: the bundled style's labels are not drawn, so no face can differ.
+  await page.route("**/fonts/**", (route) =>
+    route.fulfill({ status: 200, contentType: "text/html", body: "<!doctype html><title>Glass</title>" }),
+  );
+  await page.goto("/keyboard/map-tiles-harness.html");
+  await checkRenderer(page);
+  await expect.poll(() => page.evaluate(() => window.__MAP__?.loaded() ?? false), { timeout: 30_000 }).toBe(true);
+  await expect.poll(() => page.evaluate(() => window.__MAP__?.areTilesLoaded() ?? false), { timeout: 30_000 }).toBe(true);
+  await page.mouse.move(0, 0);
+  const box = (await page.locator("main > div").first().boundingBox())!;
+  return settledShot(page, box, "map");
 }
 
 const tolerance = JSON.parse(readFileSync(new URL("TOLERANCE.json", FOLDER), "utf8")) as Tolerance & Record<string, unknown>;

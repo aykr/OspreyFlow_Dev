@@ -30,8 +30,6 @@ declare global {
       nodeIds: string[];
       /** The product's label face loaded (false: the picture would be drawn in a fallback). */
       facesLoaded: boolean;
-      /** The browser's WebGL renderer, as it names itself: the references belong to one. */
-      renderer: string;
       /** Puts each node at its fixed place; the spec then fits the view. */
       pin: () => void;
     };
@@ -213,13 +211,7 @@ applyTheme("dark");
 await import("../src/design/fonts");
 await loadLookFaces(["400", "600"], [`400 11px ${NODE_LABEL_FONT}`]);
 const facesLoaded = document.fonts.check(`400 11px 'Atkinson Hyperlegible Next'`);
-/** The WebGL renderer this browser draws with (SwiftShader, a GPU's own name, ...). */
-function webglRenderer(): string {
-  const gl = document.createElement("canvas").getContext("webgl");
-  if (!gl) return "no WebGL";
-  const named = gl.getExtension("WEBGL_debug_renderer_info");
-  return String(named ? gl.getParameter(named.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
-}
+
 
 const canvasHandle = createRef<GlassCanvasHandle>();
 window.__CANVAS__ = {
@@ -232,7 +224,6 @@ window.__COMPARE__ = {
   scene: sceneName,
   nodeIds: scene.nodes.map((n) => n.id),
   facesLoaded,
-  renderer: webglRenderer(),
   pin: () => {
     for (const [id, [x, y]] of Object.entries(scene.at)) {
       // Sigma's y grows upwards; the places above are written as the canvas shows them.
