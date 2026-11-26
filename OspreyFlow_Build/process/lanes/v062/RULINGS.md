@@ -3,6 +3,15 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 26 November 2026, about 13:40 UTC: "applied" (61); away rounds in; GG4b ruled (the owner, in chat)
+
+- **Hand-back 61 is on main (`b72aaba`):** the citation red and the beat race are fixed. Starts and merges resume in the conductor's order.
+- **Away branches on the Mac:** `away/GR1e`, `away/GG3b` and `away/WS4a` each come into the line like GR1a (round 1 merges the branch). **WS4a's questions go to the owner first; its start is held until the owner answers.** `away/GG4b` stopped at the owner's D268 stop before any code, so it has nothing to merge. `away/live-A` is evidence only. GG2c is still on the server.
+- **AD1c's `lists.tsv` row:** line-fix hands it in as a small hand-back after 62. If it qualifies for the conductor's apply-handback, the conductor applies it.
+- **GG4b (security), after its away stop:** questions 2 and 4 become **(b)**: on every read path that sends a drawn item, the cited document is re-read with the reader's principal; there is no recorded handling and no sweep. **A budget case for the working set with drawn items** is part of its table. **GG4b is built in the line, not away**, and is never accepted narrower. **Its ADR-143 amendment diff comes first, for the owner's approval.**
+- **The ceiling (GG4b question 5 (a)) is cut now as its own security slice.**
+- **C040 (re-marks outside the edit route) is raised to a security row, before RL2.**
+
 ## 26 November 2026, about 11:10 UTC: five away rounds; starts wait for 61 (the owner, in chat)
 
 Away on the server: GG2c, GR1e, and from about 10:45 GG4b, WS4a and GG3b. **No line builder starts for these five:** each comes in like GR1a when its report appears (round 1 merges the away branch). The line takes SE8g, AD1c, GR1a, GG4a, GA1a, GG3a, GR1b and GG4c, in that order, **once 61 lands.**
