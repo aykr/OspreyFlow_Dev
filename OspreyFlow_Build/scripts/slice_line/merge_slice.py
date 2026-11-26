@@ -85,7 +85,8 @@ def note(text: str) -> None:
 #: A command of the merge that prints nothing for this long is ended (the owner, 24 November 2026: GR2a's gate hung
 #: twice when the network dropped, at 11:28 and 17:30, holding the merge lock for hours each time). Its whole process
 #: group is ended, the log says so, and the merge is refused "stalled, not the part's fault": no round, no finding, the
-#: lock freed. A slow command that keeps printing is never ended. OSPREY_GATE_STALL_SECONDS is for the line's tests.
+#: lock freed. A slow command that keeps printing is never ended. Heartbeat lines are not printing (common.heartbeat:
+#: tests/run.sh beats inside `make ci`). OSPREY_GATE_STALL_SECONDS is for the line's tests.
 GATE_STALL_SECONDS = 20 * 60
 
 
@@ -122,7 +123,7 @@ def end_group(p: subprocess.Popen) -> None:
 
 def run(cmd: list[str] | str, cwd: Path, log: Path | None = None, shell: bool = False, env: dict | None = None) -> int:
     """The command's exit code, its output in the log. With a log, a command whose log has not grown for the stall
-    limit is ended and Stalled raised (its name in the log, "STALLED: ...")."""
+    limit, heartbeat lines not counted, is ended and Stalled raised (its name in the log, "STALLED: ...")."""
     env = dict(os.environ if env is None else env)
     env.setdefault("ARCADEDB_HTTP_PORT", "9")
     env.setdefault("POSTGRES_PORT", "9")
@@ -133,7 +134,7 @@ def run(cmd: list[str] | str, cwd: Path, log: Path | None = None, shell: bool = 
         p = subprocess.Popen(cmd, cwd=str(cwd), shell=shell, stdout=fh, stderr=subprocess.STDOUT, env=env,
                              start_new_session=True)
         limit = stall_seconds()
-        size, quiet_since = -1, time.monotonic()
+        watch = c.OutputWatch(log) if log else None  # output since the command began; heartbeat lines are not output
         try:
             while True:
                 try:
@@ -142,10 +143,7 @@ def run(cmd: list[str] | str, cwd: Path, log: Path | None = None, shell: bool = 
                     pass
                 if log is None:
                     continue
-                now_size = os.fstat(fh.fileno()).st_size
-                if now_size != size:
-                    size, quiet_since = now_size, time.monotonic()
-                elif time.monotonic() - quiet_since >= limit:
+                if watch.look() >= limit:
                     end_group(p)
                     fh.write(f"\nSTALLED: {said} printed nothing for {limit} s and was ended (not the part's fault)\n")
                     fh.flush()
@@ -1170,6 +1168,7 @@ class Progress:
                     "state": "running", "result": None, "step": None, "done": [], "log": {"path": str(log)},
                     "estimate_left_s": None, "estimate_from": "no estimate"}
         self.board = None
+        self.watch = c.OutputWatch(log, from_start=True)
         self.stop = threading.Event()
         self.beat = threading.Thread(target=self._beat, daemon=True)
         self.beat.start()
@@ -1193,8 +1192,10 @@ class Progress:
         with self.mutex:
             try:
                 st = self.log.stat() if self.log.exists() else None
+                self.watch.look()
                 self.rec["log"] = {"path": str(self.log), "size": st.st_size if st else 0,
-                                   "mtime": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(st.st_mtime)) if st else None}
+                                   "mtime": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(st.st_mtime)) if st else None,
+                                   "output_at": self.watch.last_wall}  # its last output, heartbeat lines not counted
                 self._estimate()
                 self.rec["updated"] = c.now()
                 tmp = self.f.with_name(self.f.name + ".tmp")
@@ -2024,35 +2025,49 @@ def main() -> int:
     aa.add_argument("--wait", type=float, default=120, metavar="MINUTES", help="how long to wait for a running merge")
     a = ap.parse_args()
     try:
-        if a.cmd == "merge":
-            done = merge(a.slice)
-            print(json.dumps(done, indent=1))
-        elif a.cmd == "push-pending":
-            print(push_pending())
-        elif a.cmd == "watch-github":
-            print(watch_github())
-        elif a.cmd == "wait-idle":
-            print(wait_idle(a.minutes))
-        elif a.cmd == "approve-diff":
-            print(approve_diff(a.name, a.hash8))
-        elif a.cmd == "server-report":  # item 6: read only
-            r = server_gate.report()
-            print(json.dumps(r, indent=1) if a.json else server_gate.report_words(r))
-        elif a.cmd == "server-rerun":
-            print(server_rerun(a.slice))
-        elif a.cmd == "apply-approved":
-            print(apply_approved(a.name, a.wait))
-        else:
-            print("Committed", records(a.message, a.paths))
+        with c.heartbeat(lambda: beat_words(a)):  # the owner, 25 November 2026: a running merge step says so
+            dispatch(a)
+        rc = 0
     except Refused as e:
         print(f"Refused: {e}", file=sys.stderr)
         rc = 1
-    else:
-        rc = 0
     for n in NOTES:
         print(n, file=sys.stderr)
     subprocess.run([sys.executable, str(Path(__file__).resolve().parent / "board.py"), "--quiet"])
     return rc
+
+
+def beat_words(a) -> str:
+    """The heartbeat's words: the command, and for a merge its step (from the progress record)."""
+    words = f"merge_slice.py {a.cmd}" + (f" {a.slice}" if getattr(a, "slice", None) else "")
+    st = (PROGRESS.rec.get("step") if PROGRESS is not None else None) or {}
+    if a.cmd == "merge" and st:
+        words += f": step {st.get('n')} of {st.get('of')}, {st.get('name')}" + (f" ({st['part']})" if st.get("part") else "")
+    return words
+
+
+def dispatch(a) -> None:
+    """The command; a refusal raises Refused."""
+    if a.cmd == "merge":
+        done = merge(a.slice)
+        print(json.dumps(done, indent=1))
+    elif a.cmd == "push-pending":
+        print(push_pending())
+    elif a.cmd == "watch-github":
+        print(watch_github())
+    elif a.cmd == "wait-idle":
+        print(wait_idle(a.minutes))
+    elif a.cmd == "approve-diff":
+        print(approve_diff(a.name, a.hash8))
+    elif a.cmd == "server-report":  # item 6: read only
+        r = server_gate.report()
+        print(json.dumps(r, indent=1) if a.json else server_gate.report_words(r))
+    elif a.cmd == "server-rerun":
+        print(server_rerun(a.slice))
+    elif a.cmd == "apply-approved":
+        print(apply_approved(a.name, a.wait))
+    else:
+        print("Committed", records(a.message, a.paths))
 
 
 if __name__ == "__main__":

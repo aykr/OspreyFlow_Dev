@@ -776,6 +776,25 @@ M = [
  ('merge_slice.py', '"passed_targets": [*e["passed_targets"], *build["taken"]]}', '"passed_targets": [*build["taken"]]}', 'test_build_checks and (a_build_green_for_exactly)'),
  ('merge_slice.py', 'f"\\nthe build account\'s run {build[\'run_id\']} counts', 'f"\\nthe build run {build[\'run_id\']} counts', 'test_build_checks and (a_build_green_for_exactly)'),
  ('merge_slice.py', '    out["build"] = build\n', '', 'test_build_checks and (without_it)'),
+ # the heartbeat (the owner, 25 November 2026): a heartbeat line never counts as output for 50's stall check
+ ("common.py", '        if HEARTBEAT_LINE.sub(b"", data):', '        if data:', 'test_heartbeat and (only_beats or log_only_beats or output_is_what)'),
+ ("common.py", '            data, self.carry = data[:i], data[i:]', '            self.carry = b""', 'test_heartbeat and (output_is_what)'),
+ ("common.py", '                    data, self.carry = data[:-k], data[-k:]\n                    break', '                    break', 'test_heartbeat and (output_is_what)'),
+ ("common.py", '                out = stream or sys.stderr', '                out = stream or sys.stdout', 'test_heartbeat and (running_merge_beats or early_warning_and_the_dry_run)'),
+ ("common.py", 'HEARTBEAT_SECONDS = 30\n', 'HEARTBEAT_SECONDS = 60\n', 'test_heartbeat and (at_least_every_30)'),
+ ("board.py", '    quiet = ago(lg.get("output_at") or lg.get("mtime"))', '    quiet = ago(lg.get("mtime"))', 'test_heartbeat and (log_only_beats)'),
+ ("merge_slice.py", '"output_at": self.watch.last_wall}', '"output_at": None}', 'test_heartbeat and (log_only_beats)'),
+ ("merge_slice.py", '        with c.heartbeat(lambda: beat_words(a)):', '        with open(os.devnull):', 'test_heartbeat and (running_merge_beats)'),
+ ("merge_slice.py", '    if a.cmd == "merge" and st:', '    if False:', 'test_heartbeat and (running_merge_beats)'),
+ ("early_warning.py", '    with c.heartbeat(words.strip()):', '    with open(os.devnull):', 'test_heartbeat and (early_warning_and_the_dry_run)'),
+ ("early_warning.py", ' for x in argv if re.fullmatch(r"[A-Za-z0-9]+", x))', ' for x in argv if x)', 'test_heartbeat and (early_warning_and_the_dry_run)'),
+ ("dry_run.py", "    with c.heartbeat(f\"dry run of {spec.get('id') or 'a slice'}'s commands on main\"):", '    with open(os.devnull):', 'test_heartbeat and (early_warning_and_the_dry_run)'),
+ ("tests/run.sh", 'beat & hb=$!', 'hb=', 'test_heartbeat and (beats_while_it_runs)'),
+ ("demo_server/tests/run.sh", 'beat & hb=$!', 'hb=', 'test_heartbeat and (beats_while_it_runs)'),
+ ("tests/run.sh", '"$HERE" "$@"\n', '"$HERE" "$@" || true\n', 'test_heartbeat and (beats_while_it_runs)'),
+ ("tests/run.sh", '${OSPREY_HEARTBEAT_SECONDS:-30}', '${OSPREY_HEARTBEAT_SECONDS:-60}', 'test_heartbeat and (at_least_every_30)'),
+ ("tests/run.sh", """  trap 'kill "$s" 2>/dev/null; exit 0' TERM""", """  trap 'exit 0' TERM""", 'test_heartbeat and (leaves_nothing)'),
+ ("demo_server/tests/run.sh", """trap 'kill "$hb" 2>/dev/null; wait "$hb" 2>/dev/null' EXIT""", """trap 'wait "$hb" 2>/dev/null' EXIT""", 'test_heartbeat and (leaves_nothing)'),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.
