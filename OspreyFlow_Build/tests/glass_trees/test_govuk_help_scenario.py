@@ -87,7 +87,7 @@ SPLIT_ROWS = {
     "reports-figures": "Reports: Reports and Figures views, trends, packs, published and data feeds",
     "reports-dashboards": "Reports: embedded dashboards and the alert monitoring board",
 }
-EXPECTED_FUNCTIONS = 49
+EXPECTED_FUNCTIONS = 50
 
 
 def read(path: Path) -> str:
@@ -269,7 +269,8 @@ def route_problems(data: dict[str, Any]) -> list[str]:
     # The tree's second page, the Admin People list (slice AD3a), is the first section of the `admin` row, whose own route stays empty
     # while the function is incomplete: it is in the list, and no row carries it (`test_govuk_admin_people_scenario.py` holds that).
     # Slice GR3a added the alert monitoring page (`/reports`): its row, `reports-figures`, carries the route.
-    # Slice GR4a's trends shown together (`/packs/trends`) is the fourth, a second page of the same row (`test_govuk_pack_trends_scenario.py`).
+    # Slice GR4a's trends shown together (`/packs/trends`) is the fourth; its row, `reports-trends-shown-together`, keeps an empty route
+    # while the function is incomplete (`test_govuk_pack_trends_scenario.py`).
     if data["routes"] != ["/help", "/admin/people", "/reports", "/packs/trends"]:
         return [f"the route list is {data['routes']!r}: the tree has four pages, /help, /admin/people, /reports and /packs/trends"]
     if routed != ["/help", "/reports"]:

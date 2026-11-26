@@ -6,19 +6,21 @@ every GOV.UK page).
 pack's trends together. The scenario is written first, from the pack routes and models, the React pack view's words and the decision
 log, and the page test (`apps/pages/test/govuk/pack-trends.test.ts`) is the proof.
 
-This file holds the document, the page test, the `reports-figures` function row, the route list and the page module in step:
+This file holds the document, the page test, the page's own function row (`reports-trends-shown-together`), the route list and the page module in step.
+The row is the page's own because one id is one page in a tree (`server/pages.ts`): `reports-figures` is slice GR3a's page, `/reports`.
 
 * a scenario with no page test, or a page test with no scenario       -> `test_every_scenario_has_a_page_test_and_back`
 * a row whose cited words are not in the file it cites                 -> `test_every_row_cites_words_that_are_in_the_source`
 * a scenario that does not say what the page shows, who may see it,
   that it reads strictly and that it works with scripts off            -> `test_the_scenario_says_what_it_shows_who_sees_it_and_scripts_off`
 * a field named as left out that no generated type has                 -> `test_every_field_named_as_left_out_is_a_field_of_the_generated_types`
-* the `reports-figures` row left without its scenario ids, given a
-  route while the function is incomplete, or its name or where moved   -> `test_the_figures_row_carries_the_scenario_and_no_route`
-* a route list that is not the paths the tree has pages for            -> `test_the_route_list_has_the_three_pages`
+* the `reports-trends-shown-together` row left without its scenario ids, given a
+  route while the function is incomplete, its name or where moved, or
+  `reports-figures` given this scenario's ids                          -> `test_the_pages_own_row_carries_the_scenario_and_no_route`
+* a route list that is not the paths the tree has pages for            -> `test_the_route_list_has_the_four_pages`
 * the page module not the row's, at the path, for the GOV.UK tree
-  alone, answering GET alone, or not in the one table of pages         -> `test_the_page_module_is_the_figures_rows_at_its_path`
-* the old "no scenario" list still holding `reports-figures`           -> `test_the_known_without_scenario_list_no_longer_holds_the_row`
+  alone, answering GET alone, or not in the one table of pages         -> `test_the_page_module_is_its_own_rows_at_its_path`
+* the "no scenario" list holding the page's row                        -> `test_the_known_without_scenario_list_no_longer_holds_the_row`
 * the citation correction for ADR-152 decision 10 pointing a line
   number at a line that does not hold what it says                      -> `test_the_citation_correction_cites_lines_that_hold_what_it_says`
 
@@ -76,10 +78,13 @@ PAGE_TEST_NAME = "pack-trends.test.ts"
 #: I21's test, under the name the owner's approved diff gives it in the decision log (25 November 2026, answer 3): "board" stays out of this page.
 I21_TEST = "test_trends_shown_together_show_a_trend_its_viewer_can_no_longer_read_as_withheld_not_as_missing_data"
 PATH = "/packs/trends"
-ROW = "reports-figures"
+ROW = "reports-trends-shown-together"
+#: Slice GR3a's row, with its own page (`/reports`): this slice leaves its scenario ids and route as they are.
+GR3A_ROW = "reports-figures"
 EXPECTED_IDS = [f"TS{n}" for n in range(1, 16)]
-EXPECTED_FUNCTIONS = 49
-EXPECTED_ROUTES = ["/help", "/admin/people", PATH]
+#: 49 until this slice, which added the page's own row (the conductor's round-3 table, 25 November 2026).
+EXPECTED_FUNCTIONS = 50
+EXPECTED_ROUTES = ["/help", "/admin/people", "/reports", PATH]
 
 #: The owner's table of cases for GR4a (`process/lanes/v062/slices/GR4a.md`), by number, and the rows that carry each.
 CASES: dict[str, tuple[str, ...]] = {
@@ -108,9 +113,9 @@ CENSUS_TYPES = {
     "TrendPoint": "PackDraft.ts",
 }
 
-#: The `reports-figures` row's own columns, as they stood before this slice, apart from `scenario`.
-ROW_NAME = "Reports: Reports and Figures views, trends, packs, published and data feeds"
-ROW_WHERE = "apps/workspace/src/reports/ (includes reportsTestKit.ts 145)"
+#: The page's own row: its name, and where the function is (the React pack view's trend, and this page).
+ROW_NAME = "Reports: trends shown together, a pack's saved trends on one page, read-only"
+ROW_WHERE = "apps/workspace/src/reports/PackItemView.tsx (a pack item's trend, shown in the Packs tab); GOV.UK page apps/pages/server/packTrends.ts"
 
 
 def read(path: Path) -> str:
@@ -326,19 +331,22 @@ def function_problems(data: dict[str, Any]) -> list[str]:
     if row["status"] != "planned":
         found.append(f"the {ROW} row's status is {row['status']!r}, not planned")
     if row["name"] != ROW_NAME or row["where"] != ROW_WHERE:
-        found.append(f"the {ROW} row's name or where has moved: only its scenario is this slice's to fill")
+        found.append(f"the {ROW} row's name or where has moved")
+    figures = rows.get(GR3A_ROW)
+    if figures is None or figures["route"] != "/reports" or re.search(r"\bTS\d", figures["scenario"]):
+        found.append(f"the {GR3A_ROW} row is not slice GR3a's: its own scenario ids and the route /reports")
     dashboards = rows.get("reports-dashboards")
     if dashboards is None or dashboards["scenario"] != "" or dashboards["route"] != "":
         found.append("the reports-dashboards row is not as it was: no scenario and no route")
     routed = sorted(r["route"] for r in data["functions"] if r.get("route"))
-    if routed != ["/help"]:
-        found.append(f"the rows that have a route are {routed!r}, not just /help")
+    if routed != ["/help", "/reports"]:
+        found.append(f"the rows that have a route are {routed!r}, not just /help and /reports")
     return found
 
 
 def route_problems(data: dict[str, Any]) -> list[str]:
     if data["routes"] != EXPECTED_ROUTES:
-        return [f"the route list is {data['routes']!r}: the tree has three pages, {EXPECTED_ROUTES}"]
+        return [f"the route list is {data['routes']!r}: the tree has four pages, {EXPECTED_ROUTES}"]
     return []
 
 
@@ -415,15 +423,15 @@ def test_every_field_named_as_left_out_is_a_field_of_the_generated_types() -> No
     assert census_problems(inputs()) == []
 
 
-def test_the_figures_row_carries_the_scenario_and_no_route() -> None:
+def test_the_pages_own_row_carries_the_scenario_and_no_route() -> None:
     assert function_problems(inputs()) == []
 
 
-def test_the_route_list_has_the_three_pages() -> None:
+def test_the_route_list_has_the_four_pages() -> None:
     assert route_problems(inputs()) == []
 
 
-def test_the_page_module_is_the_figures_rows_at_its_path() -> None:
+def test_the_page_module_is_its_own_rows_at_its_path() -> None:
     assert module_problems(inputs()) == []
 
 
@@ -532,9 +540,17 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
     ("the row without its scenario", _row(ROW, scenario=""), function_problems, "scenario"),
     ("the row routed while incomplete", _row(ROW, route=PATH), function_problems, "stays empty"),
     ("the row's where moved", _row(ROW, where="apps/workspace/src/reports/"), function_problems, "has moved"),
+    ("GR3a's row given this scenario's ids", _row(GR3A_ROW, scenario="TS1"), function_problems, "is not slice GR3a's"),
+    ("GR3a's row without its route", _row(GR3A_ROW, route=""), function_problems, "is not slice GR3a's"),
+    (
+        "the page back under GR3a's row (two pages, one id: the page service refuses to start)",
+        _replace("page_module", f'id: "{ROW}"', f'id: "{GR3A_ROW}"'),
+        module_problems,
+        "its id",
+    ),
     ("the dashboards row given a scenario", _row("reports-dashboards", scenario="TS1"), function_problems, "reports-dashboards"),
-    ("a route in the list the code has no page for", lambda d: d["routes"].append("/welcome"), route_problems, "three pages"),
-    ("the path left out of the list", lambda d: d["routes"].remove(PATH), route_problems, "three pages"),
+    ("a route in the list the code has no page for", lambda d: d["routes"].append("/welcome"), route_problems, "four pages"),
+    ("the path left out of the list", lambda d: d["routes"].remove(PATH), route_problems, "four pages"),
     ("the page at another path", _replace("page_module", f'path: "{PATH}"', 'path: "/packs/board"'), module_problems, "its path"),
     ("the page for both trees", _replace("page_module", 'trees: ["govuk"]', 'trees: ["default", "govuk"]'), module_problems, "GOV.UK tree alone"),
     ("the page answering POST", _replace("page_module", 'methods: ["GET"]', 'methods: ["GET", "POST"]'), module_problems, "GET alone"),
@@ -543,9 +559,9 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
     ("the word board in the page's code", _replace("page_module", "export const packTrends", "const boardName = 1;\nexport const packTrends"), module_problems, "says board"),
     (
         "a cited route line that drifted (the add-item route as it was before main moved)",
-        _replace("citation_diff", "services/api/app.py:19861", "services/api/app.py:19762"),
+        _replace("citation_diff", "services/api/app.py:19895", "services/api/app.py:19861"),
         citation_diff_problems,
-        "services/api/app.py:19762 does not hold",
+        "services/api/app.py:19861 does not hold",
     ),
     (
         "a cited field line that moved",

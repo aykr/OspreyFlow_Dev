@@ -1006,19 +1006,19 @@ function listedRoutes(text: string): string[] {
   return lines.slice(1).map((l) => /^\s+-\s+"?(\/[^"\s]*)"?\s*$/.exec(l)?.[1] ?? `NOT A ROUTE: ${l}`);
 }
 
-function figuresRow(functionsText: string): { scenario: string; route: string } | undefined {
-  const found = /- id: reports-figures\n(?:    .*\n)*?    scenario: "([^"]*)"\n    route: "([^"]*)"/.exec(functionsText);
+function ownRow(functionsText: string): { scenario: string; route: string } | undefined {
+  const found = /- id: reports-trends-shown-together\n(?:    .*\n)*?    scenario: "([^"]*)"\n    route: "([^"]*)"/.exec(functionsText);
   return found ? { scenario: found[1] as string, route: found[2] as string } : undefined;
 }
 
 function listProblems(routesText: string, functionsText: string): string[] {
   const found: string[] = [];
   if (!listedRoutes(routesText).includes(PATH)) found.push(`${PATH} is not in the route list`);
-  const row = figuresRow(functionsText);
-  if (!row) return [...found, "the reports-figures row of FUNCTIONS.yaml has no scenario and route"];
+  const row = ownRow(functionsText);
+  if (!row) return [...found, "the reports-trends-shown-together row of FUNCTIONS.yaml has no scenario and route"];
   const wanted = Array.from({ length: 15 }, (_, i) => `TS${i + 1}`);
-  if (row.scenario.split(",").map((s) => s.trim()).join() !== wanted.join()) found.push(`the reports-figures row's scenario is ${JSON.stringify(row.scenario)}`);
-  if (row.route !== "") found.push(`the reports-figures row has the route ${JSON.stringify(row.route)} while the function is not complete`);
+  if (row.scenario.split(",").map((s) => s.trim()).join() !== wanted.join()) found.push(`the reports-trends-shown-together row's scenario is ${JSON.stringify(row.scenario)}`);
+  if (row.route !== "") found.push(`the reports-trends-shown-together row has the route ${JSON.stringify(row.route)} while the function is not complete`);
   return found;
 }
 
@@ -1034,7 +1034,7 @@ describe("the tree that serves the page, and the lists that name it", () => {
     }
     expect(other.conduit.calls).toEqual([]);
     const page = PAGES.find((p) => p.path === PATH);
-    expect([page?.id, page?.trees]).toEqual(["reports-figures", ["govuk"]]);
+    expect([page?.id, page?.trees]).toEqual(["reports-trends-shown-together", ["govuk"]]);
     expect(listProblems(read(PAGES_DIR, "tree-govuk", "routes.yaml"), read(PAGES_DIR, "FUNCTIONS.yaml"))).toEqual([]);
   });
 });
@@ -1153,7 +1153,7 @@ describe("each check above is red against the real page, file or fixture with on
     const routesText = read(PAGES_DIR, "tree-govuk", "routes.yaml");
     const functionsText = read(PAGES_DIR, "FUNCTIONS.yaml");
     expect(listProblems(routesText.replace(`  - ${PATH}\n`, ""), functionsText)).not.toEqual([]);
-    expect(listProblems(routesText, functionsText.replace(/(- id: reports-figures\n(?:    .*\n)*?    route: )""/, `$1"${PATH}"`))).not.toEqual([]);
+    expect(listProblems(routesText, functionsText.replace(/(- id: reports-trends-shown-together\n(?:    .*\n)*?    route: )""/, `$1"${PATH}"`))).not.toEqual([]);
   });
 
   it("TS15: the fixture Conduit refuses what the real pack routes refuse, in their order, and decides withheld from its world", async () => {

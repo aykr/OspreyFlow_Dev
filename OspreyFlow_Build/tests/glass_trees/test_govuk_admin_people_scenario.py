@@ -63,7 +63,7 @@ TITLE = re.compile(r"""\b(?:it|test)\(\s*(?:"|')(AP\d+): """)
 PAGE_TEST_NAME = "admin-people.test.ts"
 PATH = "/admin/people"
 EXPECTED_IDS = [f"AP{n}" for n in range(1, 12)]
-EXPECTED_FUNCTIONS = 49
+EXPECTED_FUNCTIONS = 50
 
 #: What each behaviour of the page is, by id: a behaviour with no scenario is one nobody will build or test.
 BRIEF: dict[str, tuple[str, ...]] = {

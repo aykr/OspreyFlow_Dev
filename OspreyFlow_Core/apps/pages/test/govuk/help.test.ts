@@ -522,10 +522,9 @@ function listedRoutes(text: string): string[] {
   return lines.slice(1).map((l) => /^\s+-\s+"?(\/[^"\s]*)"?\s*$/.exec(l)?.[1] ?? `NOT A ROUTE: ${l}`);
 }
 
-/** A row whose function is not complete: its pages are in the list, and its own `route` stays empty until every section has one (slice AD3a: `admin`). A row
- * with two pages (slice GR4a: `reports-figures`, whose first page is the alert monitoring figures at `/reports` and whose second is trends shown together) carries
- * the first page's route, and the second page's path is checked by the list alone. */
-const INCOMPLETE_ROWS: ReadonlySet<string> = new Set(["admin"]);
+/** A row whose function is not complete: its pages are in the list, and its own `route` stays empty until every section has one (slice AD3a: `admin`; slice GR4a:
+ * `reports-trends-shown-together`, whose page is read-only until arranging is built). */
+const INCOMPLETE_ROWS: ReadonlySet<string> = new Set(["admin", "reports-trends-shown-together"]);
 
 function routeListProblems(listText: string, pages: readonly PageModule[], functionsText: string): string[] {
   const found: string[] = [];
@@ -534,10 +533,7 @@ function routeListProblems(listText: string, pages: readonly PageModule[], funct
   for (const route of listed) if (!served.includes(route)) found.push(`${route} is listed and no page of the tree serves it`);
   for (const route of served) if (!listed.includes(route)) found.push(`${route} is served and not listed`);
   if (new Set(listed).size !== listed.length) found.push("a route is listed twice");
-  const rowsSeen = new Set<string>();
   for (const page of pages.filter((p) => (p.trees ?? ["default"]).includes("govuk"))) {
-    if (rowsSeen.has(page.id)) continue;
-    rowsSeen.add(page.id);
     const row = new RegExp(`- id: ${page.id}\\n(?:    .*\\n)*?    route: "([^"]*)"`).exec(functionsText);
     const wanted = INCOMPLETE_ROWS.has(page.id) ? "" : page.path;
     if (row?.[1] !== wanted) found.push(`the row ${page.id} of FUNCTIONS.yaml has route ${JSON.stringify(row?.[1])}, not ${JSON.stringify(wanted)}`);
@@ -560,7 +556,7 @@ describe("the route list", () => {
       ["help", "/help", ["GET"]],
       ["admin", "/admin/people", ["GET"]],
       ["reports-figures", "/reports", ["GET"]],
-      ["reports-figures", "/packs/trends", ["GET"]],
+      ["reports-trends-shown-together", "/packs/trends", ["GET"]],
     ]);
   });
 });
