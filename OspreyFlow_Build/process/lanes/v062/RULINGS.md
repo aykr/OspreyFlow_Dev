@@ -3,6 +3,16 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 26 November 2026, about 12:40 UTC: SE9e (a); the extract route; GG2a's add-round (the owner, in chat)
+
+- **SE9e: (a).** Refuse every recipe binding of `object_ref` and `media_kind` on a Document, at validation and at load; only the engine's own writes set them; case 3 becomes "refused" (the owner's word). The owner's SE9e clear-stop line is in.
+- **The ingest extract route** (a caller-chosen Document whose `properties_override` sets `object_ref`) is cut as its own security part before RL2: **SE9f**.
+- **GG2a:** the owner's add-round line is in; it is used after WS4a merges and GG2a takes main in (the version-window entry and I20's third test). If WS4a does not merge today, the conductor says so tomorrow and the owner writes a new dated line.
+
+## 26 November 2026, about 12:20 UTC: GG2a's Mac figures; Sigma 4 (the owner, in chat)
+
+The owner's Mac run (`~/gg2a-mac-gpu.jsonl`, 3 runs, Apple M3 Pro GPU, all passed): first frame 2,877 / 2,646 / 2,954 ms against 30,000; sweep 16.5 / 17.0 / 16.5 ms a frame; expansion of 500 nodes 555 / 602 / 684 ms against the Mac's 800. **Carry on with Sigma 4; no fallback.** GG2a merges after its verifier and a server green, writing the version-window entry and I20's third test (WS4a Q1 and Q5). Merges and starts resume.
+
 ## 26 November 2026, 12:15 UTC: the owner's answers (security, WS4a, GR1e) (the owner, in chat)
 
 (The conductor's earlier headings today were not read from the clock and run about two hours ahead of UTC; from here every time is `date -u`.)
