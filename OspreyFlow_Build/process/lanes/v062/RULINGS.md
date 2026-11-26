@@ -3,6 +3,29 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 26 November 2026, about 11:10 UTC: five away rounds; starts wait for 61 (the owner, in chat)
+
+Away on the server: GG2c, GR1e, and from about 10:45 GG4b, WS4a and GG3b. **No line builder starts for these five:** each comes in like GR1a when its report appears (round 1 merges the away branch). The line takes SE8g, AD1c, GR1a, GG4a, GA1a, GG3a, GR1b and GG4c, in that order, **once 61 lands.**
+
+## 26 November 2026, about 10:35 UTC: the adviser's batch, all as recommended (the owner, in chat)
+
+- **Security:** GG4a drops its source column until GG4b. **GG4b is cut now as a security part (SE7c's shape):** every proposal (a); its ADR-143 amendment comes as a diff for the owner's approval before merge; never accepted narrower.
+- **GG2a:** carry on with Sigma 4; the owner's Mac measurement decides (the conductor gives the one command today). Q2 (a), the stricter first-frame end. Q3: the Mac's 800 ms alone for 0.7.0; a CI expansion gate goes to the backlog.
+- **The Matrix is GG2d's.** Decision 9: one exception, GG2c may merge before WS4b; all else waits. **Early starts:** GG3b, GA1a, and GG3a after GR1a; WS4a beside GG2a; not GG5b.
+- **Who made it** (GR1a Q2, GG4a Q2, GR1d Q4): left out for 0.7.0; names later via `display_names`, a backlog part.
+- GG3b Q6 (a): a browser-runnable type is a stop. GA1b: Editor (fix `ASK_MODEL`'s comment); Q3 (a): a front-proxy timeout under 16 minutes is a stop. GG2e Q2 (a): a parity line. GG5b Q4b: an ADR-152 Amendment 2 diff adding Noto Sans for map glyphs only. GG4c Q5 (a): unshare goes to the backlog.
+- **Live step:** a small part adds ClickHouse and Azurite (and Keycloak if needed) to its stack; line-fix makes it pay group by group after 61.
+- **Everything else (a):** GR1a Q3 to Q5; GG4a Q3, Q5, Q6 and Q7; every non-owner question in the 26 November drafts; the 25 November drafts with the 26th's corrections. AD4 after RL2. Draft PL8b.
+- **Order through the line:** SE8g, AD1c, GR1a (away branch), GG4a (away branch, source column dropped in its round), GG4b, WS4a, GG3b, GA1a, GG3a, GR1b, GG4c; GG2c and GR1e when their away rounds report. **Merges wait for 61** (the citation red).
+
+## 26 November 2026, about 08:30 UTC: "applied" (the owner, in chat)
+
+Hand-backs 55 (`69852bf`), 56 (`db97a76`) and 57 (`d5d62a3`) are on main; starts and merges resume. **Until hand-back 61 is applied,** a merge refused at `slice-line-check` by the beat race counts as "refused by another test": the conductor reruns it, with no send-back.
+
+## 26 November 2026, about 05:40 UTC: the morning rulings (the owner, in chat)
+
+**GR4a:** clear-stop (the stop's "token" was a false flag); round 3 on `slices/GR4a_ROUND3_TABLE.md`: the board page gets its own `FUNCTIONS.yaml` row and id; both pages stay. **RM1a:** clear-stop; its refusal came from two line faults (`server-rerun` runs a vitest name under pytest in a shell string, broken by the apostrophe in "§5's"; a newer green server run on the same tip was ignored), which go to line-fix. **GG2a, question 4, (a):** one more step (round 4, `slices/GG2a_ROUND4_TABLE.md`) adds an opt-in switch opening a GPU-backed Chromium, records the WebGL renderer with every figure and refuses a software one under the switch, red first; CI's gate unchanged; then the conductor tells the owner what to run on the Mac. **away/ci-reds** found SE8f's cause independently, and that the Mac's merge gate never runs the conformance-only files; the conductor proposes how the line catches a break in them before GitHub does, for the owner's ruling. **GG4a's away round** is done (7 questions, one a rule-3 stop on a drawn item's source document); its questions go in today's rulings batch once the owner has fetched it. **A gap with no seat running** for line-fix's hand-backs 54 to 57 (about two hours): no new start, no merge and no records commit until the owner says "applied".
+
 ## 25 November 2026, about 19:50 UTC: "take your recommended routes" (the owner, in chat)
 
 **PL4h: option (a)** (D225 item 3's structural round): every test in the two copy files that walks or parses gets an explicit, explained timeout, the plant tests included; nothing cached, nothing moved out of `sourceFiles`; the plant stands. Round 4 on `slices/PL4h_ROUND4_TABLE.md`. **AD1c: round 11 on the conductor's table** (already ruled at about 16:20). Both wait for the owner's add-round lines.
