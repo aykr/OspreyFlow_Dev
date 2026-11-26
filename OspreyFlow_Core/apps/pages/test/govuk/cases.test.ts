@@ -561,6 +561,18 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
     }
   });
 
+  it("CS6: a slash in `case` is the same page and asks nothing: the Conduit's server decodes it, so it would reach another route", async () => {
+    const w = await world();
+    const unknown = await getAs(w, NOWHERE);
+    // Written encoded and bare: the service reads both as the same value. Each of the first four is another route of the real Conduit.
+    for (const query of ["?case=c-harbour%2Fbrief", "?case=c-harbour/brief", "?case=c-harbour%2Fviews", "?case=..%2Fdatasets", "?case=c-harbour%2F", "?case=%2F"]) {
+      w.conduit.calls.splice(0);
+      const res = await getAs(w, `${PATH}${query}`);
+      expect.soft(calls(w.conduit), query).toEqual([]);
+      expect.soft(refusalProblems(res, unknown), query).toEqual([]);
+    }
+  });
+
   it("CS6: any other refusal of the case's read (a 403 for a level too low, a 409, a 422) is the same page, and the brief is not asked", async () => {
     for (const status of [403, 409, 422]) {
       const w = await world({ case_answer: { status, body: { detail: "this needs the viewer level on the case" } } });
@@ -893,6 +905,8 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
       expect(await ask2("/v1/investigations/c-harbour", { method: "PATCH", ...as2 })).toBe(500); // a write that would pass: not modelled
       const brief = (await (await fetch(`${w2.conduit.url}/v1/investigations/c-harbour/brief`, as2)).json()) as { requirements: { attachments: { id: string }[] }[] };
       expect(brief.requirements[0]?.attachments.map((a) => a.id)).toEqual(["t-berths", "v-quay"]);
+      // An encoded slash is a slash to the real server's router (measured with uvicorn against the real app's route table): the brief's.
+      expect(await (await fetch(`${w2.conduit.url}/v1/investigations/c-harbour%2Fbrief`, as2)).json()).toEqual(brief);
       const listed = (await (await fetch(`${w2.conduit.url}/v1/investigations`, as2)).json()) as { id: string }[];
       expect(listed.map((c) => c.id)).toEqual(MINE);
       // A reader holding no right is sent the list with no dataset in it (`datasets.of_case`'s `reads_dataset_names`).

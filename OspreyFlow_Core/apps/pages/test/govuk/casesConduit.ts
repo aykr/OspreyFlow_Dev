@@ -3,7 +3,7 @@
  * routes refuse (rule 15: a fixture that only grants proves the page agrees with our hopes). Synthetic throughout (rule 9).
  *
  * What it refuses, in the real routes' order (`services/api/app.py`):
- *  - the router first, for anyone: a path it has not is 404 `{"detail": "Not Found"}`, a method the path does not serve is 405
+ *  - the router first, for anyone, on the DECODED path, as the real server's router sees it (an encoded slash is a slash): a path it has not is 404 `{"detail": "Not Found"}`, a method the path does not serve is 405
  *    `{"detail": "Method Not Allowed"}`. The methods are the real routes': `/v1/investigations` GET and POST (a new case);
  *    `/v1/investigations/{id}` GET, PATCH (a rename) and DELETE (a removal); `/v1/investigations/{id}/brief` GET. Every other path under
  *    a case (`/views`, `/datasets`, `/tab`, `/access` and the rest the real Conduit serves) is NOT modelled: 500, recorded, never a 404
@@ -165,7 +165,9 @@ export async function casesConduit(options: CasesConduitOptions): Promise<CasesC
       if (c) return send(c.status, c.body);
       otherwise();
     };
-    const path = url.split("?")[0] ?? "";
+    // The real server decodes the path before its router sees it (uvicorn's `scope["path"]`), so an encoded slash IS a slash there:
+    // `/v1/investigations/<id>%2Fbrief` is the brief's route, not a case whose id holds a slash. The fixture routes on the same path.
+    const path = decodeURIComponent(url.split("?")[0] ?? "");
     const method = req.method ?? "";
     // The router answers first, as FastAPI's does.
     if (/^\/v1\/investigations\/[^/]+\/.+$/.test(path) && !/^\/v1\/investigations\/[^/]+\/brief$/.test(path)) {
@@ -173,7 +175,7 @@ export async function casesConduit(options: CasesConduitOptions): Promise<CasesC
     }
     const match = /^\/v1\/investigations(?:\/([^/]+)(\/brief)?)?$/.exec(path);
     if (!match) return send(404, { detail: "Not Found" });
-    const id = match[1] === undefined ? undefined : decodeURIComponent(match[1]);
+    const id = match[1];
     const route = id === undefined ? "list" : match[2] === undefined ? "case" : "brief";
     const methods: Record<string, string[]> = { list: ["GET", "POST"], case: ["GET", "PATCH", "DELETE"], brief: ["GET"] };
     if (!(methods[route] as string[]).includes(method)) return send(405, { detail: "Method Not Allowed" });
