@@ -54,7 +54,8 @@ JOBS = WORK / "jobs"
 REFUSALS = WORK / "refusals.log"
 CLONE = Path.home() / "ospreyflow"
 RESULTS_BRANCH = "build-results"
-SLICE = re.compile(r"\A[A-Z][A-Z0-9]*\Z")
+#: A part's name as the early warning sends it (protocol.SLICE_PATTERN), a capital first: AD1c, PL7f, IS5a0.
+SLICE = re.compile(r"\A[A-Z][A-Za-z0-9]{0,15}\Z")
 SHA = re.compile(r"\A[0-9a-f]{40}\Z")
 SEAT_VERBS = ("start", "stop", "status")  # 017-2
 MAX_BUNDLE = 2 * 1024 ** 3

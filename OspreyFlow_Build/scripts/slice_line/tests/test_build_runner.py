@@ -390,3 +390,23 @@ def test_a_job_it_cannot_read_is_recorded_as_an_error_and_the_next_still_runs(bw
     assert r["verdict"] == "pass", r
     said = json.loads((broken / "result.json").read_text())
     assert said["verdict"] == "error" and "could not be run or recorded" in said["words"], said
+
+
+@pytest.mark.parametrize("part", ["AD1c", "PL7f", "IS5a0", "SE8f", "GR3a"])
+def test_checks_takes_the_lines_real_part_names(bw, part):
+    """The line's parts end in a small letter (AD1c, PL7f; IS5a0 has a digit after it): the forced command takes the
+    early warning's own shape for a part's name (protocol.SLICE_PATTERN, a capital first), not capitals and digits
+    only. Before 26 November 2026 every real part was refused as the wrong shape."""
+    w = bw
+    sh(["git", "branch", "-f", f"lane/slice-{part}", "lane/slice-S1"], w["mac"], w["env"])
+    code, said = forced(w, f"checks {part}", bundle(w, "refs/heads/main", f"refs/heads/lane/slice-{part}"))
+    assert code == 0 and said["state"] == "started", said
+    r = done(w, said["id"])
+    assert r["slice"] == part and r["verdict"] in ("pass", "fail"), r
+    assert committed(w, part)["slice"] == part
+
+
+@pytest.mark.parametrize("cmd", ["checks ad1c", "checks 1AD", "checks AD1c-x", "checks AD1cAD1cAD1cAD1cA"])
+def test_checks_still_refuses_what_is_not_a_parts_name(bw, cmd):
+    code, said = forced(bw, cmd, bundle(bw))
+    assert code != 0 and said["reason"] == "shape", said

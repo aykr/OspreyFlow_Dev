@@ -818,6 +818,8 @@ M = [
  ('merge_slice.py', '        if code:\n            return code\n    return 0\n', '        pass\n    return 0\n', 'test_apply_handback and (real_suites)'),
  ('guard.py', '    if seat in ("conductor", "builder") and HANDBACK_FOLDER.search(writes)', '    if False and HANDBACK_FOLDER.search(writes)', 'test_apply_handback and (guard_refuses or reads_a_hand_back)'),
  ('guard.py', '    if seat in ("conductor", "builder") and HANDBACK_FOLDER.search(writes)', '    if seat in ("conductor",) and HANDBACK_FOLDER.search(writes)', 'test_apply_handback and (guard_refuses)'),
+ ('build_server/runner.py', 'SLICE = re.compile(r"\\A[A-Z][A-Za-z0-9]{0,15}\\Z")', 'SLICE = re.compile(r"\\A[A-Z][A-Z0-9]*\\Z")', 'test_build_runner and (real_part_names)'),
+ ('build_server/runner.py', 'SLICE = re.compile(r"\\A[A-Z][A-Za-z0-9]{0,15}\\Z")', 'SLICE = re.compile(r"\\A[A-Za-z0-9]+\\Z")', 'test_build_runner and (not_a_parts_name)'),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.
