@@ -31,13 +31,20 @@ serve it to anyone who may read the Document, under the loader's marking, not th
    column. If any does so legitimately, stop and list it.
 4. **The conformance case first (rule 1)**, then the code.
 
+## The owner's ruling after round 1's stop (26 November 2026, 12:40 UTC)
+
+**(a): refuse every recipe binding of `object_ref` and `media_kind` on a Document, at validation and at load; only the
+engine's own writes set them. Case 3 becomes "refused" (the owner's word).** No `dataset_media` record. Both a column
+binding and a fixed (`literal`) value are refused. The extract route (a caller-chosen Document whose `properties_override`
+sets `object_ref`) is its own part, SE9f: not this slice's.
+
 ## The table of cases (each red first on main, the planted fault at the real call site; rule 15)
 
 | # | Case | Expected | Red with |
 | --- | --- | --- | --- |
 | 1 | A recipe binds `object_ref` on a Document with no content block | refused at validation | today's rule (refuses `document_text` only) |
 | 2 | A row's `object_ref` names another dataset's file | refused at load; nothing written | the validation check alone |
-| 3 | A row's `object_ref` names this dataset's own file | written as today | every binding refused |
+| 3 | A row's `object_ref` names this dataset's own file | **refused** at validation and at load (the owner, 26 November 2026: (a)) | a binding let through when the file is the dataset's own |
 | 4 | The engine's own `document_text` and file writes | unchanged | the load check applied to the engine's writes |
 | 5 | Refusal words | name the entity and property only | the file's dataset or marking in the words |
 
