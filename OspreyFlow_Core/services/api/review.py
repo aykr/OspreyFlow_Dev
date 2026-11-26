@@ -123,6 +123,24 @@ class CandidateNotPendingError(Exception):
     already moved past `pending` — a candidate is reviewed exactly once."""
 
 
+#: What only the engine's own writes set, by entity type (the owner's rule, 26 November 2026).
+#: `object_ref` names a file in the media store, which the reader serves to whoever can see the
+#: Document; `media_kind` says how that file is read.
+_ENGINE_ONLY_PROPERTIES: dict[str, tuple[str, ...]] = {"Document": ("object_ref", "media_kind")}
+
+
+class EngineOnlyPropertyError(Exception):
+    """Raised by `accept_candidate` for a finding that would set such a property, whether the model
+    extracted it or the person accepting it gave it. The words name the entity type and the
+    properties only, never a value: no file's reference, dataset or marking."""
+
+    def __init__(self, entity_type: str, names: Sequence[str]) -> None:
+        super().__init__(
+            f"only the platform sets {' and '.join(names)} on a {entity_type}, "
+            "so this finding cannot be accepted"
+        )
+
+
 class DocumentNotFoundError(Exception):
     """Also raised — deliberately, not a 403 — when the document's text exists but
     `principal.org_unit` does not match its own `owning_unit`: the same existence-leak discipline
@@ -549,7 +567,10 @@ async def accept_candidate(
     deliberately minimal shape rather than a second, stateful draft-edit round trip (a
     disclosed gap). Writes through a fresh transaction, following the
     same begin/commit-or-rollback shape `services/api/working_set/service.py`'s manual
-    link/split already established."""
+    link/split already established.
+
+    Every accept path comes here, so the engine-only properties are refused here, on the properties
+    as they would be written (`EngineOnlyPropertyError`)."""
     record = await store.get_authorized(candidate_id, principal)
     # ADR-099 Amendment 15: every accept path comes here (a document's, an email's, a question's),
     # and a composite is read-only; refused once the finding is read, before anything is written.
@@ -557,11 +578,17 @@ async def accept_candidate(
     if record.status is not CandidateStatus.PENDING:
         raise CandidateNotPendingError(candidate_id)
 
+    properties = {**record.properties, **(properties_override or {})}
+    # The key, not its value: a null is the caller setting it too.
+    guarded = _ENGINE_ONLY_PROPERTIES.get(record.entity_type, ())
+    if engine_only := [name for name in guarded if name in properties]:
+        raise EngineOnlyPropertyError(record.entity_type, engine_only)
+
     candidate = ExtractionCandidate(
         id=record.id,
         document_id=record.document_id,
         entity_type=record.entity_type,
-        properties={**record.properties, **(properties_override or {})},
+        properties=properties,
         confidence=record.confidence,
         model=record.model,
         locator=record.locator,
@@ -600,6 +627,7 @@ __all__ = [
     "CandidateNotPendingError",
     "CandidateStatus",
     "DocumentNotFoundError",
+    "EngineOnlyPropertyError",
     "ExtractionCandidateNotFoundError",
     "ExtractionCandidateRecord",
     "ExtractionCandidateStore",
