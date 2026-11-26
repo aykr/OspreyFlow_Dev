@@ -27,8 +27,8 @@ export function rightSays(right: string): string;
 
 /*
  * For the cases page's words (`server/views/casesWords.ts`; slice GR1a): a level's name is `LEVEL_WORDS` above; a domain pack's label,
- * the core model's name and the case picker's untitled name are `investigation/cases.ts`'s, and a moment is written by
- * `time/utcStamp.ts`. `test/govuk/cases.test.ts` holds each to the package's own type.
+ * the core model's name and the case picker's untitled name are `packages/glass-shared/src/investigation/cases.ts`'s, and a moment is
+ * written by `packages/glass-shared/src/time/utcStamp.ts`. `test/govuk/cases.test.ts` holds each to the package's own type.
  */
 export type DomainPack = "fibo" | "niem" | "stix";
 export const DOMAIN_PACKS: readonly { name: DomainPack; label: string }[];
