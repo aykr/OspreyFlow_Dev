@@ -41,7 +41,7 @@ for nobody.
 | --- | --- |
 | `762a28da0` | Scenario CS written first in `spec/08`, before Scenario S (the Studio words gate needs S last). The `cases-and-views` row carries A7, B14, B21 and CS1 to CS15; its route stays empty. |
 | `30383aaae` | **Red first:** the page test, its fixture Conduit, and the scenario test with the field census. The page test failed to import; the scenario test had 34 failures. |
-| `a46fe0788` | The page: `server/cases.ts`, `server/views/casesWords.ts`, `tree-govuk/cases.njk`. Its rows went into `pageList.ts` and `routes.yaml`. The words are bundled with the shared package (`scripts/build.mjs`, `server/types/glassShared.d.ts`). |
+| `a46fe0788` | The page: `server/cases.ts`, `server/views/casesWords.ts`, `tree-govuk/cases.njk`. Its rows went into `pageList.ts` and `routes.yaml`. The words are bundled with the shared package (`OspreyFlow_Core/apps/pages/scripts/build.mjs`, `server/types/glassShared.d.ts`). |
 | `298ffac0d` | The keyboard and scripts-off specs (CS12, CS13), each shown red with a planted fault in the real template. |
 | `ac84046c5` | The route-list pins name the tree's third page in HP7/HP9/HP10, AP10, `test_govuk_{help,admin_people}_scenario.py`, `test_tree_parity.py` and `test_pages_setting.py`. |
 | `b3d3b5f6d`, `22c51beb8`, `30f190116` | The census comparison became one function, shown red by planted censuses. CS10 checks every field's shape, a gap found by planting. A presence check that could not fail on its own was removed (rule 15). One cited path was written out in full (`citation-check`). |
@@ -148,7 +148,7 @@ helpers; I left them rather than make AD3a's file a shared module in an away rou
 
 ## What is left
 
-- **Merge overlap with GR4a** (`away/GR4a`, whose round 1 merges at 19:30 under D247). Both rounds change the same lines of `scripts/build.mjs` (GR4a adds `packTrendsWords.ts`, GR1a adds `casesWords.ts`; each moves `outfile` to `outdir`), `server/types/glassShared.d.ts`, `routes.yaml`, `pageList.ts` and the route-list pins (HP7/HP9, AP10, the help and AP scenario tests, `test_tree_parity.py`, `test_pages_setting.py`). Whichever merges second takes both entries in each list. Both scenarios go before Scenario S.
+- **Merge overlap with GR4a** (`away/GR4a`, whose round 1 merges at 19:30 under D247). Both rounds change the same lines of `OspreyFlow_Core/apps/pages/scripts/build.mjs` (GR4a adds `packTrendsWords.ts`, GR1a adds `casesWords.ts`; each moves `outfile` to `outdir`), `server/types/glassShared.d.ts`, `routes.yaml`, `pageList.ts` and the route-list pins (HP7/HP9, AP10, the help and AP scenario tests, `test_tree_parity.py`, `test_pages_setting.py`). Whichever merges second takes both entries in each list. Both scenarios go before Scenario S.
 - **GR3b:** this page's fixture is hand-written, as GR3a's and GR4a's were. It models the real routes' order and refusals, and it now models withheld datasets. When GR3b lands, its answers should come from the real routes' goldens.
 - **The axe gap** of the GOV.UK tree (above).
 - **The `RULINGS.md` entry** for these rulings is the conductor's to write.
