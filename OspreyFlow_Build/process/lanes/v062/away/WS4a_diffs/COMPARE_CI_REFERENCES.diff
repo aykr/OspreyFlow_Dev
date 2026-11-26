@@ -1,0 +1,48 @@
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -1295,6 +1295,45 @@
+       # and drop the `-g` to gate the pictures too.
+       - run: npx playwright test --config map-verify/playwright.config.ts -g "contrast floor"
+         working-directory: OspreyFlow_Core/apps/workspace
++      # TEMPORARY (WS4a; the owner, 26 November 2026, 12:15 UTC, question 2 (b): CI's reference set first). Makes the
++      # canvas-look comparison's references on this runner and uploads them as the artifact
++      # `canvas-compare-references`, for a person to take and commit. NOT A GATE: nothing is compared with a
++      # committed reference, and none of these three steps can turn this job red. Take all three out in the change
++      # that commits the set; `COMPARE_CI.diff` is applied only then.
++      # The set the repository holds is removed first, so the upload can only be what this runner drew.
++      # `make-references.mjs` refuses under CI, so that no ordinary run remakes the references it is judged by:
++      # `env -u CI` lifts that for this one command and nothing else.
++      - name: Make the canvas comparison's references on this runner (temporary, not a gate)
++        id: canvas-references
++        if: ${{ !cancelled() }}
++        continue-on-error: true
++        run: |
++          git config user.name "GitHub Actions"
++          rm apps/workspace/keyboard/canvas-compare/*.png apps/workspace/keyboard/canvas-compare/REFERENCES.json
++          env -u CI npm run canvas-compare:references --workspace apps/workspace -- \
++            --reason "CI's reference set, made on GitHub's runner at ${GITHUB_SHA} (run ${GITHUB_RUN_ID}); the owner, 26 November 2026"
++      - name: Upload the references this runner made (temporary)
++        if: ${{ !cancelled() && steps.canvas-references.outcome == 'success' }}
++        continue-on-error: true
++        uses: actions/upload-artifact@v4
++        with:
++          name: canvas-compare-references
++          path: |
++            OspreyFlow_Core/apps/workspace/keyboard/canvas-compare/*.png
++            OspreyFlow_Core/apps/workspace/keyboard/canvas-compare/REFERENCES.json
++          if-no-files-found: error
++      # Three runs of Sigma 3 against the set just made, for the tolerance (`TOLERANCE.json`'s `set_from`): each
++      # scene's line in the log gives how many pixels differ.
++      - name: Compare Sigma 3 with the set just made, three times (temporary, for the tolerance)
++        if: ${{ !cancelled() && steps.canvas-references.outcome == 'success' }}
++        continue-on-error: true
++        run: |
++          failed=0
++          for run in 1 2 3; do
++            echo "canvas-compare self-comparison, run $run of 3"
++            npm run test:canvas-compare --workspace apps/workspace || failed=1
++          done
++          exit $failed
+
+   # `06_DECISIONS.md` ADR-049 Stage 2 §6 part A, amendment 21 — the setup screens' own keyboard
+   # spec, against a real `harness.webapp` server (`apps/harness/keyboard/playwright.config.ts`'s

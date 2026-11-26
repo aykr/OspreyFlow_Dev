@@ -1,0 +1,18 @@
+WS4a round 1, the owner's Mac (builder's worktree), 26 November 2026: npm run test:canvas-compare --workspace apps/workspace, run once to record its answer. Exit 1: refused at the renderer check; no scene was compared, nothing written.
+  ✓   1 keyboard/canvas-compare.spec.ts:201:1 › the comparison's tolerance is within its ceiling (4ms)
+  ✓   2 keyboard/canvas-compare.spec.ts:205:1 › every reference is the one the reference-making command recorded (3ms)
+  ✘   3 keyboard/canvas-compare.spec.ts:211:3 › the canvas draws the links scene as its reference does (2.2s)
+  ✘   4 keyboard/canvas-compare.spec.ts:211:3 › the canvas draws the links-zoomed-out scene as its reference does (1.2s)
+  ✘   5 keyboard/canvas-compare.spec.ts:211:3 › the canvas draws the nodes scene as its reference does (766ms)
+  ✘   6 keyboard/canvas-compare.spec.ts:211:3 › the canvas draws the labels scene as its reference does (765ms)
+  ✘   7 keyboard/canvas-compare.spec.ts:211:3 › the canvas draws the hover scene as its reference does (978ms)
+  ✘   8 keyboard/canvas-compare.spec.ts:211:3 › the canvas draws the selected-node scene as its reference does (966ms)
+  ✘   9 keyboard/canvas-compare.spec.ts:211:3 › the canvas draws the selected-link scene as its reference does (947ms)
+  ✘  10 keyboard/canvas-compare.spec.ts:211:3 › the canvas draws the export scene as its reference does (1.0s)
+  ✘  11 keyboard/canvas-compare.spec.ts:211:3 › the canvas draws the communities scene as its reference does (1.1s)
+  ✘  12 keyboard/canvas-compare.spec.ts:211:3 › the canvas draws the map scene as its reference does (325ms)
+    Expected: "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)"
+    Received: "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (LLVM 10.0.0) (0x0000C0DE)), SwiftShader driver)"
+  10 failed
+  2 passed (16.7s)
+    Error: the references were made with the WebGL renderer ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver); make a set of this machine's own to compare here
