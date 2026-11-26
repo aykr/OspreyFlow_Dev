@@ -1,0 +1,43 @@
+--- a/OspreyFlow_Build/tools/release_local.py
++++ b/OspreyFlow_Build/tools/release_local.py
+@@ -35,6 +35,11 @@
+ (`tools/licence_register.py`), refuses the release before anything is built, in words that name each. The gate in
+ `make ci` allows both, so the build stays green while the owner decides. Checked after the two above, which the
+ existing cases in `tests/test_release_owed.py` assert and which are unchanged.
++
++**No release while the version window is open** (ADR-002 Amendment 1, item 3; ADR-152 I20): while
++`apps/pages/VERSION_WINDOW.yaml` lists anything, the two front ends may resolve different versions of a renderer,
++and no release is cut. `scripts/same_drawing_versions_check.mjs --release` refuses then, in words naming each
++entry; it is asked last of the four, before anything is built.
+ """
+ 
+ from __future__ import annotations
+@@ -64,6 +69,17 @@
+ def green_refusal(sha: str) -> str | None:
+     """Why a release of `sha` must wait for GitHub green on it, in release_green.py's words, or None when it is."""
+     p = subprocess.run([sys.executable, str(GREEN), "check", sha], capture_output=True, text=True, check=False)
++    return None if p.returncode == 0 else (p.stdout + p.stderr).strip()
++
++
++#: ADR-152 I20 at release: the same drawing versions, and the version window empty.
++SAME_VERSIONS = REPO_ROOT / "scripts" / "same_drawing_versions_check.mjs"
++
++
++def window_refusal() -> str | None:
++    """Why a release must wait for the version window to close, in the check's words, or None when it is shut."""
++    p = subprocess.run(["node", str(SAME_VERSIONS), str(REPO_ROOT), "--release"], capture_output=True, text=True,
++                       check=False)  # fmt: skip
+     return None if p.returncode == 0 else (p.stdout + p.stderr).strip()
+ 
+ 
+@@ -198,6 +214,10 @@
+     if refusal:
+         print(f"release_local: refusing — {refusal}", file=sys.stderr)
+         return 1
++    refusal = window_refusal()
++    if refusal:
++        print(f"release_local: refusing — the version window is open:\n{refusal}", file=sys.stderr)
++        return 1
+     args.out.mkdir(parents=True, exist_ok=True)
+     print(f"release_local: the product's release of {args.tag}, from commit {sha}, short of the push")
+     _run([sys.executable, "-m", "scripts.changelog_check", "--tag", args.tag,

@@ -1,0 +1,12 @@
+--- a/OspreyFlow_Build/scripts/publish_user_repo_update.sh
++++ b/OspreyFlow_Build/scripts/publish_user_repo_update.sh
+@@ -20,6 +20,9 @@
+ # environment (as `make publish-user-repo` below does), not in the bare python3 the two checks above use: they are standard library only.
+ (cd "$ROOT/ospreyflow/OspreyFlow_Core" && PYTHONPATH=.:packages:../OspreyFlow_Build .venv/bin/python -m tools.licence_register release-check) \
+   || { echo "STOP: the licence register is not settled (above); nothing was published." >&2; exit 1; }
++# No release while the version window is open (ADR-002 Amendment 1, item 3; ADR-152 I20): the check release_local.py asks.
++(cd "$ROOT/ospreyflow/OspreyFlow_Core" && node scripts/same_drawing_versions_check.mjs . --release) \
++  || { echo "STOP: the version window is open, or the front ends differ (above); nothing was published." >&2; exit 1; }
+ make -C "$ROOT/ospreyflow/OspreyFlow_Build" publish-user-repo COMMIT=HEAD OUT="$FRESH"
+ 
+ # Names any case; the local path case-sensitively (Keycloak's API paths are /users/).
