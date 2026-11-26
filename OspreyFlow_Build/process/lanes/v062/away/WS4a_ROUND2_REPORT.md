@@ -100,6 +100,20 @@ still apply in round 1's order (checked against a throwaway index).
   they load). The comparison spec: round 1's answer stands. It refused, because the references were made with
   SwiftShader "Subzero" and this Mac draws with SwiftShader "LLVM 10.0.0".
 
+### One red at the first Stop run: the Matrix budget
+
+`MatrixView.budget.test.tsx` opened in **4,509 ms** against 2,500 in the Stop hook's run of the checks (the other two
+budgets passed). This branch changes no Matrix file, and nothing in the Matrix folder names the canvas or its marks. At
+about 15:19 UTC the load was about 19 on 12 processors (Spotlight indexing, media analysis, another seat's tests among
+the busiest); the load during the red run itself was not recorded. Then, with no code changed and no limit touched:
+
+- the budget file alone, three times: 2,371, 2,287 and 2,276 ms for the whole case, each passed (load about 17 to 18);
+- the whole `npm test` step again: 3,981 tests and the 3 budgets passed (load 16 before, 33 after), then the rest of
+  the chain, green (the Python parts in the worktree's `.venv`).
+
+So the likely cause is the machine's load, which is an inference. The margin is thin even when it passes: the owner's
+ruling of 22 November already records the Matrix first frame at its limit as backlog row 18. It can go red again.
+
 ## For the owner (one new question; nothing waits on it)
 
 The check itself still accepts a listed `maplibre-gl` or `graphology` difference, as I20's words allow ("except a
