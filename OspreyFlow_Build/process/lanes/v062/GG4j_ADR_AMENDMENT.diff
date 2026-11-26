@@ -1,0 +1,49 @@
+diff --git a/OspreyFlow_Build/spec/06_DECISIONS.md b/OspreyFlow_Build/spec/06_DECISIONS.md
+index 42fddd9..3e71f18 100644
+--- a/OspreyFlow_Build/spec/06_DECISIONS.md
++++ b/OspreyFlow_Build/spec/06_DECISIONS.md
+@@ -42120,3 +42120,32 @@ Tests that would fail (rule 12; each shown red against a planted fault in the sh
+ allowlist); the fonts test applied to the theme folder's list (a face not in either list); the default build's output holds no GDS Transport
+ file and no GOV.UK token or font once the move has landed, and holds them when the identity is on; the re-recorded baseline differs from the old only
+ in GOV.UK files; and a deployment with the GOV.UK brand and the switch off refuses to start.
++
++### ADR-143, Amendment 9 (26 November 2026) — a case's ceiling is told only to a reader cleared for it (GG4j)
++
++Status: proposed by slice GG4j from the owner's rulings of 26 November 2026 (GG4b's question 5 (a), cut as its own security slice; and
++that a refusal names only the capped ceiling the board already sent that reader). It takes effect on the owner's approval line. It
++changes the words of Amendment 2 decision 3, "naming the ceiling"; no check changes.
++
++1. **What a reader is told.** A case's ceiling (the strictest highest allowed marking of what the case reads) is sent as it is only to a
++   reader cleared for it. To anyone else it is the highest marking both under it and within their clearance. Where there is no such
++   marking (a clearance the scheme does not know), none is named.
++2. **Where.** The opened board's `ceiling`; the highest allowed marking on the promotion sheet, the layer merge sheet, the drawn merge
++   sheet and each merge target (a dataset's highest allowed marking is the ceiling of every case reading it), and those sheets' marking
++   check in words. A sheet's words about one item are said only of an item its reader sees that is above that marking, so the marking
++   they name is within the reader's clearance.
++3. **A refusal.** A drawing above the ceiling is still refused, judged against the case's real ceiling. The refusal names the ceiling as
++   decision 1 gives it to that reader, which is the one the opened board sent them: Amendment 2 decision 3's "naming the ceiling" is read
++   so. The board's refusal for the deployment's highest marking (ADR-148 decision 10, "words that say the deployment's limit") names
++   that limit the same way.
++4. **Not changed.** The markings a board offers, every write check, and each refusal's code.
++5. **Open.** A refusal's code still depends on the ceiling: to a drawing marked above the reader's own clearance, the Conduit answers
++   `above_your_clearance` when the marking is within the case's ceiling and `above_the_ceiling` when it is above it, so a reader who
++   tries markings above their own can work out the ceiling. Closing it changes which refusal such a reader is given, which the owner
++   has not ruled.
++
++Tests that would fail (rule 12; `test_board_ceiling_for_the_reader.py`): `test_row_1_a_reader_below_the_ceiling_is_told_their_own_highest`,
++`test_row_3_bs_answer_is_the_same_whatever_the_ceiling_above_b_is`, `test_row_5_a_drawing_above_the_cases_real_ceiling_is_refused_as_before`,
++`test_row_5b_bs_refusal_names_only_the_ceiling_the_board_sent_b`, `test_the_boards_deployment_refusal_names_no_marking_above_the_reader`,
++`test_row_6_the_promotion_sheet_tells_a_reader_below_the_ceiling_only_their_own`, `test_row_6_the_layer_merge_sheet_opened_and_read_again`
++and `test_row_6_the_merge_targets_and_the_drawn_merge_sheet`.
+diff --git a/OspreyFlow_Build/spec/ADR_RESERVATIONS.md b/OspreyFlow_Build/spec/ADR_RESERVATIONS.md
+index c473a81..2cf392f 100644
+--- a/OspreyFlow_Build/spec/ADR_RESERVATIONS.md
++++ b/OspreyFlow_Build/spec/ADR_RESERVATIONS.md
+@@ -130,6 +130,7 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
+ | ADR-014 Amendment 2 | The revisit trigger is met: `maplibre-gl` 6.x on Sigma 3, through the binding already in the tree (the owner, 18 November 2026; slice GG6) | slice-GG6 | 2026-11-18 | written |
+ | ADR-152 Amendment 3 | The page service in a deployment is a setting, `pages.enabled`, off by default and turned on per deployment by the owner; while it is off no deployment's rendered output changes (the owner's ruling of 21 Nov on PL7a2; reference render first, slice PL7a2a) | v062 conductor | 2026-11-21 | written |
+ | ADR-152 Amendment 4 | A theme's override block, fonts entry and sign-in theme live in the theme's own folder (`OspreyFlow_Core/packages/themes/<name>/`); the shared design package names no theme; the React GOV.UK look is not moved (F7); the Default baseline is re-recorded once, in PL12d, with a diff of GOV.UK files only (the owner's rulings of 21 Nov on PL12; slice PL12a) | v062 conductor | 2026-11-21 | written |
++| ADR-143 Amendment 9 | A case's ceiling is told only to a reader cleared for it: the opened board, the promotion and merge sheets and the merge targets; a refusal names what the board sent that reader (GG4j; the owner's rulings of 26 November 2026) | graph | 2026-11-26 | written |
+ 
+ ## Baseline
+ 
