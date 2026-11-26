@@ -675,13 +675,24 @@ interface Drawn {
   pages: { html: string; status: number }[];
 }
 
+/** Two signed-in services for `drawn`: one whose list and board answer, one whose board is past the cap. A census draws every field's
+ * bodies through one pair: a new pair for each used most of the Mac's local ports in one run of this file, and the next run to want one
+ * failed with `EADDRNOTAVAIL`. */
+interface Pair {
+  open: World;
+  capped: World;
+}
+const pair = async (): Promise<Pair> => ({ open: await world(), capped: await world() });
+
 /** The three pages as the real service draws them from these bodies (the fixture serves them through its real refusals): the list, the
- * board, and the board past the cap. */
-async function drawn(b: Bodies): Promise<Drawn> {
-  const w = await world({ list_answer: { status: 200, body: b.list }, board_answer: { status: 200, body: b.opened } });
-  const capped = await world({ board_answer: { status: 409, body: b.limit } });
-  const list = await getAs(w, listOf());
-  const one = await getAs(w, boardOfPath("b-quay"));
+ * board, and the board past the cap. The fixture reads what it is to answer at each request. */
+async function drawn(b: Bodies, services?: Pair): Promise<Drawn> {
+  const { open, capped } = services ?? (await pair());
+  open.options.list_answer = { status: 200, body: b.list };
+  open.options.board_answer = { status: 200, body: b.opened };
+  capped.options.board_answer = { status: 409, body: b.limit };
+  const list = await getAs(open, listOf());
+  const one = await getAs(open, boardOfPath("b-quay"));
   const cap = await getAs(capped, boardOfPath("b-quay"));
   return { pages: [list, one, cap].map((res) => ({ html: mainOf(res.text), status: res.status })) };
 }
@@ -693,14 +704,15 @@ type Census = Record<string, { readonly drawn: readonly string[]; readonly check
  * (BD17). */
 async function censusProblems(census: Census): Promise<string[]> {
   const found: string[] = [];
-  const base = await drawn(bodies());
+  const services = await pair();
+  const base = await drawn(bodies(), services);
   if (JSON.stringify(base.pages.map((p) => p.status)) !== "[200,200,409]") return [`the pages answered ${base.pages.map((p) => p.status).join(", ")}`];
   for (const [model, { drawn: drawnFields, checked, left }] of Object.entries(census)) {
     const fields = [...drawnFields, ...checked, ...left];
     if (JSON.stringify(Object.keys(OTHER[model] ?? {}).sort()) !== JSON.stringify(fields.filter((f) => !NOT_SENT.includes(`${model}.${f}`)).sort())) found.push(`the census of ${model} is not the fields the test can change`);
     for (const field of fields) {
       if (NOT_SENT.includes(`${model}.${field}`)) continue;
-      const changed = await drawn(withField(model, field, (OTHER[model] as Record<string, unknown>)[field]));
+      const changed = await drawn(withField(model, field, (OTHER[model] as Record<string, unknown>)[field]), services);
       const pairs = changed.pages.map((page, i) => ({ page, was: base.pages[i] as { html: string; status: number } }));
       const redrawn = pairs.some(({ page, was }) => page.status === was.status && page.html !== was.html);
       const refused = pairs.some(({ page, was }) => page.status !== was.status);
