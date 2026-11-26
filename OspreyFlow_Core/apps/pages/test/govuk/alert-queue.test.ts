@@ -512,13 +512,22 @@ describe("the alert queue page (the govuk tree)", () => {
       // `/v1/investigations/alert-queue` (a case's own page, which writes an audit row) and `..` would read `/v1/alert-queue`.
       ["a case id that is one dot", ok, "."],
       ["a case id that is two dots", ok, ".."],
+      // The real Conduit decodes `%2F` to `/` before it routes: each of these would reach another route of it (a node's ownership read,
+      // `explain_alert` which writes an audit row), as the person. A case id is a plain name, so none is asked about.
+      ["a case id holding a slash (X/ownership)", ok, `${mine.id}/ownership`],
+      ["a case id holding a slash (X/alert-queue)", ok, `${mine.id}/alert-queue`],
+      ["a case id holding a percent sign", ok, `${mine.id}%2Fownership`],
+      ["a case id starting with a dot", ok, ".hidden"],
+      ["a case id with a space", ok, "a case"],
+      ["a case id of exactly the longest length plus one", ok, "a".repeat(201)],
     ];
     for (const [why, who, id] of refusals) {
       const p = await w.as(who);
       const callsBefore = w.conduit.calls.length;
       const res = await p.get(queueUrl(id));
-      // A dot segment is refused before the Conduit is asked: whatever address it would be resolved to, no call is made for it.
-      if (id === "." || id === "..") {
+      // An id that is not a plain name is refused before the Conduit is asked: whatever address it would be sent to, no call is made.
+      // (The test states the rule it holds the page to: a plain name of at most 200 characters, as `server/plainName.ts`.)
+      if (!(id.length <= 200 && /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(id))) {
         expect(w.conduit.calls.slice(callsBefore).map((c) => c.url), why).toEqual([]);
       }
       expect(res.status, why).toBe(404);
@@ -527,9 +536,18 @@ describe("the alert queue page (the govuk tree)", () => {
       expect(res.text, why).not.toMatch(/right_required|read_alert_queue|queue_rows_not_offered|counts|investigation_not_found|insufficient|Viewer|Missing right|triage|rules/i);
       expect(res.text, why).not.toContain("Hidden finding");
     }
+    // The query string as a browser carries it, `%2F` for the slash (and an unencoded slash): the same refusal, and no call.
+    for (const raw of [`${mine.id}%2Fownership`, `${mine.id}%2Falert-queue`, `${mine.id}/ownership`, `${mine.id}/alert-queue`]) {
+      const p = await w.as(ok);
+      const callsBefore = w.conduit.calls.length;
+      const res = await p.get(`/alert-queue?case=${raw}`);
+      expect(res.status, raw).toBe(404);
+      expect(w.conduit.calls.slice(callsBefore).map((c) => c.url), raw).toEqual([]);
+      expect(sameFor(res.text, p.signed.csrf), raw).toBe(sameFor((await p.get(NOWHERE)).text, p.signed.csrf));
+    }
     // A request with no session learns nothing and is sent to sign-in; the Conduit is not asked.
     const before = w.conduit.calls.length;
-    const bare = await request((await w.as(ok)).app).get(queueUrl(mine.id));
+    const bare =await request((await w.as(ok)).app).get(queueUrl(mine.id));
     expect(bare.status).toBe(302);
     expect(bare.headers["location"]).toBe("/session/sign-in");
     expect(w.conduit.calls.length).toBe(before);

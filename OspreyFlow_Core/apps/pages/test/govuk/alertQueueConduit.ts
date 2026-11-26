@@ -222,7 +222,14 @@ export async function queueConduit(world: { readers: Reader[]; alerts: Held[]; r
       if (failing?.on === "cases") return json(res, failing.status ?? 200, failing.body ?? { detail: "Internal Server Error" });
       return json(res, 200, reader.cases);
     }
-    const found = /^\/v1\/investigations\/([^/]+)\/alert-queue$/.exec(target.pathname);
+    // The real Conduit decodes the path (`%2F` becomes `/`) BEFORE it routes (the server hands the app a decoded path), so the route is
+    // found on the decoded path: an id holding a slash lands on the route the decoded address names, not always on the queue (rule 15).
+    const decoded = decodeURIComponent(target.pathname);
+    // Two of the routes such an address reaches (app.py): a node's ownership read, and `explain_alert` (which writes an audit row).
+    // Each answers a body that is not a queue, as the real ones do, so a page that reached one would be seen to.
+    const other = /^\/v1\/investigations\/[^/]+\/(ownership|alert-queue)\/[^/]+$/.exec(decoded);
+    if (req.method === "GET" && other) return json(res, 200, { served: other[1], note: "not the alert queue" });
+    const found = /^\/v1\/investigations\/([^/]+)\/alert-queue$/.exec(decoded);
     if (req.method !== "GET" || !found) return json(res, 404, { detail: "Not Found" });
     if (!reader.rights.includes("read_alert_queue")) {
       return json(res, 403, { detail: { error: "right_required", right: "read_alert_queue" } });
@@ -231,7 +238,7 @@ export async function queueConduit(world: { readers: Reader[]; alerts: Held[]; r
     if (!opensPlace && !reader.roles.includes("reports_viewer")) {
       return json(res, 403, { detail: { error: "queue_rows_not_offered", place: "rules", counts: "alert-queue/counts" } });
     }
-    const caseId = decodeURIComponent(found[1] as string);
+    const caseId = found[1] as string;
     const held = reader.cases.find((c) => c.id === caseId);
     if (!held) return json(res, 404, { error: "investigation_not_found" });
     if ((held.level as string) === "none") return json(res, 403, { detail: "You need at least Viewer access to this case." });
