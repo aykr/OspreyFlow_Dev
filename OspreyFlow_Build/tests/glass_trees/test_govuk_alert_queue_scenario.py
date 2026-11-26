@@ -239,15 +239,15 @@ def function_problems(data: dict[str, Any]) -> list[str]:
     # Help's row (GR2a) and the alert monitoring row (GR3a, `/reports`) carry the other two routes on the line; the Admin People list's does not.
     if routed != {ROW: ROUTE, "help": "/help", "reports-figures": "/reports"}:
         found.append(f"the rows that have a route are {routed!r}, not the queue's, Help's and the alert monitoring page's")
-    if len(data["functions"]) != 49:
-        found.append(f"FUNCTIONS.yaml has {len(data['functions'])} rows, not 49: this slice adds none")
+    if len(data["functions"]) != 50:
+        found.append(f"FUNCTIONS.yaml has {len(data['functions'])} rows, not 50: this slice adds none")
     return found
 
 
 def route_problems(data: dict[str, Any]) -> list[str]:
-    # The tree's pages on the line: Help (GR2a), the Admin People list (AD3a), the alert monitoring page (GR3a) and this one.
-    if sorted(data["routes"]) != sorted(["/help", "/admin/people", "/reports", ROUTE]):
-        return [f"the route list is {data['routes']!r}: the tree has four pages, /help, /admin/people, /reports and {ROUTE}"]
+    # The tree's pages on the line: Help (GR2a), the Admin People list (AD3a), the alert monitoring page (GR3a), trends shown together (GR4a) and this one.
+    if sorted(data["routes"]) != sorted(["/help", "/admin/people", "/reports", "/packs/trends", ROUTE]):
+        return [f"the route list is {data['routes']!r}: the tree has five pages, /help, /admin/people, /reports, /packs/trends and {ROUTE}"]
     return []
 
 
@@ -420,8 +420,8 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
     ("the row that does not name the page", _row(ROW, where="apps/workspace/src/alerts/"), function_problems, "does not name the page"),
     ("a row marked built while its halves are not", _row(ROW, status="built"), function_problems, "status"),
     ("a second row given a route", _row("admin", route="/admin"), function_problems, "not the queue's, Help's"),
-    ("the route left out of the list", lambda d: d["routes"].remove(ROUTE), route_problems, "four pages"),
-    ("a route in the list the code has no page for", lambda d: d["routes"].append("/rules"), route_problems, "four pages"),
+    ("the route left out of the list", lambda d: d["routes"].remove(ROUTE), route_problems, "five pages"),
+    ("a route in the list the code has no page for", lambda d: d["routes"].append("/rules"), route_problems, "five pages"),
     ("the harness test not told", _in("pins", "tests/harness/test_pages_setting.py", ROUTE, "/elsewhere"), pin_problems, "test_pages_setting"),
     ("the tree parity test not told", _in("pins", "tests/glass_trees/test_tree_parity.py", ROUTE, "/elsewhere"), pin_problems, "test_tree_parity"),
     ("the help scenario's route list not told", _in("pins", "tests/glass_trees/test_govuk_help_scenario.py", ROUTE, "/elsewhere"), pin_problems, "test_govuk_help_scenario"),

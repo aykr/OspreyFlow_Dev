@@ -657,7 +657,7 @@ describe("the tree that serves the page, and the lists that name it", () => {
     const routesText = read(PAGES_DIR, "tree-govuk", "routes.yaml");
     const functionsText = read(PAGES_DIR, "FUNCTIONS.yaml");
     expect(listProblems(routesText, functionsText)).toEqual([]);
-    expect(listedRoutes(routesText)).toEqual(["/help", PATH, "/reports", "/alert-queue"]); // slice GR3a's page is the list's third, slice RM1a's the fourth
+    expect(listedRoutes(routesText)).toEqual(["/help", PATH, "/reports", "/packs/trends", "/alert-queue"]); // slice GR3a's page is the list's third, GR4a's the fourth, RM1a's the fifth
   });
 });
 

@@ -175,13 +175,15 @@ def parity_problems(tmp_path: Path) -> list[str]:
 
 
 def test_the_real_tree_is_partial() -> None:
-    """Today `FUNCTIONS.yaml` has 49 rows and the GOV.UK tree has four pages, Help (slice GR2a), the Admin People list (slice AD3a), the alert
-    monitoring page (slice GR3a) and the alert queue (slice RM1a): four routes in the list, and three rows with a route, since the `admin`
-    function is not complete (its route stays empty)."""
-    assert len(real_rows()) == 49
+    """Today `FUNCTIONS.yaml` has 50 rows and the GOV.UK tree has five pages, Help (slice GR2a), the Admin People list (slice AD3a), the
+    alert monitoring figures (slice GR3a), trends shown together (slice GR4a) and the alert queue (slice RM1a): five routes in the list,
+    and three rows with a route, since neither the `admin` function nor the `reports-trends-shown-together` one is complete (their routes
+    stay empty)."""
+    assert len(real_rows()) == 50
     assert tree_parity.govuk_tree_state() == PARTIAL
     assert tree_parity.ROUTE_LIST.is_file(), "the GOV.UK tree's route list is gone"
-    assert tree_parity._routes(tree_parity.ROUTE_LIST) == ["/help", "/admin/people", "/reports", "/alert-queue"]  # GR3a, then RM1a, added theirs
+    # GR3a added the third page, GR4a the fourth, RM1a the fifth
+    assert tree_parity._routes(tree_parity.ROUTE_LIST) == ["/help", "/admin/people", "/reports", "/packs/trends", "/alert-queue"]
     assert [row["id"] for row in real_rows() if row["route"]] == ["reports-figures", "alerts-rules-watches", "help"]
 
 
@@ -201,7 +203,7 @@ def real_defaults_problems() -> list[str]:
 def test_the_defaults_point_at_the_real_files() -> None:
     """The real call is partial whatever it reads (every absent file means partial), so say where it reads."""
     assert real_defaults_problems() == []
-    assert len(tree_parity._mappings(tree_parity.FUNCTIONS, "functions") or []) == 49
+    assert len(tree_parity._mappings(tree_parity.FUNCTIONS, "functions") or []) == 50
     assert tree_parity._mappings(tree_parity.EXCEPTIONS, "exceptions"), (
         "the real exception lines did not load"
     )

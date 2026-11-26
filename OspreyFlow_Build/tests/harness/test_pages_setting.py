@@ -2339,14 +2339,15 @@ def test_with_no_function_page_yet_only_the_services_own_paths_go_to_pages(
 def test_the_real_govuk_tree_routes_help_to_pages_and_not_the_home_page(shape: str) -> None:
     """The tree as the repository has it now (its real `routes.yaml`, patched by nothing): the
     Help page's path, the Admin People list's (`/admin/people`, slice AD3a), the alert monitoring
-    page's (`/reports`, slice GR3a) and the alert queue's (`/alert-queue`, slice RM1a: not `/alerts`,
-    which is an alert's own address and stays with the workspace) go to `pages` beside the service's
-    own, `/` is not routed (the tree switch decides which tree draws it, not the front proxy: ADR-152
-    decision 7), and the workspace stays. The Caddyfile's matcher (`_caddy_pages_paths`) is what
-    `pages_paths` reads for both shapes this case runs on."""
+    page's (`/reports`, slice GR3a), the trends shown together (`/packs/trends`, slice GR4a) and the
+    alert queue's (`/alert-queue`, slice RM1a: not `/alerts`, which is an alert's own address and
+    stays with the workspace) go to `pages` beside the service's own, `/` is not routed (the tree
+    switch decides which tree draws it, not the front proxy: ADR-152 decision 7), and the workspace
+    stays. The Caddyfile's matcher (`_caddy_pages_paths`) is what `pages_paths` reads for both shapes
+    this case runs on."""
     files = _render(shape, "govuk", **_on(shape))
     routed = pages_paths(shape, files)
-    assert routed == OWN_PATHS | {"/help", "/admin/people", "/reports", "/alert-queue"}, routed
+    assert routed == OWN_PATHS | {"/help", "/admin/people", "/reports", "/packs/trends", "/alert-queue"}, routed
     assert "/" not in routed and has_a_workspace(shape, files)
     assert on_findings(shape, "govuk", files) == []
 
