@@ -275,10 +275,11 @@ def function_problems(data: dict[str, Any]) -> list[str]:
 
 
 def route_problems(data: dict[str, Any]) -> list[str]:
-    # Slice GR3a added the alert monitoring page (`/reports`), and slice GR4a trends shown together (`/packs/trends`) after it.
-    if data["routes"] != ["/help", PATH, "/reports", "/packs/trends"]:
+    # Slice GR3a added the alert monitoring page (`/reports`), slice GR4a trends shown together (`/packs/trends`) after it, and slice
+    # GR1a the cases page (`/cases`; `test_govuk_cases_scenario.py` holds its own).
+    if data["routes"] != ["/help", PATH, "/reports", "/packs/trends", "/cases"]:
         return [
-            f"the route list is {data['routes']!r}: the tree has four pages, /help, {PATH}, /reports and /packs/trends"
+            f"the route list is {data['routes']!r}: the tree has five pages, /help, {PATH}, /reports, /packs/trends and /cases"
         ]
     return []
 
@@ -515,13 +516,13 @@ PLANTS: list[
         "a route in the list the code has no page for",
         lambda d: d["routes"].append("/welcome"),
         route_problems,
-        "four pages",
+        "five pages",
     ),
     (
         "the People path left out of the list",
         lambda d: d["routes"].remove(PATH),
         route_problems,
-        "four pages",
+        "five pages",
     ),
     (
         "the page at another path",
