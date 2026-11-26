@@ -80,7 +80,8 @@ behaviour to you as question 1. If you read your instruction as stopping DR3, th
 | `465bb86d1` | The route-list pins name the tree's fourth page: HP7/HP9, AP10, the help, AP and CS scenario tests, `test_tree_parity.py` and `test_pages_setting.py`. |
 | `a6e102efe` | Fixes for the independent review's findings (below). |
 | `51212290d` | The friction row (`process/friction/2026-11-26-away-gg3b-reader-page.md`). |
-| this commit | This report. |
+| `f94778b3b` | The census cases of both pages get a limit of their own (below, under the tests). |
+| this commit and the one before it | This report. |
 
 ## The table of cases
 
@@ -193,12 +194,12 @@ A read-only lane reviewer read the branch, and its findings were checked against
 
 **Page tests (`apps/pages` vitest):**
 - `document.test.ts`: 25 of 25.
-- Whole suite: **RESULT_VITEST.** The two traversal-probe failures (`assetsTraversal.test.ts`, `foundation.test.ts`) are the wrapper's (`TMPDIR` under a dot-named folder), as GR1a and GR4a found. They touch no file of this part.
-- One run, while the Python suite ran beside it, timed `cases.test.ts`'s CS15 out at 5,067 ms against vitest's 5 s limit. Alone it was 22 of 22.
+- Whole suite, run twice at the end: **934 passed, 2 failed** each time. The two traversal-probe failures (`assetsTraversal.test.ts`, `foundation.test.ts`) are the wrapper's (`TMPDIR` under a dot-named folder), as GR1a and GR4a found. They touch no file of this part. With `TMPDIR` set to a plain folder, both files pass, 32 of 32.
+- **A timing interaction this slice caused, fixed.** GR1a's census cases (CS11 and CS15 in `cases.test.ts`) start one service world a field and ran near vitest's 5 s limit. With this slice's file running beside them, CS15 timed out in the whole suite (5,067 ms and 5,083 ms; alone, 22 of 22). Both census cases in each file now carry a limit of their own, 20 s, with a comment saying why (`CENSUS_LIMIT_MS`). This is the one change to a GR1a file.
 
-**Playwright, the GOV.UK keyboard and scripts-off folder (`npm run test:keyboard:govuk`):** RESULT_PLAYWRIGHT.
+**Playwright, the GOV.UK keyboard and scripts-off folder (`npm run test:keyboard:govuk`):** 21 of 21, this slice's seven (DK1 to DK4, DO1 to DO3) among them.
 
-**Python, the 14 files below:** RESULT_PY.
+**Python, the 14 files below:** 873 passed, 1 failed. The failure is GR1a's report under `test_doc_citations_check.py` (see `citation-check` below); this report's own citation was reworded and passes.
 - `test_govuk_document_scenario.py` (37)
 - `test_functions_yaml.py`
 - `test_tree_parity.py`
@@ -214,7 +215,7 @@ A read-only lane reviewer read the branch, and its findings were checked against
 
 The whole `tests/glass_trees/` folder with `test_pages_setting.py` gave 1,917 passed and 24 skipped. It had **1 failure, which is GR1a's:** `test_glass_shared_case_clients.py::test_no_tracked_file_names_an_old_path`. `OspreyFlow_Core/apps/pages/server/types/glassShared.d.ts` lines 30 and 31 name `investigation/cases.ts` and `time/utcStamp.ts` in their old short form. I did not edit GR1a's file. Writing both out as `packages/glass-shared/src/…` is the likely fix.
 
-**Static checks, all exit 0:**
+**Static checks, all exit 0** (and `node OspreyFlow_Core/apps/pages/scripts/build.mjs --out` to a scratch folder builds the page, whose built words import no workspace package):
 - root `tsc --noEmit`
 - the pages build's `tsc -p tsconfig.build.json`
 - `eslint` in `apps/pages`
