@@ -1,5 +1,5 @@
-// The GOV.UK tree's cases page by keyboard alone, with scripts on (slice GR1a; `CLAUDE.md` rule 13; ADR-152 decision 6 and I4; scenario
-// CS12). The page is read-only and its only actions are links, so the cases that prove it are the tab order through each page (every
+// The GOV.UK tree's cases page by keyboard alone, with scripts on (slices GR1a and GR1e; `CLAUDE.md` rule 13; ADR-152 decision 6 and I4;
+// scenario CS12 and CS25). The page is read-only and its only actions are links, so the cases that prove it are the tab order through each page (every
 // stop a native one, in the page's own order, the skip link first, the table with no stop of its own) and that each link does what it
 // says when activated by Enter: a case's name opens its page, the way back returns to the list, Home is Home. No `page.mouse`, no
 // `.click()`. The service is started in the case for the `govuk` tree against a fixture Conduit that refuses what the real routes refuse.
@@ -47,6 +47,24 @@ test.describe("the cases page with scripts", () => {
       await page.keyboard.press("Enter");
       await expect(page).toHaveURL(new RegExp(`^${base}/$`));
       await expect(page.getByRole("heading", { level: 1 })).toHaveText("Home");
+    });
+  });
+
+  test("CK4: Enter on the contents' History takes the reader to the history, a table of the steps with no stop of its own", async ({ page }) => {
+    await withCases(assets, async (base) => {
+      await openCases(page, base, "/cases?case=k-harbour");
+      await page.getByRole("link", { name: "History" }).focus();
+      await page.keyboard.press("Enter");
+      await expect(page).toHaveURL(new RegExp(`^${base}/cases\\?case=k-harbour#history$`));
+      await expect(page.locator(":target")).toHaveText("History");
+      const table = page.getByRole("table", { name: "Changes to this case, oldest first" });
+      await expect(table).toBeInViewport();
+      await expect(table.getByRole("columnheader")).toHaveText(["Step", "When", "Restore"]);
+      await expect(table.getByRole("rowheader")).toHaveText(["Seeded", "Edited the brief"]);
+      await expect(table.getByRole("row").last()).toContainText("Cannot be restored");
+      // The next stop after the part is the way back: the history holds none of its own.
+      await page.keyboard.press("Tab");
+      await expect(page.getByRole("link", { name: "Back to your cases" })).toBeFocused();
     });
   });
 
