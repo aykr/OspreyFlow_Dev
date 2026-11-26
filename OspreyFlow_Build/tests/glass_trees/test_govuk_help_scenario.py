@@ -269,8 +269,9 @@ def route_problems(data: dict[str, Any]) -> list[str]:
     # The tree's second page, the Admin People list (slice AD3a), is the first section of the `admin` row, whose own route stays empty
     # while the function is incomplete: it is in the list, and no row carries it (`test_govuk_admin_people_scenario.py` holds that). The
     # third, the cases page (slice GR1a), is the first part of the `cases-and-views` row, likewise (`test_govuk_cases_scenario.py`).
-    if data["routes"] != ["/help", "/admin/people", "/cases"]:
-        return [f"the route list is {data['routes']!r}: the tree has three pages, /help, /admin/people and /cases"]
+    # The fourth, one document of a case in the reader (slice GG3b), is the first part of the `documents` row, likewise.
+    if data["routes"] != ["/help", "/admin/people", "/cases", "/cases/document"]:
+        return [f"the route list is {data['routes']!r}: the tree has four pages, /help, /admin/people, /cases and /cases/document"]
     if routed != ["/help"]:
         return [f"the rows that have a route are {routed!r}, not just /help"]
     return []
@@ -404,7 +405,7 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
     ("the old combined top bar row back", _row("functions", "top-bar-home", id="top-bar-home-help"), function_problems, "owner ruled it split"),
     ("reports not split", _row("functions", "reports-figures", id="reports"), function_problems, "owner ruled it split"),
     ("the dashboards row given a slice", _row("functions", "reports-dashboards", slice="GR3"), function_problems, "must be later"),
-    ("a route in the list the code has no page for", lambda d: d["routes"].append("/welcome"), route_problems, "three pages"),
+    ("a route in the list the code has no page for", lambda d: d["routes"].append("/welcome"), route_problems, "four pages"),
     ("a row routed with the list left short", _row("functions", "top-bar-home", route="/"), route_problems, "not just /help"),
     ("no register row", _drop("register", "govuk-frontend"), register_problems, "not one"),
     ("a licence that is not MIT", _register_row(licence="GPL-3.0-only"), register_problems, "not MIT"),
