@@ -193,6 +193,13 @@ class Promotions:
         deployment's ceiling, which would loosen access)."""
         return dataset.highest_marking or self._top()
 
+    def highest_told(self, marking: str, reader: Principal) -> str:
+        """A dataset's highest allowed marking, the ceiling of a case reading it, as `reader` may
+        be told it in a sheet, a check's words or a list of targets (rule 3; GG4j;
+        `Boards.ceiling_told`); empty where there is none to tell. No item is checked against
+        it: each is checked against `highest`."""
+        return self.boards.ceiling_told(marking, reader) or ""
+
     def ceiling(self) -> DeploymentCeiling:
         return deployment_ceiling(self.boards.scheme)
 
@@ -385,11 +392,15 @@ class Promotions:
         ]  # fmt: skip
 
     def _checks(
-        self, reads: Sequence[_Read], problems: dict[str, list[tuple[str, str]]], dataset: Dataset
+        self,
+        reads: Sequence[_Read],
+        problems: dict[str, list[tuple[str, str]]],
+        dataset: Dataset,
+        reader: Principal,
     ) -> list[PromotionCheck]:
         """Each check counted by its code, never by its words. `ends` counts the links one of whose
-        drawn ends cannot go (a check that can fail, not a sentence)."""
-        highest = self.highest(dataset)
+        drawn ends cannot go (a check that can fail, not a sentence). The words are `reader`'s."""
+        highest = self.highest_told(self.highest(dataset), reader)
 
         def failing(code: str) -> int:
             return sum(1 for r in reads if any(c == code for c, _ in problems[r.item.item_id]))
@@ -456,7 +467,8 @@ class Promotions:
         top = self._top()
         if dataset is None:
             return PromotionSheet(
-                board_id=board.id, dataset_id=None, dataset_name=None, highest_marking=top,
+                board_id=board.id, dataset_id=None, dataset_name=None,
+                highest_marking=self.highest_told(top, reader),
                 policy="author_promotes", items=[], checks=[], recorded_as="", refused=refused,
             )  # fmt: skip
         # Rule 3: an item the reader may not see now is not on their sheet, as from every read.
@@ -467,10 +479,10 @@ class Promotions:
             board_id=board.id,
             dataset_id=dataset.id,
             dataset_name=dataset.name,
-            highest_marking=self.highest(dataset),
+            highest_marking=self.highest_told(self.highest(dataset), reader),
             policy=dataset.promotion_policy,
             items=items,
-            checks=self._checks(reads, problems, dataset),
+            checks=self._checks(reads, problems, dataset, reader),
             warnings=await self._warnings(board, reader),
             recorded_as=self._recorded_as(dataset, "analyst_promotion"),
         )
@@ -1187,8 +1199,9 @@ class Promotions:
         return LayerMergeSheet(
             grant_id=grant.id, investigation_id=grant.case_id, case_name=case_name,
             dataset_id=dataset.id, dataset_name=dataset.name,
-            highest_marking=self.highest(dataset), policy=dataset.promotion_policy, items=items,
-            checks=self._checks(reads, problems, dataset),
+            highest_marking=self.highest_told(self.highest(dataset), author),
+            policy=dataset.promotion_policy, items=items,
+            checks=self._checks(reads, problems, dataset, author),
             recorded_as=self._recorded_as(dataset, "layer_merge"),
         )  # fmt: skip
 

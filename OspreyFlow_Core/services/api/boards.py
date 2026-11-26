@@ -14,7 +14,9 @@ routes stand behind the case's own level check first.
 
 **What each refusal says.** A refusal names the rule it keeps, in words: the case's marking
 ceiling (Amendment 2 decision 3), the reader's own clearance, a type not in the case's model (C14),
-a link's ends not on the board, an item that is not the reader's own (decision 5).
+a link's ends not on the board, an item that is not the reader's own (decision 5). **A ceiling is
+told only as the reader may know it** (`Boards.ceiling_told`; GG4j): a reader below it is told, in
+the opened board and in a refusal's words, the highest marking within both it and their clearance.
 
 **Matching never merges** (decision 6; rule 6): *Same* writes one `SAME_AS` (score 1.0) into the
 layer and *Not the same* one `NOT_SAME_AS`; neither node is changed. A suggestion is `inferred` and
@@ -206,19 +208,27 @@ class Boards:
     def check_marking(self, marking: str, ceiling: str, principal: Principal) -> None:
         """Every write site's first question, asked before anything is kept. The deployment's own
         highest marking comes before the case's (ADR-148 decision 10): refused with the documents'
-        refusal, in words that say the deployment's limit and never the item's content."""
+        refusal, in words that say the deployment's limit and never the item's content.
+
+        `ceiling` is the case's real one, and the check is against it. A refusal's words name a
+        ceiling, the case's or the deployment's, only as `ceiling_told` gives it to this reader
+        (GG4j): for the case's, the value the opened board sent them."""
         if marking not in self.scheme.classification:
             raise DrawingRefused(
                 "not_a_marking", f"{marking} is not a marking of this deployment", status=422
             )
         if self.deployment_ceiling is not None and self.deployment_ceiling.above(marking):
-            raise AboveTheDeploymentCeiling(self.deployment_ceiling.marking, "write")
+            named = self.ceiling_told(self.deployment_ceiling.marking, principal)
+            # With nothing to name (a clearance the scheme does not know), the checks below
+            # refuse the write: such a clearance clears no marking.
+            if named is not None:
+                raise AboveTheDeploymentCeiling(named, "write")
         if not self.scheme.clears(ceiling, marking):
-            raise DrawingRefused(
-                "above_the_ceiling",
-                f"{marking} is above this case's ceiling, {ceiling}: nothing drawn in this case "
-                f"may be marked above {ceiling}",
-            )
+            words = f"{marking} is above this case's ceiling"
+            told = self.ceiling_told(ceiling, principal)
+            if told is not None:
+                words += f", {told}: nothing drawn in this case may be marked above {told}"
+            raise DrawingRefused("above_the_ceiling", words)
         if not self.scheme.clears(principal.clearance, marking):
             raise DrawingRefused(
                 "above_your_clearance",
@@ -334,6 +344,15 @@ class Boards:
             if self.scheme.clears(ceiling, m) and self.scheme.clears(principal.clearance, m)
         ]
 
+    def ceiling_told(self, ceiling: str, principal: Principal) -> str | None:
+        """A marking ceiling as `principal` may be told it (rule 3; GG4j; the owner's ruling of
+        26 November 2026): itself to a reader cleared for it; to anyone else the highest marking
+        both under it and within their clearance; `None` where there is no such marking (a
+        clearance the scheme does not know). A ceiling is sent to a reader, in a field or in a
+        refusal's words, as this. A write is never checked against it, only against the real one."""
+        held = self.markings_up_to(ceiling, principal)
+        return held[-1] if held else None
+
     # --- boards ---------------------------------------------------------------------------
 
     async def board(self, case_id: str, board_id: str, reader: str) -> StoredCaseView:
@@ -446,7 +465,7 @@ class Boards:
             node_types=await self.node_types(board.case_id),
             link_types=sorted(await self.case_link_types(board.case_id, principal)),
             markings=self.markings_up_to(ceiling, principal),
-            ceiling=ceiling,
+            ceiling=self.ceiling_told(ceiling, principal),
             may_draw=board.created_by == principal.id,
         )
 

@@ -167,7 +167,8 @@ class DrawnMerges:
             drawn_dataset_id=drawn.id, drawn_name=drawn.name,
             targets=[
                 MergeTarget(dataset_id=t.id, name=t.name,
-                            highest_marking=self.promotions.highest(t),
+                            highest_marking=self.promotions.highest_told(
+                                self.promotions.highest(t), reader),
                             policy=t.promotion_policy)
                 for t in await self.targets(drawn, reader)
             ],
@@ -505,7 +506,8 @@ class DrawnMerges:
         matches, more = await self._matches(reads, drawn, target, reader, chosen, as_types)
         return DrawnMergeSheet(
             drawn_dataset_id=drawn.id, drawn_name=drawn.name, target_dataset_id=target.id,
-            target_name=target.name, highest_marking=promotions.highest(target),
+            target_name=target.name,
+            highest_marking=promotions.highest_told(promotions.highest(target), reader),
             policy=target.promotion_policy,
             mapping=self._mapping(reads, names, chosen, target, target_types),
             target_types=target_types,
@@ -520,7 +522,7 @@ class DrawnMerges:
             ],
             more_matches=more,
             items=[promotions._sheet_item(r, problems[r.item.item_id]) for r in reads],
-            checks=promotions._checks(reads, problems, target),
+            checks=promotions._checks(reads, problems, target, reader),
             recorded_as=promotions._recorded_as(target, "drawn_merge"),
         )  # fmt: skip
 
