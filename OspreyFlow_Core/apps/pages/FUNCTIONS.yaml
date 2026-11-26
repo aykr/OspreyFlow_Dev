@@ -246,7 +246,7 @@ functions:
     name: "Documents: reader, a node's Messages, adding files"
     where: "apps/workspace/src/reader/, apps/workspace/src/dossier/, apps/workspace/src/content/"
     slice: "R5"
-    scenario: "A6, B6"
+    scenario: "A6, B6, DR1, DR2, DR3, DR4, DR5, DR6, DR7, DR8, DR9, DR10, DR11, DR12, DR13, DR14, DR15, DR16, DR17, DR18, DR19"
     route: ""
     status: "planned"
   # The plan has not yet named a build for this row; the inventory's own slice is kept.
