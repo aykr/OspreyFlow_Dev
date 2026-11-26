@@ -12,7 +12,7 @@ const HARNESS = `/perf/harness.html${process.env.OSPREY_PERF_BRAND ? `?brand=${p
 /** How many pixels the community-link layer has drawn now. */
 async function communityInk(page: Page): Promise<number> {
   return page.evaluate(() => {
-    const canvas = document.querySelector<HTMLCanvasElement>("canvas.sigma-communityLinks");
+    const canvas = document.querySelector<HTMLCanvasElement>('[data-canvas-layer="community-links"]');
     if (!canvas) return -1;
     const data = canvas.getContext("2d")!.getImageData(0, 0, canvas.width, canvas.height).data;
     let drawn = 0;

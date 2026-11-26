@@ -107,7 +107,9 @@ test("a sustained pan/zoom sweep holds a CI-appropriate minimum frame rate", asy
     .toBeLessThan(100);
   await page.waitForTimeout(3000);
 
-  const canvas = page.locator("canvas.sigma-nodes");
+  // The canvas by its role, not by the class name Sigma 3 gives the layer it draws nodes on (WS4a): the
+  // renderer's layers fill the application element (`network-canvas__sigma`, inset 0), so the box is the same.
+  const canvas = page.getByRole("application", { name: "Network canvas" });
   const box = await canvas.boundingBox();
   if (!box) throw new Error("canvas not found");
   const cx = box.x + box.width / 2;

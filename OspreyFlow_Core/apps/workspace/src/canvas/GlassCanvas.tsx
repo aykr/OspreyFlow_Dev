@@ -97,6 +97,7 @@ import { useStore } from "zustand/react";
 import { EdgeLineProgram, EdgeRectangleProgram, NodeCircleProgram, createNodeCompoundProgram } from "sigma/rendering";
 import { animateNodes, graphExtent } from "sigma/utils";
 import Sigma from "sigma";
+import { markRenderer } from "./canvasMarks";
 import {
   useId,
   forwardRef,
@@ -1867,6 +1868,9 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         active: drawsCommunityLinks(zoomBandForRatio(sigma.getCamera().ratio), graph.size),
         ...communityLinksRef.current,
       }));
+      // The canvas's own marks (`canvasMarks.ts`, WS4a): its state on the application element and a name on
+      // each layer, the community links' included, so no test finds the canvas by the renderer's class names.
+      const unmarkRenderer = markRenderer(containerRef.current, sigma);
       // ADR-115 E4: the zoom group's readout follows the camera (100% at its starting scale).
       const camera = sigma.getCamera();
       setZoomPercent(Math.round(100 / camera.getState().ratio));
@@ -2116,6 +2120,7 @@ export const GlassCanvas = forwardRef<GlassCanvasHandle, GlassCanvasProps>(
         resizeObserverRef.current?.disconnect();
         resizeObserverRef.current = null;
         detachCommunityLinks();
+        unmarkRenderer();
         sigma.kill();
         sigmaRef.current = null;
       };

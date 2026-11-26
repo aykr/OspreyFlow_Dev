@@ -68,22 +68,24 @@ createRoot(container).render(
   />,
 );
 
-// Sigma's own `afterRender` fires once per frame; the first one after
-// mount is "first interactive frame" for this harness's purposes — the
-// same event `perf.spec.ts` would have no other reliable hook for, since
-// this harness never touches the network the real app's `onOpen`/delta
-// events would otherwise mark readiness from.
+// `readyAt` is the moment the canvas's renderer is mounted, with its layers in the page: the canvas's
+// own mark, `data-canvas-state` on its application element (`src/canvas/canvasMarks.ts`), not a class
+// name the renderer gives its own elements. Until WS4a this waited for `canvas.sigma-nodes` to appear,
+// which Sigma 4 does not make (ADR-152 decision 9), so on Sigma 4 the gate would have timed out rather
+// than measured. "mounted" is set in the same task as that canvas appeared, so the figure means what it
+// always meant; "drawn" (the first finished frame) is the mark for a gate that wants the frame itself.
+// This harness never touches the network the real app's `onOpen`/delta events would mark readiness from.
+const READY = '[role="application"][aria-label="Network canvas"][data-canvas-state]';
 requestAnimationFrame(() => {
   const observer = new MutationObserver(() => {
-    const canvas = container.querySelector("canvas.sigma-nodes");
-    if (canvas) {
+    if (container.querySelector(READY)) {
       window.__PERF__!.readyAt = performance.now();
       observer.disconnect();
     }
   });
-  observer.observe(container, { childList: true, subtree: true });
-  // In case the canvas already exists by the time this runs:
-  if (container.querySelector("canvas.sigma-nodes")) {
+  observer.observe(container, { childList: true, subtree: true, attributes: true, attributeFilter: ["data-canvas-state"] });
+  // In case the canvas is already marked by the time this runs:
+  if (container.querySelector(READY)) {
     window.__PERF__!.readyAt = performance.now();
     observer.disconnect();
   }
