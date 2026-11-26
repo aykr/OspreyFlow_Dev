@@ -3,6 +3,14 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 26 November 2026, 14:50 UTC: SE8g (a) (the owner, in chat)
+
+SE8g grows by (a): `await client.create_database_if_absent()` in the four helpers its guard found (`test_assessment_routes.py`, `test_export_routes.py`, `test_statelessness.py`), test setup only, nothing loosened. The owner's clear-stop line is in.
+
+## 26 November 2026, 14:44 UTC: GG2c in; GG5a and GR1d away (the owner, in chat)
+
+`away/GG2c` comes in like GR1a (round 1 merges the branch); by the owner's ruling of 10:45 (D268) GG2c may merge before WS4b. **GG5a (from origin/main) and GR1d (from away/GR1a) are away rounds on the server until 22:00:** no line builder starts for them; each comes in when its report appears.
+
 ## 26 November 2026, 13:26 UTC: the 62 hold cancelled; hand-backs together at about 17:30 (the owner, in chat)
 
 The hold for hand-back 62 is cancelled. GR4a merges, and merges and starts carry on as normal all afternoon. **No hand-back is applied until about 17:30 UTC**, when the owner applies 62, 63, 58, 59 and 60 together, with a warning first. **AD1c waits for 63** (its `lists.tsv` row) until then.
