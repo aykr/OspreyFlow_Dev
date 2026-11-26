@@ -78,7 +78,7 @@ range). The same in both browsers.
 | `unsafe-eval` | **no**: not reached (traced below) | not planted (ruling 6 (a)) |
 
 Browsers: Chromium 156.0.8078.4 and WebKit 27.2 (Playwright 1.64.1's builds), headless, 1000 × 700, device scale 1. Main run
-15:10:54 to 15:15:39 UTC (50 passed, 4.7 min); two further full runs for stability are recorded under "Tests run".
+15:10:54 to 15:15:39 UTC (50 passed, 4.7 min); two further full runs, 15:29 to 15:39 UTC, passed 50 of 50 each.
 
 ## The table of cases (each runs in both browsers: 25 cases × 2 = 50)
 
@@ -153,8 +153,8 @@ Browsers: Chromium 156.0.8078.4 and WebKit 27.2 (Playwright 1.64.1's builds), he
 | 14:58 to 15:02 | measurement pass (every plant, printed) | the table above |
 | 15:10:54 to 15:15:39 | `npm run test:csp --workspace apps/pages`, the full spec | **50 passed** (4.7 min) |
 | 15:27 | the checks | see below |
-| STAB2 | full spec, stability run 2 | STAB2R |
-| STAB3 | full spec, stability run 3 | STAB3R |
+| 15:29:35 to 15:34:11 | full spec, stability run 2 | **50 passed** (4.6 min) |
+| 15:34:11 to 15:38:43 | full spec, stability run 3 | **50 passed** (4.5 min) |
 
 The checks, at `0da010da2`:
 - **Pass:** `tsc -p apps/pages/test/csp/page/tsconfig.json`; `npm run typecheck` (root); `eslint apps/pages`; `node scripts/no_react_check.mjs`; `node scripts/version_isolation_check.mjs`; `tools.licence_check` (94 packages, all allowed) and `tools/licence_check.mjs`; `tools.doc_citations_check`; `tests/test_doc_citations_check.py` (10 passed); `tools.test_file_coverage_check`; `tools.client_name_check`; `tools.colour_drift_check`; `tools.design_check`.
