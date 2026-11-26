@@ -148,7 +148,12 @@ for (const c of CASES) {
     expect(toleranceRefusal(tolerance)).toBeNull();
     await info.attach(`${c.name}-actual.png`, { body: picture, contentType: "image/png" });
     const result = compare(picture, readFileSync(reference), tolerance.channel);
-    console.log(`canvas-compare ${c.name}: ${result.differing} of ${result.width * result.height} pixels differ by more than ${tolerance.channel} (share ${result.share.toFixed(6)})`);
+    // Also any difference at all, for the record the tolerance is set from (`TOLERANCE.json`).
+    const exact = compare(picture, readFileSync(reference), 0);
+    console.log(
+      `canvas-compare ${c.name}: ${result.differing} of ${result.width * result.height} pixels differ by more than ${tolerance.channel} ` +
+        `(share ${result.share.toFixed(6)}); ${exact.differing} differ at all`,
+    );
     expect(result.share, `the share of pixels unlike the reference (tolerance ${tolerance.share})`).toBeLessThanOrEqual(tolerance.share);
   });
 }
