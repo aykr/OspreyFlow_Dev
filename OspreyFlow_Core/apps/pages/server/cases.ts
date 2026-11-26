@@ -1,29 +1,32 @@
 /**
- * The reader's cases and one case's page with its brief, read-only, a page of the GOV.UK tree (slice GR1a; ADR-152 decisions 1, 4, 5, 6,
- * 7 and 12; FUNCTIONS row `cases-and-views`, its first part; scenario CS):
+ * The reader's cases and one case's page with its brief and its history, read-only, a page of the GOV.UK tree (slices GR1a and GR1e;
+ * ADR-152 decisions 1, 4, 5, 6, 7 and 12; FUNCTIONS row `cases-and-views`, its first two parts; scenario CS):
  *
  *   GET  /cases              the cases the reader holds a level on (`GET /v1/investigations`), as a table
- *   GET  /cases?case=<id>    one case: `GET /v1/investigations/{id}`, then its brief, then the list (for the reader's level and its datasets)
+ *   GET  /cases?case=<id>    one case: `GET /v1/investigations/{id}`, then its brief, then its history, then the list (for the reader's
+ *                            level and its datasets)
  *
  * One page with the case in its query, not `/cases/{case_id}`: a page's path is a plain path and one page is one row in a tree
  * (`pages.ts`, decision 6), so the owner's ruled address is a question in the slice's report, as GR4a's was.
  *
  * It reads through the same door a script's call takes (`conduit.ts`), as the person, with their bearer and nothing of the browser's.
  * The Conduit authorises every read (rules 3 and 4): this page checks no level or right of its own, filters nothing after the answer and
- * counts nothing (decision 5). One render of a case's page reads the case exactly once, so the Conduit's audit of the read is one row.
+ * counts nothing (decision 5). One render of a case's page reads the case and its history exactly once each, so the Conduit's audit of
+ * each read is one row. The history is a part of the case's page (the owner's ruling of 26 November 2026 on GR1e's draft) until GR1c gives
+ * it a page of its own, and it restores nothing: a restore changes the working set, which no GOV.UK page shows until GG2e.
  *
  * What the page answers (the owner's rulings of 25 November 2026 on GR1a's draft):
- *  - the case's read or the brief's refused (any 4xx but a 401: no level, another unit and no such case are the route's one 404; the
+ *  - the case's read, the brief's or the history's refused (any 4xx but a 401: no level, another unit and no such case are the route's one 404; the
  *    brief's 403 for want of the right to investigate is the same to the reader): a 404 with the page of a path nothing serves, drawn
  *    from the same words and template, with none of the Conduit's words; nothing more is asked after a refusal;
  *  - a `case` that is empty, repeated, a dot segment or not a plain value: the same 404, and nothing is asked;
  *  - a 401 from any read: the Studio's words, to sign in again (a 401);
  *  - the Conduit failing, not answering, or answering what the page cannot draw from (the strict reader, `views/casesWords.ts`), or a list
- *    that does not hold the case: could not be read (a 502), with no table, no brief and no part of one (rule 2).
+ *    that does not hold the case: could not be read (a 502), with no table, no brief, no history and no part of one (rule 2).
  *
  * It is the GOV.UK tree's alone for now: a service started for the Default tree answers `/cases` as a path nothing serves. GET is the only
  * method it answers, and it has no form, control or script. Its id is the `cases-and-views` row's, whose route stays empty until the
- * function is whole (new case, settings, access, saved views and history are later slices').
+ * function is whole (new case, settings, access, saved views and the history's own page are later slices').
  */
 import type { Request, Response } from "express";
 
@@ -101,10 +104,15 @@ async function casesGet(req: Request, res: Response): Promise<void> {
   if (brief.status === 401) return ended();
   if (refused(brief)) return notFound(res);
   if (brief.status !== 200) return unreadable();
+  const history = await ask(conduit, v1("investigations", wanted, "history"));
+  if (history === undefined) return unreadable();
+  if (history.status === 401) return ended();
+  if (refused(history)) return notFound(res);
+  if (history.status !== 200) return unreadable();
   const list = await ask(conduit, v1("investigations"));
   if (list === undefined) return unreadable();
   if (list.status === 401) return ended();
-  const view = list.status === 200 ? caseView(wanted, investigation.json, brief.json, list.json) : undefined;
+  const view = list.status === 200 ? caseView(wanted, investigation.json, brief.json, history.json, list.json) : undefined;
   if (view === undefined) return unreadable();
   res.render("cases", context(view.name, view));
 }

@@ -388,11 +388,20 @@ function inOrderProblems(text: string, words: string[]): string[] {
   return [];
 }
 
+/** The Brief part of a case's page: from its heading to the next part's (the History, GR1e). The page's contents are a list of their own,
+ * before it, and are not the brief's. A page with no Brief heading is all brief, so a plant that drops the heading is still read. */
+function briefPartOf(html: string): string {
+  const main = mainOf(html);
+  const start = main.search(/<h2\b[^>]*\sid="brief"/);
+  const end = main.search(/<h2\b[^>]*\sid="history"/);
+  return start === -1 ? main : main.slice(start, end > start ? end : main.length);
+}
+
 /** What an empty brief must be (CS5): said in words, with no list and no heading of the brief's parts. */
 const emptyBriefProblems = (html: string): string[] => {
   const found: string[] = [];
   if (!mainText(html).includes(CASES_WORDS.noBrief)) found.push("the empty brief is not said in words");
-  if (/<ol|<ul/.test(mainOf(html))) found.push("the empty brief is drawn as a list");
+  if (/<ol|<ul/.test(briefPartOf(html))) found.push("the empty brief is drawn as a list");
   if (mainText(html).includes(CASES_WORDS.priority)) found.push("the empty brief is drawn with its parts' headings");
   return found;
 };
@@ -562,14 +571,14 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
     const ferry = await getAs(w, pageOf("c-ferry"));
     expect(emptyBriefProblems(ferry.text)).toEqual([]);
     expect(mainText(ferry.text)).toContain("This case has no brief yet.");
-    expect(mainOf(ferry.text)).not.toMatch(/<ol|<ul/);
+    expect(briefPartOf(ferry.text)).not.toMatch(/<ol|<ul/);
     expect(mainText(ferry.text)).not.toContain(CASES_WORDS.priority);
     const toll = await getAs(w, pageOf("c-toll"));
     expect(mainText(toll.text)).toContain("No priority information requirement is set.");
     const w2 = await world({ brief_answer: { status: 200, body: { priority: "Only a priority", requirements: [] } } });
     const only = await getAs(w2, pageOf("c-harbour"));
     expect(mainText(only.text)).toContain("No information requirements yet.");
-    expect(mainOf(only.text)).not.toMatch(/<ol/);
+    expect(briefPartOf(only.text)).not.toMatch(/<ol/);
   });
 
   it("CS6: no level, another unit, no such case, an empty or repeated case: the very page of a path nothing serves, and nothing more is asked", async () => {
@@ -1150,7 +1159,9 @@ describe("the history part of a case's page (scenario CS, slice GR1e)", () => {
       const res = await getAs(w, pageOf("c-harbour"));
       expect(res.status, JSON.stringify(options)).toBe(502);
       expect(failedHistoryProblems(res.text), JSON.stringify(options)).toEqual([]);
-      expect(calls(w.conduit), JSON.stringify(options)).toEqual(caseCalls("c-harbour").slice(0, 3));
+      // A refused status asks nothing more; a 200 that is not a list of steps is found by the reader, after the one read of the list.
+      const text = options.history_answer?.status === 200;
+      expect(calls(w.conduit), JSON.stringify(options)).toEqual(text ? caseCalls("c-harbour") : caseCalls("c-harbour").slice(0, 3));
     }
     const w = await world({ history_answer: { status: 401, body: { detail: "Not authenticated" } } });
     const res = await getAs(w, pageOf("c-harbour"));
@@ -1216,7 +1227,8 @@ describe("the history part of a case's page (scenario CS, slice GR1e)", () => {
       const w2 = await world({ history_answer: { status: 500, body: {} } });
       const failed = (await getAs(w2, pageOf("c-harbour"))).text;
       expect(failedHistoryProblems(failed)).toEqual([]);
-      const ferry = (await getAs(w2, pageOf("c-ferry"))).text;
+      const ferry = (await getAs(await world(), pageOf("c-ferry"))).text;
+      expect(emptyHistoryProblems(ferry)).toEqual([]);
       expect(failedHistoryProblems(ferry)).not.toEqual([]);
       expect(failedHistoryProblems(failed.replace('<p role="alert">', "<p>"))).not.toEqual([]);
     });

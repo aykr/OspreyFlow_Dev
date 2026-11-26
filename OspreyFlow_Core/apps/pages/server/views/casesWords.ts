@@ -1,19 +1,19 @@
 /**
- * The cases page's words and the views it is drawn from (slice GR1a; ADR-152 decisions 5, 6 and 12; FUNCTIONS row `cases-and-views`;
- * scenario CS). Nothing here is a call or a right: a word, or a function from what the Conduit answered to what the template draws.
+ * The cases page's words and the views it is drawn from (slices GR1a and GR1e; ADR-152 decisions 5, 6 and 12; FUNCTIONS row
+ * `cases-and-views`; scenario CS). Nothing here is a call or a right: a word, or a function from what the Conduit answered to what the template draws.
  *
  * What the page says of a level, a domain pack, an untitled case and a moment is the shared package's (`packages/glass-shared`): the
  * Help page's level names, the Studio's pack labels, the case picker's untitled name and its way of writing a moment, imported and never
  * written again here. `apps/pages/scripts/build.mjs` bundles this file with the package, as it does `helpWords.ts`.
  *
  * **The strict reader.** A body is read field by field against the route's model: `InvestigationListing` (`services/api/app.py`),
- * `Investigation` (`services/api/investigations.py`) and `CaseBrief`, `BriefRequirement` and `BriefAttachment`
- * (`services/api/case_brief.py`). Every field the route sends (`REQUIRED`) must be there, of its type; a body missing one, or with one of
+ * `Investigation` (`services/api/investigations.py`), `CaseBrief`, `BriefRequirement` and `BriefAttachment`
+ * (`services/api/case_brief.py`) and `HistoryStepSummary` (`services/api/history.py`, GR1e). Every field the route sends (`REQUIRED`) must be there, of its type; a body missing one, or with one of
  * another shape, is not a view (`undefined`), said as "could not be read", never as a zero, an empty list or an empty brief (rule 2).
  * **The field census.** `CENSUS` names, for each model, the fields the page draws and the fields it leaves out; Scenario CS's "Left out,
  * by field name" sentence names the same, and `tests/glass_trees/test_govuk_cases_scenario.py` holds both to the models' own fields.
  *
- * The views keep every case and every requirement the Conduit sent, in the order it sent them: nothing here removes, cuts, sorts or
+ * The views keep every case, every requirement and every step the Conduit sent, in the order it sent them: nothing here removes, cuts, sorts or
  * counts (decision 5; rule 3 stays with the Conduit and its adapters, and the brief's route already leaves out an attachment the reader
  * may not read). Plain words, British English.
  */
@@ -45,6 +45,20 @@ export const CASES_WORDS = {
   answered: "Answered",
   answeredOn: (when: string): string => `Answered on ${when}`,
   attached: "Attached to it",
+  contentsTitle: "Contents",
+  // The case page's parts, in order: each an address on the page (its heading's id) and the words of its link.
+  contents: [
+    { href: "#about", text: "About this case" },
+    { href: "#brief", text: "Brief" },
+    { href: "#history", text: "History" },
+  ],
+  history: "History",
+  historyLede: "This page only shows the steps. It restores none.",
+  historyCaption: "Changes to this case, oldest first",
+  historyColumns: ["Step", "When", "Restore"],
+  canRestore: "Can be restored",
+  cannotRestore: "Cannot be restored",
+  noHistory: "Nothing has changed in this case yet.",
   kinds: { trend: "A saved trend", pattern: "A saved pattern", assessment: "An assessment", view: "A canvas view" },
   unreadableList: "Your cases could not be read just now. Nothing is shown, and nothing has changed. Try again in a few minutes.",
   unreadableCase: "This case could not be read just now. Nothing is shown, and nothing has changed. Try again in a few minutes.",
@@ -59,6 +73,7 @@ export const CENSUS = {
   CaseBrief: { drawn: ["priority", "requirements"], left: [] },
   BriefRequirement: { drawn: ["text", "status", "answered_at", "attachments"], left: ["id"] },
   BriefAttachment: { drawn: ["kind"], left: ["id", "title"] },
+  HistoryStepSummary: { drawn: ["label", "created_at", "restorable"], left: ["id"] },
 } as const;
 
 /** A field of a model that is never on the wire (`exclude=True`): the reader does not ask for it. */
@@ -77,6 +92,10 @@ export const LEVELS = ["viewer", "editor", "author"] as const;
 export const PACKS: readonly string[] = ["fibo", "niem", "stix"];
 export const STATUSES = ["open", "answered"] as const;
 export const KINDS = ["trend", "pattern", "assessment", "view"] as const;
+// The labels `GET /history` can send: `history_labels.py`'s fixed labels and `Changed`, which the route sends for any stored label that is
+// not one of them. The page draws a label as sent and never in words of its own; a label outside this list is a body it does not draw
+// from (could not be read). The scenario test holds this list to that file.
+export const HISTORY_LABELS: readonly string[] = ["Seeded", "Expanded", "Showed links among the view", "Removed", "Ran a starter question", "Showed two who share contacts", "Opened from an alert", "Showed an ownership structure", "Opened an alert", "Edited the brief", "Changed"];
 
 type Level = (typeof LEVELS)[number];
 type Kind = (typeof KINDS)[number];
@@ -102,6 +121,14 @@ export interface RequirementRow {
 
 export type BriefView = { kind: "none" } | { kind: "brief"; priority: string | undefined; requirements: RequirementRow[] };
 
+export interface StepRow {
+  label: string;
+  when: string;
+  restore: string;
+}
+
+export type HistoryView = { kind: "none" } | { kind: "steps"; rows: StepRow[] };
+
 export interface CaseView {
   kind: "case";
   name: string;
@@ -110,6 +137,7 @@ export interface CaseView {
   datasets: string[];
   made: string;
   brief: BriefView;
+  history: HistoryView;
 }
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
@@ -117,6 +145,7 @@ const isText = (value: unknown): value is string => typeof value === "string";
 const isTexts = (value: unknown): value is string[] => Array.isArray(value) && (value as unknown[]).every(isText);
 const isPacks = (value: unknown): value is DomainPack[] => isTexts(value) && value.every((pack) => PACKS.includes(pack));
 const isLevel = (value: unknown): value is Level => LEVELS.some((level) => level === value);
+const isLabel = (value: unknown): value is string => HISTORY_LABELS.some((label) => label === value);
 /** A moment the page can write: a time `utcStampOf` would draw as given is a body the page does not draw from. */
 const isTime = (value: unknown): value is string => isText(value) && !Number.isNaN(new Date(value).getTime());
 
@@ -209,18 +238,40 @@ function briefOf(body: unknown): BriefView | undefined {
   return { kind: "brief", priority: priority.trim() === "" ? undefined : priority, requirements: rows };
 }
 
+/** One step of `GET /history` (`HistoryStepSummary`), read strictly. Whether it can be restored is the route's `restorable`, never the
+ * page's guess from the label; a step without it is not read as the model's default. */
+function stepOf(body: unknown): StepRow | undefined {
+  if (!isObject(body)) return undefined;
+  const { id, label, created_at, restorable } = body;
+  if (!isText(id) || !isLabel(label) || !isTime(created_at) || typeof restorable !== "boolean") return undefined;
+  return { label, when: utcStampOf(created_at), restore: restorable ? CASES_WORDS.canRestore : CASES_WORDS.cannotRestore };
+}
+
+/** `GET /history` as rows, every step in the order sent (the route's, oldest first); `undefined` when it is not a list of steps. */
+function historyOf(body: unknown): HistoryView | undefined {
+  if (!Array.isArray(body)) return undefined;
+  const rows: StepRow[] = [];
+  for (const step of body as unknown[]) {
+    const read = stepOf(step);
+    if (read === undefined) return undefined;
+    rows.push(read);
+  }
+  return rows.length === 0 ? { kind: "none" } : { kind: "steps", rows };
+}
+
 /**
- * One case's page (`caseId`, the address's), from its own read (`Investigation`), its brief (`CaseBrief`) and the list (for the reader's level on it and the
- * datasets it reads, which the case's own route does not send); `undefined` when any is not the route's, or the list does not hold the
- * case (it is never drawn without its level).
+ * One case's page (`caseId`, the address's), from its own read (`Investigation`), its brief (`CaseBrief`), its history
+ * (`list[HistoryStepSummary]`) and the list (for the reader's level on it and the datasets it reads, which the case's own route does not
+ * send); `undefined` when any is not the route's, or the list does not hold the case (it is never drawn without its level).
  */
-export function caseView(caseId: string, investigation: unknown, brief: unknown, list: unknown): CaseView | undefined {
+export function caseView(caseId: string, investigation: unknown, brief: unknown, history: unknown, list: unknown): CaseView | undefined {
   if (!isObject(investigation)) return undefined;
   const { id, name, created_at, created_by, owning_unit, domains } = investigation;
   if (!isText(id) || !isText(name) || !isTime(created_at) || !isText(created_by) || !isText(owning_unit) || !isPacks(domains)) return undefined;
   const listings = listingsOf(list);
   const briefView = briefOf(brief);
-  if (listings === undefined || briefView === undefined) return undefined;
+  const historyView = historyOf(history);
+  if (listings === undefined || briefView === undefined || historyView === undefined) return undefined;
   const listed = listings.find((row) => row.id === caseId);
   if (listed === undefined) return undefined;
   return {
@@ -231,5 +282,6 @@ export function caseView(caseId: string, investigation: unknown, brief: unknown,
     datasets: listed.datasets,
     made: utcStampOf(created_at),
     brief: briefView,
+    history: historyView,
   };
 }
