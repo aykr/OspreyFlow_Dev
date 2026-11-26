@@ -55,6 +55,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import common as c  # noqa: E402
 import owed as owed_tests  # noqa: E402
 import server_gate  # noqa: E402
+import build_gate  # noqa: E402
 import scan_select  # noqa: E402
 
 #: The owner's files in the records folder: no slice changes them and records mode never commits them.
@@ -1487,6 +1488,30 @@ def rerun_named(tree: Path, log: Path, tests: list[str], targets: list[str]) -> 
     return next((x for x in codes if x), 0)
 
 
+#: The full gate on the build account (build_gate.run); the line's tests stand it in, as they stand in FULL_GATE.
+BUILD_GATE = build_gate.run
+
+
+def gate_on_build(on_build: dict, after: Path, base: str, log: Path) -> int:
+    """The full gate's exit, given the build account's gate (build_gate.run): a pass, the Mac runs only the remainder;
+    a fail, the build account's log is added to the merge's and the gate is red, unless only a network step failed
+    there, when the Mac runs the whole gate itself; not used, the Mac runs the whole gate itself, as before."""
+    if not on_build.get("used"):
+        return FULL_GATE(after, base, log)
+    if on_build["verdict"] == "pass":
+        return FULL_GATE(after, base, log, targets=on_build["plan"]["targets"])
+    text = on_build.get("log") or ""
+    why = network_only(text, True)
+    if why:
+        on_build["network_only"] = why
+        log.open("a").write(f"\nthe build account's gate (run {on_build['run_id']}) failed only on a network step ({why}): "
+                            "the Mac runs the whole gate itself.\n")
+        return FULL_GATE(after, base, log)
+    log.open("a").write(f"\n--- the build account's gate (run {on_build['run_id']}): red; its log follows ---\n{text}\n"
+                        "--- the end of the build account's log ---\n")
+    return 1
+
+
 def counted_gate(slice_id: str, tip: str, base: str, after: Path, log: Path) -> dict:
     """The server's green for this merge (item 2): counted only with the owner's switch on and a finished pass for the
     same main tip, slice tip and candidate tree as `after`; then the gate runs only server_gate.remainder's targets.
@@ -1727,8 +1752,12 @@ def merge(slice_id: str) -> dict:
         # 7. today's full gate on the merge result
         prog.step(5)
         server = counted_gate(slice_id, tip, base, after, log)  # the owner's file 004, item 2
-        code = FULL_GATE(after, base, log, targets=server["plan"]["targets"]) if server.get("counted") else \
-            FULL_GATE(after, base, log)
+        on_build = None
+        if server.get("counted"):
+            code = FULL_GATE(after, base, log, targets=server["plan"]["targets"])
+        else:  # the owner's ask of 26 November 2026, item 2: the full gate on the build account, behind gate_on_build
+            on_build = BUILD_GATE(slice_id, base, merged, after, log)
+            code = gate_on_build(on_build, after, base, log)
         retried = c.read_json(log.with_suffix(".retries.json"))
         try:  # item 4: the server's result beside the Mac's whole gate, on from the first day; never changes the merge
             server["shadow"] = server_gate.shadow(slice_id, tip, server, code, code == NETWORK, gate_findings(
@@ -1756,6 +1785,11 @@ def merge(slice_id: str) -> dict:
                 "github_at_merge": github, "at": c.now()}
         if server.get("run_id") or server.get("counted"):
             done["server"] = {k: v for k, v in server.items() if k != "plan"}
+        if on_build and on_build.get("used"):
+            done["build_gate"] = {k: v for k, v in on_build.items() if k not in ("plan", "log")} | (
+                {"taken": on_build["plan"]["taken"], "mac_ran": on_build["plan"]["mac"]} if on_build.get("plan") else {})
+        elif on_build:
+            done["build_gate"] = {"used": False, "why": on_build.get("why")}
         if under:  # 2: records commits that moved main under the gate, landed beneath the tested result
             done.update(tested_merge=merged, landed_on=c.git(["rev-parse", f"{landed}^1"], c.REPO), records_under_gate=under)
         if retried:

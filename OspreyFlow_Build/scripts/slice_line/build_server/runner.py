@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 """The build account's container checks and seats (the owner's file 017, items 1 and 2; the owner's answers of 24
-and 25 November 2026): the forced command of the Mac's key to `ospreyflow_build` on the test server. No shell, four
+and 25 November 2026): the forced command of the Mac's key to `ospreyflow_build` on the test server. No shell, five
 verbs in all:
 
     (forced command)  checks <ID>     a git bundle on standard input, of exactly main's tip and one slice's tip (sent
                                       by early_warning.py at the moment it sends the early warning); the candidate is
                                       built as the Mac's merge builds it and checked in a detached job; prints
                                       {"state": "started", "id": <16 hex>, "holds_main": <main>} and returns at once
+    (forced command)  gate <ID>       the owner's ask of 26 November 2026, item 2: a git bundle on standard input of
+                                      exactly one ref, HEAD, the merge commit the Mac's merge made and will land (its
+                                      first parent main as the Mac had it); today's full gate run on exactly that
+                                      commit in a detached job, the merge made nowhere else; prints {"state": "started",
+                                      "id": <16 hex>, "holds_main": <main>} and returns at once
     (forced command)  start <ID> builder|verifier
                                       017-2: one tar on standard input, of exactly in.bundle (main and lane/slice-<ID>)
                                       and order.json (the seat, part, round, prompt, model, effort, account and the
@@ -35,6 +40,14 @@ CI's Python (`uv sync --frozen`) and `npm ci`; then the container checks, TARGET
 They run in this account's own rootless Docker and nowhere else: the job sets DOCKER_HOST to this account's socket
 itself (never taken from the caller), and nothing runs unless the system Docker's socket does not answer and
 `docker info` answers as rootless.
+
+A gate job: a shared clone at exactly the commit received (never merged here: the Mac made it, and main moves only to
+it); CI's Python and Node, checked against the commit's own ci.yml, `uv sync --frozen` and `npm ci`; the closed store
+ports and the merger's slot, as the Mac's gate sets them; then one make per target, each `ci` prerequisite but
+core-check and client-name-check (its hashed list never leaves the Mac), each of Core's `check` targets (harness-a11y
+only once proved here), and make test. Its result is in the early warning's shape (passed_targets, failing, not_run),
+at `gates/<ID>/<COMMIT>.json` beside its log, so the Mac runs only what it does not prove, as for a counted early
+warning. What the gate checks is the commit's own Makefiles: nothing here names a target.
 
 A seat's work goes back the same way: the builder's commits on the clone's lane/slice-<ID>, and each seat's result
 (seats/<ID>/<seat>-<id>.json, with the records it wrote) on the clone's local branch seat-results.
@@ -95,6 +108,20 @@ TARGETS = (
 #: run, the result does not name it, and the Mac keeps it.
 A11Y_READY = HERE / "harness-a11y.ready"
 TARGET_SECONDS = 3600
+#: The gate job (the owner's ask of 26 November 2026, item 2). The Mac's gate's closed store ports and its lane, as
+#: merge_slice.OFFLINE_PORTS and GATE_LANE give them; the targets that never run here (client-name-check reads the
+#: owner's hashed client list, which never leaves the Mac); make test's slowest steps are bounded by TEST_SECONDS.
+GATE_OFFLINE_PORTS = {"ARCADEDB_HTTP_PORT": "59991", "POSTGRES_PORT": "59992", "VALKEY_PORT": "59993",
+                      "CLICKHOUSE_HTTP_PORT": "59994"}
+GATE_LANE = "merger"
+MAC_KEEPS = {"client-name-check": "the owner's hashed client list never leaves the Mac"}
+TEST_SECONDS = 3 * 3600
+GATES_PATH = "gates/%s/%s"
+MAX_LOG = 8 * 1024 ** 2
+FAILED_TEST = re.compile(r"^(?:FAILED|ERROR) (\S+)|^\s*(?:FAIL|\u2718|\u00d7)\s+(\S+.*)$")
+MAKE_ERROR = re.compile(r"^make(?:\[\d+\])?: \*\*\* \[(?:[^\]]*?:\s*)?([\w./-]+)\] Error \d+")
+DOCKER_SKIP = re.compile(r"^SKIPPED \[\d+\] ([^:\s]+):\d+: a server-only test: it calls the docker CLI")
+ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 SYSTEM_SOCKETS = ("/var/run/docker.sock", "/run/docker.sock")
 #: What a job keeps of its own environment; DOCKER_HOST is set by the job itself. Under systemd-run (as installed) a
 #: job starts from the build account's own user environment, not its caller's: the forced command hands it nothing,
@@ -221,10 +248,58 @@ def do_checks(slice_id: str) -> int:
     return say({"state": "started", "id": rid, "holds_main": main}, 0)
 
 
+def do_gate(slice_id: str) -> int:
+    """The owner's ask of 26 November 2026, item 2: a bundle of exactly HEAD, a merge commit whose first parent is main
+    as the Mac had it; today's full gate on exactly that commit, in a detached job, as `checks` runs its job."""
+    WORK.mkdir(parents=True, exist_ok=True)
+    if not SOURCE.is_dir():
+        git(["init", "-q", "--bare", str(SOURCE)], cwd=WORK)
+    if len(pending()) >= MAX_QUEUE:
+        return refuse("busy", words="%d jobs are waiting" % MAX_QUEUE)
+    rid = secrets.token_hex(8)
+    job = JOBS / rid
+    job.mkdir(parents=True)
+    bundle = job / "in.bundle"
+    try:
+        if not receive(bundle):
+            return refuse("too-large")
+        heads = {}
+        for line in git(["bundle", "list-heads", str(bundle)], check=False).splitlines():
+            sha, _, ref = line.partition(" ")
+            heads[ref] = sha
+        if list(heads) != ["HEAD"] or not SHA.match(heads["HEAD"]):
+            return refuse("bundle-shape", words="a bundle of exactly one ref, HEAD: the merge commit to gate")
+        if subprocess.run(["git", "bundle", "verify", "-q", str(bundle)], cwd=str(SOURCE), capture_output=True,
+                          env=git_env()).returncode != 0:
+            return refuse("bundle-prerequisites")
+        git(["fetch", "-q", str(bundle), "HEAD:refs/jobs/%s/gate" % rid])
+        commit = heads["HEAD"]
+        parents = git(["rev-list", "--parents", "-n", "1", commit]).split()[1:]
+        if len(parents) != 2:
+            return refuse("bundle-shape", words="HEAD is not a merge commit (main and the slice's tip)")
+        main = parents[0]
+        git(["update-ref", "refs/heads/main", main])  # what this copy holds, for the Mac's next, smaller bundle
+        (job / "job.json").write_text(json.dumps({"kind": "gate", "slice": slice_id, "commit": commit, "main": main,
+                                                  "tip": parents[1], "received": now()}))
+    except Stop:
+        return refuse("bundle-unreadable")
+    finally:
+        if bundle.exists():
+            bundle.unlink()
+        if not (job / "job.json").exists():
+            for ref in git(["for-each-ref", "--format=%(refname)", "refs/jobs/%s/" % rid], check=False).split():
+                git(["update-ref", "-d", ref], check=False)
+            shutil.rmtree(job, ignore_errors=True)
+    launch(rid)
+    return say({"state": "started", "id": rid, "holds_main": main}, 0)
+
+
 def forced(cmd: str) -> int:
     parts = cmd.split(" ")
     if len(parts) == 2 and parts[0] == "checks" and SLICE.match(parts[1]):
         return do_checks(parts[1])
+    if len(parts) == 2 and parts[0] == "gate" and SLICE.match(parts[1]):
+        return do_gate(parts[1])
     if len(parts) == 3 and parts[0] in SEAT_VERBS and SLICE.match(parts[1]) and parts[2] in SEAT_KINDS:
         return {"start": do_start, "stop": seat_stop, "status": seat_status}[parts[0]](parts[1], parts[2])
     return refuse("shape", cmd)
@@ -614,6 +689,179 @@ def run_targets(tree: Path, env: dict, log, result: dict) -> None:
         result.update(verdict="error", words="the tree's gate lists none of the container checks")
 
 
+# ------------------------------------------------------------------ the gate job: today's full gate on one commit
+
+
+def ci_value(tree: Path, pattern: str, what: str) -> str:
+    try:
+        found = set(re.findall(pattern, (tree / ".github/workflows/ci.yml").read_text(), re.M))
+    except OSError:
+        found = set()
+    if len(found) != 1:
+        raise Stop("error", "ci.yml names %d %s values; the gate needs exactly one" % (len(found), what))
+    return found.pop()
+
+
+def lane_slot(tree: Path, lane: str = GATE_LANE) -> str:
+    try:
+        lines = (tree / "OspreyFlow_Build/scripts/lane_ports.tsv").read_text().splitlines()
+    except OSError:
+        lines = []
+    for ln in lines:
+        parts = ln.split("\t")
+        if not ln.startswith("#") and len(parts) >= 2 and parts[0] == lane:
+            return parts[1].strip()
+    raise Stop("error", "lane_ports.tsv gives the %s lane no slot" % lane)
+
+
+def closed_ports_in_use() -> list:
+    """The Mac's gate's closed store ports must be closed here too: a listener on one is a store the gate could reach."""
+    used = []
+    for name, port in GATE_OFFLINE_PORTS.items():
+        with socket.socket() as sk:
+            sk.settimeout(1)
+            if sk.connect_ex(("127.0.0.1", int(port))) == 0:
+                used.append("%s %s" % (name, port))
+    return used
+
+
+def gate_tree(tree: Path, commit: str) -> str:
+    """Exactly the commit received, checked out as a clone of its own; its tree hash."""
+    git(["clone", "-q", "--shared", "--no-checkout", str(SOURCE), str(tree)], cwd=WORK)
+    git(["-C", str(tree), "remote", "remove", "origin"], cwd=WORK)
+    git(["-C", str(tree), "checkout", "-q", "--detach", commit], cwd=WORK)
+    if git(["rev-parse", "HEAD"], cwd=tree) != commit:
+        raise Stop("error", "the checkout is not the commit received")
+    return git(["rev-parse", "HEAD^{tree}"], cwd=tree)
+
+
+def gate_env(tree: Path, env: dict, log) -> dict:
+    """merge_slice.ci_env's environment, built here: CI's Node major on PATH, CI's Python for uv, the closed store
+    ports, the merger's slot; then `uv sync --frozen` and `npm ci` (environment()) and the venv's Python checked."""
+    major = ci_value(tree, r"node-version:\s*[\"']?(\d+)", "node-version")
+    said = subprocess.run(["node", "--version"], capture_output=True, text=True, env=env)
+    if said.returncode != 0 or not said.stdout.startswith("v%s." % major):
+        raise Stop("error", "this account's node is %s, not ci.yml's Node %s" % (said.stdout.strip() or "missing", major))
+    used = closed_ports_in_use()
+    if used:
+        raise Stop("error", "a closed store port is listening on this server (%s): nothing was run" % ", ".join(used))
+    env = {**env, **GATE_OFFLINE_PORTS, "OSPREY_PORTS_SLOT": lane_slot(tree)}
+    env = environment(tree, env, log)
+    py = tree / "OspreyFlow_Core/.venv/bin/python"
+    said = subprocess.run([str(py), "--version"], capture_output=True, text=True) if py.is_file() else None
+    if not said or not (said.stdout + said.stderr).strip().startswith("Python %s." % env["UV_PYTHON"]):
+        raise Stop("error", "the gate's venv is not ci.yml's Python %s" % env["UV_PYTHON"])
+    return env
+
+
+def gate_steps(tree: Path, result: dict) -> list:
+    """(name, target, command) for each target today's full gate runs, from the commit's own Makefiles: each `ci`
+    prerequisite but core-check, each of Core's `check` targets for core-check, and make test. What never runs here
+    is named not run, and the Mac runs it."""
+    steps, not_run = [], result["not_run"]["targets"]
+    for t in gate_targets(tree, "OspreyFlow_Build", "ci"):
+        if t == "core-check":
+            for ct in gate_targets(tree, "OspreyFlow_Core", "check"):
+                if ct == "harness-a11y" and not A11Y_READY.is_file():
+                    not_run.append({"name": ct, "why": "not proved on this server (no bin/harness-a11y.ready)"})
+                else:
+                    steps.append(("make -C ../OspreyFlow_Core " + ct, ct, ["make", "-C", "../OspreyFlow_Core", ct]))
+        elif t in MAC_KEEPS:
+            not_run.append({"name": t, "why": MAC_KEEPS[t]})
+        else:
+            steps.append(("make " + t, t, ["make", t]))
+    steps.append(("make test", "test", ["make", "test"]))
+    return steps
+
+
+def run_gate_steps(tree: Path, env: dict, log, logpath: Path, result: dict) -> None:
+    """One make per target, so each target's own exit is known; named passed only when it exited 0 with no failing
+    test or failed make target in its output, and nothing in it skipped as a server-only docker test."""
+    failing = result["failing"]
+    env_test = {**env, "PYTEST_ADDOPTS": "-rfEs"}
+    for name, target, cmd in gate_steps(tree, result):
+        log.write("\n$ %s\n" % name)
+        log.flush()
+        start = logpath.stat().st_size
+        t0 = time.monotonic()
+        try:
+            code = subprocess.run(cmd, cwd=str(tree / "OspreyFlow_Build"), stdout=log, stderr=subprocess.STDOUT,
+                                  env=env_test, timeout=TEST_SECONDS if target == "test" else TARGET_SECONDS).returncode
+        except subprocess.TimeoutExpired:
+            code = 124
+            log.write("\nTIMED OUT: %s\n" % name)
+        log.flush()
+        with logpath.open("rb") as fh:
+            fh.seek(start)
+            lines = [ANSI.sub("", ln) for ln in fh.read().decode(errors="replace").splitlines()]
+        bad = skipped = False
+        for ln in lines:
+            m = MAKE_ERROR.match(ln)
+            if m:
+                bad = True
+                if m.group(1) not in failing["targets"]:
+                    failing["targets"].append(m.group(1))
+                continue
+            m = FAILED_TEST.match(ln)
+            if m:
+                bad = True
+                n = (m.group(1) or m.group(2) or "").strip()
+                if n and n not in failing["tests"]:
+                    failing["tests"].append(n)
+            m = DOCKER_SKIP.match(ln)
+            if m:
+                skipped = True
+                if m.group(1) not in result["not_run"]["docker_skipped"]:
+                    result["not_run"]["docker_skipped"].append(m.group(1))
+        result["steps"].append({"target": target, "exit": code, "seconds": int(time.monotonic() - t0)})
+        if code != 0 and target != "test" and target not in failing["targets"]:
+            failing["targets"].append(target)
+        if code == 0 and not bad and (target == "test" or not skipped):
+            result["passed_targets"].append(target)
+    result["verdict"] = "pass" if all(x["exit"] == 0 for x in result["steps"]) and not failing["targets"] \
+        and not failing["tests"] else "fail"
+
+
+def run_gate(job: Path, meta: dict) -> dict:
+    result = {"state": "done", "kind": "gate", "id": job.name, "runner": RUNNER, "slice": meta["slice"],
+              "commit": meta["commit"], "main": meta["main"], "tip": meta["tip"], "tree": None, "verdict": "error",
+              "words": "", "passed_targets": [], "failing": {"targets": [], "tests": []},
+              "not_run": {"targets": [], "test_files": [], "docker_skipped": []}, "steps": [],
+              "log": (GATES_PATH % (meta["slice"], meta["commit"])) + ".log"}
+    t0 = time.monotonic()
+    tree = job / "tree"
+    logpath = job / "log.txt"
+    with logpath.open("w") as log:
+        try:
+            env = job_env()
+            docker_check(env)
+            result["tree"] = gate_tree(tree, meta["commit"])
+            run_gate_steps(tree, gate_env(tree, env, log), log, logpath, result)
+        except Stop as e:
+            result.update(verdict=e.verdict, words=e.words, passed_targets=[])
+        except Exception as e:  # noqa: BLE001 - any other fault is the runner's, never the slice's
+            result.update(verdict="error", words="the runner failed: %s" % type(e).__name__, passed_targets=[])
+    result["seconds"] = int(time.monotonic() - t0)
+    result["finished"] = now()
+    if not result.get("words"):
+        result.pop("words")
+    shutil.rmtree(tree, ignore_errors=True)  # the log stays, for the owner
+    for ref in git(["for-each-ref", "--format=%(refname)", "refs/jobs/%s/" % job.name], check=False).split():
+        git(["update-ref", "-d", ref], check=False)
+    return result
+
+
+def write_gate_result(job: Path, result: dict) -> None:
+    """The gate's log (its last MAX_LOG bytes), then its result: the Mac takes the result, which names the log."""
+    path = GATES_PATH % (result["slice"], result["commit"])
+    log = job / "log.txt"
+    data = log.read_bytes()[-MAX_LOG:] if log.exists() else b""
+    msg = "gate: %s at %s on main %s: %s (%s)" % (result["slice"], result["commit"][:10], str(result["main"])[:10],
+                                                  result["verdict"], result["id"])
+    commit_result(RESULTS_BRANCH, path + ".log", data.decode(errors="replace"), msg + ", its log")
+    commit_result(RESULTS_BRANCH, path + ".json", result, msg)
+
+
 # ------------------------------------------------------------------ results, on the local branch the backup takes
 
 
@@ -634,7 +882,8 @@ def commit_result(branch: str, path: str, result: dict, msg: str) -> None:
     WORK.mkdir(parents=True, exist_ok=True)
     with (WORK / "results.lock").open("w") as fh:
         fcntl.flock(fh, fcntl.LOCK_EX)
-        blob = git(["hash-object", "-w", "--stdin"], cwd=CLONE, input=json.dumps(result, indent=1) + "\n")
+        text = result if isinstance(result, str) else json.dumps(result, indent=1) + "\n"
+        blob = git(["hash-object", "-w", "--stdin"], cwd=CLONE, input=text)
         index = WORK / "results.index"
         if index.exists():
             index.unlink()
@@ -651,6 +900,8 @@ def commit_result(branch: str, path: str, result: dict, msg: str) -> None:
 
 def run_one(job: Path) -> dict:
     meta = json.loads((job / "job.json").read_text())
+    if meta.get("kind") == "gate":
+        return run_gate(job, meta)
     result = {"state": "done", "id": job.name, "runner": RUNNER, "slice": meta["slice"], "tip": meta["tip"],
               "main": meta["main"], "tree": None, "verdict": "error", "words": "", "passed_targets": [],
               "failing": {"targets": [], "tests": []}, "not_run": {"targets": []}, "steps": []}
@@ -689,7 +940,10 @@ def work() -> int:
             for job in pending():
                 try:
                     r = run_one(job)
-                    write_result(r)
+                    if r.get("kind") == "gate":
+                        write_gate_result(job, r)
+                    else:
+                        write_result(r)
                 except Exception as e:  # noqa: BLE001 - a job it cannot read or record never stops the rest
                     r = {"state": "done", "id": job.name, "verdict": "error",
                          "words": "the job could not be run or recorded: %s" % type(e).__name__}

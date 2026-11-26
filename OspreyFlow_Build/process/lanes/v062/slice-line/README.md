@@ -50,8 +50,8 @@ launch's one-time token before the prompt is sent (the prompt goes over stream-j
 
 ## Gates and their proofs
 
-`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (978 cases) plants each violation in the shape its real call
-site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (813 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
+`OspreyFlow_Build/scripts/slice_line/tests/run.sh` (1013 cases) plants each violation in the shape its real call
+site produces; `OspreyFlow_Build/scripts/slice_line/tests/plant_faults.py` shows each test red with its gate disabled (843 planted faults, 0 missed). `make ci` runs the suite (`slice-line-check`), and so does its own CI job.
 
 | Gate | Where | What refuses |
 | --- | --- | --- |

@@ -73,6 +73,7 @@ runner.SYSTEM_SOCKETS = tuple(harness.get("sockets", []))
 runner.KEPT = runner.KEPT + tuple(harness.get("keep", []))
 runner.MAX_QUEUE = harness.get("max_queue", runner.MAX_QUEUE)
 runner.MAX_BUNDLE = harness.get("max_bundle", runner.MAX_BUNDLE)
+runner.TARGET_SECONDS = harness.get("target_seconds", runner.TARGET_SECONDS)
 runner.SEAT_WORKER = [sys.executable, __file__, runner_py, sys.argv[2], "_seat"]
 if harness.get("seat_run"):
     runner.SEAT_RUN = harness["seat_run"]
