@@ -30,6 +30,7 @@ import { ConduitUnreachable, conduitFor, v1 } from "./conduit.js";
 import type { Conduit } from "./conduit.js";
 import type { ForwardSettings } from "./config.js";
 import type { PageModule } from "./pages.js";
+import { identifier } from "./plainName.js";
 import { ALERT_QUEUE_WORDS, QUEUE_PATH, caseLinks, caseList, nameOfCase, queueRows } from "./views/alertQueueWords.js";
 import type { CaseLink, QueueRow } from "./views/alertQueueWords.js";
 
@@ -44,8 +45,6 @@ type View =
   | { kind: "table"; caption: string; caseName: string; rows: QueueRow[] }
   | { kind: "cases"; cases: CaseLink[] }
   | { kind: "empty" | "unreadable" | "message"; message: string };
-
-const MAX_CASE_ID_CHARS = 200;
 
 /** The status of a read, and its body when it was 200 and JSON: 0 for a Conduit that could not be reached. */
 async function readAs(conduit: Conduit, path: string): Promise<{ status: number; json: unknown }> {
@@ -75,10 +74,11 @@ async function alertQueueGet(req: Request, res: Response): Promise<void> {
     return;
   }
   const asked: unknown = req.query["case"];
-  const caseId = asked === undefined || asked === "" ? null : asked;
-  // `.` and `..` are refused as a path nothing serves: `encodeURIComponent` leaves them as they are and the address is then resolved, so
-  // the read would go to another route of the Conduit (`/v1/investigations/alert-queue`, a case's own page, which writes an audit row).
-  if (caseId !== null && (typeof caseId !== "string" || caseId.length > MAX_CASE_ID_CHARS || caseId === "." || caseId === "..")) {
+  // A case id is a plain name (`plainName.ts`, the rule `packTrends.ts` holds too), or the page is refused as a path nothing serves and the
+  // Conduit is not asked: a slash (the Conduit decodes `%2F` before it routes) or a dot segment would send the read to another route of the
+  // Conduit, such as `explain_alert`, which writes an audit row, as the person.
+  const caseId = asked === undefined || asked === "" ? null : identifier(asked);
+  if (caseId === undefined) {
     notFound(res);
     return;
   }
