@@ -45,7 +45,7 @@
 </tr>
 </thead>
 <tbody>
-{% for r in view.drawn %}<tr><th scope="row">{{ r.label }}<p>{{ words.drawnNote }}</p></th><td>{{ r.type }}</td><td>{{ r.marking }}</td><td>{{ r.grading }}</td><td>{{ r.note }}</td></tr>
+{% for r in view.drawn %}<tr><th scope="row">{{ r.label }}<p>{{ words.drawnNote }}</p></th>{% for cell in r.cells %}<td>{{ cell }}</td>{% endfor %}</tr>
 {% endfor %}</tbody>
 </table>
 {% else %}
@@ -75,7 +75,7 @@
 </tr>
 </thead>
 <tbody>
-{% for r in view.links %}<tr><th scope="row">{{ r.label }}</th><td>{{ r.type }}</td><td>{{ r.from }}</td><td>{{ r.to }}</td><td>{% if r.drawn %}{{ words.drawn }}{% else %}{{ words.loaded }}{% endif %}</td><td>{{ r.marking }}</td><td>{{ r.grading }}</td><td>{{ r.note }}</td></tr>
+{% for r in view.links %}<tr><th scope="row">{{ r.label }}</th>{% for cell in r.cells %}<td>{{ cell }}</td>{% endfor %}</tr>
 {% endfor %}</tbody>
 </table>
 {% else %}

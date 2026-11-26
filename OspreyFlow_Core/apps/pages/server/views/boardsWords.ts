@@ -24,6 +24,11 @@
  * field name" and "Checked, not drawn" sentences name the same, and `tests/glass_trees/test_govuk_boards_scenario.py` holds them to the
  * models' own fields.
  *
+ * **No source is said until GG4b** (the owner's ruling of 26 November 2026, rule 3). The route sends a drawn item's `source_document` to
+ * every reader of the board, whether or not they may read the document, and a drawn item needs a note or a document: saying a note, or
+ * that there is none, would tell a reader a document is there. The reader still refuses a drawn item with neither, and keeps neither: no
+ * view holds a note or a document, and no table has a column for one.
+ *
  * The views keep every board, item and link the Conduit sent, in the order it sent them: nothing here removes, cuts, sorts or counts
  * (decision 5; rule 3 stays with the Conduit and its adapters, which send only what the reader may see). The one split is of what was sent
  * into the items drawn and the items loaded, by the route's own `drawn` list: each item is in exactly one of the two tables. Plain words,
@@ -48,19 +53,17 @@ export const BOARDS_WORDS = {
   sharedLabel: "Shared",
   made: "Made",
   drawnCaption: "Drawn items on this board",
-  drawnColumns: ["Item", "Type", "Marking", "Grading", "Source note"],
+  drawnColumns: ["Item", "Type", "Marking", "Grading"],
   drawnNote: "Drawn, not loaded",
-  noNote: "No note given",
   loadedCaption: "Loaded items on this board",
   loadedColumns: ["Item", "Type", "Marking"],
   // The React board's words for a loaded item (`apps/workspace/src/boards/BoardEditor.tsx`).
   loadedNote: "A dataset this case reads: a live reference, not editable here",
   linksCaption: "Links on this board",
-  linkColumns: ["Link", "Type", "From", "To", "Drawn or loaded", "Marking", "Grading", "Source note"],
+  linkColumns: ["Link", "Type", "From", "To", "Drawn or loaded", "Marking", "Grading"],
   drawn: "Drawn, not loaded",
   loaded: "Loaded",
   notGraded: "Not graded: loaded",
-  loadedSource: "A dataset this case reads",
   // What is shown, never what is there: an item the reader may not see is in no table and no sentence (rule 3).
   emptyBoard: "No items are shown on this board.",
   nothingDrawn: "No drawn items are shown on this board.",
@@ -93,7 +96,7 @@ export const CENSUS = {
   Node: { drawn: ["type", "properties", "provenance", "handling"], checked: ["id"], left: ["resolution", "audit", "datasets"] },
   Edge: { drawn: ["type", "source", "target", "provenance", "handling"], checked: ["id"], left: ["properties", "interval", "occurrences", "weight", "weight_components", "basis", "audit", "datasets"] },
   Provenance: { drawn: ["drawn"], checked: [], left: ["state", "sources", "sources_withheld", "extracted_by", "extraction_confidence", "first_seen", "last_confirmed", "confirmed_by", "gazetteer"] },
-  DrawnAssertion: { drawn: ["label", "grading", "source_note"], checked: ["provenance_class"], left: ["item_id", "asserted_by", "board_id", "case_id", "original_grading", "source_document", "icon"] },
+  DrawnAssertion: { drawn: ["label", "grading"], checked: ["provenance_class"], left: ["item_id", "asserted_by", "board_id", "case_id", "original_grading", "source_note", "source_document", "icon"] },
   Grading: { drawn: ["scheme", "source", "intelligence", "handling"], checked: [], left: [] },
   Handling: { drawn: ["classification"], checked: [], left: ["handling_code", "action_code", "sanitisation_code", "originator", "owning_unit", "review_date", "legal_basis"] },
   LimitExceeded: { drawn: ["cap_kind", "cap", "would_be", "options"], checked: ["error"], left: [] },
@@ -171,10 +174,10 @@ function gradingOf(body: unknown): Grade | undefined {
   return { scheme, source, intelligence, handling };
 }
 
+/** What the page keeps of an assertion: its label and its grade. Its source is checked and not kept. */
 interface Assertion {
   label: string;
   grading: Grade;
-  source_note: string | null;
 }
 
 function assertionOf(body: unknown): Assertion | undefined {
@@ -185,9 +188,8 @@ function assertionOf(body: unknown): Assertion | undefined {
   if (!isFilled(label) || grade === undefined || !(original_grading === null || gradingOf(original_grading) !== undefined)) return undefined;
   if (!isTextOrNull(source_note) || !isTextOrNull(source_document) || !isTextOrNull(icon)) return undefined;
   // A drawn item has a source note, a document of the case, or both; never neither (`DrawnAssertion._has_a_source`).
-  const noted = isText(source_note) && source_note.trim() !== "";
-  if (!noted && !isFilled(source_document)) return undefined;
-  return { label, grading: grade, source_note: noted ? (source_note as string) : null };
+  if (!(isText(source_note) && source_note.trim() !== "") && !isFilled(source_document)) return undefined;
+  return { label, grading: grade };
 }
 
 /** A provenance, with its assertion when it carries one; `undefined` when it is not one. */
@@ -307,9 +309,6 @@ function linkLabel(edge: EdgeRead): string {
 
 /** A grade as the React board writes it: source, intelligence and handling, then the scheme. */
 const gradeSaid = (g: Grade): string => `${g.source}${g.intelligence}${g.handling} (${g.scheme})`;
-/** A source note as written. A source document is never said, not even by its kind: the route sends its identifier to every reader of
- * the board, whether or not they may read the document (a question in the slice's report, rule 3). */
-const noteSaid = (d: Assertion): string => d.source_note ?? BOARDS_WORDS.noNote;
 
 export interface BoardRow {
   href: string;
@@ -340,12 +339,11 @@ export function listView(caseId: string, body: unknown): ListView | undefined {
   };
 }
 
+/** A row of the drawn table or the links table: its row header, then its other cells in the order of the table's columns
+ * (`BOARDS_WORDS.drawnColumns`, `linkColumns`). What a row holds is decided here alone; the template writes each cell it is given. */
 export interface DrawnRow {
   label: string;
-  type: string;
-  marking: string;
-  grading: string;
-  note: string;
+  cells: string[];
 }
 
 export interface LoadedRow {
@@ -356,13 +354,7 @@ export interface LoadedRow {
 
 export interface LinkRow {
   label: string;
-  type: string;
-  from: string;
-  to: string;
-  drawn: boolean;
-  marking: string;
-  grading: string;
-  note: string;
+  cells: string[];
 }
 
 export interface BoardView {
@@ -403,13 +395,14 @@ export function boardView(caseId: string, boardId: string, body: unknown): Board
     if (from === undefined || to === undefined) return undefined;
     links.push({
       label: linkLabel(edge),
-      type: edge.type,
-      from: itemLabel(from),
-      to: itemLabel(to),
-      drawn: edge.drawn !== undefined,
-      marking: edge.marking,
-      grading: edge.drawn ? gradeSaid(edge.drawn.grading) : BOARDS_WORDS.notGraded,
-      note: edge.drawn ? noteSaid(edge.drawn) : BOARDS_WORDS.loadedSource,
+      cells: [
+        edge.type,
+        itemLabel(from),
+        itemLabel(to),
+        edge.drawn ? BOARDS_WORDS.drawn : BOARDS_WORDS.loaded,
+        edge.marking,
+        edge.drawn ? gradeSaid(edge.drawn.grading) : BOARDS_WORDS.notGraded,
+      ],
     });
   }
   return {
@@ -423,7 +416,7 @@ export function boardView(caseId: string, boardId: string, body: unknown): Board
       .filter((node) => drawnIds.has(node.id))
       .map((node) => {
         const d = node.drawn as Assertion;
-        return { label: d.label, type: node.type, marking: node.marking, grading: gradeSaid(d.grading), note: noteSaid(d) };
+        return { label: d.label, cells: [node.type, node.marking, gradeSaid(d.grading)] };
       }),
     loaded: nodesRead.filter((node) => !drawnIds.has(node.id)).map((node) => ({ label: itemLabel(node), type: node.type, marking: node.marking })),
     links,
