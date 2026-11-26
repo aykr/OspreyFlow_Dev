@@ -30,7 +30,11 @@ function walk(dir: string, out: string[] = []): string[] {
   return out;
 }
 
-const files = SCANNED.flatMap((d) => walk(join(WORKSPACE, d))).map((p) => relative(WORKSPACE, p));
+// This file is left out of the scan: its third case holds the stale shapes as strings, on purpose.
+const SELF = relative(WORKSPACE, new URL(import.meta.url).pathname);
+const files = SCANNED.flatMap((d) => walk(join(WORKSPACE, d)))
+  .map((p) => relative(WORKSPACE, p))
+  .filter((f) => f !== SELF);
 
 describe("the delta client has one home, the shared package", () => {
   it("leaves no copy of the client or its unit tests in the workspace, only the integration test", () => {
