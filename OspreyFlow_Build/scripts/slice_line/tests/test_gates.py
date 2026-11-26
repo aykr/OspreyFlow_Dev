@@ -26,6 +26,26 @@ SYSPY = "/usr/bin/python3"
 #: module takes it from here, and the scripts in the throwaway repository read it too (TODAY_IN_THE_COPY): the real
 #: line's scripts are unchanged and always read the clock.
 TODAY = time.strftime("%Y-%m-%d", time.gmtime())
+#: The owner's files a test world needs, from the v062 folder.
+OWNER_WORLD_FILES = ("dial.yaml", "accounts.yaml", "live_step.yaml")
+
+
+def committed_owner_file(name: str, line_dir: Path = SRC) -> str:
+    """The owner's file `name` (process/lanes/v062) as the checkout's HEAD commits it, never the working copy: the
+    owner keeps local edits to these files (the apply of 55, 26 November 2026: an all-default accounts.yaml in the
+    main checkout turned 16 cases red, the worlds having copied it)."""
+    top = Path(subprocess.run(["git", "-C", str(line_dir), "rev-parse", "--show-toplevel"], capture_output=True,
+                              text=True, check=True).stdout.strip())
+    rel = (line_dir.parents[1] / "process/lanes/v062" / name).resolve().relative_to(top.resolve())
+    p = subprocess.run(["git", "-C", str(top), "show", f"HEAD:{rel.as_posix()}"], capture_output=True, text=True)
+    if p.returncode != 0:
+        raise AssertionError(f"{rel} is not committed at HEAD: a test world takes the owner's files as committed only")
+    return p.stdout
+
+
+def owner_files_into(dest: Path, line_dir: Path = SRC) -> None:
+    for name in OWNER_WORLD_FILES:
+        (dest / name).write_text(committed_owner_file(name, line_dir))
 TODAY_REAL = '''def today() -> str:
     return time.strftime("%Y-%m-%d", time.gmtime())'''
 TODAY_IN_THE_COPY = '''def today() -> str:
@@ -161,10 +181,7 @@ def world(tmp_path):
     day.write_text(day.read_text().replace(TODAY_REAL, TODAY_IN_THE_COPY))
     v062 = repo / "OspreyFlow_Build/process/lanes/v062"
     v062.mkdir(parents=True)
-    real = SRC.parents[1] / "process/lanes/v062"
-    shutil.copy(real / "dial.yaml", v062 / "dial.yaml")
-    shutil.copy(real / "accounts.yaml", v062 / "accounts.yaml")
-    shutil.copy(real / "live_step.yaml", v062 / "live_step.yaml")
+    owner_files_into(v062)  # as committed, never the owner's working copies
     (v062 / "slices.tsv").write_text(
         "id\tbuild\twhat\tafter\ttrack\tbranch\tenv\tacceptance_files\tacceptance\tchecks\n"
         "S1\tCO1\tA test slice\t-\t1\t-\tnone\taccept.sh\tsh accept.sh\ttrue\n"
@@ -727,7 +744,7 @@ def test_a_signed_out_account_starts_nothing(world):
 
 
 def test_the_accounts_file_holds_names_only():
-    text = (SRC.parents[1] / "process/lanes/v062/accounts.yaml").read_text()
+    text = committed_owner_file("accounts.yaml")
     assert "@" not in text and "sk-" not in text and "token:" not in text
 
 
@@ -932,7 +949,7 @@ def lease_calls(calls):
 
 def test_the_committed_live_step_is_off():
     import yaml
-    data = yaml.safe_load((SRC.parents[1] / "process/lanes/v062/live_step.yaml").read_text())
+    data = yaml.safe_load(committed_owner_file("live_step.yaml"))
     assert data["live_step"] is False
 
 
