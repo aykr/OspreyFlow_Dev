@@ -5,8 +5,8 @@
  *   GET  /cases              the cases the reader holds a level on (`GET /v1/investigations`), as a table
  *   GET  /cases?case=<id>    one case: `GET /v1/investigations/{id}`, then its brief, then the list (for the reader's level and its datasets)
  *
- * One page with the case in its query, not `/cases/{case_id}`: a page's path is a plain path and one page is one row in a tree
- * (`pages.ts`, decision 6), so the owner's ruled address is a question in the slice's report, as GR4a's was.
+ * One page with the case in its query, not `/cases/{case_id}` (the owner's ruling of 26 November 2026: the query form, as GR4a's page
+ * has): a page's path is a plain path and one page is one row in a tree (`pages.ts`, decision 6).
  *
  * It reads through the same door a script's call takes (`conduit.ts`), as the person, with their bearer and nothing of the browser's.
  * The Conduit authorises every read (rules 3 and 4): this page checks no level or right of its own, filters nothing after the answer and
