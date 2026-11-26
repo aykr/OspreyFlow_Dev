@@ -19,7 +19,7 @@ import { inflateSync } from "node:zlib";
 import { expect, test } from "@playwright/test";
 import type { Page, Worker } from "@playwright/test";
 
-import { COLOURS, RASTER_OPACITY, startMapServer } from "./mapServer.js";
+import { COLOURS, RASTER_OPACITY, THIRD_ORIGIN, startMapServer } from "./mapServer.js";
 import type { MapServer, PageRequest, PolicyPlant, Served } from "./mapServer.js";
 
 interface Violation {
@@ -47,6 +47,8 @@ interface Run {
   tileReads: number;
   drawn: { water: number; landcover: number; raster: number };
   policy: { builder: string; sent: string; received: string };
+  /** The policy on each response that served the worker file, as the builder made it and as it went out. */
+  workerPolicies: { builder: string; sent: string }[];
   workers: string[];
   /** Every request the page's own origin answered for this page. */
   served: Served[];
@@ -107,6 +109,7 @@ async function openMap(page: Page, browser: string, request: PageRequest): Promi
   const servedBefore = server.served.length;
   const elsewhereBefore = server.reachedElsewhere.length;
   const policiesBefore = server.policies.length;
+  const workerPoliciesBefore = server.workerPolicies.length;
   const outside: string[] = [];
   const consoleRefusals: string[] = [];
   const pageErrors: string[] = [];
@@ -187,6 +190,8 @@ async function openMap(page: Page, browser: string, request: PageRequest): Promi
     } while (Date.now() < until);
   }
   await page.waitForTimeout(250);
+  // The exception for Playwright's own screenshot style ends with the screenshots.
+  phase = "after";
   const policy = server.policies[policiesBefore] ?? { builder: "", sent: "" };
   return {
     browser,
@@ -205,6 +210,7 @@ async function openMap(page: Page, browser: string, request: PageRequest): Promi
       .length,
     drawn,
     policy: { ...policy, received },
+    workerPolicies: server.workerPolicies.slice(workerPoliciesBefore),
     workers: workers.map((w) => w.url()),
     served: server.served.slice(servedBefore),
   };
@@ -313,6 +319,11 @@ function failures(run: Run): string[] {
   for (const text of run.consoleRefusals) if (!isPlaywrightsOwn(text)) out.push(`refused, on the console: ${text}`);
   for (const url of new Set([...run.outside, ...run.reachedElsewhere])) out.push(`request to another origin: ${url}`);
   if (run.policy.received !== run.policy.builder) out.push(`the policy sent is not the builder's own: ${run.policy.received}`);
+  // A dedicated worker obeys the policy on its own script's response, not its page's (measured: the "page alone" case below).
+  for (const w of run.workerPolicies) {
+    if (!w.builder) out.push("the worker's script was served with no policy");
+    else if (w.sent !== w.builder) out.push(`the worker's policy is not the builder's own: ${w.sent}`);
+  }
   if (!run.loaded) out.push("the map never reached load");
   if (!run.idle) out.push("the map never reached idle");
   if (run.tileReads === 0) out.push("no tile block was read from the archive");
@@ -402,6 +413,7 @@ test("planted: the archive answered whole, ignoring Range (as a forwarder withou
   const found = failures(run);
   // The readiness check is not only `load` and `idle`: the map reaches both and draws nothing from the archive.
   expect(run.loaded && run.idle, "the map should still reach load and idle").toBe(true);
+  // (Counted from 206 answers only, so "no tile block was read" is true of a 200 by construction; the picture carries the case.)
   expect(found).toContain("no tile block was read from the archive");
   expect(found).toContainEqual(expect.stringMatching(/^no water drawn from the archive's tiles/));
   expect(found).toContainEqual(expect.stringMatching(/^no land cover drawn from the archive's tiles/));
@@ -413,7 +425,10 @@ test("planted: the page sends a policy of its own (img-src *), not the builder's
   const run = await openMap(page, browserName, { ...FULL, plant: setDirective("img-src", "*") });
   record("img-src *", run);
   // Nothing in the map notices a weaker policy, so only the comparison with the builder's own output can.
-  expect(failures(run)).toEqual([expect.stringMatching(/^the policy sent is not the builder's own: .*img-src \*/)]);
+  const found = failures(run);
+  expect(found[0]).toMatch(/^the policy sent is not the builder's own: .*img-src \*/);
+  // The worker's response carries the plant too, and is named for it; nothing else is.
+  expect(found.slice(1).every((f) => /^the worker's policy is not the builder's own: .*img-src \*/.test(f))).toBe(true);
 });
 
 test("planted: worker-src taken out of the policy: the worker still runs, under script-src 'self' (the fallback)", async ({ page, browserName }) => {
@@ -422,7 +437,9 @@ test("planted: worker-src taken out of the policy: the worker still runs, under 
   // browser that stopped falling back would show here.
   const run = await openMap(page, browserName, { ...FULL, plant: dropDirective("worker-src") });
   record("worker-src dropped", run);
-  expect(failures(run)).toEqual([expect.stringMatching(/^the policy sent is not the builder's own: /)]);
+  const found = failures(run);
+  expect(found[0]).toMatch(/^the policy sent is not the builder's own: /);
+  expect(found.slice(1).every((f) => f.startsWith("the worker's policy is not the builder's own: "))).toBe(true);
   expect(run.policy.received).not.toMatch(/worker-src/);
 });
 
@@ -471,6 +488,38 @@ test("planted: connect-src widened to the other origin on every response, and a 
   expect(run.violations, "the widened policy refuses nothing").toEqual([]);
   expect(run.reachedElsewhere.length, "the other origin's own server saw the tile requests").toBeGreaterThan(0);
   expect(failures(run)).toContainEqual(expect.stringMatching(elsewherePath("/tiles/")));
+  // And the browser's own witness saw them, apart from the other origin's server: a vector tile is fetched in the worker.
+  expect(run.outside.some((u) => u.startsWith(`${server.elsewhere}/tiles/`)), "the browser's request record missed the worker's tile requests").toBe(true);
+});
+
+test("planted: connect-src widened to a third origin no server answers, and a style that asks it for a tile: only the browser's witness can name it", async ({ page, browserName }) => {
+  // A real leak (a public tile host) reaches no server of this test's, so (b)'s browser half must see it alone. The spec's
+  // route aborts the request, so nothing leaves the machine.
+  const run = await openMap(page, browserName, {
+    ...FULL,
+    style: "tile-third",
+    plant: (policy, origins) => setDirective("connect-src", `'self' ${THIRD_ORIGIN}`)(policy, origins),
+  });
+  record("connect-src widened, tile at a third origin", run);
+  expect(run.violations, "the widened policy refuses nothing").toEqual([]);
+  expect(run.reachedElsewhere).toEqual([]);
+  expect(failures(run)).toContainEqual(expect.stringMatching(new RegExp(`^request to another origin: ${THIRD_ORIGIN.replace(/[.]/g, "\\.")}/tiles/`)));
+});
+
+test("planted: connect-src widened on the page's own response alone: the worker still refuses the outside tile, under its own policy", async ({ page, browserName }) => {
+  // Finding 2, kept as a case: what governs a worker's fetch is the policy on the worker script's response.
+  const run = await openMap(page, browserName, {
+    ...FULL,
+    style: "tile-elsewhere",
+    plantScope: "page",
+    plant: (policy, origins) => setDirective("connect-src", `'self' ${origins.elsewhere}`)(policy, origins),
+  });
+  record("connect-src widened on the page alone", run);
+  expect(run.policy.received).toContain(`connect-src 'self' ${server.elsewhere}`);
+  expect(run.workerPolicies.length).toBeGreaterThan(0);
+  for (const w of run.workerPolicies) expect(w.sent, "the worker's own policy").toBe(w.builder);
+  expect(failures(run)).toContainEqual(expect.stringMatching(refusedElsewhere("connect-src", "/tiles/", "worker")));
+  expect(run.reachedElsewhere).toEqual([]);
 });
 
 test("planted: a browser without createImageBitmap: the image fallback asks for img-src blob:, refused (the only path that needs it)", async ({ page, browserName }) => {
@@ -501,7 +550,12 @@ test("planted: a page that adds a <style> element while it loads: refused and co
   });
   const run = await openMap(page, browserName, FULL);
   record("page adds a <style>", run);
-  expect(failures(run)).toContainEqual(expect.stringMatching(/^(policy violation: style-src refused inline in the document|refused, on the console: \[load, document\] .*style)/));
+  // The violation event, in both browsers; and in WebKit the console line too, word for word the text the screenshot's
+  // exception lets past, counted here because it arrives while the page loads.
+  expect(failures(run)).toContain("policy violation: style-src-elem refused inline in the document");
+  if (browserName === "webkit") {
+    expect(failures(run)).toContainEqual(expect.stringMatching(/^refused, on the console: \[load, document\] Refused to apply a stylesheet because its hash, its nonce, or 'unsafe-inline'/));
+  }
 });
 
 // --------------------------------------------------------------------------------------------- the directive table
@@ -532,12 +586,31 @@ for (const [directive, needed] of Object.entries(NEEDED)) {
   test(`the directive table: ${directive} 'none' ${needed ? "is refused by name" : "changes nothing"}`, async ({ page, browserName }) => {
     const run = await openMap(page, browserName, { ...FULL, plant: setDirective(directive, "'none'") });
     record(`${directive} 'none'`, run);
-    const others = failures(run).filter((f) => !f.startsWith("the policy sent is not the builder's own"));
+    // The plant reached the browser: the page's policy and the worker's both carry it.
+    expect(run.policy.received.split(";")).toContain(`${directive} 'none'`);
+    for (const w of run.workerPolicies) expect(w.sent.split(";")).toContain(`${directive} 'none'`);
+    expect(failures(run)).toContainEqual(expect.stringMatching(/^the policy sent is not the builder's own: /));
+    const others = failures(run).filter((f) => !f.startsWith("the policy sent is not the builder's own") && !f.startsWith("the worker's policy is not"));
     if (needed) {
       expect(directivesRefused(run)).toEqual([directive]);
+      if (directive === "style-src") {
+        // The stylesheet is refused and the map still draws every layer.
+        expect(others.filter((f) => /^no |never reached/.test(f))).toEqual([]);
+      }
     } else {
       expect(others, `${directive} 'none' changed the map`).toEqual([]);
     }
   });
 }
 
+
+test("the directive table: script-src with the nonce alone (no 'self')", async ({ page, browserName }) => {
+  // What `script-src 'self'` is for, beyond the nonce the page's script tag carries: measured, not assumed.
+  const run = await openMap(page, browserName, {
+    ...FULL,
+    plant: (policy, origins) => setDirective("script-src", /script-src[^;]*('nonce-[^']+')/.exec(policy)![1]!)(policy, origins),
+  });
+  record("script-src nonce only", run);
+  console.log(`SCRIPT-NONCE-ONLY [${browserName}] ${JSON.stringify(failures(run).filter((f) => !f.startsWith("the policy sent") && !f.startsWith("the worker's policy")))}`);
+  expect(run.policy.received).not.toMatch(/script-src 'self'/);
+});

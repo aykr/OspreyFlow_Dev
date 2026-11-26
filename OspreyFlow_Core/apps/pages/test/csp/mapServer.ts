@@ -54,7 +54,10 @@ export const FONT_STACK = "Synthetic Sans";
 // ---------------------------------------------------------------------------------------------------------------- the cases
 
 /** Which style the page is given. Every one but `full` is a planted fault (rule 15), each the shape a real style file takes. */
-export type StyleCase = "full" | "tile-elsewhere" | "glyphs-elsewhere" | "sprite-elsewhere" | "raster-elsewhere";
+export type StyleCase = "full" | "tile-elsewhere" | "tile-third" | "glyphs-elsewhere" | "sprite-elsewhere" | "raster-elsewhere";
+
+/** A third origin no server answers: only the browser's own witnesses can see a request to it (the spec's route aborts it). */
+export const THIRD_ORIGIN = "http://third-origin.test";
 /** Where the page's worker is: the page's own origin (as `maplibreWorker.ts` does), or another origin (a planted fault). */
 export type WorkerCase = "self" | "elsewhere";
 /** How the archive is answered: by range (as the Conduit's ranged route answers it), or whole, ignoring `Range`. */
@@ -70,6 +73,8 @@ export interface PageRequest {
   archive: ArchiveCase;
   /** A planted change to the policy, if any (rule 15). */
   plant?: PolicyPlant;
+  /** Where the plant applies: every response while the page is open (the default), or the page's own response alone. */
+  plantScope?: "all" | "page";
 }
 
 export interface Served {
@@ -90,6 +95,8 @@ export interface MapServer {
   reachedElsewhere: Served[];
   /** For each page served, the policy the builder made for it and the policy that went out (they differ only under a plant). */
   policies: { builder: string; sent: string }[];
+  /** The same for every response that served MapLibre's worker file: a dedicated worker obeys its own script's policy. */
+  workerPolicies: { builder: string; sent: string }[];
   /** The offset in the archive at which tile data starts: a read at or past it is a tile, not the header or the directory. */
   tileDataOffset: number;
   close(): Promise<void>;
@@ -191,9 +198,10 @@ function styleFor(kind: StyleCase, self: string, elsewhere: string, archive: Buf
     },
     { id: "place", type: "symbol", source: "places", layout: { "icon-image": "dot", "icon-allow-overlap": true } },
   ];
-  if (kind === "tile-elsewhere") {
+  if (kind === "tile-elsewhere" || kind === "tile-third") {
     // A vector source as a real style file names one: a `tiles` template on another origin (fetched in the worker).
-    sources["elsewhere"] = { type: "vector", tiles: [at(elsewhere, "/tiles/{z}/{x}/{y}.pbf")], maxzoom: 14 };
+    const base = kind === "tile-third" ? THIRD_ORIGIN : elsewhere;
+    sources["elsewhere"] = { type: "vector", tiles: [at(base, "/tiles/{z}/{x}/{y}.pbf")], maxzoom: 14 };
     layers.push({ id: "elsewhere-water", type: "fill", source: "elsewhere", "source-layer": "water", paint: { "fill-color": COLOURS.water } });
   }
   return {
@@ -305,6 +313,7 @@ export async function startMapServer(): Promise<MapServer> {
   const served: Served[] = [];
   const reachedElsewhere: Served[] = [];
   const policies: { builder: string; sent: string }[] = [];
+  const workerPolicies: { builder: string; sent: string }[] = [];
   const requests = new Map<string, PageRequest>();
   let archiveCase: ArchiveCase = "ranged";
   let current: PageRequest | undefined;
@@ -347,8 +356,12 @@ export async function startMapServer(): Promise<MapServer> {
     if (req.path === "/map") current = key === undefined ? undefined : requests.get(key);
     const pageRequest = current;
     const builder = String(res.getHeader("Content-Security-Policy") ?? "");
-    if (pageRequest?.plant) res.setHeader("Content-Security-Policy", pageRequest.plant(builder, origins));
-    if (req.path === "/map") policies.push({ builder, sent: String(res.getHeader("Content-Security-Policy") ?? "") });
+    if (pageRequest?.plant && (pageRequest.plantScope !== "page" || req.path === "/map")) {
+      res.setHeader("Content-Security-Policy", pageRequest.plant(builder, origins));
+    }
+    const sent = String(res.getHeader("Content-Security-Policy") ?? "");
+    if (req.path === "/map") policies.push({ builder, sent });
+    if (/\/maplibre-gl-worker-[A-Z0-9]{8}\.js$/.test(req.path)) workerPolicies.push({ builder, sent });
     next();
   });
   // The real assets handler, after the headers, as `server/app.ts:227` mounts it.
@@ -412,6 +425,7 @@ export async function startMapServer(): Promise<MapServer> {
     served,
     reachedElsewhere,
     policies,
+    workerPolicies,
     tileDataOffset,
     pageUrl(request) {
       const key = `p${++counter}`;
