@@ -7,12 +7,18 @@ OUT = REPO / "OspreyFlow_Build/process/lanes/v062/away/WS4a_diffs"
 OUT.mkdir(parents=True, exist_ok=True)
 
 
+#: Each file's text after the diffs made so far: a later diff of the same file applies on top of the earlier ones (I20's
+#: first, then the comparison's), so the owner applies them in the order they were made.
+APPLIED: dict[str, str] = {}
+
+
 def diff(rel: str, name: str, subs: list[tuple[str, str]]) -> None:
-    before = (REPO / rel).read_text()
+    before = APPLIED.get(rel) or (REPO / rel).read_text()
     after = before
     for old, new in subs:
         assert after.count(old) == 1, (rel, old)
         after = after.replace(old, new)
+    APPLIED[rel] = after
     text = "".join(difflib.unified_diff(before.splitlines(True), after.splitlines(True), f"a/{rel}", f"b/{rel}"))
     (OUT / f"{name}.diff").write_text(text)
 
@@ -67,5 +73,23 @@ diff("OspreyFlow_Build/scripts/publish_user_repo_update.sh", "I20_PUBLISH", [
      "(cd \"$ROOT/ospreyflow/OspreyFlow_Core\" && node scripts/same_drawing_versions_check.mjs . --release) \\\n"
      "  || { echo \"STOP: the version window is open, or the front ends differ (above); nothing was published.\" >&2; exit 1; }\n"
      "make -C \"$ROOT/ospreyflow/OspreyFlow_Build\" publish-user-repo"),
+])
+# The canvas-look comparison's wiring (WS4a): its own step in CI's Glass job and its own Makefile target, written once
+# a CI run has shown it green on CI's runner (question 2 of the report).
+diff("OspreyFlow_Core/Makefile", "COMPARE_CORE_MAKEFILE", [
+    (" glass-perf glass-a11y glass-keyboard ", " glass-perf glass-a11y glass-keyboard glass-canvas-compare "),
+    ("glass-keyboard:\n\tnpm run test:keyboard --workspace apps/workspace\n",
+     "glass-keyboard:\n\tnpm run test:keyboard --workspace apps/workspace\n\n"
+     "# ADR-152 decision 9: the canvas-look comparison WS4 is held to (`apps/workspace/keyboard/canvas-compare.spec.ts`),\n"
+     "# each scene's whole canvas against its reference within one pixel tolerance. Its references belong to one WebGL\n"
+     "# renderer (`keyboard/canvas-compare/REFERENCES.json`); on another it says so and fails.\n"
+     "glass-canvas-compare:\n\tnpm run test:canvas-compare --workspace apps/workspace\n"),
+])
+diff(".github/workflows/ci.yml", "COMPARE_CI", [
+    ("      - run: npm run test:keyboard --workspace apps/workspace\n",
+     "      - run: npm run test:keyboard --workspace apps/workspace\n"
+     "      # ADR-152 decision 9: the canvas-look comparison (WS4a). Its references were made with SwiftShader; this step\n"
+     "      # is added once a run here has shown it green (or the references are made here, the owner's choice).\n"
+     "      - run: npm run test:canvas-compare --workspace apps/workspace\n"),
 ])
 print("written", sorted(p.name for p in OUT.iterdir()))
