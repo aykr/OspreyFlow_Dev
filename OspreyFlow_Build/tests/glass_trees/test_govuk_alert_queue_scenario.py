@@ -280,8 +280,14 @@ def route_claim_problems(data: dict[str, Any]) -> list[str]:
                 found.append(f"scenario AQ says the {ROW} row's route is {ROUTE}, and FUNCTIONS.yaml's row says it is empty ({sentence.strip()[:80]!r})")
             elif "empty" not in sentence:
                 found.append(f"scenario AQ speaks of the {ROW} row's route without saying it is empty, which FUNCTIONS.yaml's row says ({sentence.strip()[:80]!r})")
-    elif not any(row["route"] in sentence for sentence in sentences):
-        found.append(f"FUNCTIONS.yaml's {ROW} row has the route {row['route']!r} and scenario AQ does not name it")
+    else:
+        found += [
+            f"scenario AQ says the {ROW} row's route is empty, and FUNCTIONS.yaml's row has the route {row['route']!r} ({sentence.strip()[:80]!r})"
+            for sentence in sentences
+            if "empty" in sentence
+        ]
+        if not any(row["route"] in sentence for sentence in sentences):
+            found.append(f"FUNCTIONS.yaml's {ROW} row has the route {row['route']!r} and scenario AQ does not name it")
     return found
 
 
@@ -517,7 +523,7 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
         route_claim_problems,
         "without saying it is empty",
     ),
-    ("the row given the route while the scenario says it is empty", _row(ROW, route=ROUTE), route_claim_problems, "says it is empty"),
+    ("the row given the route while the scenario says it is empty", _row(ROW, route=ROUTE), route_claim_problems, "row's route is empty"),
     ("the scenario silent on the row's route", _in_section_all("row's route", "row's way"), route_claim_problems, "says nothing of"),
     ("the row on the wrong slice", _row(ROW, slice="R7"), function_problems, "RM1"),
     ("the row that lost a scenario of its other halves", _row(ROW, scenario="AQ1, AQ2, AQ3, AQ4, AQ5, AQ6, AQ7, AQ8, AQ9, AQ10, AQ11"), function_problems, "B12"),
