@@ -1,0 +1,18 @@
+--- the diff applied: pytest exit 0
+9 passed in 2.53s
+--- planted: window_refusal()'s call removed from main(): pytest exit 1
+E       AssertionError: assert 0 == 1
+E        +  where 0 = <function main at 0x1070cd3a0>(['--dry-run', '--tag', 'v9.9.9', '--out', '/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2230/test_release_loca
+E        +    where <function main at 0x1070cd3a0> = release_local.main
+FAILED ../OspreyFlow_Build/tests/test_release_owed.py::test_release_local_refuses_before_building_anything_while_the_version_window_lists_anything
+1 failed, 8 passed in 2.66s
+--- planted: window_refusal() refuses whatever the window holds: pytest exit 1
+E       AssertionError: assert 'no release while apps/pages/VERSION_WINDOW.yaml lists anything' in 'release_local: refusing — the version window is open:\nplanted: refused whatever the window holds\n'
+E       AssertionError: assert 1 == 0
+E        +  where 1 = <function main at 0x1103cd3a0>(['--dry-run', '--tag', 'v9.9.9', '--out', '/private/var/folders/wn/c2zljmgj4519j0tc44kq9z5h0000gp/T/pytest-of-ayankar/pytest-2232/test_release_loca
+E        +    where <function main at 0x1103cd3a0> = release_local.main
+FAILED ../OspreyFlow_Build/tests/test_release_owed.py::test_release_local_refuses_before_building_anything_while_the_version_window_lists_anything
+FAILED ../OspreyFlow_Build/tests/test_release_owed.py::test_release_local_goes_on_while_the_version_window_is_empty
+2 failed, 7 passed in 2.16s
+--- restored: pytest exit 0
+9 passed in 2.11s

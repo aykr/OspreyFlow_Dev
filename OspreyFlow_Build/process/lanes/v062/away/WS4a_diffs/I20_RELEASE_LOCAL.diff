@@ -41,3 +41,81 @@
      args.out.mkdir(parents=True, exist_ok=True)
      print(f"release_local: the product's release of {args.tag}, from commit {sha}, short of the push")
      _run([sys.executable, "-m", "scripts.changelog_check", "--tag", args.tag,
+--- a/OspreyFlow_Build/tests/test_release_owed.py
++++ b/OspreyFlow_Build/tests/test_release_owed.py
+@@ -7,6 +7,11 @@
+ `OspreyFlow_Build/tools/release_local.py` before it builds anything, and
+ `OspreyFlow_Build/scripts/publish_user_repo_update.sh` before it exports the product. The line's own records sit in
+ `OSPREY_SLICE_HOME`, a temporary folder here.
++
++And no release while the version window is open (ADR-002 Amendment 1, item 3; ADR-152 I20; slice WS4a): the two
++`*_version_window_*` cases run the real check, `scripts/same_drawing_versions_check.mjs --release`, over a copy of the
++real lockfile and a window file of their own, so they hold whether or not the checkout's own window is open. The first
++fails if `main()` stops asking `window_refusal()`.
+ """
+ 
+ from __future__ import annotations
+@@ -70,7 +75,62 @@
+     assert check is not None and 0 < check.start() < export
+ 
+ 
+-COMMIT = "555c6b78ea45e6005aa39730b25610a797aabd34"
++def _window_root(tmp_path: Path, listed: bool) -> Path:
++    """A product root holding what the window check reads: the real lockfile and a window file. `listed`: `apps/pages`
++    pins Sigma 4.0.6 exactly, nested under it as npm writes such a pin, and the window lists that difference, so the
++    merge check passes and only a release is refused. Not listed: the lockfile as it is, with `windows: []`."""
++    lock = json.loads((release_local.REPO_ROOT / "package-lock.json").read_text(encoding="utf-8"))
++    window = "windows: []\n"
++    if listed:
++        workspace = lock["packages"]["node_modules/sigma"]["version"]
++        lock["packages"]["apps/pages"].setdefault("devDependencies", {})["sigma"] = "4.0.6"
++        lock["packages"]["apps/pages/node_modules/sigma"] = {"version": "4.0.6", "dev": True, "license": "MIT"}
++        window = (f"windows:\n  - package: sigma\n    apps/workspace: {workspace}\n    apps/pages: 4.0.6\n"
++                  "    opened: 2026-11-26\n")  # fmt: skip
++    root = tmp_path / "product"
++    (root / "apps/pages").mkdir(parents=True)
++    (root / "package-lock.json").write_text(json.dumps(lock), encoding="utf-8")
++    (root / "apps/pages/VERSION_WINDOW.yaml").write_text(window, encoding="utf-8")
++    return root
++
++
++def _past_the_other_refusals(monkeypatch: pytest.MonkeyPatch, root: Path) -> list[object]:
++    """`main()` with GitHub green and the register settled (each has its own cases), reading `root`, and with
++    everything that builds, pulls or packs recorded rather than run."""
++    monkeypatch.setattr(release_local, "git_sha", lambda: COMMIT)
++    monkeypatch.setattr(release_local, "green_refusal", lambda sha: None)
++    monkeypatch.setattr(release_local, "register_refusal", lambda: None)
++    monkeypatch.setattr(release_local, "REPO_ROOT", root)
++    ran: list[object] = []
++    monkeypatch.setattr(release_local, "_run", lambda *a, **k: ran.append(a))
++    monkeypatch.setattr(release_local, "build_and_scan", lambda *a, **k: ran.append(a) or [])
++    monkeypatch.setattr(release_local, "lock", lambda *a, **k: ran.append(a))
++    return ran
++
++
++def test_release_local_refuses_before_building_anything_while_the_version_window_lists_anything(
++    line: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
++) -> None:
++    ran = _past_the_other_refusals(monkeypatch, _window_root(tmp_path, listed=True))
++    assert release_local.main(["--dry-run", "--tag", "v9.9.9", "--out", str(line / "out")]) == 1
++    assert ran == []
++    assert not (line / "out").exists()
++    err = capsys.readouterr().err
++    assert "the version window is open" in err
++    assert "no release while apps/pages/VERSION_WINDOW.yaml lists anything" in err
++    assert "sigma (" in err and "4.0.6 in apps/pages, opened 2026-11-26)" in err
++
++
++def test_release_local_goes_on_while_the_version_window_is_empty(
++    line: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
++) -> None:
++    ran = _past_the_other_refusals(monkeypatch, _window_root(tmp_path, listed=False))
++    assert release_local.main(["--dry-run", "--tag", "v9.9.9", "--out", str(line / "out")]) == 0
++    assert ran != []
++    assert "refusing" not in capsys.readouterr().err
++
++
++COMMIT ="555c6b78ea45e6005aa39730b25610a797aabd34"
+ 
+ 
+ def _gh(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, runs: list[dict]) -> None:
