@@ -12,5 +12,6 @@ From the round-10 verifier's record (tip `c59d809b13`). Security findings, the o
 **Added 26 November 2026, 10:05 UTC (the conductor), after the stop at `7f414ca`:** your two reds were the line's. (1) The
 scan row for `tests/harness/test_gateway_token_reader_role.py` is now on main (`scan_rows/AD1c.tsv`, `41ed4f1`).
 (2) `scans` names `tests/services/api/test_case_report_stand_ins.py`, which is on main (SE8f) but not in your branch.
-**First merge main into your branch (the line's instruction; keep both sides, change nothing else), then rerun your
-checks.** Rows 1 to 3 stand as built; finish them if any is not done.
+**First merge `042c882` (SE8f's merge on main) into your branch, not main's tip (the line's instruction, 10:40 UTC:
+main's tip is red on `test_doc_citations_check.py` from a line hand-back, being fixed; keep both sides, change nothing
+else), then rerun your checks.** Rows 1 to 3 stand as built; finish them if any is not done.

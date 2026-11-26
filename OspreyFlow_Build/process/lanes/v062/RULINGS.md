@@ -3,6 +3,17 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 26 November 2026, about 10:35 UTC: the adviser's batch, all as recommended (the owner, in chat)
+
+- **Security:** GG4a drops its source column until GG4b. **GG4b is cut now as a security part (SE7c's shape):** every proposal (a); its ADR-143 amendment comes as a diff for the owner's approval before merge; never accepted narrower.
+- **GG2a:** carry on with Sigma 4; the owner's Mac measurement decides (the conductor gives the one command today). Q2 (a), the stricter first-frame end. Q3: the Mac's 800 ms alone for 0.7.0; a CI expansion gate goes to the backlog.
+- **The Matrix is GG2d's.** Decision 9: one exception, GG2c may merge before WS4b; all else waits. **Early starts:** GG3b, GA1a, and GG3a after GR1a; WS4a beside GG2a; not GG5b.
+- **Who made it** (GR1a Q2, GG4a Q2, GR1d Q4): left out for 0.7.0; names later via `display_names`, a backlog part.
+- GG3b Q6 (a): a browser-runnable type is a stop. GA1b: Editor (fix `ASK_MODEL`'s comment); Q3 (a): a front-proxy timeout under 16 minutes is a stop. GG2e Q2 (a): a parity line. GG5b Q4b: an ADR-152 Amendment 2 diff adding Noto Sans for map glyphs only. GG4c Q5 (a): unshare goes to the backlog.
+- **Live step:** a small part adds ClickHouse and Azurite (and Keycloak if needed) to its stack; line-fix makes it pay group by group after 61.
+- **Everything else (a):** GR1a Q3 to Q5; GG4a Q3, Q5, Q6 and Q7; every non-owner question in the 26 November drafts; the 25 November drafts with the 26th's corrections. AD4 after RL2. Draft PL8b.
+- **Order through the line:** SE8g, AD1c, GR1a (away branch), GG4a (away branch, source column dropped in its round), GG4b, WS4a, GG3b, GA1a, GG3a, GR1b, GG4c; GG2c and GR1e when their away rounds report. **Merges wait for 61** (the citation red).
+
 ## 26 November 2026, about 08:30 UTC: "applied" (the owner, in chat)
 
 Hand-backs 55 (`69852bf`), 56 (`db97a76`) and 57 (`d5d62a3`) are on main; starts and merges resume. **Until hand-back 61 is applied,** a merge refused at `slice-line-check` by the beat race counts as "refused by another test": the conductor reruns it, with no send-back.

@@ -40,7 +40,7 @@ GitHub's `conformance` job after the merge.**
 
 ## Checks
 
-The new guard test; `pytest --collect-only` on `test_reports.py` (it imports and collects); `test_doc_citations_check.py`;
+The new guard test; `pytest --collect-only` on `test_reports.py` (it imports and collects);
 `ruff check .`.
 
 ## Out of scope
