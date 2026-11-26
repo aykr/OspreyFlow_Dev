@@ -550,6 +550,9 @@ async function censusProblems(census: Census): Promise<string[]> {
 
 const viewOf = (body: unknown) => documentView(CASE, CENSUS_DOC.id, body);
 
+/** How long a census case may take (see each). */
+const CENSUS_LIMIT_MS = 20_000;
+
 // ------------------------------------------------------------------------------------------------ the cases
 
 describe("one document of a case in the reader, on the GOV.UK tree (scenario DR)", () => {
@@ -867,9 +870,10 @@ describe("one document of a case in the reader, on the GOV.UK tree (scenario DR)
     expect(headings(mainOf(ledger)).map((h) => h.level)).toEqual([1, 2, 2]);
   });
 
+  // A census starts one service world a field, and in the whole suite it runs beside the other pages' files: a limit of its own, not vitest's 5 s.
   it("DR17: every field of the two models is drawn or named as left out; a drawn field changes the page and a left-out one does not", async () => {
     expect(await censusProblems(CENSUS)).toEqual([]);
-  });
+  }, CENSUS_LIMIT_MS);
 
   it("DR18: the GOV.UK tree serves the page and the Default tree does not; the lists name it; its words are its own and British", async () => {
     const w = await world({ tree: "default" });
@@ -978,6 +982,7 @@ describe("one document of a case in the reader, on the GOV.UK tree (scenario DR)
       expect(scriptsOffProblems(raw)).not.toEqual([]);
     });
 
+    // A census starts one service world a field, and in the whole suite it runs beside the other pages' files: a limit of its own, not vitest's 5 s.
     it("DR19: the census fails for a left-out field claimed as drawn, and a drawn field claimed as left out", async () => {
       const moved = (model: keyof typeof CENSUS, field: string, to: "drawn" | "left"): Census => {
         const { drawn: d, left: l } = CENSUS[model];
@@ -988,7 +993,7 @@ describe("one document of a case in the reader, on the GOV.UK tree (scenario DR)
       expect(await censusProblems(moved("MessageSpan", "node_id", "drawn"))).toEqual(["MessageSpan.node_id is drawn but changes nothing"]);
       expect(await censusProblems(moved("MessageSpan", "provenance_state", "left"))).toEqual(["MessageSpan.provenance_state is left out but changes the page"]);
       expect(await censusProblems(moved("DocumentReaderView", "truncated", "left"))).toEqual(["DocumentReaderView.truncated is left out but changes the page"]);
-    });
+    }, CENSUS_LIMIT_MS);
 
     it("DR19: the source checks fail for a filter, a sort or a cut in the page's code", () => {
       const sources = sourcesOfThePage();

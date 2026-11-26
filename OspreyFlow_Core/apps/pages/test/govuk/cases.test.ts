@@ -477,6 +477,9 @@ async function censusProblems(census: Census): Promise<string[]> {
   return found;
 }
 
+/** How long a census case may take (see each). */
+const CENSUS_LIMIT_MS = 20_000;
+
 // ------------------------------------------------------------------------------------------------ the cases
 
 describe("the cases page on the GOV.UK tree (scenario CS)", () => {
@@ -711,9 +714,10 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
     }
   });
 
+  // A census starts one service world a field, and in the whole suite it runs beside the other pages' files: a limit of its own, not vitest's 5 s.
   it("CS11: every field of the five models is drawn or named as left out; a drawn field changes the page and a left-out one does not", async () => {
     expect(await censusProblems(CENSUS)).toEqual([]);
-  });
+  }, CENSUS_LIMIT_MS);
 
   it("CS12: both pages are whole in structure, read-only, and their stops come in order", async () => {
     const w = await world();
@@ -829,6 +833,7 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
       expect(lenient(b.list)).toBeDefined();
     });
 
+    // A census starts one service world a field, and in the whole suite it runs beside the other pages' files: a limit of its own, not vitest's 5 s.
     it("CS15: the census fails for a drawn field that changes nothing, the structure for a control or a link out of order, scripts off for a script", async () => {
       const w = await world();
       const real = (await getAs(w, PATH)).text;
@@ -852,7 +857,7 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
       expect(await censusProblems(moved("BriefAttachment", "title", "drawn"))).toEqual(["BriefAttachment.title is drawn but changes nothing"]);
       expect(await censusProblems(moved("BriefRequirement", "status", "left"))).toEqual(["BriefRequirement.status is left out but changes the page"]);
       expect(await censusProblems(moved("InvestigationListing", "tab_hidden", "left"))).toEqual(["InvestigationListing.tab_hidden is left out but changes the page"]);
-    });
+    }, CENSUS_LIMIT_MS);
 
     it("CS15: the source checks fail for a filter, a sort or a cut in the page's code, and for a shared sentence written again", () => {
       const sources = sourcesOfThePage();
