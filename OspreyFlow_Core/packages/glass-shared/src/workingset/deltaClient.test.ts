@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 
 import { connectDeltaClient, type SocketLike } from "./deltaClient";
-import type { WorkingSetDelta } from "@ospreyflow/glass-shared";
+import type { WorkingSetDelta } from "./models";
 
 function fakeSocket(): SocketLike & { receive: (message: unknown) => void; sent: string[] } {
   const socket = {
