@@ -34,3 +34,10 @@ The new test; `pytest --collect-only` on `test_ws_ticket.py`; `ruff check .`.
 ## Out of scope
 
 Product code, the port guard, every other test file, the rest of `away/live-A`.
+
+## The conductor's answer after round 1's stop (26 November 2026, 13:25 UTC)
+
+`test-file-coverage-check` reads a test that imports the Valkey client as a store test. **(a): the new test imports
+neither `Valkey` nor any store client, not even for type hints.** Read the fixture's port another way (call the fixture
+function's body with a stand-in for the client class, or read the source by its syntax tree; say which), keep the plant,
+and keep it red first. Do not change the checker or any list.

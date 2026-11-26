@@ -3,6 +3,10 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 26 November 2026, 13:26 UTC: the 62 hold cancelled; hand-backs together at about 17:30 (the owner, in chat)
+
+The hold for hand-back 62 is cancelled. GR4a merges, and merges and starts carry on as normal all afternoon. **No hand-back is applied until about 17:30 UTC**, when the owner applies 62, 63, 58, 59 and 60 together, with a warning first. **AD1c waits for 63** (its `lists.tsv` row) until then.
+
 ## 26 November 2026, about 12:40 UTC: SE9e (a); the extract route; GG2a's add-round (the owner, in chat)
 
 - **SE9e: (a).** Refuse every recipe binding of `object_ref` and `media_kind` on a Document, at validation and at load; only the engine's own writes set them; case 3 becomes "refused" (the owner's word). The owner's SE9e clear-stop line is in.
