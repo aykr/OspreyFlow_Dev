@@ -554,3 +554,19 @@ Accepted on the owner's standing line (gaps in a test only, from round 3) or his
 ### New row 38 (25 November 2026, RM1a's accepted gap in a test: on the standing line, tip `f35dd00b69`)
 
 **The fixture Conduit never sends `created_at` in the real route's form (rule 15).** The page's reader turns one time it cannot parse into "could not be read" (502) for the whole queue, so a break in parsing the real form would make every real queue unreadable with every test green. Done when the fixture's `created_at` is the exact form the real alert-queue route serialises (read from its model, not hand-written), and a case shows the page parses it.
+
+### New row 39 (26 November 2026, the owner's batch: "who made it")
+
+**Who made a case, a board or a saved view is left out of the GOV.UK pages for 0.7.0** (GR1a question 2, GG4a question 2, GR1d question 4). Names come later through `display_names`, never a raw subject. This is a later part of its own.
+
+### New row 40 (26 November 2026, the owner's batch: GG2a question 3)
+
+**A CI expansion gate for the page service's graph module.** For 0.7.0 the expansion figure is judged by the owner's Mac alone (800 ms). A CI gate for it, calibrated for CI's software WebGL and shown red first, is a later part.
+
+### New row 41 (26 November 2026, the owner's batch: GG4c question 5)
+
+**Unsharing a board.** GG4c ships sharing with no unshare route; a route and its form, each with its access-control test (rule 4), are a later part.
+
+### New row 42 (26 November 2026, the owner's batch: the live step)
+
+**The live step's stack gains ClickHouse and Azurite (and Keycloak if a group needs it)**, a small part. Line-fix then makes the live step pay group by group, after hand-back 61.
