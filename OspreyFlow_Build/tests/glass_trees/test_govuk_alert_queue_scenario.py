@@ -17,6 +17,7 @@ thing a source can be held to: nothing in it filters, counts or draws what an al
   count it as covered), or without its scenarios or slice, or the route list not the tree's pages
                                                                      -> `test_the_function_row_and_the_route_list_are_in_step`,
                                                                         `test_the_trees_state_does_not_count_the_row_as_covered`
+* what the scenario says of the row's route disagreeing with the row -> `test_the_scenario_says_what_the_row_has_for_a_route`
 * a route pinned in three of the four places and not the fourth      -> `test_every_place_that_pins_the_routes_names_the_queue`
 * a page source that filters or counts rows after the Conduit sent
   them, or names what an alert rests on                              -> `test_the_page_source_filters_nothing_and_draws_no_evidence`
@@ -250,6 +251,40 @@ def function_problems(data: dict[str, Any]) -> list[str]:
     return found
 
 
+#: The sentences of the AQ section that speak of the row's route: "the `alerts-rules-watches` row's route", or "the route names".
+ROUTE_SENTENCE = re.compile(r"row's route|route names")
+#: The words that say the row has a route: the route itself named as the row's, or "the route names" the first half.
+CLAIMS_A_ROUTE = re.compile(rf"`{ROUTE}` is the `{ROW}` row's route|route names")
+
+
+def route_claim_problems(data: dict[str, Any]) -> list[str]:
+    """Scenario AQ and the row say the same of the row's route (round 7: round 6 emptied the row's route and left the scenario saying the
+    row's route is `/alert-queue`, with every check green). A route that is empty is said to be empty in each sentence that speaks of it, and
+    no sentence says it is the queue's; a route that is not empty is named by a sentence that speaks of it."""
+    section = section_of(data["spec_08"]).replace("**", "")
+    row = next((r for r in data["functions"] if r["id"] == ROW), None)
+    if row is None or not section:
+        return []
+    sentences = [
+        sentence
+        for line in section.splitlines()
+        for sentence in re.split(r"(?<=[.;])\s+|\s\|\s", line)
+        if ROUTE_SENTENCE.search(sentence)
+    ]
+    if not sentences:
+        return [f"scenario AQ says nothing of the {ROW} row's route: it must say what the row has"]
+    found: list[str] = []
+    if row["route"] == "":
+        for sentence in sentences:
+            if CLAIMS_A_ROUTE.search(sentence):
+                found.append(f"scenario AQ says the {ROW} row's route is {ROUTE}, and FUNCTIONS.yaml's row says it is empty ({sentence.strip()[:80]!r})")
+            elif "empty" not in sentence:
+                found.append(f"scenario AQ speaks of the {ROW} row's route without saying it is empty, which FUNCTIONS.yaml's row says ({sentence.strip()[:80]!r})")
+    elif not any(row["route"] in sentence for sentence in sentences):
+        found.append(f"FUNCTIONS.yaml's {ROW} row has the route {row['route']!r} and scenario AQ does not name it")
+    return found
+
+
 def route_problems(data: dict[str, Any]) -> list[str]:
     # The tree's pages on the line: Help (GR2a), the Admin People list (AD3a), the alert monitoring page (GR3a), trends shown together (GR4a) and this one.
     if sorted(data["routes"]) != sorted(["/help", "/admin/people", "/reports", "/packs/trends", ROUTE]):
@@ -311,6 +346,7 @@ CHECKS = (
     scenario_problems,
     citation_problems,
     function_problems,
+    route_claim_problems,
     route_problems,
     pin_problems,
     source_problems,
@@ -342,6 +378,10 @@ def test_the_function_row_and_the_route_list_are_in_step() -> None:
     data = inputs()
     assert function_problems(data) == []
     assert route_problems(data) == []
+
+
+def test_the_scenario_says_what_the_row_has_for_a_route() -> None:
+    assert route_claim_problems(inputs()) == []
 
 
 def test_the_trees_state_does_not_count_the_row_as_covered(tmp_path: Path) -> None:
@@ -407,6 +447,18 @@ def _in_section(old: str, new: str) -> Callable[[dict[str, Any]], None]:
     return plant
 
 
+def _in_section_all(old: str, new: str) -> Callable[[dict[str, Any]], None]:
+    """Every `old` of the AQ section changed (a plant for a sentence that appears more than once)."""
+
+    def plant(data: dict[str, Any]) -> None:
+        start = data["spec_08"].find(SECTION)
+        end = data["spec_08"].find("\n## ", start + 1)
+        assert start != -1 and old in data["spec_08"][start:end], f"the plant's anchor {old!r} is not in the AQ section"
+        data["spec_08"] = data["spec_08"][:start] + data["spec_08"][start:end].replace(old, new) + data["spec_08"][end:]
+
+    return plant
+
+
 def _in(key: str, name: str, old: str, new: str) -> Callable[[dict[str, Any]], None]:
     """A change inside one entry of a dict of texts (`sources` or `pins`)."""
 
@@ -444,6 +496,29 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
     ("words a source does not hold", _replace("spec_08", '"Watched pattern"', '"Watched rumour"'), citation_problems, "does not hold"),
     ("the row given the route while incomplete", _row(ROW, route=ROUTE), function_problems, "stays empty"),
     ("the row given the route: the tree counts it as covered", _row(ROW, route=ROUTE), function_problems, "count the alerts-rules-watches row"),
+    (
+        "the round-5 sentence put back: the row's route is the queue's",
+        _in_section(
+            "the `alerts-rules-watches` row's route stays empty",
+            f"`{ROUTE}` is the `{ROW}` row's route",
+        ),
+        route_claim_problems,
+        "says the alerts-rules-watches row's route is /alert-queue",
+    ),
+    (
+        "the round-5 half sentence put back: the route names the first",
+        _in_section("its route stays empty until all three", "the route names the first; its route stays empty until all three"),
+        route_claim_problems,
+        "says the alerts-rules-watches row's route is /alert-queue",
+    ),
+    (
+        "a sentence about the row's route that does not say it is empty",
+        _in_section("the `alerts-rules-watches` row's route stays empty", "the `alerts-rules-watches` row's route stays as it was"),
+        route_claim_problems,
+        "without saying it is empty",
+    ),
+    ("the row given the route while the scenario says it is empty", _row(ROW, route=ROUTE), route_claim_problems, "says it is empty"),
+    ("the scenario silent on the row's route", _in_section_all("row's route", "row's way"), route_claim_problems, "says nothing of"),
     ("the row on the wrong slice", _row(ROW, slice="R7"), function_problems, "RM1"),
     ("the row that lost a scenario of its other halves", _row(ROW, scenario="AQ1, AQ2, AQ3, AQ4, AQ5, AQ6, AQ7, AQ8, AQ9, AQ10, AQ11"), function_problems, "B12"),
     ("the row that does not name the page", _row(ROW, where="apps/workspace/src/alerts/"), function_problems, "does not name the page"),
