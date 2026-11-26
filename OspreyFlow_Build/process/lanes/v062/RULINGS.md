@@ -3,6 +3,14 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 26 November 2026, about 08:30 UTC: "applied" (the owner, in chat)
+
+Hand-backs 55 (`69852bf`), 56 (`db97a76`) and 57 (`d5d62a3`) are on main; starts and merges resume. **Until hand-back 61 is applied,** a merge refused at `slice-line-check` by the beat race counts as "refused by another test": the conductor reruns it, with no send-back.
+
+## 26 November 2026, about 05:40 UTC: the morning rulings (the owner, in chat)
+
+**GR4a:** clear-stop (the stop's "token" was a false flag); round 3 on `slices/GR4a_ROUND3_TABLE.md`: the board page gets its own `FUNCTIONS.yaml` row and id; both pages stay. **RM1a:** clear-stop; its refusal came from two line faults (`server-rerun` runs a vitest name under pytest in a shell string, broken by the apostrophe in "§5's"; a newer green server run on the same tip was ignored), which go to line-fix. **GG2a, question 4, (a):** one more step (round 4, `slices/GG2a_ROUND4_TABLE.md`) adds an opt-in switch opening a GPU-backed Chromium, records the WebGL renderer with every figure and refuses a software one under the switch, red first; CI's gate unchanged; then the conductor tells the owner what to run on the Mac. **away/ci-reds** found SE8f's cause independently, and that the Mac's merge gate never runs the conformance-only files; the conductor proposes how the line catches a break in them before GitHub does, for the owner's ruling. **GG4a's away round** is done (7 questions, one a rule-3 stop on a drawn item's source document); its questions go in today's rulings batch once the owner has fetched it. **A gap with no seat running** for line-fix's hand-backs 54 to 57 (about two hours): no new start, no merge and no records commit until the owner says "applied".
+
 ## 25 November 2026, about 19:50 UTC: "take your recommended routes" (the owner, in chat)
 
 **PL4h: option (a)** (D225 item 3's structural round): every test in the two copy files that walks or parses gets an explicit, explained timeout, the plant tests included; nothing cached, nothing moved out of `sourceFiles`; the plant stands. Round 4 on `slices/PL4h_ROUND4_TABLE.md`. **AD1c: round 11 on the conductor's table** (already ruled at about 16:20). Both wait for the owner's add-round lines.
