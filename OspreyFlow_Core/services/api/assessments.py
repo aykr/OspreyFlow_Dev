@@ -555,9 +555,112 @@ async def list_visible_judgements(
     return visible
 
 
-async def flag_judgements_citing_superseded_node(
-    store: JudgementStore, node_id: str
-) -> list[str]:
+# --- a gap's and an assumption's links, as their reader may see them (rule 3) -------------------
+#
+# The access fault `tests/services/api/test_assessment_links_access.py` proved (25 November 2026):
+# the gaps and assumptions routes returned every stored link, so a reader was sent the id of a
+# node, or of a judgement, they may not see. A link the reader may not see is now left out
+# entirely: no count, no placeholder, no sign it exists. That is exactly how a judgement whose
+# evidence the reader cannot see is hidden (ADR-046), and it uses the same step. Whether a node may
+# be seen is the graph adapter's answer to `get_node` as the reader; the Conduit only keeps what
+# that answer allows. A save is refused, as a judgement's unverifiable citation is, when the saver
+# cannot confirm a link.
+
+
+class UnverifiableLinkError(Exception):
+    """A gap's linked entity, or an assumption's linked judgement, that the saver cannot confirm:
+    absent, or there but not theirs to see. The two are refused alike, and only ids the saver sent
+    are named, so the refusal tells them nothing they did not type (the judgement rule's own
+    discipline, `UnverifiableCitationError`)."""
+
+    def __init__(self, link_ids: list[str]) -> None:
+        self.link_ids = link_ids
+        super().__init__(
+            f"link(s) {', '.join(link_ids)} could not be confirmed as something you may see "
+            "in this case"
+        )
+
+
+async def _reference_visible(graph: GraphPort, principal: Principal, ref_id: str) -> bool:
+    """One reference as `judgement_visible_to` reads each `supporting` one: visible when the graph
+    gives it to this principal, or when the system superseded it and its successor resolves (owner
+    ruling R7). Not permitted, or not there, is not visible."""
+    if await graph.get_node(ref_id, principal) is not None:
+        return True
+    return await resolve_superseded_citation(graph, principal, ref_id) is not None
+
+
+async def visible_judgement_ids(
+    store: JudgementStore, investigation_id: str, principal: Principal, graph: GraphPort
+) -> set[str]:
+    """The ids of the judgements `GET .../judgements` shows this reader in this case: the same
+    ownership query and ADR-046 rule as `list_visible_judgements`, without its lazy review flag
+    (reading assumptions writes nothing)."""
+    candidates = await store.list_for_investigation(investigation_id, principal)
+    return {j.id for j in candidates if await judgement_visible_to(j, principal, graph)}
+
+
+async def list_visible_gaps(
+    store: IntelligenceGapStore, investigation_id: str, principal: Principal, graph: GraphPort
+) -> list[IntelligenceGap]:
+    """The case's gaps for this reader, each with only the linked entities they may see."""
+    gaps = await store.list_for_investigation(investigation_id, principal)
+    served: list[IntelligenceGap] = []
+    for gap in gaps:
+        kept = [
+            ref for ref in gap.linked_entities if await _reference_visible(graph, principal, ref)
+        ]
+        served.append(gap.model_copy(update={"linked_entities": kept}))
+    return served
+
+
+async def list_visible_assumptions(
+    store: AssumptionStore,
+    judgements: JudgementStore,
+    investigation_id: str,
+    principal: Principal,
+    graph: GraphPort,
+) -> list[Assumption]:
+    """The case's assumptions for this reader, each with only the linked judgements they are
+    shown."""
+    assumptions = await store.list_for_investigation(investigation_id, principal)
+    if not any(a.linked_judgements for a in assumptions):
+        return assumptions
+    shown = await visible_judgement_ids(judgements, investigation_id, principal, graph)
+    return [
+        a.model_copy(update={"linked_judgements": [j for j in a.linked_judgements if j in shown]})
+        for a in assumptions
+    ]
+
+
+async def confirm_gap_links(
+    graph: GraphPort, principal: Principal, linked_entities: list[str]
+) -> None:
+    """Refuses, before anything is written, a linked entity the saver cannot confirm as a node they
+    may see: the check a judgement's `supporting` citations get (`_unverifiable_citations`)."""
+    unverifiable = await _unverifiable_citations(graph, principal, linked_entities)
+    if unverifiable:
+        raise UnverifiableLinkError(unverifiable)
+
+
+async def confirm_assumption_links(
+    judgements: JudgementStore,
+    investigation_id: str,
+    principal: Principal,
+    graph: GraphPort,
+    linked_judgements: list[str],
+) -> None:
+    """Refuses, before anything is written, a linked judgement the saver is not shown in this
+    case."""
+    if not linked_judgements:
+        return
+    shown = await visible_judgement_ids(judgements, investigation_id, principal, graph)
+    unknown = [j for j in linked_judgements if j not in shown]
+    if unknown:
+        raise UnverifiableLinkError(unknown)
+
+
+async def flag_judgements_citing_superseded_node(store: JudgementStore, node_id: str) -> list[str]:
     """The review-flag loop's own hook — `01_DOMAIN_MODEL.md` §5: "When a supporting node is later
     split, corrected or retracted, every judgement resting on it is flagged for review." Called
     immediately after a real `GraphPort.supersede_node` succeeds

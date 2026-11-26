@@ -17,6 +17,16 @@ export const SHARED_SRC = join(__dirname, "..", "..", "..", "packages", "glass-s
 /** The roots the guards walk: the one list every copy guard and its reach test use. */
 export const ROOTS: readonly string[] = [SRC, SHARED_SRC];
 
+/** The explicit limit, in milliseconds, of each test in the two copy guards that walks the roots or parses
+ * (the third argument of its `it`; never a suite-, file- or config-wide limit). The walk lists some 890 files under
+ * the two roots and the guards parse each one: 0.6 s alone, 5.4 to 7 s on the loaded demo server (the owner's
+ * measurement, 25 November 2026), against vitest's 5 s. A test that plants a word walks up to four times (the roots, the
+ * moved clients, the plant's source, the plant itself), so the bound is set from the slowest walking test under the
+ * planted fault of 6 s a walk (`plants/PL4h.patch`): 24 s measured, so 60 s gives it a margin of two and a half. A test
+ * that hands a short string to the parser also carries it, as the owner ruled (25 November 2026): the constant goes on
+ * each test that walks or parses. */
+export const GUARD_TEST_TIMEOUT_MS = 60_000;
+
 /** The files under `roots` (by default both), skipping tests, test kits and generated types. */
 export function sourceFiles(roots: readonly string[] = ROOTS): string[] {
   return roots.flatMap((root) => filesUnder(root));

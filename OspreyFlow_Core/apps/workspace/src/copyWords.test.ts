@@ -16,6 +16,7 @@ import ts from "typescript";
 import { describe, expect, it } from "vitest";
 
 import {
+  GUARD_TEST_TIMEOUT_MS,
   movedClients,
   plantedCopy,
   LINK_CLIENTS,
@@ -74,7 +75,7 @@ describe("the Glass's copy says pipeline", () => {
       copyWords(path, readFileSync(path, "utf-8")).map((hit) => `${shown(path)}:${hit.line}: ${hit.words}`),
     );
     expect(hits).toEqual([]);
-  });
+  }, GUARD_TEST_TIMEOUT_MS);
 
   it("reads the Conduit clients that moved to packages/glass-shared/src (rule 15)", () => {
     const walked = sourceFiles();
@@ -91,7 +92,7 @@ describe("the Glass's copy says pipeline", () => {
     } finally {
       planted.remove();
     }
-  });
+  }, GUARD_TEST_TIMEOUT_MS);
 
   it("reads the report, export, alert and pattern clients that moved (PL4d3a), and finds a word planted in each (rule 15)", () => {
     const walked = sourceFiles();
@@ -105,7 +106,7 @@ describe("the Glass's copy says pipeline", () => {
     } finally {
       planted.remove();
     }
-  });
+  }, GUARD_TEST_TIMEOUT_MS);
 
   it("reads the link, inspector, question, reader, views and analytics clients that moved (PL4d3b), and finds a word planted in each (rule 15)", () => {
     const walked = sourceFiles();
@@ -119,7 +120,7 @@ describe("the Glass's copy says pipeline", () => {
     } finally {
       planted.remove();
     }
-  });
+  }, GUARD_TEST_TIMEOUT_MS);
 
   it("reads the assessment, boards, connections, explore, map, metrics, ownership, search, site, strength and watches clients that moved (PL4d3c), and finds a word planted in each (rule 15)", () => {
     const walked = sourceFiles();
@@ -133,7 +134,7 @@ describe("the Glass's copy says pipeline", () => {
     } finally {
       planted.remove();
     }
-  });
+  }, GUARD_TEST_TIMEOUT_MS);
 
   it("reads the cases, moment, needs-you, dataset, pack and external-orchestration files that moved (PL4d3d), and finds a word planted in each (rule 15)", () => {
     const walked = sourceFiles();
@@ -147,7 +148,7 @@ describe("the Glass's copy says pipeline", () => {
     } finally {
       planted.remove();
     }
-  });
+  }, GUARD_TEST_TIMEOUT_MS);
 
   it("reads the roles', admin, Home, rule-group and entity-picture files that moved (PL4d3e), and finds a word planted in each (rule 15)", () => {
     const walked = sourceFiles();
@@ -161,7 +162,7 @@ describe("the Glass's copy says pipeline", () => {
     } finally {
       planted.remove();
     }
-  });
+  }, GUARD_TEST_TIMEOUT_MS);
 
   it("is found in each shape the Glass's copy took before this change (rule 15)", () => {
     const planted = [
@@ -177,8 +178,7 @@ describe("the Glass's copy says pipeline", () => {
       "const failed = (name: string) => `The recipes of ${name} could not be read`;",
       'const label = "Recipe";',
     ].join("\n");
-    expect(copyWords("Planted.tsx", planted).map((hit) => hit.line)).toEqual([4, 5, 9, 10, 11]);
-  });
+    expect(copyWords("Planted.tsx", planted).map((hit) => hit.line)).toEqual([4, 5, 9, 10, 11]);}, GUARD_TEST_TIMEOUT_MS);
 
   it("leaves alone what is not copy: identifiers, imports, comments, keys and routes", () => {
     const clean = [
@@ -189,6 +189,5 @@ describe("the Glass's copy says pipeline", () => {
       'const route = "POST /v1/ingest/recipes/{id}/run";',
       "const url = `${base}/v1/ingest/recipes/${recipeId}`;",
     ].join("\n");
-    expect(copyWords("Clean.ts", clean)).toEqual([]);
-  });
+    expect(copyWords("Clean.ts", clean)).toEqual([]);}, GUARD_TEST_TIMEOUT_MS);
 });

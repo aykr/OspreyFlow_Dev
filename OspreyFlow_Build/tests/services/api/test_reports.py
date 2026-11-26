@@ -14,7 +14,8 @@ What a mistake would do, and the case that catches it:
   `test_the_pole_figures_count_nothing_the_reader_cannot_read_at_the_route`, the same figures for
   a case with those things and one without;
 - the feed and the view disagreeing — the route case reading both for one reader;
-- the feed leaving without a record — the route case finding its export-ledger entry;
+- the view's figures or the feed leaving without a record — the route case finding each one's
+  export-ledger entry (`spec/03_CONDUIT_MIDDLEWARE.md`: every export the Conduit makes);
 - a free-text field slipping into the feed — `test_the_feed_carries_no_free_text`.
 """
 
@@ -465,9 +466,17 @@ def test_the_view_and_the_feed_agree_and_the_feed_is_recorded(
 
         ledger = client.get("/v1/exports", headers={"Authorization": f"Bearer {sign_token(key, default_claims(sub='compliance-1', roles=['compliance']))}"})  # fmt: skip
         assert ledger.status_code == 200, ledger.text
-        feeds = [e for e in ledger.json()["entries"] if e["investigation_id"] == case]
-        assert [(e["artefact_kind"], e["principal_id"]) for e in feeds] == [("report_feed", VIEWER)] * 2, \
-            "each feed read, JSON and CSV, is in the export ledger; the view is not"
+        rows = [e for e in ledger.json()["entries"] if e["investigation_id"] == case]
+        # Compared as a multiset (both sides sorted), not in the ledger's own order: which rows
+        # there are is what is asked. The outsider's refused read above has none.
+        assert sorted((e["artefact_kind"], e["principal_id"]) for e in rows) == [
+            ("case_report", VIEWER),
+            ("report_feed", VIEWER),
+            ("report_feed", VIEWER),
+        ], (
+            "every export the Conduit makes has its ledger row: the Reports view's figures, and "
+            "the report feed at each read, JSON and CSV"
+        )
 
 
 def test_the_feed_counts_no_alert_over_a_link_the_reader_cannot_read(

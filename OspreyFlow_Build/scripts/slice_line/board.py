@@ -158,7 +158,8 @@ def merge_progress(rec: Path) -> dict | None:
         except (TypeError, ValueError):
             return None
     alive = isinstance(r.get("pid"), int) and c.pid_alive(r["pid"]) and merge_slice.merging() is not None
-    quiet = ago((r.get("log") or {}).get("mtime"))
+    lg = r.get("log") or {}
+    quiet = ago(lg.get("output_at") or lg.get("mtime"))  # output_at: heartbeat lines are not output (common.heartbeat)
     stall = float(os.environ.get("OSPREY_STALL_SECONDS") or STALL_SECONDS)
     state = "no process" if not alive else ("stalled" if quiet is not None and quiet >= stall else "running")
     step_s, merge_s = ago(st.get("began")), ago(r.get("started"))

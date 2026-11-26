@@ -80,6 +80,18 @@ STAND_IN_GATE = """def _stand_in_gate(t, b, l, targets=None):
 
 
 FULL_GATE = _stand_in_gate"""
+#: P3's suites in the hand-back's tree (merge_slice.HANDBACK_SUITES), in this copy only: TEST_HANDBACK_SUITE's exit code;
+#: TEST_HANDBACK_SEES gets the tree's board.py, as the suites would test it; TEST_HANDBACK_RUN runs through run().
+STAND_IN_HANDBACK = """def _stand_in_handback_suites(t, l):
+    if os.environ.get('TEST_HANDBACK_SEES'):
+        Path(os.environ['TEST_HANDBACK_SEES']).write_text((t / LINE_REL / 'board.py').read_text())
+    if os.environ.get('TEST_HANDBACK_RUN'):
+        return run(['sh', '-c', os.environ['TEST_HANDBACK_RUN']], t, l)
+    l.open('a').write(os.environ.get('TEST_HANDBACK_SAID', '== 9 passed in 1.00s ==') + '\\n')
+    return int(os.environ.get('TEST_HANDBACK_SUITE', '0'))
+
+
+HANDBACK_SUITES = _stand_in_handback_suites"""
 
 
 #: The Mac's rerun of a demo server's red (merge_slice.SERVER_RERUN), stood in as the gate is: TEST_RERUN's exit code;
@@ -142,7 +154,8 @@ def world(tmp_path):
     stand_in_project_checks(lines / "stop_check.py")
     gate = lines / "merge_slice.py"  # the full gate's stand-in, in this copy only: TEST_GATE's exit code
     gate.write_text(gate.read_text().replace("FULL_GATE = full_gate", STAND_IN_GATE)
-                    .replace("SERVER_RERUN = rerun_named", STAND_IN_RERUN))
+                    .replace("SERVER_RERUN = rerun_named", STAND_IN_RERUN)
+                    .replace("HANDBACK_SUITES = handback_suites", STAND_IN_HANDBACK))
     day = lines / "resume.py"  # the run's one date, in this copy only (9)
     assert TODAY_REAL in day.read_text(), "resume.today() changed: the suite's one-date copy needs it"
     day.write_text(day.read_text().replace(TODAY_REAL, TODAY_IN_THE_COPY))

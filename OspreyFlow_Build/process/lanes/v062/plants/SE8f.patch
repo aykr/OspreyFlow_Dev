@@ -1,0 +1,15 @@
+diff --git a/OspreyFlow_Core/services/api/app.py b/OspreyFlow_Core/services/api/app.py
+--- a/OspreyFlow_Core/services/api/app.py
++++ b/OspreyFlow_Core/services/api/app.py
+@@ -15057,10 +15057,7 @@ async def read_case_report(
+         alerts_store=alerts_store, held_rows=held_rows, compute=compute, explore=explore,
+         ontology=ontology, period_weeks=weeks, analytics=analytics,
+     )  # fmt: skip
+-    await _record_figures_export(
+-        export_ledger, kind="case_report", investigation=investigation, principal=principal,
+-        withheld=withheld, rows=len(reports_module.feed_rows(figures)),
+-    )  # fmt: skip
++    # A planted fault (SE8f): the Reports view's figures leave with no export-ledger row.
+     await audit.record(
+         principal=principal,
+         action="read_case_report",
