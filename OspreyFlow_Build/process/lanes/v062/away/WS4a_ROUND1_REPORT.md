@@ -45,10 +45,10 @@ out: the `git config user.name` line (it would write the shared repository confi
   and its community-link layer are made, sets `data-canvas-state="mounted"` on the "Network canvas" element.
   `perf/harness.tsx` watches for it and sets `window.__PERF__.readyAt`; `perf/perf.spec.ts` waits for that. The gated
   figure is `elapsedMs`, from before `page.goto` until the wait returns.
-- **The page service** (GG2a's, not on main; read on `lane/slice-GG2a` at `37492cc`). `mountGraph`
-  (`apps/pages/modules/graph/index.ts`) sets `data-graph-state="ready"` and the mark `graph-ready` after one more
-  scheduled render's `afterRender` and the animation frame after it. `apps/pages/test/perf/graph.spec.ts`, `ready()`,
-  waits for that selector; the gated figure is `elapsedMs` in `open()`.
+- **The page service** (GG2a's, not on main; read on `lane/slice-GG2a` at `37492cc`, so its files are named here by
+  folder). `mountGraph`, in the `graph` folder of the pages' `modules/`, sets `data-graph-state="ready"` and the mark
+  `graph-ready` after one more scheduled render's `afterRender` and the animation frame after it. Its perf spec (the
+  pages' `test/perf/` folder), `ready()`, waits for that selector; the gated figure is `elapsedMs` in `open()`.
 - **They are not the same instant, and this slice changes neither.** Sigma 3.0.3's constructor calls `refresh()`,
   which renders at once, so "mounted" comes after the first draw but before the browser is known to have shown it. The
   page's "ready" is later by one render and one frame (its own comment: the figure "errs slow"). For WS4b the
