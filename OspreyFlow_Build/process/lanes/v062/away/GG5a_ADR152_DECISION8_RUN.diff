@@ -1,0 +1,20 @@
+--- a/OspreyFlow_Build/spec/06_DECISIONS.md
++++ b/OspreyFlow_Build/spec/06_DECISIONS.md
+@@ -41087,6 +41087,17 @@
+    `object-src 'none'`; `base-uri 'self'`; `form-action 'self'`. No `unsafe-inline`, no `unsafe-eval`, no
+    inline `style` attribute. Nothing is fetched from another address. Since no page frames Superset (decision
+    10), the policy has no exception for it.
++
++   **The browser run (slice GG5a, 26 November 2026; `apps/pages/test/csp/map.spec.ts`, Chromium and WebKit).**
++   MapLibre 6.19 draws under this policy unchanged: no `blob:` and no `unsafe-eval` are needed, so map pages
++   take no exception. Its `blob:` image path is taken only in a browser without `createImageBitmap`, and its
++   `eval` only through `setRTLTextPlugin` or `importScriptInWorkers` with a classic script, which no page
++   calls. Three conditions the map pages keep: the worker file is named on the page's own origin (another
++   origin makes MapLibre use a `blob:` worker, which `worker-src 'self'` refuses); the worker file is served
++   with this policy and as `.js`, because a dedicated worker obeys the policy on its own script's response, not
++   its page's (a test of a deployed map reads that response's header); and a PMTiles basemap needs `Range`
++   carried to the Conduit and `Content-Range` carried back, because without them the map loads and draws no
++   tile.
+
+ 9. **Sigma and MapLibre: one version in both front ends** (D46; D47 as the owner answered it on 19 November).
+    - **The new modules start on Sigma 4.** The graph and map modules in `pages` use Sigma 4.0.x, with
