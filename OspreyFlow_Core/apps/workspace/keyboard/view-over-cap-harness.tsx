@@ -10,8 +10,7 @@ import { useStore } from "zustand/react";
 
 import "../../../packages/design/tokens.css";
 import "../../../packages/design/primitives.css";
-import { connectDeltaClient, type SocketLike } from "../src/workingset/deltaClient";
-import { createWorkingSet } from "@ospreyflow/glass-shared";
+import { connectDeltaClient, createWorkingSet, type SocketLike } from "@ospreyflow/glass-shared";
 import { ViewOverCapGate } from "../src/workingset/ViewOverCapGate";
 import { ContextBanner } from "../src/shell/ContextBanner";
 import { applyHarnessBrand } from "./brandHarness";

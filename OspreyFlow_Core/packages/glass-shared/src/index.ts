@@ -6,6 +6,8 @@
 //   keyboard/actionRegistry   the keyboard action registry: data, `defineActionRegistry`, `registerCovered`,
 //                             `assertAllCovered`
 //   workingset/store, models  the working set's store (graphology and `zustand/vanilla`) and its typed deltas
+//   workingset/deltaClient    the delta client: `spec/03` §3.2's wire protocol off a socket the caller makes, with
+//                             gap detection and resync (GG2c: moved from the workspace; each front end gives the socket)
 //   color/textContrast        the text-contrast judgement the accessibility probe runs in Node
 //   map/contrast              the WCAG contrast ratio of two colours
 //   map/conduitRequest        which of MapLibre's tile reads carry the bearer token (a request transform: it
@@ -89,6 +91,7 @@
 export * from "./keyboard/actionRegistry";
 export * from "./workingset/store";
 export * from "./workingset/models";
+export * from "./workingset/deltaClient";
 export * from "./color/textContrast";
 export * from "./map/contrast";
 export * from "./map/conduitRequest";
