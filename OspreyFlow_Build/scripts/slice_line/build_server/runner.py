@@ -1,13 +1,26 @@
 #!/usr/bin/env python3
-"""The build account's container checks (the owner's file 017, item 1; his answer of 25 November 2026): the forced
-command of the Mac's key to `ospreyflow_build` on the test server. No shell, four verbs in all:
+"""The build account's container checks and seats (the owner's file 017, items 1 and 2; the owner's answers of 24
+and 25 November 2026): the forced command of the Mac's key to `ospreyflow_build` on the test server. No shell, four
+verbs in all:
 
     (forced command)  checks <ID>     a git bundle on standard input, of exactly main's tip and one slice's tip (sent
                                       by early_warning.py at the moment it sends the early warning); the candidate is
                                       built as the Mac's merge builds it and checked in a detached job; prints
                                       {"state": "started", "id": <16 hex>, "holds_main": <main>} and returns at once
-    (forced command)  start | stop | status ...
-                                      017-2's seats: refused until they are built
+    (forced command)  start <ID> builder|verifier
+                                      017-2: one tar on standard input, of exactly in.bundle (main and lane/slice-<ID>)
+                                      and order.json (the seat, part, round, prompt, model, effort, account and the
+                                      records it reads); the seat's trees made in this account's clone, the seat run
+                                      in a detached tmux session (seat-<ID>-<seat>), one seat per part; prints
+                                      {"state": "started", "slice", "seat", "id"} and returns at once
+    (forced command)  status <ID> builder|verifier
+                                      the seat's state (none, running, done, failed, stopped), its id, tip, main,
+                                      times and exit code, nothing else
+    (forced command)  stop <ID> builder|verifier
+                                      ends the seat's session; its work so far stays as committed
+    runner.py _seat <ID> <seat>       the seat itself, in its tmux session: the line's run_seat.py on the order, then
+                                      its result and records committed on the clone's seat-results branch (never
+                                      reachable over SSH)
     runner.py _work                   the jobs, one at a time, as systemd-run starts them (never reachable over SSH:
                                       the forced command takes no arguments and reads only SSH_ORIGINAL_COMMAND)
 
@@ -20,6 +33,9 @@ CI's Python (`uv sync --frozen`) and `npm ci`; then the container checks, TARGET
 They run in this account's own rootless Docker and nowhere else: the job sets DOCKER_HOST to this account's socket
 itself (never taken from the caller), and nothing runs unless the system Docker's socket does not answer and
 `docker info` answers as rootless.
+
+A seat's work goes back the same way: the builder's commits on the clone's lane/slice-<ID>, and each seat's result
+(seats/<ID>/<seat>-<id>.json, with the records it wrote) on the clone's local branch seat-results.
 
 Results go back only through the backup repository: each is one JSON file, `results/<ID>/<TIP>.json`, committed by
 plumbing on the local branch `build-results` of this account's clone (~/ospreyflow), which the backup timer pushes.
@@ -196,9 +212,239 @@ def forced(cmd: str) -> int:
     parts = cmd.split(" ")
     if len(parts) == 2 and parts[0] == "checks" and SLICE.match(parts[1]):
         return do_checks(parts[1])
-    if parts[0] in SEAT_VERBS:
-        return refuse("not-yet", cmd, words="the seats (017-2) are not built yet")
+    if len(parts) == 3 and parts[0] in SEAT_VERBS and SLICE.match(parts[1]) and parts[2] in SEAT_KINDS:
+        return {"start": do_start, "stop": seat_stop, "status": seat_status}[parts[0]](parts[1], parts[2])
     return refuse("shape", cmd)
+
+
+# ------------------------------------------------------------------ 017-2: seats on this server
+
+#: Each seat's folder: its order, its status, its records, and the trees it works in (the builder's worktree of the
+#: clone on lane/slice-<ID>; the verifier's, detached at the tip; main's tree beside them).
+SEATS = WORK / "seats"
+SEAT_KINDS = ("builder", "verifier")
+SEAT_RESULTS_BRANCH = "seat-results"
+MAX_ORDER = 1024 ** 2
+ORDER_KEYS = {"seat", "slice", "round", "prompt", "model", "effort", "account", "records"}
+RECORD_NAME = re.compile(r"\A[a-z][a-z0-9-]{0,40}\.json\Z")
+#: How a seat is run: the line's own run_seat.py, from this account's clone, given the order (its --order mode).
+SEAT_RUN = [sys.executable, str(CLONE / "OspreyFlow_Build/scripts/slice_line/run_seat.py"), "--order"]
+SEAT_WORKER = [sys.executable, str(Path(__file__).resolve()), "_seat"]
+
+
+def seat_dir(slice_id: str, seat: str) -> Path:
+    return SEATS / ("%s-%s" % (slice_id, seat))
+
+
+def seat_session(slice_id: str, seat: str) -> str:
+    return "seat-%s-%s" % (slice_id, seat)
+
+
+def seat_alive(slice_id: str, seat: str) -> bool:
+    """The seat's session is running: its tmux session (or, launched directly, its process group)."""
+    if LAUNCH == "direct":
+        pid = (read_json(seat_dir(slice_id, seat) / "pid.json") or {}).get("pid")
+        if not isinstance(pid, int):
+            return False
+        try:
+            os.killpg(pid, 0)
+            return True
+        except OSError:
+            return False
+    return subprocess.run(["tmux", "has-session", "-t", "=" + seat_session(slice_id, seat)], stdout=subprocess.DEVNULL,
+                          stderr=subprocess.DEVNULL).returncode == 0
+
+
+def read_json(p: Path):
+    try:
+        return json.loads(p.read_text())
+    except (OSError, ValueError):
+        return None
+
+
+def set_status(slice_id: str, seat: str, **fields) -> dict:
+    d = seat_dir(slice_id, seat)
+    st = {**(read_json(d / "status.json") or {}), **fields, "at": now()}
+    tmp = d / "status.json.tmp"
+    tmp.write_text(json.dumps(st) + "\n")
+    tmp.replace(d / "status.json")
+    return st
+
+
+def read_order(tar_path: Path, slice_id: str, seat: str, into: Path):
+    """The tar's two members, and nothing else: in.bundle and order.json, each a regular file. The order checked key by
+    key; Stop("order-shape") otherwise."""
+    import tarfile
+    try:
+        with tarfile.open(str(tar_path), "r:") as tf:
+            members = tf.getmembers()
+            names = sorted(m.name for m in members)
+            if names != ["in.bundle", "order.json"] or not all(m.isreg() for m in members):
+                raise Stop("order-shape", "a tar of in.bundle and order.json, regular files, nothing else")
+            by = {m.name: m for m in members}
+            if by["order.json"].size > MAX_ORDER:
+                raise Stop("order-shape", "order.json is larger than %d bytes" % MAX_ORDER)
+            order = json.loads(tf.extractfile(by["order.json"]).read().decode())
+            with (into / "in.bundle").open("wb") as out:
+                shutil.copyfileobj(tf.extractfile(by["in.bundle"]), out)
+    except (tarfile.TarError, ValueError, UnicodeDecodeError, OSError):
+        raise Stop("order-shape", "not a readable tar with a JSON order") from None
+    ok = (isinstance(order, dict) and set(order) <= ORDER_KEYS and order.get("seat") == seat
+          and order.get("slice") == slice_id and isinstance(order.get("round"), int) and order["round"] >= 1
+          and isinstance(order.get("prompt"), str) and order["prompt"].strip()
+          and re.fullmatch(r"[a-z0-9.-]{1,40}", str(order.get("model", "")))
+          and re.fullmatch(r"[a-z]{1,16}", str(order.get("effort", "")))
+          and re.fullmatch(r"[a-z][a-z0-9-]{0,30}", str(order.get("account", "")))
+          and isinstance(order.get("records", {}), dict)
+          and all(RECORD_NAME.match(k) and isinstance(v, (dict, list)) for k, v in order.get("records", {}).items()))
+    if not ok:
+        raise Stop("order-shape", "the order's keys or values are not an order's")
+    return order
+
+
+def clone_git(args: list, check: bool = True) -> str:
+    return git(args, cwd=CLONE, check=check)
+
+
+def do_start(slice_id: str, seat: str) -> int:
+    WORK.mkdir(parents=True, exist_ok=True)
+    if not SOURCE.is_dir():
+        git(["init", "-q", "--bare", str(SOURCE)], cwd=WORK)
+    for other in SEAT_KINDS:
+        if seat_alive(slice_id, other):
+            return refuse("seat-running", words="the %s of %s is running" % (other, slice_id))
+    d = seat_dir(slice_id, seat)
+    d.mkdir(parents=True, exist_ok=True)
+    rid = secrets.token_hex(8)
+    tar_path = d / "in.tar"
+    branch = "refs/heads/lane/slice-%s" % slice_id
+    try:
+        if not receive(tar_path):
+            return refuse("too-large")
+        order = read_order(tar_path, slice_id, seat, d)
+        heads = {}
+        for line in git(["bundle", "list-heads", str(d / "in.bundle")], check=False).splitlines():
+            sha, _, ref = line.partition(" ")
+            heads[ref] = sha
+        if sorted(heads) != sorted(["refs/heads/main", branch]) or not all(SHA.match(h) for h in heads.values()):
+            raise Stop("bundle-shape", "a bundle of exactly main and lane/slice-%s" % slice_id)
+        if subprocess.run(["git", "bundle", "verify", "-q", str(d / "in.bundle")], cwd=str(SOURCE),
+                          capture_output=True, env=git_env()).returncode != 0:
+            raise Stop("bundle-prerequisites", "")
+        git(["fetch", "-q", str(d / "in.bundle"), "+refs/heads/*:refs/seats/%s/*" % rid])
+        git(["update-ref", "refs/heads/main", heads["refs/heads/main"]])
+        main, tip = heads["refs/heads/main"], heads[branch]
+        clone_git(["fetch", "-q", str(SOURCE), "+refs/seats/%s/*:refs/line/seats/%s/*" % (rid, rid)])
+        have = clone_git(["rev-parse", "-q", "--verify", branch], check=False)
+        if have and have != tip and subprocess.run(["git", "merge-base", "--is-ancestor", have, tip], cwd=str(CLONE),
+                                                   env=git_env()).returncode != 0:
+            raise Stop("server-ahead", "this clone's lane/slice-%s holds work the Mac has not fetched (%s): the Mac "
+                                       "fetches it from the backup repository first" % (slice_id, have[:10]))
+        trees = {}
+        for name, ref in (("main", main), ("wt" if seat == "builder" else "vt", tip)):
+            t = d / name
+            if t.exists():
+                if clone_git(["-C", str(t), "status", "--porcelain"], check=False):
+                    raise Stop("dirty-tree", "%s has uncommitted work from an earlier seat; the owner looks" % t)
+                clone_git(["worktree", "remove", "--force", str(t)], check=False)
+                shutil.rmtree(t, ignore_errors=True)
+            trees[name] = t
+        clone_git(["worktree", "prune"], check=False)
+        if seat == "builder":
+            clone_git(["update-ref", branch, tip, *([have] if have else [])])
+            clone_git(["worktree", "add", "-q", str(trees["wt"]), "lane/slice-%s" % slice_id])
+        else:
+            clone_git(["worktree", "add", "-q", "--detach", str(trees["vt"]), tip])
+        clone_git(["worktree", "add", "-q", "--detach", str(trees["main"]), main])
+        (d / "records").mkdir(exist_ok=True)
+        for name, value in order.get("records", {}).items():
+            (d / "records" / name).write_text(json.dumps(value, indent=1) + "\n")
+        order.update(id=rid, main=main, tip=tip, trees={k: str(v) for k, v in trees.items()}, received=now())
+        (d / "order.json").write_text(json.dumps(order, indent=1) + "\n")
+    except Stop as e:
+        return refuse(e.verdict, words=e.words)
+    finally:
+        for f in ("in.tar", "in.bundle"):
+            if (d / f).exists():
+                (d / f).unlink()
+    for f in ("result.json", "pid.json"):
+        if (d / f).exists():
+            (d / f).unlink()
+    set_status(slice_id, seat, state="running", id=rid, tip=tip, main=main, started=now(), finished=None)
+    launch_seat(slice_id, seat)
+    return say({"state": "started", "slice": slice_id, "seat": seat, "id": rid}, 0)
+
+
+def launch_seat(slice_id: str, seat: str) -> None:
+    env = {k: v for k, v in os.environ.items() if k in KEPT}
+    out = subprocess.DEVNULL
+    if LAUNCH == "direct":
+        p = subprocess.Popen([*SEAT_WORKER, slice_id, seat], env=env, stdin=out, stdout=out, stderr=out,
+                             start_new_session=True)
+        (seat_dir(slice_id, seat) / "pid.json").write_text(json.dumps({"pid": p.pid}))
+    else:
+        subprocess.run(["tmux", "new-session", "-d", "-s", seat_session(slice_id, seat), "--",
+                        *SEAT_WORKER, slice_id, seat], env=env, stdin=out, stdout=out, stderr=out)
+
+
+def run_seat(slice_id: str, seat: str) -> int:
+    """The seat itself (in its tmux session): the line's run_seat.py on the order, then its result and its records
+    committed on seat-results, and the status set."""
+    d = seat_dir(slice_id, seat)
+    order = read_json(d / "order.json") or {}
+    t0 = time.monotonic()
+    with (d / "seat.log").open("w") as log:
+        code = subprocess.run([*SEAT_RUN, str(d / "order.json")], cwd=order.get("trees", {}).get(
+            "wt" if seat == "builder" else "vt", str(d)), stdout=log, stderr=log).returncode
+    st = read_json(d / "status.json") or {}
+    if st.get("state") == "stopped":
+        return 0
+    tip = clone_git(["rev-parse", "refs/heads/lane/slice-%s" % slice_id], check=False) if seat == "builder" \
+        else order.get("tip")
+    result = {"state": "done", "id": order.get("id"), "runner": RUNNER, "slice": slice_id, "seat": seat,
+              "round": order.get("round"), "main": order.get("main"), "tip_before": order.get("tip"), "tip": tip,
+              "exit": code, "seconds": int(time.monotonic() - t0), "finished": now(),
+              "session": read_json(d / "records" / "session.json"),
+              "records": {p.name: read_json(p) for p in sorted((d / "records").glob("*.json"))}}
+    try:
+        commit_result(SEAT_RESULTS_BRANCH, "seats/%s/%s-%s.json" % (slice_id, seat, order.get("id")), result,
+                      "seat: %s's %s, round %s, at %s: exit %s (%s)" % (slice_id, seat, order.get("round"),
+                                                                       str(tip)[:10], code, order.get("id")))
+        state = "done" if code == 0 else "failed"
+    except Exception as e:  # noqa: BLE001 - a result it cannot record is the runner's fault, said in the status
+        state, result = "failed", {**result, "words": "the result could not be recorded: %s" % type(e).__name__}
+    (d / "result.json").write_text(json.dumps(result, indent=1) + "\n")
+    set_status(slice_id, seat, state=state, finished=now(), exit=code, tip=tip)
+    return 0
+
+
+def seat_status(slice_id: str, seat: str) -> int:
+    st = read_json(seat_dir(slice_id, seat) / "status.json")
+    if not st:
+        return say({"state": "none", "slice": slice_id, "seat": seat}, 0)
+    if st.get("state") == "running" and not seat_alive(slice_id, seat):
+        st = set_status(slice_id, seat, state="failed", finished=now(),
+                        words="the seat's session ended without its result")
+    keep = ("state", "id", "tip", "main", "started", "finished", "exit", "words")
+    return say({"slice": slice_id, "seat": seat, **{k: st[k] for k in keep if st.get(k) is not None}}, 0)
+
+
+def seat_stop(slice_id: str, seat: str) -> int:
+    st = read_json(seat_dir(slice_id, seat) / "status.json")
+    if not st or st.get("state") != "running":
+        return refuse("not-running", words="no %s of %s is running" % (seat, slice_id))
+    set_status(slice_id, seat, state="stopped", finished=now())
+    if LAUNCH == "direct":
+        pid = (read_json(seat_dir(slice_id, seat) / "pid.json") or {}).get("pid")
+        if isinstance(pid, int):
+            try:
+                os.killpg(pid, 15)
+            except OSError:
+                pass
+    else:
+        subprocess.run(["tmux", "kill-session", "-t", "=" + seat_session(slice_id, seat)], stdout=subprocess.DEVNULL,
+                       stderr=subprocess.DEVNULL)
+    return say({"state": "stopped", "slice": slice_id, "seat": seat, "id": st.get("id")}, 0)
 
 
 # ------------------------------------------------------------------ Docker: this account's own, never the system's
@@ -331,24 +577,31 @@ def result_path(slice_id: str, tip: str) -> str:
 
 
 def write_result(result: dict) -> None:
-    """The result committed on the clone's refs/heads/build-results by plumbing alone: no checkout, and never the
-    clone's own index."""
-    blob = git(["hash-object", "-w", "--stdin"], cwd=CLONE, input=json.dumps(result, indent=1) + "\n")
-    index = WORK / "results.index"
-    if index.exists():
-        index.unlink()
-    env = {**git_env(), "GIT_INDEX_FILE": str(index)}
-    parent = git(["rev-parse", "-q", "--verify", "refs/heads/%s" % RESULTS_BRANCH], cwd=CLONE, check=False)
-    if parent:
-        git(["read-tree", parent], cwd=CLONE, env=env)
-    git(["update-index", "--add", "--cacheinfo", "100644,%s,%s" % (blob, result_path(result["slice"], result["tip"]))],
-        cwd=CLONE, env=env)
-    tree = git(["write-tree"], cwd=CLONE, env=env)
+    """A check's result, committed on the clone's build-results branch."""
     msg = "build checks: %s at %s on main %s: %s (%s)" % (result["slice"], result["tip"][:10], str(result["main"])[:10],
                                                          result["verdict"], result["id"])
-    commit = git(["commit-tree", tree, *(["-p", parent] if parent else []), "-m", msg], cwd=CLONE)
-    git(["update-ref", "refs/heads/%s" % RESULTS_BRANCH, commit, *([parent] if parent else [])], cwd=CLONE)
-    index.unlink()
+    commit_result(RESULTS_BRANCH, result_path(result["slice"], result["tip"]), result, msg)
+
+
+def commit_result(branch: str, path: str, result: dict, msg: str) -> None:
+    """One JSON file committed on the clone's local branch by plumbing alone: no checkout, and never the clone's own
+    index. One writer at a time (the results lock)."""
+    WORK.mkdir(parents=True, exist_ok=True)
+    with (WORK / "results.lock").open("w") as fh:
+        fcntl.flock(fh, fcntl.LOCK_EX)
+        blob = git(["hash-object", "-w", "--stdin"], cwd=CLONE, input=json.dumps(result, indent=1) + "\n")
+        index = WORK / "results.index"
+        if index.exists():
+            index.unlink()
+        env = {**git_env(), "GIT_INDEX_FILE": str(index)}
+        parent = git(["rev-parse", "-q", "--verify", "refs/heads/%s" % branch], cwd=CLONE, check=False)
+        if parent:
+            git(["read-tree", parent], cwd=CLONE, env=env)
+        git(["update-index", "--add", "--cacheinfo", "100644,%s,%s" % (blob, path)], cwd=CLONE, env=env)
+        tree = git(["write-tree"], cwd=CLONE, env=env)
+        commit = git(["commit-tree", tree, *(["-p", parent] if parent else []), "-m", msg], cwd=CLONE)
+        git(["update-ref", "refs/heads/%s" % branch, commit, *([parent] if parent else [])], cwd=CLONE)
+        index.unlink()
 
 
 def run_one(job: Path) -> dict:
@@ -403,6 +656,9 @@ def work() -> int:
 def main(argv: list) -> int:
     if argv == ["_work"] and "SSH_ORIGINAL_COMMAND" not in os.environ:
         return work()
+    if len(argv) == 3 and argv[0] == "_seat" and "SSH_ORIGINAL_COMMAND" not in os.environ and SLICE.match(argv[1]) \
+            and argv[2] in SEAT_KINDS:
+        return run_seat(argv[1], argv[2])
     return forced(os.environ.get("SSH_ORIGINAL_COMMAND", ""))
 
 

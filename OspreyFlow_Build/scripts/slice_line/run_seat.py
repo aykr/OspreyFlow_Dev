@@ -373,6 +373,68 @@ def stop_slice(slice_id: str, note: str) -> None:
     print(f"STOPPED {slice_id}: {note}")
 
 
+class ServerSeatRefused(Exception):
+    """017-2: the server's seat could not be run or its work taken back; the part stays where it was."""
+
+
+def on_server(seat: dict) -> bool:
+    """The dial's where: for this seat (017-2): server, or mac (the default); anything else refuses."""
+    import server_seat
+    try:
+        return server_seat.where(seat) == "server"
+    except server_seat.ServerSeatError as e:
+        raise ServerSeatRefused(f"NOT STARTED: {e}") from None
+
+
+def server_run(slice_id: str, seat: str, rnd: int, prompt: str, settings: dict, account: str, branch: str, tree: Path,
+               records: dict) -> dict:
+    import server_seat
+    try:
+        return server_seat.run(slice_id, seat, rnd, prompt, settings["model"], settings["effort"], account, branch, tree,
+                               records)
+    except server_seat.ServerSeatError as e:
+        raise ServerSeatRefused(f"SERVER SEAT {slice_id}: {e}. The part stays where it was; nothing of the Mac's "
+                                "changed.") from None
+
+
+def from_order(path: Path) -> int:
+    """017-2, on the build account (build_server/runner.py runs it in the seat's tmux session): the seat the Mac
+    ordered, under this account's guard, settings and shim (launch() refuses without them, as on the Mac), in the tree
+    the runner made. The prompt's paths are the Mac's: its worktree and checkout become the trees here. The session's
+    result, and the Stop hook's test record and a red stop the session wrote, are left in the order's records for the
+    runner to commit on seat-results."""
+    o = c.read_json(path) or {}
+    d, slice_id, seat = path.parent, o["slice"], o["seat"]
+    trees = o["trees"]
+    tree = Path(trees["wt" if seat == "builder" else "vt"])
+    records = o.get("records") or {}
+    mac = records.get("mac.json") or {}
+    prompt = o["prompt"]
+    if mac.get("tree"):
+        prompt = prompt.replace(mac["tree"], str(tree))
+    if mac.get("repo"):
+        prompt = prompt.replace(mac["repo"], trees["main"])
+    rec = c.rec_dir(slice_id)
+    rec.mkdir(parents=True, exist_ok=True)
+    for name in ("frozen.json", "state.json"):
+        if isinstance(records.get(name), dict):
+            c.write_json(rec / name, records[name])
+    before = {p.name: p.stat().st_mtime_ns for p in rec.glob("*.json")}
+    extra = ["--json-schema", json.dumps(VERDICT_SCHEMA)] if seat == "verifier" else None
+    out = d / "records"
+    out.mkdir(exist_ok=True)
+    try:
+        res = launch(seat, o["account"], tree, prompt, o["model"], o["effort"],
+                     {"OSPREY_SLICE": slice_id, "OSPREY_SLICE_WORKTREE": str(tree)}, d / "session.jsonl", extra)
+    except NotLoaded as e:
+        res = {"is_error": True, "subtype": "not started on the server", "result": str(e)}
+    c.write_json(out / "session.json", res)
+    for p in sorted(rec.glob("*.json")):
+        if (p.name.startswith("tests-") or p.name == "red_stop.json") and before.get(p.name) != p.stat().st_mtime_ns:
+            (out / p.name).write_text(p.read_text())
+    return 1 if res.get("is_error") else 0
+
+
 def builder(slice_id: str) -> int:
     st, frozen = c.state(slice_id), c.read_json(c.rec_dir(slice_id) / "frozen.json")
     if not frozen or st.get("phase") != "building":
@@ -397,15 +459,23 @@ def builder(slice_id: str) -> int:
         prompt += (f"\n\nThis round is judged against the scout's table of every open case, {table} (read it whole): "
                    "close its open rows; nothing outside it is this round's work.")
     tip0 = c.git(["rev-parse", frozen["branch"]], c.REPO)
+    if on_server(seat):  # 017-2: the dial's where: server
+        call = lambda: server_run(slice_id, "builder", st["round"], prompt, seat, st["account"], frozen["branch"], wt,  # noqa: E731
+                                  {"frozen.json": frozen, "state.json": st})
+    else:
+        call = lambda: launch("builder", st["account"], wt, prompt, seat["model"], seat["effort"],  # noqa: E731
+                              {"OSPREY_SLICE": slice_id, "OSPREY_SLICE_WORKTREE": str(wt),
+                               **({"OSPREY_PORTS_SLOT": str(st["slot"])} if st.get("slot") else {})},
+                              c.rec_dir(slice_id) / f"builder-r{st['round']}-{uuid.uuid4().hex[:6]}.jsonl")
     try:
         res = launch_seat(
-            slice_id, "builder", f"round {st['round']}", st["account"], tip0,
-            lambda: launch("builder", st["account"], wt, prompt, seat["model"], seat["effort"],
-                           {"OSPREY_SLICE": slice_id, "OSPREY_SLICE_WORKTREE": str(wt),
-                            **({"OSPREY_PORTS_SLOT": str(st["slot"])} if st.get("slot") else {})},
-                           c.rec_dir(slice_id) / f"builder-r{st['round']}-{uuid.uuid4().hex[:6]}.jsonl"),
+            slice_id, "builder", f"round {st['round']}", st["account"], tip0, call,
             lambda r: append_usage(slice_id, frozen["build"], "builder", st["account"], seat["model"], seat["effort"], r))
     except SeatFailed as e:
+        board()
+        print(e)
+        return 2
+    except ServerSeatRefused as e:
         board()
         print(e)
         return 2
@@ -463,17 +533,25 @@ def verifier(slice_id: str) -> int:
                   f"when the code does the wrong thing, '{GAP}' (a gap in a test) when the code may be right but no "
                   f"test would fail if it were wrong; a finding without a kind counts as a fault. Put "
                   f"the commit {tip} in your answer.{rulings}")
+        if on_server(seat):  # 017-2: the dial's where: server
+            call = lambda: server_run(slice_id, "verifier", st.get("round", 1), prompt, seat, account,  # noqa: E731
+                                      frozen["branch"], vt, {"frozen.json": frozen, "state.json": st})
+        else:
+            call = lambda: launch("verifier", account, vt, prompt, seat["model"], seat["effort"],  # noqa: E731
+                                  {"OSPREY_SLICE": slice_id, "OSPREY_SLICE_WORKTREE": str(vt)},
+                                  c.rec_dir(slice_id) / f"verifier-{focus}-{uuid.uuid4().hex[:6]}.jsonl",
+                                  ["--json-schema", json.dumps(VERDICT_SCHEMA)])
         try:
             res = launch_seat(
-                slice_id, "verifier", focus, account, tip,
-                lambda: launch("verifier", account, vt, prompt, seat["model"], seat["effort"],
-                               {"OSPREY_SLICE": slice_id, "OSPREY_SLICE_WORKTREE": str(vt)},
-                               c.rec_dir(slice_id) / f"verifier-{focus}-{uuid.uuid4().hex[:6]}.jsonl",
-                               ["--json-schema", json.dumps(VERDICT_SCHEMA)]),
+                slice_id, "verifier", focus, account, tip, call,
                 lambda r: append_usage(slice_id, frozen["build"], f"verifier:{focus}", account, seat["model"],
                                        seat["effort"], r),
                 wants_verdict=True)
         except SeatFailed as e:  # no verifier record: the passes so far are run again with the rest
+            board()
+            print(e)
+            return 2
+        except ServerSeatRefused as e:
             board()
             print(e)
             return 2
@@ -587,6 +665,8 @@ def conductor() -> int:
 
 
 def main() -> int:
+    if len(sys.argv) == 3 and sys.argv[1] == "--order":  # 017-2: on the build account, the runner's seat
+        return from_order(Path(sys.argv[2]))
     ap = argparse.ArgumentParser()
     ap.add_argument("seat", choices=["builder", "verifier", "conductor"])
     ap.add_argument("slice", nargs="?")
@@ -600,6 +680,10 @@ def main() -> int:
     except NotLoaded as e:
         print(e, file=sys.stderr)
         return 3
+    except ServerSeatRefused as e:  # 017-2: the dial's where: refused before any seat started
+        board()
+        print(e)
+        return 2
 
 
 if __name__ == "__main__":

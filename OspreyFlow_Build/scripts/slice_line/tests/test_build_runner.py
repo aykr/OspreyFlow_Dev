@@ -71,6 +71,9 @@ runner.SYSTEM_SOCKETS = tuple(harness.get("sockets", []))
 runner.KEPT = runner.KEPT + tuple(harness.get("keep", []))
 runner.MAX_QUEUE = harness.get("max_queue", runner.MAX_QUEUE)
 runner.MAX_BUNDLE = harness.get("max_bundle", runner.MAX_BUNDLE)
+runner.SEAT_WORKER = [sys.executable, __file__, runner_py, sys.argv[2], "_seat"]
+if harness.get("seat_run"):
+    runner.SEAT_RUN = harness["seat_run"]
 sys.exit(runner.main(sys.argv[3:]))
 """
 EXPECTED = ["opentofu-check", "chart-check", "cp-policy-check", "trivy", "trivy-image-api", "harness-a11y"]
@@ -305,9 +308,12 @@ def test_a_slice_that_does_not_merge_cleanly_is_a_conflict_and_nothing_runs(bw):
 @pytest.mark.parametrize("command,reason", [
     (None, "shape"), ("", "shape"), ("checks", "shape"), ("checks s1", "shape"), ("checks S1 extra", "shape"),
     ("checks S1;sh", "shape"), ("checks  S1", "shape"), ("bash", "shape"), ("_work", "shape"),
-    ("start S1 builder", "not-yet"), ("stop S1", "not-yet"), ("status", "not-yet"),
+    ("start S1", "shape"), ("stop S1", "shape"), ("status", "shape"), ("start S1 scout", "shape"),
+    ("start s1 builder", "shape"), ("status S1 builder extra", "shape"), ("start S1 builder;sh", "shape"),
+    ("restart S1 builder", "shape"), ("attach S1 builder", "shape"), ("_seat S1 builder", "shape"),  # a fourth verb
+    ("sh -c id", "shape"), ("bash -l", "shape"), ("tmux attach", "shape"),                            # a shell
 ])
-def test_anything_but_checks_is_refused_and_logged_by_reason_and_length_never_its_text(bw, command, reason):
+def test_anything_but_the_four_verbs_is_refused_and_logged_by_reason_and_length_never_its_text(bw, command, reason):
     w = bw
     code, said = forced(w, command, bundle(w))
     assert code == 3 and said["state"] == "refused" and said["reason"] == reason, said
