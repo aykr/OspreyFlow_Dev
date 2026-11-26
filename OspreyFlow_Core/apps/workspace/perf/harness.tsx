@@ -70,7 +70,7 @@ createRoot(container).render(
 
 // `readyAt` is the moment the canvas's renderer is mounted, with its layers in the page: the canvas's
 // own mark, `data-canvas-state` on its application element (`src/canvas/canvasMarks.ts`), not a class
-// name the renderer gives its own elements. Until WS4a this waited for `canvas.sigma-nodes` to appear,
+// name the renderer gives its own elements. Until WS4a this waited for Sigma 3's nodes canvas to appear,
 // which Sigma 4 does not make (ADR-152 decision 9), so on Sigma 4 the gate would have timed out rather
 // than measured. "mounted" is set in the same task as that canvas appeared, so the figure means what it
 // always meant; "drawn" (the first finished frame) is the mark for a gate that wants the frame itself.

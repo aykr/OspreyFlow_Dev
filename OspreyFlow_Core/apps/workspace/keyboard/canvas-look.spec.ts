@@ -203,7 +203,7 @@ async function linkContrastBetween(page: Page, a: string, b: string): Promise<nu
   }
   await page.addStyleTag({
     content:
-      "button, select, label, .canvas-toolbar, .canvas-legend, .canvas-zoom, [data-canvas-layer="nodes"], [data-canvas-layer="labels"], [data-canvas-layer="hovers"], [data-canvas-layer="hover-nodes"], [data-canvas-layer="link-labels"] { visibility: hidden !important; } .network-canvas { background-image: none !important; }",
+      "button, select, label, .canvas-toolbar, .canvas-legend, .canvas-zoom, [data-canvas-layer='nodes'], [data-canvas-layer='labels'], [data-canvas-layer='hovers'], [data-canvas-layer='hover-nodes'], [data-canvas-layer='link-labels'] { visibility: hidden !important; } .network-canvas { background-image: none !important; }",
   });
   const pixels = readPng(await page.screenshot());
   const scale = pixels.width / page.viewportSize()!.width;

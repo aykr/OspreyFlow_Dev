@@ -1,11 +1,11 @@
 // The canvas's own marks, read by its tests and harnesses in place of the class names Sigma 3 gives its elements
-// (slice WS4a; ADR-152 decision 9: Sigma 4 has no `canvas.sigma-nodes`). A version-bound file (decision 6's table): it
+// (slice WS4a; ADR-152 decision 9: Sigma 4 has no nodes canvas of Sigma 3's kind). A version-bound file (decision 6's table): it
 // alone knows which of the renderer's layers is which, so the port to another Sigma changes this file and no test.
 //
 //   data-canvas-state   on the "Network canvas" application element:
 //                         "mounted"  the renderer is constructed on the canvas, with its layers in the page (what the
 //                                    budget gate's readiness has always meant: `perf/harness.tsx`'s `readyAt`, which
-//                                    until WS4a waited for `canvas.sigma-nodes` to appear);
+//                                    until WS4a waited for Sigma 3's nodes canvas to appear);
 //                         "drawn"    the renderer has finished drawing at least one frame.
 //                       Absent while no renderer is mounted (before the first, and after it is taken down).
 //   data-canvas-layer   on each canvas the renderer draws on: "links", "link-labels", "nodes", "labels", "hovers",

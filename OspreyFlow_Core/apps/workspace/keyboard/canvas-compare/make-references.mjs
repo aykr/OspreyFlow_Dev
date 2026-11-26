@@ -8,6 +8,8 @@
 // from a look nobody can find again proves nothing). Commit the pictures and the record together, with the reason in
 // the commit message.
 import { execFileSync, spawnSync } from "node:child_process";
+import console from "node:console";
+import process from "node:process";
 import { createHash } from "node:crypto";
 import { readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { arch, cpus, platform, release } from "node:os";
