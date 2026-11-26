@@ -5,12 +5,17 @@ Pure: nothing here connects. Building a `Valkey` client only records its setting
 connection pool (a socket is opened by the first command, and no command is sent), so the port is
 read from `client.connection_pool.connection_kwargs`. The fixture under test is the real one,
 imported from `test_ws_ticket.py` and run by pytest itself.
+
+This file does not import the client class, which it would only use to name a type: it reads the
+settings of whatever client the fixture hands it. `test-file-coverage-check` takes an import of that
+class to mean a file needs a live Valkey, and this one needs none, so it runs with the offline tests.
 """
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
-from valkey.asyncio import Valkey
 
 from tests.services.api import test_ws_ticket
 
@@ -32,7 +37,7 @@ def unset_port(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("VALKEY_PORT", raising=False)
 
 
-def _port(client: Valkey) -> int:
+def _port(client: Any) -> object:
     return client.connection_pool.connection_kwargs["port"]
 
 
@@ -40,11 +45,11 @@ def _port(client: Valkey) -> int:
 # before the fixture under test reads it.
 
 
-async def test_the_fixtures_client_takes_valkey_port(pinned_port: int, valkey: Valkey) -> None:
+async def test_the_fixtures_client_takes_valkey_port(pinned_port: int, valkey: Any) -> None:
     assert _port(valkey) == pinned_port
 
 
 async def test_the_fixtures_client_takes_6379_when_valkey_port_is_unset(
-    unset_port: None, valkey: Valkey
+    unset_port: None, valkey: Any
 ) -> None:
     assert _port(valkey) == 6379
