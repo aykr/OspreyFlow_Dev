@@ -15,25 +15,55 @@ Which test fails if the invariant is broken (rule 12):
 * a window that outlives its difference: `test_an_entry_with_no_difference_left_fails`;
 * a release with anything listed: `test_a_release_is_refused_while_the_window_lists_anything`;
 * a nested duplicate inside one front end, which no entry excuses: `test_a_nested_duplicate_*`;
+* a library listed twice, so that one entry hides another: `test_a_library_listed_twice_is_refused`;
 * a check that compares nothing: `test_a_missing_*_does_not_pass`.
-The real tree must pass both ways: `test_the_real_tree_passes`.
+
+**These hold with the checkout's own window shut or open.** GG2a's merge writes the `sigma` entry on main and WS4b takes
+it out (the owner, 26 November 2026, WS4a question 1). So what is asked of the real tree is what the specification
+holds in both states (`test_the_real_tree_passes`, `hold_a_checkout`: the merge check passes; the window lists
+Sigma's own libraries only, since MapLibre never differs (ADR-002 Amendment 1, items 3 and 4); a release goes ahead
+only while it lists nothing), and every planted fault starts from `LEVEL_LOCK`, the real lockfile with no difference
+between the front ends, so the planted one is the only one. That the window is shut today is not asserted: an entry
+with no difference behind it is already refused.
 """
 
 from __future__ import annotations
 
 import copy
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
+import yaml
 
 CORE = Path(__file__).resolve().parents[3] / "OspreyFlow_Core"
 SCRIPT = CORE / "scripts" / "same_drawing_versions_check.mjs"
 REAL_LOCK = json.loads((CORE / "package-lock.json").read_text(encoding="utf-8"))
 WINDOW = "apps/pages/VERSION_WINDOW.yaml"
 EMPTY = "# no difference open\nwindows: []\n"
+DRAWING = re.compile(r"^(sigma|@sigma/[^/]+|maplibre-gl|graphology)$")
+#: The libraries a window is for (ADR-002 Amendment 1, item 3: "different Sigma versions"; item 4: MapLibre never differs).
+SIGMA = re.compile(r"^(sigma|@sigma/[^/]+)$")
+
+
+def level(lock: dict) -> dict:
+    """`lock` with `apps/pages`'s own pins of a drawing library, and the copies npm nested for them, taken out: no
+    difference between the front ends. With the window shut that changes nothing the check reads; with it open (GG2a's
+    Sigma 4 pin) it takes the difference out."""
+    levelled = copy.deepcopy(lock)
+    packages = levelled["packages"]
+    for field in ("dependencies", "devDependencies", "optionalDependencies", "peerDependencies"):
+        declared = packages["apps/pages"].get(field, {})
+        for name in [n for n in declared if DRAWING.match(n)]:
+            del declared[name]
+            packages.pop(f"apps/pages/node_modules/{name}", None)
+    return levelled
+
+
+LEVEL_LOCK = level(REAL_LOCK)
 
 
 def node() -> str:
@@ -60,7 +90,7 @@ def entry(package: str, workspace: str, pages: str, opened: str | None = "2026-1
 
 def scratch(tmp_path: Path, lock: dict | None = None, window: str | None = EMPTY) -> Path:
     (tmp_path / "apps/pages").mkdir(parents=True, exist_ok=True)
-    (tmp_path / "package-lock.json").write_text(json.dumps(lock if lock is not None else REAL_LOCK), encoding="utf-8")
+    (tmp_path / "package-lock.json").write_text(json.dumps(lock if lock is not None else LEVEL_LOCK), encoding="utf-8")
     if window is not None:
         (tmp_path / WINDOW).write_text(window, encoding="utf-8")
     return tmp_path
@@ -85,29 +115,59 @@ def pages_pins(lock: dict, name: str, version: str, extra: dict | None = None) -
 def gg2a_lock() -> dict:
     """The lockfile as `away/GG2a` has it (read there at `759a45233`): Sigma 4.0.6 and graphology 0.26.0 pinned in
     `apps/pages`, Sigma nested under it, graphology the root's own copy."""
-    planted = pages_pins(REAL_LOCK, "sigma", "4.0.6", {"dependencies": {"events": "^3.3.0", "graphology-utils": "^2.5.2"}})
+    planted = pages_pins(LEVEL_LOCK, "sigma", "4.0.6", {"dependencies": {"events": "^3.3.0", "graphology-utils": "^2.5.2"}})
     planted["packages"]["apps/pages"]["devDependencies"]["graphology"] = "0.26.0"
     return planted
 
 
-def test_the_real_tree_passes() -> None:
-    code, output = run_check(CORE)
+def hold_a_checkout(root: Path) -> None:
+    """What I20 holds of a checkout as it stands, with its window shut or open. The merge check passes (so every entry
+    is a difference the tree bears out, with its day). The window lists Sigma's libraries only. A release goes ahead
+    only while the window lists nothing, and is otherwise refused, naming each entry."""
+    code, output = run_check(root)
     assert code == 0, output
     assert "PASS" in output
-    code, output = run_check(CORE, "--release")
+    listed = [e["package"] for e in yaml.safe_load((root / WINDOW).read_text(encoding="utf-8"))["windows"]]
+    assert [name for name in listed if not SIGMA.match(name)] == [], "the version window is for Sigma's libraries only"
+    code, output = run_check(root, "--release")
+    if not listed:
+        assert code == 0, output
+        return
+    assert code == 1, output
+    assert "no release while apps/pages/VERSION_WINDOW.yaml lists anything" in output
+    for name in listed:
+        assert f"{name} (" in output, output
+
+
+def test_the_real_tree_passes() -> None:
+    hold_a_checkout(CORE)
+
+
+def test_a_checkout_with_the_window_open_as_gg2a_leaves_it_passes(tmp_path: Path) -> None:
+    window = "windows:\n" + entry("sigma", real_version("sigma"), "4.0.6")
+    hold_a_checkout(scratch(tmp_path, gg2a_lock(), window))
+
+
+def test_a_checkout_whose_window_excuses_maplibre_fails(tmp_path: Path) -> None:
+    """MapLibre never differs (ADR-002 Amendment 1, item 4). The script takes the entry, as I20's words allow any
+    difference written down; the real tree may not carry one."""
+    window = "windows:\n" + entry("maplibre-gl", real_version("maplibre-gl"), "6.5.0")
+    root = scratch(tmp_path, pages_pins(LEVEL_LOCK, "maplibre-gl", "6.5.0"), window)
+    assert run_check(root)[0] == 0
+    with pytest.raises(AssertionError, match="for Sigma's libraries only"):
+        hold_a_checkout(root)
+
+
+def test_the_planted_faults_start_from_a_tree_with_no_difference(tmp_path: Path) -> None:
+    """Each fault below is planted on `LEVEL_LOCK`: it passes as it is, so a red there is the planted fault's."""
+    code, output = run_check(scratch(tmp_path), "--release")
     assert code == 0, output
-
-
-def test_the_real_window_file_is_empty() -> None:
-    """On main the window is shut (decision 6: empty except while WS4 is open)."""
-    text = (CORE / WINDOW).read_text(encoding="utf-8")
-    assert [line for line in text.splitlines() if line and not line.startswith("#")] == ["windows: []"]
 
 
 def test_the_check_sees_what_each_front_end_reaches_through_the_shared_package(tmp_path: Path) -> None:
     """graphology reaches the workspace both directly and through the linked `@ospreyflow/glass-shared`; a second copy
     under the shared package's own folder is a second version in the workspace, so the link is followed."""
-    planted = copy.deepcopy(REAL_LOCK)
+    planted = copy.deepcopy(LEVEL_LOCK)
     planted["packages"]["packages/glass-shared/node_modules/graphology"] = {"version": "0.25.4", "license": "MIT"}
     code, output = run_check(scratch(tmp_path, planted))
     assert code == 1, output
@@ -118,7 +178,7 @@ def test_the_check_sees_what_each_front_end_reaches_through_the_shared_package(t
 def test_a_difference_with_an_empty_window_fails(tmp_path: Path) -> None:
     """I20's own red (ADR-152's table): `apps/pages` pinning `maplibre-gl` 6.5 while the workspace resolves its own."""
     workspace = real_version("maplibre-gl")
-    code, output = run_check(scratch(tmp_path, pages_pins(REAL_LOCK, "maplibre-gl", "6.5.0")))
+    code, output = run_check(scratch(tmp_path, pages_pins(LEVEL_LOCK, "maplibre-gl", "6.5.0")))
     assert code == 1, output
     assert f"maplibre-gl: apps/workspace resolves {workspace} and apps/pages resolves 6.5.0" in output
     assert "does not list it" in output
@@ -164,14 +224,14 @@ def test_an_entry_naming_other_versions_fails(tmp_path: Path) -> None:
 def test_an_entry_with_no_difference_left_fails(tmp_path: Path) -> None:
     """WS4b closes the window in the merge that ports the workspace: an entry left behind is refused."""
     window = "windows:\n" + entry("sigma", real_version("sigma"), "4.0.6")
-    code, output = run_check(scratch(tmp_path, REAL_LOCK, window))
+    code, output = run_check(scratch(tmp_path, LEVEL_LOCK, window))
     assert code == 1, output
     assert "do not differ in it: take the entry out" in output
 
 
 def test_an_entry_for_a_library_i20_does_not_hold_is_refused(tmp_path: Path) -> None:
     window = "windows:\n" + entry("react", "19.3.1", "19.2.0")
-    code, output = run_check(scratch(tmp_path, REAL_LOCK, window))
+    code, output = run_check(scratch(tmp_path, LEVEL_LOCK, window))
     assert code == 1, output
     assert "not a drawing library I20 holds equal" in output
 
@@ -187,9 +247,31 @@ def test_an_entry_for_a_library_i20_does_not_hold_is_refused(tmp_path: Path) -> 
     ],
 )
 def test_a_window_file_it_cannot_read_does_not_pass(tmp_path: Path, window: str) -> None:
-    code, output = run_check(scratch(tmp_path, REAL_LOCK, window))
+    code, output = run_check(scratch(tmp_path, LEVEL_LOCK, window))
     assert code == 1, output
     assert WINDOW in output
+
+
+@pytest.mark.parametrize(
+    "pages_versions",
+    [("4.0.5", "4.0.6"), ("4.0.6", "4.0.5"), ("4.0.6", "4.0.6")],
+    ids=["the wrong entry first", "the wrong entry last", "the same entry twice"],
+)
+def test_a_library_listed_twice_is_refused(tmp_path: Path, pages_versions: tuple[str, str]) -> None:
+    """One entry per library, in either order: a second one would hide the first from the comparison with the tree."""
+    window = "windows:\n" + "".join(entry("sigma", real_version("sigma"), v) for v in pages_versions)
+    code, output = run_check(scratch(tmp_path, gg2a_lock(), window))
+    assert code == 1, output
+    assert "it lists sigma more than once" in output
+
+
+def test_a_library_listed_twice_is_refused_however_its_name_is_quoted(tmp_path: Path) -> None:
+    """GG2a's own entry, and a stale one above it with the name in quotes."""
+    stale = entry('"sigma"', real_version("sigma"), "4.0.5")
+    window = "windows:\n" + stale + entry("sigma", real_version("sigma"), "4.0.6")
+    code, output = run_check(scratch(tmp_path, gg2a_lock(), window))
+    assert code == 1, output
+    assert "it lists sigma more than once" in output
 
 
 def test_a_release_is_refused_while_the_window_lists_anything(tmp_path: Path) -> None:
@@ -205,7 +287,7 @@ def test_a_release_is_refused_while_the_window_lists_anything(tmp_path: Path) ->
 def test_a_nested_duplicate_under_a_plugin_fails(tmp_path: Path) -> None:
     """`@sigma/node-border` given a private copy of Sigma, as npm nests one when the plugin's range excludes the root's:
     the workspace would draw nodes with one renderer and the rest with another."""
-    planted = copy.deepcopy(REAL_LOCK)
+    planted = copy.deepcopy(LEVEL_LOCK)
     planted["packages"]["node_modules/@sigma/node-border/node_modules/sigma"] = {"version": "3.1.0", "license": "MIT"}
     planted["packages"]["node_modules/@sigma/node-border"]["dependencies"] = {"sigma": "3.1.0"}
     code, output = run_check(scratch(tmp_path, planted))
@@ -226,13 +308,13 @@ def test_a_nested_duplicate_is_not_excused_by_the_window(tmp_path: Path) -> None
 
 
 def test_a_missing_window_file_does_not_pass(tmp_path: Path) -> None:
-    code, output = run_check(scratch(tmp_path, REAL_LOCK, window=None))
+    code, output = run_check(scratch(tmp_path, LEVEL_LOCK, window=None))
     assert code == 1, output
     assert "no apps/pages/VERSION_WINDOW.yaml" in output
 
 
 def test_a_missing_front_end_does_not_pass(tmp_path: Path) -> None:
-    planted = copy.deepcopy(REAL_LOCK)
+    planted = copy.deepcopy(LEVEL_LOCK)
     del planted["packages"]["apps/pages"]
     code, output = run_check(scratch(tmp_path, planted))
     assert code == 1, output
