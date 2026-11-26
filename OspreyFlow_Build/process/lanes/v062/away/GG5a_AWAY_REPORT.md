@@ -207,6 +207,7 @@ comes, is the run of record.
 | 15:10:54 to 15:15:39 | `npm run test:csp --workspace apps/pages`, the full spec | **50 passed** (4.7 min) |
 | 15:27 | the checks | see below |
 | 15:44:58 to 15:49:22 | the full spec after the review's fixes | **56 passed** (28 cases × 2 browsers, 4.4 min). The two stability runs above were of the 25-case version. |
+| 15:52:23 to 15:57:47 | the full spec at `c8e21c3d4` (comments changed only), and the checks again: as at `0da010da2` (the same 2 vitest and 190 `tsc` reds as main, every other check passing) | **56 passed** (5.4 min) |
 | 15:29:35 to 15:34:11 | full spec, stability run 2 | **50 passed** (4.6 min) |
 | 15:34:11 to 15:38:43 | full spec, stability run 3 | **50 passed** (4.5 min) |
 
