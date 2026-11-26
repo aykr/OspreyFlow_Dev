@@ -7,6 +7,8 @@ export interface Pixels {
   width: number;
   height: number;
   at: (x: number, y: number) => [number, number, number];
+  /** The pixel's opacity, 0 to 255 (255 for a picture with no alpha). */
+  alphaAt: (x: number, y: number) => number;
 }
 
 export function readPng(file: Buffer): Pixels {
@@ -62,5 +64,6 @@ export function readPng(file: Buffer): Pixels {
       const i = y * stride + x * channels;
       return [out[i]!, out[i + 1]!, out[i + 2]!];
     },
+    alphaAt: (x, y) => (channels === 4 ? out[y * stride + x * channels + 3]! : 255),
   };
 }

@@ -1,8 +1,8 @@
 // The canvas-look comparison's arithmetic (ADR-152 decision 9; slice WS4a), kept apart from the spec so its own red
 // cases can run without a browser (`canvasCompare.test.ts`). Node only: it reads the files in `canvas-compare/`.
 //
-// Two pictures are compared pixel by pixel. A pixel differs when any of its red, green or blue values differs by more
-// than `channel`; the pictures match when the share of differing pixels is at most `share`. That pair is the one pixel
+// Two pictures are compared pixel by pixel. A pixel differs when any of its red, green, blue or opacity values differs
+// by more than `channel`; the pictures match when the share of differing pixels is at most `share`. That pair is the one pixel
 // tolerance decision 9 allows: there is no list of accepted differences, and no scene has a tolerance of its own.
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
@@ -51,7 +51,14 @@ export function compare(actual: Buffer, reference: Buffer, channel: number): Com
     for (let x = 0; x < a.width; x++) {
       const p = a.at(x, y);
       const q = b.at(x, y);
-      if (Math.abs(p[0] - q[0]) > channel || Math.abs(p[1] - q[1]) > channel || Math.abs(p[2] - q[2]) > channel) differing++;
+      // Opacity too: the exported PNG is drawn on a transparent ground, where black at 75% (its watermark) changes
+      // the alpha alone; read as colour only, every word of it was invisible to the comparison.
+      if (
+        Math.abs(p[0] - q[0]) > channel ||
+        Math.abs(p[1] - q[1]) > channel ||
+        Math.abs(p[2] - q[2]) > channel ||
+        Math.abs(a.alphaAt(x, y) - b.alphaAt(x, y)) > channel
+      ) differing++;
     }
   }
   return { width: a.width, height: a.height, differing, share: differing / (a.width * a.height) };

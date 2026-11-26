@@ -9,12 +9,14 @@ import { describe, expect, it } from "vitest";
 
 import { CEILING, compare, readReferences, sha256, toleranceRefusal } from "./canvasCompare";
 
-/** An 8-bit RGB PNG of `width` by `height`, every pixel `colour` except those `paint` changes. */
-function png(width: number, height: number, colour: [number, number, number], paint: (x: number, y: number) => [number, number, number] | null = () => null): Buffer {
+/** An 8-bit PNG of `width` by `height`, every pixel `colour` except those `paint` changes: RGB for three values, RGBA
+ * for four (the exported PNG's shape). */
+function png(width: number, height: number, colour: number[], paint: (x: number, y: number) => number[] | null = () => null): Buffer {
+  const channels = colour.length;
   const rows: Buffer[] = [];
   for (let y = 0; y < height; y++) {
-    const row = Buffer.alloc(1 + width * 3);
-    for (let x = 0; x < width; x++) row.set(paint(x, y) ?? colour, 1 + x * 3);
+    const row = Buffer.alloc(1 + width * channels);
+    for (let x = 0; x < width; x++) row.set(paint(x, y) ?? colour, 1 + x * channels);
     rows.push(row);
   }
   const chunk = (type: string, body: Buffer) => {
@@ -27,7 +29,7 @@ function png(width: number, height: number, colour: [number, number, number], pa
   ihdr.writeUInt32BE(width, 0);
   ihdr.writeUInt32BE(height, 4);
   ihdr[8] = 8;
-  ihdr[9] = 2;
+  ihdr[9] = channels === 4 ? 6 : 2;
   return Buffer.concat([
     Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]),
     chunk("IHDR", ihdr),
@@ -77,6 +79,11 @@ describe("the comparison", () => {
     const dotted = png(60, 9, ground, (x, y) => (y === 4 && x % 6 < 3 ? [180, 190, 200] : null));
     const solid = png(60, 9, ground, (x, y) => (y === 4 ? [180, 190, 200] : null));
     expect(compare(solid, dotted, 16).differing).toBe(30);
+  });
+  it("reads a difference in opacity alone (black at 75% on the export's transparent ground, its watermark)", () => {
+    const clear = png(20, 10, [0, 0, 0, 0]);
+    const marked = png(20, 10, [0, 0, 0, 0], (x, y) => (y === 5 && x < 8 ? [0, 0, 0, 191] : null));
+    expect(compare(marked, clear, 16).differing).toBe(8);
   });
   it("finds pictures of different sizes wholly unlike", () => {
     expect(compare(png(10, 10, ground), png(10, 11, ground), 16).share).toBe(1);
