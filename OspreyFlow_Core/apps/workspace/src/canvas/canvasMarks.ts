@@ -11,8 +11,8 @@
 //   data-canvas-layer   on each canvas the renderer draws on: "links", "link-labels", "nodes", "labels", "hovers",
 //                       "hover-nodes", "pointer", and the canvas's own "community-links" (ADR-119).
 //
-// `OspreyFlow_Build/tests/glass_trees/test_no_sigma_class_names_in_the_workspace.py` fails on any `sigma-` class name
-// left in the workspace, so nothing finds the canvas any other way.
+// The developer repository's `tests/glass_trees/test_no_sigma_class_names_in_the_workspace.py` fails on any `sigma-`
+// class name left in the workspace, so nothing finds the canvas any other way.
 import type Sigma from "sigma";
 
 export const CANVAS_STATE = "data-canvas-state";
