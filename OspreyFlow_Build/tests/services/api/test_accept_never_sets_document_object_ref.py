@@ -148,6 +148,15 @@ class _OneCase:
         )
 
 
+class _AnyonesCase(_OneCase):
+    """Lets another unit into the case, so the finding's own refusal is the one answered."""
+
+    async def get_authorized(
+        self, investigation_id: str, principal: Principal, *, need: object = None
+    ) -> Investigation:
+        return await super().get_authorized(investigation_id, ANALYST)
+
+
 class _Valkey:
     def __init__(self) -> None:
         self.published: list[str] = []
@@ -221,7 +230,8 @@ async def _pending(
 def _extract_a_document(served: _App, model_says: dict[str, Any]) -> str:
     """The review queue's own extract route, with `Document` among the types the caller chose. The
     model answers one Document holding `model_says`. Returns the pending finding's id."""
-    served.serve(model=FixedModel({"Document": [{"title": TITLE, **model_says, "confidence": 0.9}]}))
+    found = {"title": TITLE, **model_says, "confidence": 0.9}
+    served.serve(model=FixedModel({"Document": [found]}))
     response = served.client.post(
         f"{BASE}/ingest/extract",
         json={
@@ -527,12 +537,3 @@ async def test_another_units_finding_is_not_found_whatever_the_override_holds(
     assert (theirs.status_code, theirs.json()) == (404, missing.json())
     assert theirs.json()["error"] == "extraction_candidate_not_found"
     assert asked == _Writes()
-
-
-class _AnyonesCase(_OneCase):
-    """Lets the other unit into the case, so the finding's own refusal is the one answered."""
-
-    async def get_authorized(
-        self, investigation_id: str, principal: Principal, *, need: object = None
-    ) -> Investigation:
-        return await super().get_authorized(investigation_id, ANALYST)
