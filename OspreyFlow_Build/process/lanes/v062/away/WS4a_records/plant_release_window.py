@@ -7,6 +7,11 @@ edited: the scratch copy is made under `OspreyFlow_Build/dist/` (ignored by git)
 The copy is `git archive HEAD`: main with this slice merged, which is what main is when the owner applies the diff
 (today's main has no `scripts/same_drawing_versions_check.mjs` to ask). The Python is the checkout's own
 `OspreyFlow_Core/.venv`.
+
+Round 2 adds two things. The diff only adds, so `git apply --numstat` must count no removed line in either file (round
+1's diff also rewrote a line of `test_release_owed.py` it had no business with). And the runs are made again in a copy
+holding the state GG2a's merge leaves main in (its lockfile, read from its branch at `37492cc`, and the `sigma` window
+entry), since the diff's cases are to hold whether or not the checkout's own window is open.
 """
 
 from __future__ import annotations
@@ -48,7 +53,30 @@ def run(label: str) -> None:
     print("\n".join(line[:200] for line in kept))
 
 
+GG2A = "37492cc"
+ENTRY = """windows:
+  - package: sigma
+    apps/workspace: 3.0.3
+    apps/pages: 4.0.6
+    opened: 2026-11-26
+"""
+
+
+def open_the_window() -> None:
+    """The scratch copy put in the state GG2a's merge leaves main in."""
+    lock = subprocess.run(["git", "show", f"{GG2A}:OspreyFlow_Core/package-lock.json"], cwd=ROOT,
+                          capture_output=True, check=True).stdout  # fmt: skip
+    (SCRATCH / "OspreyFlow_Core/package-lock.json").write_bytes(lock)
+    window = SCRATCH / "OspreyFlow_Core/apps/pages/VERSION_WINDOW.yaml"
+    text = window.read_text(encoding="utf-8")
+    assert text.endswith("windows: []\n"), "the window file does not end as it is written"
+    window.write_text(text.removesuffix("windows: []\n") + ENTRY, encoding="utf-8")
+
+
 def main() -> None:
+    counted = subprocess.run(["git", "apply", "--numstat", DIFF], cwd=ROOT, capture_output=True, text=True, check=True)
+    print("--- lines added, removed, by the diff:")
+    print(counted.stdout.rstrip())
     shutil.rmtree(SCRATCH, ignore_errors=True)
     SCRATCH.mkdir(parents=True)
     try:
@@ -66,6 +94,10 @@ def main() -> None:
         run("planted: window_refusal() refuses whatever the window holds")
         tool.write_text(applied, encoding="utf-8")
         run("restored")
+        open_the_window()
+        run("the diff applied, the checkout's own window open as GG2a leaves it")
+        tool.write_text(applied.replace(CALL, ""), encoding="utf-8")
+        run("window open, planted: window_refusal()'s call removed from main()")
     finally:
         shutil.rmtree(SCRATCH, ignore_errors=True)
 
