@@ -388,7 +388,7 @@ test("the map draws under the page service's own policy, with no violation and n
   // The page's own worker ran, from the page's own origin: the path `worker-src 'self'` allows, with no `blob:`.
   expect(run.workers.length).toBeGreaterThan(0);
   for (const w of run.workers) expect(originOf(w), `worker at ${w}`).toBe(server.origin);
-  // Every path the map has was taken, so "no violation" covers each: the worker file, the style, the archive's tiles (by
+  // Every path this style gives the map was taken, so "no violation" covers each: the worker file, the style, the archive's tiles (by
   // range), the raster tile, the sprite's two files and a glyph range. A path never taken would pass by never being tried.
   const paths = run.served.map((s) => s.path);
   for (const pattern of [

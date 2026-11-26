@@ -3,7 +3,9 @@
 //
 // It does what a map page does and nothing more: names MapLibre's worker on the page's own origin before any map is made, as
 // `apps/workspace/src/map/maplibreWorker.ts` does (`setWorkerUrl`, once); registers the `pmtiles://` protocol, as the
-// workspace's Map view does; and makes one map with the product's own option (`attributionControl: false`, `MapView.tsx`).
+// workspace's Map view does; and makes one map with the product's option (`attributionControl: false`, `MapView.tsx`), plus
+// `fadeDuration: 0` so the picture is read without waiting on fades. It has no `transformRequest` (the workspace's adds a
+// bearer token to Conduit reads, which changes headers, not addresses or fetch kinds).
 // The worker's and style's addresses come from the server, in `<meta>` tags, so a planted case changes the page's data and
 // never its code.
 import { Map as MapLibreMap, addProtocol, getVersion, setWorkerUrl } from "maplibre-gl";
