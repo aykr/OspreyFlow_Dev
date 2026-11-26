@@ -20,6 +20,7 @@
 //     versions moved, or the difference closed), since a window that outlives its difference is no longer short;
 //   * with --release, any entry at all.
 // A lockfile, front end or window file that cannot be read is a failure: a check with nothing to compare must not pass.
+// So is a window file that names one library twice: only one of the two could be held against the tree.
 import { existsSync, readFileSync } from "node:fs";
 import { dirname, join, posix, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -126,8 +127,12 @@ export function readWindow(text) {
     else current[key] = value;
   }
   if (entries.length === 0) problems.push("`windows:` with no entries: write `windows: []`");
+  const named = new Set();
   for (const entry of entries) {
     const name = entry.package ?? "(no package)";
+    // The comparison with the tree reads one entry for each library, so a second would hide the first from it.
+    if (entry.package && named.has(entry.package)) problems.push(`it lists ${name} more than once: one entry for each library`);
+    named.add(entry.package);
     for (const key of ENTRY_KEYS) {
       if (!entry[key]) problems.push(`the entry for ${name} gives no ${key === "opened" ? "day it opened (opened: YYYY-MM-DD)" : key}`);
     }
