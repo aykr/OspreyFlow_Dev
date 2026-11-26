@@ -10,4 +10,5 @@ routes:
   - /admin/people
   - /reports
   - /packs/trends
+  - /cases
   - /alert-queue

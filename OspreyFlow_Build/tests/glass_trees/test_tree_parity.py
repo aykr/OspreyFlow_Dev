@@ -175,15 +175,15 @@ def parity_problems(tmp_path: Path) -> list[str]:
 
 
 def test_the_real_tree_is_partial() -> None:
-    """Today `FUNCTIONS.yaml` has 50 rows and the GOV.UK tree has five pages, Help (slice GR2a), the Admin People list (slice AD3a), the
-    alert monitoring figures (slice GR3a), trends shown together (slice GR4a) and the alert queue (slice RM1a): five routes in the list,
-    and two rows with a route, since neither the `admin` function, nor the `reports-trends-shown-together` one, nor the
-    `alerts-rules-watches` one is complete (their routes stay empty)."""
+    """Today `FUNCTIONS.yaml` has 50 rows and the GOV.UK tree has six pages, Help (slice GR2a), the Admin People list (slice AD3a), the
+    alert monitoring figures (slice GR3a), trends shown together (slice GR4a), the cases page (slice GR1a) and the alert queue (slice RM1a): six routes
+    in the list, and two rows with a route, since the `admin`, `reports-trends-shown-together`, `cases-and-views` and `alerts-rules-watches` functions are
+    not complete (their routes stay empty)."""
     assert len(real_rows()) == 50
     assert tree_parity.govuk_tree_state() == PARTIAL
     assert tree_parity.ROUTE_LIST.is_file(), "the GOV.UK tree's route list is gone"
-    # GR3a added the third page, GR4a the fourth, RM1a the fifth
-    assert tree_parity._routes(tree_parity.ROUTE_LIST) == ["/help", "/admin/people", "/reports", "/packs/trends", "/alert-queue"]
+    # GR3a added the third page, GR4a the fourth, GR1a the fifth, RM1a the sixth
+    assert tree_parity._routes(tree_parity.ROUTE_LIST) == ["/help", "/admin/people", "/reports", "/packs/trends", "/cases", "/alert-queue"]
     assert [row["id"] for row in real_rows() if row["route"]] == ["reports-figures", "help"]
 
 

@@ -71,6 +71,7 @@ test	OspreyFlow_Build/tests/harness/test_bundle_exit_test.py	run	container-guard
 test	OspreyFlow_Build/tests/harness/test_compose_lockout.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_compose_lockout.py:88
 test	OspreyFlow_Build/tests/harness/test_deployment_guard.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_deployment_guard.py:3
 test	OspreyFlow_Build/tests/harness/test_first_admin.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_first_admin.py:78
+test	OspreyFlow_Build/tests/harness/test_gateway_token_reader_role.py	not-run	container	OspreyFlow_Build/tests/harness/test_gateway_token_reader_role.py:93	pending: AD1c. its one docker run of postgres:16.4 by its registry digest (the verifier in the pinned image)
 test	OspreyFlow_Build/tests/harness/test_harness_image.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_harness_image.py:1
 test	OspreyFlow_Build/tests/harness/test_harness_main.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_harness_main.py:29; OspreyFlow_Build/tests/harness/test_harness_main.py:42	main() refuses --port 7217 and the webapp is patched out (line 40): nothing binds
 test	OspreyFlow_Build/tests/harness/test_helm_chart.py	run	container-guarded	OspreyFlow_Build/tests/harness/test_helm_chart.py:29

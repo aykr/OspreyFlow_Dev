@@ -686,7 +686,7 @@ describe("the alert queue page (the govuk tree)", () => {
   it("AQ10: the route is in the tree's list and in its table of pages, the govuk tree serves it and the default tree does not", async () => {
     const list = read("tree-govuk", "routes.yaml");
     const listed = [...list.matchAll(/^\s+-\s+(\S+)\s*$/gm)].map((m) => m[1]);
-    expect(listed.sort()).toEqual(["/admin/people", "/alert-queue", "/help", "/packs/trends", "/reports"]); // Help, Admin People (AD3a), alert monitoring (GR3a), trends shown together (GR4a), this page
+    expect(listed.sort()).toEqual(["/admin/people", "/alert-queue", "/cases", "/help", "/packs/trends", "/reports"]); // Help, Admin People (AD3a), alert monitoring (GR3a), trends shown together (GR4a), cases (GR1a), this page
     const govuk = PAGES.filter((page) => (page.trees ?? ["default"]).includes("govuk")).map((page) => [page.id, page.path, [...page.methods]]);
     expect(govuk).toContainEqual(["alerts-rules-watches", "/alert-queue", ["GET"]]);
     expect(govuk.map((g) => g[1] as string).sort()).toEqual(listed);

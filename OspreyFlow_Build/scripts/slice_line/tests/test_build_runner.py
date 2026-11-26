@@ -65,12 +65,15 @@ WRAP = """import json, sys
 runner_py, harness = sys.argv[1], json.loads(open(sys.argv[2]).read())
 sys.path.insert(0, runner_py.rsplit("/", 1)[0])
 import runner
-runner.LAUNCH = "direct"
+runner.LAUNCH = harness.get("launch", "direct")
+runner.OWN_ENV = harness.get("own_env", ["env"])
+runner.TMUX = harness.get("tmux", getattr(runner, "TMUX", "tmux"))
 runner.WORKER = [sys.executable, __file__, runner_py, sys.argv[2], "_work"]
 runner.SYSTEM_SOCKETS = tuple(harness.get("sockets", []))
 runner.KEPT = runner.KEPT + tuple(harness.get("keep", []))
 runner.MAX_QUEUE = harness.get("max_queue", runner.MAX_QUEUE)
 runner.MAX_BUNDLE = harness.get("max_bundle", runner.MAX_BUNDLE)
+runner.TARGET_SECONDS = harness.get("target_seconds", runner.TARGET_SECONDS)
 runner.SEAT_WORKER = [sys.executable, __file__, runner_py, sys.argv[2], "_seat"]
 if harness.get("seat_run"):
     runner.SEAT_RUN = harness["seat_run"]

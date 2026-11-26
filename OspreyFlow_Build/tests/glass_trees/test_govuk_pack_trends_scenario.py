@@ -84,8 +84,8 @@ GR3A_ROW = "reports-figures"
 EXPECTED_IDS = [f"TS{n}" for n in range(1, 16)]
 #: 49 until this slice, which added the page's own row (the conductor's round-3 table, 25 November 2026).
 EXPECTED_FUNCTIONS = 50
-#: Slice RM1a added the alert queue (`/alert-queue`) after this page.
-EXPECTED_ROUTES = ["/help", "/admin/people", "/reports", PATH, "/alert-queue"]
+#: Slice GR1a added the cases page (`/cases`) after this page, and slice RM1a the alert queue (`/alert-queue`) after that.
+EXPECTED_ROUTES = ["/help", "/admin/people", "/reports", PATH, "/cases", "/alert-queue"]
 
 #: The owner's table of cases for GR4a (`process/lanes/v062/slices/GR4a.md`), by number, and the rows that carry each.
 CASES: dict[str, tuple[str, ...]] = {
@@ -347,7 +347,7 @@ def function_problems(data: dict[str, Any]) -> list[str]:
 
 def route_problems(data: dict[str, Any]) -> list[str]:
     if data["routes"] != EXPECTED_ROUTES:
-        return [f"the route list is {data['routes']!r}: the tree has five pages, {EXPECTED_ROUTES}"]
+        return [f"the route list is {data['routes']!r}: the tree has six pages, {EXPECTED_ROUTES}"]
     return []
 
 
@@ -550,8 +550,8 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
         "its id",
     ),
     ("the dashboards row given a scenario", _row("reports-dashboards", scenario="TS1"), function_problems, "reports-dashboards"),
-    ("a route in the list the code has no page for", lambda d: d["routes"].append("/welcome"), route_problems, "five pages"),
-    ("the path left out of the list", lambda d: d["routes"].remove(PATH), route_problems, "five pages"),
+    ("a route in the list the code has no page for", lambda d: d["routes"].append("/welcome"), route_problems, "six pages"),
+    ("the path left out of the list", lambda d: d["routes"].remove(PATH), route_problems, "six pages"),
     ("the page at another path", _replace("page_module", f'path: "{PATH}"', 'path: "/packs/board"'), module_problems, "its path"),
     ("the page for both trees", _replace("page_module", 'trees: ["govuk"]', 'trees: ["default", "govuk"]'), module_problems, "GOV.UK tree alone"),
     ("the page answering POST", _replace("page_module", 'methods: ["GET"]', 'methods: ["GET", "POST"]'), module_problems, "GET alone"),

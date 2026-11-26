@@ -292,9 +292,9 @@ def route_claim_problems(data: dict[str, Any]) -> list[str]:
 
 
 def route_problems(data: dict[str, Any]) -> list[str]:
-    # The tree's pages on the line: Help (GR2a), the Admin People list (AD3a), the alert monitoring page (GR3a), trends shown together (GR4a) and this one.
-    if sorted(data["routes"]) != sorted(["/help", "/admin/people", "/reports", "/packs/trends", ROUTE]):
-        return [f"the route list is {data['routes']!r}: the tree has five pages, /help, /admin/people, /reports, /packs/trends and {ROUTE}"]
+    # The tree's pages on the line: Help (GR2a), the Admin People list (AD3a), the alert monitoring page (GR3a), trends shown together (GR4a), the cases page (GR1a) and this one.
+    if sorted(data["routes"]) != sorted(["/help", "/admin/people", "/reports", "/packs/trends", "/cases", ROUTE]):
+        return [f"the route list is {data['routes']!r}: the tree has six pages, /help, /admin/people, /reports, /packs/trends, /cases and {ROUTE}"]
     return []
 
 
@@ -530,8 +530,8 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
     ("the row that does not name the page", _row(ROW, where="apps/workspace/src/alerts/"), function_problems, "does not name the page"),
     ("a row marked built while its halves are not", _row(ROW, status="built"), function_problems, "status"),
     ("a second row given a route", _row("admin", route="/admin"), function_problems, "not Help's and the alert"),
-    ("the route left out of the list", lambda d: d["routes"].remove(ROUTE), route_problems, "five pages"),
-    ("a route in the list the code has no page for", lambda d: d["routes"].append("/rules"), route_problems, "five pages"),
+    ("the route left out of the list", lambda d: d["routes"].remove(ROUTE), route_problems, "six pages"),
+    ("a route in the list the code has no page for", lambda d: d["routes"].append("/rules"), route_problems, "six pages"),
     ("the harness test not told", _in("pins", "tests/harness/test_pages_setting.py", ROUTE, "/elsewhere"), pin_problems, "test_pages_setting"),
     ("the tree parity test not told", _in("pins", "tests/glass_trees/test_tree_parity.py", ROUTE, "/elsewhere"), pin_problems, "test_tree_parity"),
     ("the help scenario's route list not told", _in("pins", "tests/glass_trees/test_govuk_help_scenario.py", ROUTE, "/elsewhere"), pin_problems, "test_govuk_help_scenario"),
