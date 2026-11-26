@@ -112,6 +112,7 @@ def _node_write(
 async def _write_node(*, owning_unit: str, sanitisation_code: str | None = None) -> str:
     client = ArcadeDBClient(ArcadeDBConfig.from_env(database="ospreyflow"))
     try:
+        await client.create_database_if_absent()
         graph = GraphArcadeDBAdapter(client, load_uk_le_scheme())
         await graph.apply_schema(load_default_ontology())
         tx = await graph.begin_transaction()
@@ -130,6 +131,7 @@ async def _write_nodes(specs: list[tuple[str, str]]) -> list[str]:
     (ADR-124 decision 7), so a node the test seeds must be written there first."""
     client = ArcadeDBClient(ArcadeDBConfig.from_env(database="ospreyflow"))
     try:
+        await client.create_database_if_absent()
         graph = GraphArcadeDBAdapter(client, load_uk_le_scheme())
         await graph.apply_schema(load_default_ontology())
         tx = await graph.begin_transaction()
