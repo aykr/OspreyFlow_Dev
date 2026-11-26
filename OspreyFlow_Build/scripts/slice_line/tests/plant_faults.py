@@ -867,6 +867,23 @@ M = [
  ('build_server/runner.py', 'seat_tmux("has-session"', '[TMUX, "has-session"', 'test_seat_env_socket and (own_tmux_server or gone_from_its_own_server)'),
  ('build_server/runner.py', 'seat_tmux("kill-session"', '[TMUX, "kill-session"', 'test_seat_env_socket and (own_tmux_server)'),
  ('build_server/runner.py', '"--", "/usr/bin/env", "-i",\n                                 *("%s=%s" % kv for kv in sorted(env.items())), *SEAT_WORKER', '"--", *SEAT_WORKER', 'test_seat_env_socket and (another_environment)'),
+ ('merge_slice.py', '"RERUN_TESTS=" + make_words(py)]', '"RERUN_TESTS=" + " ".join(py)]', 'test_server_rerun_rm1a and (quotes_and_shell_words)'),
+ ('merge_slice.py', '    return " ".join(shlex.quote(n).replace("$", "$$") for n in names)', '    return " ".join(shlex.quote(n) for n in names)', 'test_server_rerun_rm1a and (quotes_and_shell_words)'),
+ ('merge_slice.py', '    py = [t for t in tests if PYTEST_NAME.match(t)]', '    py = list(tests)', 'test_server_rerun_rm1a and (vitest or no_runner or bare_file)'),
+ ('merge_slice.py', 'PYTEST_NAME = re.compile(r"\\A\\S+\\.py(?:::\\S.*)?\\Z")', 'PYTEST_NAME = re.compile(r"\\A\\S+(?:::\\S.*)?\\Z")', 'test_server_rerun_rm1a and (vitest or no_runner or bare_file)'),
+ ('merge_slice.py', '    if len(held) != 1:\n        return None', '    if not held:\n        return None', 'test_server_rerun_rm1a and (two_workspaces)'),
+ ('merge_slice.py', '    if VITEST_BUDGET.search(file):\n        cmd += ["--config", VITEST_BUDGET_CONFIG]', '    if False:\n        cmd += ["--config", VITEST_BUDGET_CONFIG]', 'test_server_rerun_rm1a and (budget_config or whole_through)'),
+ ('merge_slice.py', 'VITEST_BUDGET = re.compile(r"\\.budget\\.test\\.[cm]?[jt]sx?\\Z")', 'VITEST_BUDGET = re.compile(r"\\.test\\.[cm]?[jt]sx?\\Z")', 'test_server_rerun_rm1a and (outside_the_budget)'),
+ ('merge_slice.py', '    return (f"the server\'s failing vitest case, rerun: {name}", cmd, core / held[0])', '    return (f"the server\'s failing vitest case, rerun: {name}", cmd, core)', 'test_server_rerun_rm1a and (vitest)'),
+ ('merge_slice.py', '        cmd += ["-t", f"^{js_regex(case)}$"]', '        cmd += ["-t", case]', 'test_server_rerun_rm1a and (budget_config)'),
+ ('merge_slice.py', '        cmd += ["-t", f"^{js_regex(case)}$"]', '        cmd += ["-t", f"{js_regex(case)}"]', 'test_server_rerun_rm1a and (budget_config)'),
+ ('merge_slice.py', 'VITEST_NAME = re.compile(r"\\A(\\S+\\.test\\.[cm]?[jt]sx?)(?: > (.+?)| \\[ .* \\])?\\s*\\Z")', 'VITEST_NAME = re.compile(r"\\A(\\S+\\.test\\.[cm]?[jt]sx?)(?: > (.+?))?\\s*\\Z")', 'test_server_rerun_rm1a and (whole_file)'),
+ ('merge_slice.py', '            unplaced.append(t)', '            pass', 'test_server_rerun_rm1a and (no_runner or two_workspaces)'),
+ ('server_gate.py', '    if is_red(e):  # a newer green', '    if False:  # a newer green', 'test_server_rerun_rm1a and (newer_green_at_the_same_tip)'),
+ ('server_gate.py', '        if has_verdict(o):\n            return (newer, o) if o.get("verdict") == "pass" else None', '        if has_verdict(o) and o.get("verdict") == "pass":\n            return (newer, o)', 'test_server_rerun_rm1a and (newer_red_after_a_newer_green)'),
+ ('server_gate.py', '        if has_verdict(o):\n            return (newer, o) if', '        if o:\n            return (newer, o) if', 'test_server_rerun_rm1a and (newer_error_does_not_hide)'),
+ ('server_gate.py', '        o = element(fetch(newer), slice_id, tip)\n        if has_verdict(o):\n            return (newer, o) if', '        o = fetch(newer)\n        if has_verdict(o):\n            return (newer, o) if', 'test_server_rerun_rm1a and (server_says_is_another_tip)'),
+ ('server_gate.py', '    if not rid or rid not in rows:\n        return []\n    after = rows[len(rows) - rows[::-1].index(rid):]', '    after = rows', 'test_server_rerun_rm1a and (newer_red_is_never)'),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.

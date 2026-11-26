@@ -96,7 +96,10 @@ TARGETS = (
 A11Y_READY = HERE / "harness-a11y.ready"
 TARGET_SECONDS = 3600
 SYSTEM_SOCKETS = ("/var/run/docker.sock", "/run/docker.sock")
-#: What a job keeps of its caller's environment; DOCKER_HOST is set by the job itself.
+#: What a job keeps of its own environment; DOCKER_HOST is set by the job itself. Under systemd-run (as installed) a
+#: job starts from the build account's own user environment, not its caller's: the forced command hands it nothing,
+#: and its PATH is the account's own (demo-server, 26 November 2026). Only LAUNCH = "direct", the tests' stand-in,
+#: starts it from the caller's.
 KEPT = ("PATH", "HOME", "LANG", "XDG_RUNTIME_DIR", "USER", "LOGNAME")
 #: A seat's environment (demo-server, 26 November 2026): the build account's own, as a job's is, never the SSH
 #: session's (whose PATH lacks ~/.local/bin, where uv and trivy are). It is read from the account's user manager, the
@@ -509,7 +512,8 @@ def answers(path: str) -> bool:
 
 
 def job_env() -> dict:
-    """The job's environment: the caller's few plain variables, and DOCKER_HOST this account's own socket."""
+    """The job's environment: the few plain variables (KEPT) of the environment it started in, which under systemd-run
+    is the build account's own, never the forced command's caller's; and DOCKER_HOST this account's own socket."""
     env = {k: v for k, v in os.environ.items() if k in KEPT}
     env["DOCKER_HOST"] = own_socket()
     return env

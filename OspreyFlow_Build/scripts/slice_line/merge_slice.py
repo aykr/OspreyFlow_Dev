@@ -38,6 +38,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import shutil
 import signal
 import subprocess
@@ -1391,24 +1392,78 @@ def has_rule(makefile: Path, target: str) -> bool:
     return re.search(rf"^{re.escape(target)}:(?!=)", text, re.M) is not None
 
 
+#: The Core workspaces whose vitest make test-js runs (Core's Makefile: npm test --workspace each), and the budget
+#: tests, which a workspace runs with their own config (apps/workspace: vitest.budget.config.ts).
+VITEST_WORKSPACES = ("apps/workspace", "apps/harness", "packages/glass-shared")
+VITEST_BUDGET = re.compile(r"\.budget\.test\.[cm]?[jt]sx?\Z")
+VITEST_BUDGET_CONFIG = "vitest.budget.config.ts"
+#: A vitest name as the server's runner reads one (demo_server/runner.failing_test): "<file> > <group> > <case>", or the
+#: file's own failure, "<file> [ <file> ]" or the file alone.
+VITEST_NAME = re.compile(r"\A(\S+\.test\.[cm]?[jt]sx?)(?: > (.+?)| \[ .* \])?\s*\Z")
+PYTEST_NAME = re.compile(r"\A\S+\.py(?:::\S.*)?\Z")
+
+
+def js_regex(text: str) -> str:
+    """`text` as a JavaScript RegExp matching it literally (vitest compiles -t with new RegExp(pattern), no flags)."""
+    return re.sub(r"([.*+?^${}()|[\]\\/])", r"\\\1", text)
+
+
+def make_words(names: list[str]) -> str:
+    """Names as one make variable's value the shell then reads back as these words, each whole: make expands $, the
+    shell reads quotes; nothing in a name is ever a word of the shell's own (RM1a: §5's)."""
+    return " ".join(shlex.quote(n).replace("$", "$$") for n in names)
+
+
+def vitest_step(tree: Path, name: str) -> tuple | None:
+    """(words, command, folder) to rerun one vitest name by vitest itself, in the one workspace holding its file; None
+    when no workspace, or more than one, holds it (not rerun: the merge's whole gate settles it)."""
+    m = VITEST_NAME.match(name)
+    if not m:
+        return None
+    file, case = m.group(1), m.group(2)
+    core = tree / "OspreyFlow_Core"
+    held = [w for w in VITEST_WORKSPACES if (core / w / file).is_file()]
+    if len(held) != 1:
+        return None
+    cmd = [str(core / "node_modules/.bin/vitest"), "run"]
+    if VITEST_BUDGET.search(file):
+        cmd += ["--config", VITEST_BUDGET_CONFIG]
+    cmd.append(file)
+    if case:  # vitest's full name of a case: its groups and its own name, joined by " > ", as the runner read it
+        cmd += ["-t", f"^{js_regex(case)}$"]
+    return (f"the server's failing vitest case, rerun: {name}", cmd, core / held[0])
+
+
 def rerun_steps(tree: Path, mk: Path, tests: list[str], targets: list[str]) -> tuple[list, list[str]]:
-    """The rerun's steps, each (words, command, folder), and the targets neither Makefile has a rule for. A target runs
-    from the Makefile that has its rule: Build's own first (OspreyFlow_Build, as before), else Core's (OspreyFlow_Core).
+    """The rerun's steps, each (words, command, folder), and the names nothing could place. A test runs by its own
+    runner (RM1a, 26 November 2026: a vitest name with an apostrophe broke the one shell line every name was put in,
+    and was given to pytest): a pytest node id by make test's own pytest, each name one whole word; a vitest name by
+    vitest, in the workspace that holds its file (vitest_step); any other name is not placed. A target runs from the
+    Makefile that has its rule: Build's own first (OspreyFlow_Build, as before), else Core's (OspreyFlow_Core).
     PL12b, 23 November 2026: the server named test-js (a Core target, which make test runs as make -C ../OspreyFlow_Core
     test-js) and test; the rerun ran make -k test-js test in OspreyFlow_Build, make said "No rule to make target
     `test-js'", and the rerun was red though every test in it passed: PL12b was held from the slot all night."""
-    steps = []
-    if tests:
+    steps, unplaced = [], []
+    py = [t for t in tests if PYTEST_NAME.match(t)]
+    if py:
         mk.write_text("server-rerun:\n\t$(IN_CORE) $(PYTEST) $(RERUN_TESTS)\n")
         steps.append(("the server's failing tests, rerun", ["make", "-f", "Makefile", "-f", str(mk), "server-rerun",
-                                                            "RERUN_TESTS=" + " ".join(tests)], tree / "OspreyFlow_Build"))
+                                                            "RERUN_TESTS=" + make_words(py)], tree / "OspreyFlow_Build"))
+    for t in tests:
+        if t in py:
+            continue
+        step = vitest_step(tree, t)
+        if step:
+            steps.append(step)
+        else:
+            unplaced.append(t)
     build = [t for t in targets if has_rule(tree / "OspreyFlow_Build/Makefile", t)]
     core = [t for t in targets if t not in build and has_rule(tree / "OspreyFlow_Core/Makefile", t)]
     if build:
         steps.append(("the server's failing targets, rerun", ["make", "-k", *build], tree / "OspreyFlow_Build"))
     if core:
         steps.append(("the server's failing Core targets, rerun", ["make", "-k", *core], tree / "OspreyFlow_Core"))
-    return steps, [t for t in targets if t not in build and t not in core]
+    return steps, unplaced + [t for t in targets if t not in build and t not in core]
 
 
 def rerun_named(tree: Path, log: Path, tests: list[str], targets: list[str]) -> int:
@@ -1418,8 +1473,8 @@ def rerun_named(tree: Path, log: Path, tests: list[str], targets: list[str]) -> 
     rule (rerun_steps). 0 when every one is green; UNPLACED when nothing named could be placed."""
     steps, unplaced = rerun_steps(tree, log.with_suffix(".mk"), tests, targets)
     if unplaced:
-        log.open("a").write(f"\nNOT PLACED: no Makefile of the tree has a rule for {', '.join(unplaced)}: not rerun; the "
-                            "merge's whole gate settles it.\n")
+        log.open("a").write(f"\nNOT PLACED: no runner or Makefile of the tree places {', '.join(unplaced)}: not rerun; "
+                            "the merge's whole gate settles it.\n")
     if not steps:
         return UNPLACED
     try:
@@ -1427,7 +1482,8 @@ def rerun_named(tree: Path, log: Path, tests: list[str], targets: list[str]) -> 
     except (NetworkError, GateEnvError) as e:
         log.open("a").write(f"\nREFUSED: the rerun's environment: {e}\n")
         return 3
-    codes = [run_step(words, cmd, cwd, log, env, [], tests=words.endswith("tests, rerun")) for words, cmd, cwd in steps]
+    tests_step = ("the server's failing tests", "the server's failing vitest")
+    codes = [run_step(words, cmd, cwd, log, env, [], tests=words.startswith(tests_step)) for words, cmd, cwd in steps]
     return next((x for x in codes if x), 0)
 
 
