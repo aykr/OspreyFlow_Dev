@@ -198,6 +198,28 @@ async def test_one_link_and_one_node_can_be_fetched_by_id_and_a_missing_one_is_n
     assert await working_store.get_edge("another-investigation", "e1") is None
 
 
+async def test_named_nodes_and_links_are_read_together_and_the_missing_ones_left_out(
+    store: tuple[ValkeyWorkingSetStore, str],
+) -> None:
+    """`get_members` is the one read behind what the document reader may name of an email
+    (`WorkingSetService.visible_ends_and_link`): each id's own body, whatever order and however
+    often it is asked, and nothing for an id this case does not hold."""
+    working_store, investigation_id = store
+    await working_store.add_nodes(investigation_id, [_node("n1"), _node("n2")])
+    await working_store.add_edges(investigation_id, [_edge("e1", "n1", "n2")])
+
+    nodes, edges = await working_store.get_members(
+        investigation_id, ["missing", "n2", "n1", "n2"], ["e1", "missing"]
+    )
+
+    assert {key: n.id for key, n in nodes.items()} == {"n1": "n1", "n2": "n2"}
+    assert {key: (e.id, e.source, e.target) for key, e in edges.items()} == {
+        "e1": ("e1", "n1", "n2")
+    }
+    assert await working_store.get_members(investigation_id, ["missing"], ["missing"]) == ({}, {})
+    assert await working_store.get_members("another-investigation", ["n1"], ["e1"]) == ({}, {})
+
+
 async def test_seq_is_monotonic_and_per_investigation(
     store: tuple[ValkeyWorkingSetStore, str],
 ) -> None:
