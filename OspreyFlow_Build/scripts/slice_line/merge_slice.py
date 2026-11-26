@@ -1988,6 +1988,178 @@ def apply_approved(name: str, wait: float = 120) -> str:
         fh.close()
 
 
+# ------------------------------------------------------------------ P3: the conductor applies a proved hand-back
+
+#: The owner's paperwork list, item 3: the conductor may apply a proved hand-back of the line-fix session that touches
+#: no hook, guard, merge gate code or protected file. The hand-backs are in the line-fix session's folder, fixed here
+#: (never an argument or the environment: the conductor writes nothing there, and the guard refuses it).
+HANDBACKS = Path.home() / "dev" / "line-fixes-5" / "OUT"
+HANDBACK_APPLIED_REL = f"{c.V062_REL}/slice-line/handbacks/applied.tsv"
+HANDBACK_TRAILER = "Line-Fix-Hand-Back"
+LINE_REL = "OspreyFlow_Build/scripts/slice_line/"
+#: What a hand-back the conductor applies may touch, and nothing else: the board, the line's tests, the early warning's
+#: tests and the line's README. Every other file is the owner's to apply, for the reason HANDBACK_NOT_THE_CONDUCTORS
+#: gives (a file on neither list: not on the conductor's list).
+HANDBACK_FILES = (f"{LINE_REL}board.py", f"{LINE_REL}tests/", f"{LINE_REL}demo_server/tests/",
+                  f"{c.V062_REL}/slice-line/README.md")
+HANDBACK_NOT_THE_CONDUCTORS = (
+    *[(f"{LINE_REL}{f}", "a hook (install.sh installs it)") for f in
+      ("guard.py", "stop_check.py", "usage_hook.py", "scan_select.py", "scan_map.tsv", "seat_shim.sh", "install.sh")],
+    (f"{LINE_REL}run_seat.py", "the guard (a seat refuses to start without it)"),
+    (f"{LINE_REL}resume.py", "the guard on the conductor (its own word and its budgets)"),
+    *[(f"{LINE_REL}{f}", "the merge's gate code") for f in
+      ("merge_slice.py", "server_gate.py", "common.py", "early_warning.py", "dry_run.py", "slice_start.py", "owed.py",
+       "release_green.py", "push_main.sh", "build_server/", "demo_server/")],
+    *[(f"{LINE_REL}{f}", "the owner's script") for f in ("refreeze.py", "clear_account.py", "clear_github_stop.py")],
+    ("OspreyFlow_Core/Makefile", "a protected file"), ("OspreyFlow_Build/Makefile", "a protected file"),
+    (".github/", "a protected file"), *[(f, "the owner's file") for f in OWNER_FILES],
+)
+
+
+def handback_class(path: str) -> str | None:
+    """None when the conductor may apply a change to `path`; else why not, in words."""
+    if any(path == f or (f.endswith("/") and path.startswith(f)) for f in HANDBACK_FILES):
+        return None
+    for f, why in HANDBACK_NOT_THE_CONDUCTORS:
+        if path == f or (f.endswith("/") and path.startswith(f)):
+            return why
+    return "not on the conductor's list"
+
+
+def handback(nn: str) -> dict:
+    """The hand-back apply_<nn>.sh hands back: its patches (each with its .msg and the sha256 the script holds), the
+    subject that must be on main first (AFTER, if it has one), and its proofs, the red file and the planted faults' file
+    each .msg names. Refused in words when anything is missing or not the one handed back."""
+    if not re.fullmatch(r"[0-9]{2,3}", nn or ""):
+        raise Refused(f"{nn!r} is not a hand-back's number (apply_<NN>.sh in {HANDBACKS}). Nothing changed.")
+    script = HANDBACKS / f"apply_{nn}.sh"
+    if not script.is_file():
+        raise Refused(f"there is no hand-back {nn} ({script}). Nothing changed.")
+    text = script.read_text()
+    pm = re.search(r"^PATCHES=\(([^)]*)\)$", text, re.M)
+    sm = re.search(r"^SHA256=\(([^)]*)\)$", text, re.M)
+    am = re.search(r'^AFTER="([^"]+)"$', text, re.M)
+    names = re.findall(r'"([^"]+)"', pm.group(1)) if pm else []
+    shas = re.findall(r'"([0-9a-f]{64})"', sm.group(1)) if sm else []
+    if not names or len(names) != len(shas):
+        raise Refused(f"apply_{nn}.sh names no patches, or not one sha256 for each. Nothing changed.")
+    patches = []
+    for name, sha in zip(names, shas):
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", name):
+            raise Refused(f"{name!r} is not a patch's name. Nothing changed.")
+        p, msg = HANDBACKS / "patches" / f"{name}.patch", HANDBACKS / "patches" / f"{name}.msg"
+        if not p.is_file() or not msg.is_file():
+            raise Refused(f"{name} (.patch or .msg) is missing from {HANDBACKS / 'patches'}. Nothing changed.")
+        if sha256(p) != sha:
+            raise Refused(f"{name}.patch is not the one handed back: its sha256 is {sha256(p)[:8]}, apply_{nn}.sh's is "
+                          f"{sha[:8]}. Nothing changed.")
+        body = msg.read_text()
+        red = re.search(r"Red first: (red/[\w./-]+\.txt)", body)
+        plants = re.search(r"Planted faults: (green/[\w./-]+\.txt)", body)
+        if not red or not plants:
+            raise Refused(f"{name}.msg names no red file or no planted faults' file: not a proved hand-back. Nothing "
+                          "changed.")
+        for rel in (red.group(1), plants.group(1)):
+            if ".." in rel or not (HANDBACKS / rel).is_file():
+                raise Refused(f"{name}'s proof {rel} is not in {HANDBACKS}: not a proved hand-back. Nothing changed.")
+        last = [ln for ln in (HANDBACKS / plants.group(1)).read_text().splitlines() if ln.strip()][-1:]
+        if last != ["planted faults not caught: 0"]:
+            raise Refused(f"{name}'s planted faults ({plants.group(1)}) do not end 'planted faults not caught: 0': not a "
+                          "proved hand-back. Nothing changed.")
+        patches.append({"name": name, "patch": p, "msg": msg, "sha256": sha,
+                        "subject": body.splitlines()[0].strip() if body.strip() else ""})
+    return {"nn": nn, "script": script, "patches": patches, "after": am.group(1) if am else ""}
+
+
+def handback_suites(tree: Path, log: Path) -> int:
+    """The line's suite and the early warning's, in the tree, through their own run.sh (each under the merge's stall
+    limit); the first that is red is the answer."""
+    py = c.REPO / "OspreyFlow_Core/.venv/bin/python"
+    py = str(py) if py.is_file() else sys.executable
+    env = {**os.environ, "SLICE_LINE_PY": py, "EARLY_WARNING_PY": py}
+    for rel in ("tests/run.sh", "demo_server/tests/run.sh"):
+        code = run(["bash", str(tree / LINE_REL / rel)], tree, log, env=env)
+        if code:
+            return code
+    return 0
+
+
+HANDBACK_SUITES = handback_suites
+
+
+def apply_handback(nn: str, wait: float = 120) -> str:
+    """P3: the conductor applies hand-back <nn> as apply_<nn>.sh would, under the merge lock, refused in words with
+    nothing staged or committed unless every rule holds: each patch is the one handed back (its sha256), with its red
+    file and its planted faults (0 not caught); none is on main already; the one before it is (AFTER); every file it
+    touches is the conductor's (handback_class); each applies on main's tip in order; and the line's suite and the early
+    warning's are green on the result. Then main is fast-forwarded, the hand-back listed in handbacks/applied.tsv, and
+    pushed."""
+    hb = handback(nn)
+    on_main = set(c.git(["log", "--format=%s", "main"], c.REPO).splitlines())
+    if hb["after"] and hb["after"] not in on_main:
+        raise Refused(f"hand-back {nn} goes on main after '{hb['after'][:90]}', which is not on main yet. Nothing changed.")
+    for p in hb["patches"]:
+        if p["subject"] in on_main:
+            raise Refused(f"{p['name']} is on main already ('{p['subject'][:90]}'). Nothing changed.")
+    fh = lock_after_merge(wait, f"apply-handback {nn}")
+    tree = None
+    try:
+        base = main_ready()
+        for p in hb["patches"]:
+            mine = [(q, handback_class(q)) for q in diff_paths(p["patch"], c.REPO)]
+            theirs = [f"{q} ({why})" for q, why in mine if why]
+            if theirs:
+                raise Refused(f"{p['name']} touches " + "; ".join(theirs[:5]) + ": a hand-back the conductor applies "
+                              "touches only " + ", ".join(HANDBACK_FILES) + f". It is the owner's: bash {hb['script']}. "
+                              "Nothing changed.")
+        tree = temp_tree(base, f"handback-{nn}")
+        for p in hb["patches"]:
+            check = subprocess.run(["git", "apply", "--check", str(p["patch"])], cwd=str(tree), capture_output=True,
+                                   text=True)
+            if check.returncode:
+                raise Refused(f"{p['name']} does not apply on main ({base[:10]}) after the ones before it: "
+                              f"{check.stderr.strip()[:300]}. Nothing changed.")
+            c.git(["apply", "--index", str(p["patch"])], tree)
+            msg = p["msg"].read_text().rstrip() + f"\n{HANDBACK_TRAILER}: {nn} ({p['name']}, sha256 {p['sha256'][:8]})\n"
+            c.git(["commit", "-q", "-m", msg], tree)
+        log = c.DATA / "handbacks" / f"{nn}-{uuid.uuid4().hex[:8]}.log"
+        log.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            code = HANDBACK_SUITES(tree, log)
+        except Stalled as e:
+            raise Refused(f"hand-back {nn}'s suites stalled ({e}): nothing landed. See {log}.") from None
+        if code:
+            said = [ln for ln in log.read_text().splitlines() if ln.strip() and not c.HEARTBEAT_LINE.fullmatch(
+                (ln + "\n").encode())][-1:]
+            raise Refused(f"hand-back {nn} applied, but its suites are red on the result ({'; '.join(said)}): nothing "
+                          f"landed. See {log}.")
+        commit = c.git(["rev-parse", "HEAD"], tree)
+        date = today()
+        with records_lock():
+            if c.git(["rev-parse", "HEAD"], c.REPO) != base:
+                raise Refused("main moved while the hand-back was being tested: nothing landed; run it again.")
+            c.git(["merge", "-q", "--ff-only", commit], c.REPO)
+            listed = c.REPO / HANDBACK_APPLIED_REL
+            listed.parent.mkdir(parents=True, exist_ok=True)
+            if not listed.exists():
+                listed.write_text("date\thand-back\tpatches\tcommit\n")
+            with listed.open("a") as out:
+                out.write(f"{date}\t{nn}\t{','.join(p['name'] + ':' + p['sha256'][:8] for p in hb['patches'])}\t"
+                          f"{commit}\n")
+            c.git(["add", "--", HANDBACK_APPLIED_REL], c.REPO)
+            c.git(["commit", "-q", "-m", f"docs(process): hand-back {nn} applied by the conductor ({commit[:10]}), for "
+                   "the owner's next report\n\nSlice-Records: yes", "--", HANDBACK_APPLIED_REL], c.REPO)
+        push = subprocess.run([str(Path(__file__).resolve().parent / "push_main.sh")], cwd=c.REPO, capture_output=True,
+                              text=True)
+        return (f"Applied hand-back {nn} ({', '.join(p['name'] for p in hb['patches'])}): commit {commit[:10]} on main, "
+                f"its suites green, listed in {HANDBACK_APPLIED_REL}. Push: {(push.stdout + push.stderr).strip()[-200:]}")
+    finally:
+        if tree:
+            drop_tree(tree)
+            shutil.rmtree(tree, ignore_errors=True)
+        fh.close()
+
+
 def wait_idle(minutes: float) -> str:
     """Wait until no merge runs (LINE_FIXES_5_BRIEF.md, 9: a wait that polled `pgrep -f 'merge_slice.py merge'` matched its
     own command line). The merge lock itself is the answer: free is idle. Refused after `minutes`."""
@@ -2023,6 +2195,9 @@ def main() -> int:
     aa = sub.add_parser("apply-approved")
     aa.add_argument("name")
     aa.add_argument("--wait", type=float, default=120, metavar="MINUTES", help="how long to wait for a running merge")
+    hb = sub.add_parser("apply-handback")
+    hb.add_argument("nn")
+    hb.add_argument("--wait", type=float, default=120, metavar="MINUTES", help="how long to wait for a running merge")
     a = ap.parse_args()
     try:
         with c.heartbeat(lambda: beat_words(a)):  # the owner, 25 November 2026: a running merge step says so
@@ -2066,6 +2241,8 @@ def dispatch(a) -> None:
         print(server_rerun(a.slice))
     elif a.cmd == "apply-approved":
         print(apply_approved(a.name, a.wait))
+    elif a.cmd == "apply-handback":  # P3
+        print(apply_handback(a.nn, a.wait))
     else:
         print("Committed", records(a.message, a.paths))
 

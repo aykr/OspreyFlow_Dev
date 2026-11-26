@@ -77,6 +77,9 @@ WRITE_MARKERS = re.compile(
     r"install|rsync|chmod|chown|unlink|patch)\b|\bgit\s+(?:checkout|restore|apply|am|mv|rm|stash)\b|"
     r"open\(|write_text|write_bytes|\.write\(|\bunzip\b|\btar\b"
 )
+#: P3: the line-fix session's folder, whose hand-backs the conductor applies (merge_slice.HANDBACKS); never written by
+#: the conductor or a seat, so a hand-back is always the line-fix session's own.
+HANDBACK_FOLDER = re.compile(r"line-fixes-5\b")
 GIT_WRITE = {"commit", "merge", "rebase", "reset", "cherry-pick", "revert", "am", "pull", "update-ref"}
 #: Starting Claude Code by its command's text (F1, layer 1: a floor, not a wall; the seat shim, layer 2, does not
 #: depend on the text). The name as a command word or a path's last part, quoted, escaped or after any separator; the
@@ -385,6 +388,9 @@ def check_bash(cmd: str, seat: str, cwd: str) -> None:
         if any(seg and seg[0] in ("patch",) or (seg and seg[0].endswith("/patch")) for seg in segments(cmd)):
             raise Refuse("the conductor applies no diff itself: an owner-approved diff goes through merge_slice.py "
                          "apply-approved <name>.")
+    if seat in ("conductor", "builder") and HANDBACK_FOLDER.search(writes) and WRITE_MARKERS.search(writes):
+        raise Refuse("the line-fix session's hand-backs (~/dev/line-fixes-5) are never written by a seat or the "
+                     "conductor: the conductor applies one only as it was handed back (merge_slice.py apply-handback).")
     if seat == "conductor" and WRITE_MARKERS.search(writes):
         if re.search(r"OspreyFlow_(Core|Build)/(?!process/lanes/v062/)", writes) or re.search(r"\b(apps|services|packages|tests)/", writes):
             raise Refuse("the conductor writes no product code: its shell writes stay in " + RECORDS_ROOT + ".")
