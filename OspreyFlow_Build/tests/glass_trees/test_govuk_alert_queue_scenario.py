@@ -13,8 +13,10 @@ thing a source can be held to: nothing in it filters, counts or draws what an al
 
 * a scenario with no page test, or a page test with no scenario     -> `test_every_scenario_has_a_page_test_and_back`
 * a row whose cited words are not in the file it cites               -> `test_every_row_cites_words_that_are_in_the_source`
-* the `alerts-rules-watches` row without its route, scenarios or
-  slice, or the route list not the tree's two pages                 -> `test_the_function_row_and_the_route_list_are_in_step`
+* the `alerts-rules-watches` row given a route (the function is not complete, so its route stays empty and the tree's state does not
+  count it as covered), or without its scenarios or slice, or the route list not the tree's pages
+                                                                     -> `test_the_function_row_and_the_route_list_are_in_step`,
+                                                                        `test_the_trees_state_does_not_count_the_row_as_covered`
 * a route pinned in three of the four places and not the fourth      -> `test_every_place_that_pins_the_routes_names_the_queue`
 * a page source that filters or counts rows after the Conduit sent
   them, or names what an alert rests on                              -> `test_the_page_source_filters_nothing_and_draws_no_evidence`
@@ -41,6 +43,7 @@ from typing import Any
 
 import pytest
 import yaml
+from scripts import tree_parity
 
 BUILD = Path(__file__).resolve().parents[2]
 ROOT = BUILD.parent
@@ -229,16 +232,19 @@ def function_problems(data: dict[str, Any]) -> list[str]:
         found.append(f"the {ROW} row's scenario does not name {sorted(section_ids - scenario_ids)}")
     if row["slice"] != "RM1":
         found.append(f"the {ROW} row's slice is {row['slice']!r}, not RM1")
-    if row["route"] != ROUTE:
-        found.append(f"the {ROW} row's route is {row['route']!r}, not {ROUTE}")
+    if row["route"] != "":
+        found.append(f"the {ROW} row has the route {row['route']!r}: the function is not complete, so its route stays empty")
+    if tree_parity._row_has_page(row, data["routes"]):
+        found.append(f"the tree's state would count the {ROW} row as having its page: it has rules, watches and strength still to build")
     if "apps/pages/server/alertQueue.ts" not in row["where"]:
         found.append(f"the {ROW} row's `where` does not name the page, apps/pages/server/alertQueue.ts")
     if row["status"] != "planned":
         found.append(f"the {ROW} row's status is {row['status']!r}: the row still has its rules and watches to build")
     routed = {r["id"]: r["route"] for r in data["functions"] if r.get("route")}
-    # Help's row (GR2a) and the alert monitoring row (GR3a, `/reports`) carry the other two routes on the line; the Admin People list's does not.
-    if routed != {ROW: ROUTE, "help": "/help", "reports-figures": "/reports"}:
-        found.append(f"the rows that have a route are {routed!r}, not the queue's, Help's and the alert monitoring page's")
+    # Help's row (GR2a) and the alert monitoring row (GR3a, `/reports`) carry the routes on the line; the Admin People list's, trends shown
+    # together's and this queue's do not, because each is one section of a function that is not complete.
+    if routed != {"help": "/help", "reports-figures": "/reports"}:
+        found.append(f"the rows that have a route are {routed!r}, not Help's and the alert monitoring page's")
     if len(data["functions"]) != 50:
         found.append(f"FUNCTIONS.yaml has {len(data['functions'])} rows, not 50: this slice adds none")
     return found
@@ -338,6 +344,28 @@ def test_the_function_row_and_the_route_list_are_in_step() -> None:
     assert route_problems(data) == []
 
 
+def test_the_trees_state_does_not_count_the_row_as_covered(tmp_path: Path) -> None:
+    """Every other row routed to a path of its own and listed, the tree reads partial only because this row's route is empty; with the
+    route put back, the same files read complete (the early reading `_row_has_page` would give a function whose rules and watches have
+    no page). The rows are the real file's own; only the routes of the others are made up."""
+    data = inputs()
+
+    def state(route: str) -> str:
+        rows = [dict(row) for row in data["functions"]]
+        for row in rows:
+            row["route"] = route if row["id"] == ROW else f"/page-of-{row['id']}"
+        listed = [row["route"] for row in rows if row["route"]]
+        functions, exceptions, routes = tmp_path / "f.yaml", tmp_path / "e.yaml", tmp_path / "r.yaml"
+        functions.write_text(yaml.safe_dump({"functions": rows}))
+        exceptions.write_text(yaml.safe_dump({"exceptions": []}))
+        routes.write_text(yaml.safe_dump({"routes": listed}))
+        return tree_parity.govuk_tree_state(functions, exceptions, routes)
+
+    real_route = next(row["route"] for row in data["functions"] if row["id"] == ROW)
+    assert state(real_route) == "partial"
+    assert state(ROUTE) == "complete", "with the route put back the tree reads complete: the plant would be caught"
+
+
 def test_every_place_that_pins_the_routes_names_the_queue() -> None:
     assert pin_problems(inputs()) == []
 
@@ -414,12 +442,13 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
     ("the which-scenario answer left out", _replace("spec_08", "the queue page proves: none", "the queue page proves B14"), scenario_problems, "proves: none"),
     ("the one-case-at-a-time sentence left out", _replace("spec_08", "one case at a time", "all cases"), scenario_problems, "one case at a time"),
     ("words a source does not hold", _replace("spec_08", '"Watched pattern"', '"Watched rumour"'), citation_problems, "does not hold"),
-    ("the row without its route", _row(ROW, route=""), function_problems, "route"),
+    ("the row given the route while incomplete", _row(ROW, route=ROUTE), function_problems, "stays empty"),
+    ("the row given the route: the tree counts it as covered", _row(ROW, route=ROUTE), function_problems, "count the alerts-rules-watches row"),
     ("the row on the wrong slice", _row(ROW, slice="R7"), function_problems, "RM1"),
     ("the row that lost a scenario of its other halves", _row(ROW, scenario="AQ1, AQ2, AQ3, AQ4, AQ5, AQ6, AQ7, AQ8, AQ9, AQ10, AQ11"), function_problems, "B12"),
     ("the row that does not name the page", _row(ROW, where="apps/workspace/src/alerts/"), function_problems, "does not name the page"),
     ("a row marked built while its halves are not", _row(ROW, status="built"), function_problems, "status"),
-    ("a second row given a route", _row("admin", route="/admin"), function_problems, "not the queue's, Help's"),
+    ("a second row given a route", _row("admin", route="/admin"), function_problems, "not Help's and the alert"),
     ("the route left out of the list", lambda d: d["routes"].remove(ROUTE), route_problems, "five pages"),
     ("a route in the list the code has no page for", lambda d: d["routes"].append("/rules"), route_problems, "five pages"),
     ("the harness test not told", _in("pins", "tests/harness/test_pages_setting.py", ROUTE, "/elsewhere"), pin_problems, "test_pages_setting"),

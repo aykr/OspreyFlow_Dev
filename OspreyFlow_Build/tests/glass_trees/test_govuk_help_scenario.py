@@ -271,13 +271,14 @@ def route_problems(data: dict[str, Any]) -> list[str]:
     # Slice GR3a added the alert monitoring page (`/reports`): its row, `reports-figures`, carries the route.
     # Slice GR4a's trends shown together (`/packs/trends`) is the fourth; its row, `reports-trends-shown-together`, keeps an empty route
     # while the function is incomplete (`test_govuk_pack_trends_scenario.py`).
-    # Slice RM1a added the alert queue (`/alert-queue`), the fifth: its row, `alerts-rules-watches`, carries the route.
+    # Slice RM1a added the alert queue (`/alert-queue`), the fifth: its row, `alerts-rules-watches`, keeps an empty route while the function
+    # is incomplete (`test_govuk_alert_queue_scenario.py`).
     if data["routes"] != ["/help", "/admin/people", "/reports", "/packs/trends", "/alert-queue"]:
         return [
             f"the route list is {data['routes']!r}: the tree has five pages, /help, /admin/people, /reports, /packs/trends and /alert-queue"
         ]
-    if routed != ["/alert-queue", "/help", "/reports"]:
-        return [f"the rows that have a route are {routed!r}, not just /help, /reports and /alert-queue"]
+    if routed != ["/help", "/reports"]:
+        return [f"the rows that have a route are {routed!r}, not just /help and /reports"]
     return []
 
 

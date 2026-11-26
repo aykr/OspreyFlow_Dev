@@ -268,9 +268,9 @@ def function_problems(data: dict[str, Any]) -> list[str]:
     if help_row is None or help_row["route"] != "/help":
         found.append("the help row's route is not /help")
     routed = sorted(row["route"] for row in data["functions"] if row.get("route"))
-    # slice GR3a's page (`reports-figures`, `/reports`) and slice RM1a's (`alerts-rules-watches`, `/alert-queue`) are the other rows with a route
-    if routed != ["/alert-queue", "/help", "/reports"]:
-        found.append(f"the rows that have a route are {routed!r}, not just /help, /reports and /alert-queue")
+    # slice GR3a's page (`reports-figures`, `/reports`) is the other row with a route; slice RM1a's `/alert-queue` is in the list and no row carries it
+    if routed != ["/help", "/reports"]:
+        found.append(f"the rows that have a route are {routed!r}, not just /help and /reports")
     return found
 
 

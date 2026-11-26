@@ -691,7 +691,10 @@ describe("the alert queue page (the govuk tree)", () => {
     expect(govuk).toContainEqual(["alerts-rules-watches", "/alert-queue", ["GET"]]);
     expect(govuk.map((g) => g[1] as string).sort()).toEqual(listed);
     expect(PAGES.filter((page) => page.path === "/alert-queue").map((page) => page.trees)).toEqual([["govuk"]]);
-    expect(read("FUNCTIONS.yaml")).toMatch(/- id: alerts-rules-watches[\s\S]*?route: "\/alert-queue"/);
+    // The row keeps an empty route: the function is complete only when its rules, watches and strength have pages too, and a row with a route
+    // is read as a function whose GOV.UK page exists (`tree_parity.py`).
+    expect(read("FUNCTIONS.yaml")).toMatch(/- id: alerts-rules-watches\n(?: {4}.*\n)*? {4}route: ""\n/);
+    expect(read("FUNCTIONS.yaml")).not.toMatch(/- id: alerts-rules-watches\n(?: {4}.*\n)*? {4}route: "\/alert-queue"/);
     // The default tree answers it as a path nothing serves, signed in or not, and asks the Conduit nothing.
     const mine = aCase();
     const reader = aReader({ cases: [mine] });

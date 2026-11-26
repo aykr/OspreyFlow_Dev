@@ -340,8 +340,8 @@ def function_problems(data: dict[str, Any]) -> list[str]:
     if dashboards is None or dashboards["scenario"] != "" or dashboards["route"] != "":
         found.append("the reports-dashboards row is not as it was: no scenario and no route")
     routed = sorted(r["route"] for r in data["functions"] if r.get("route"))
-    if routed != ["/alert-queue", "/help", "/reports"]:
-        found.append(f"the rows that have a route are {routed!r}, not just /help, /reports and /alert-queue")
+    if routed != ["/help", "/reports"]:
+        found.append(f"the rows that have a route are {routed!r}, not just /help and /reports")
     return found
 
 

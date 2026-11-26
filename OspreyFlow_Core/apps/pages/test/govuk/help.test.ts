@@ -527,8 +527,9 @@ function listedRoutes(text: string): string[] {
 }
 
 /** A row whose function is not complete: its pages are in the list, and its own `route` stays empty until every section has one (slice AD3a: `admin`; slice GR4a:
- * `reports-trends-shown-together`, whose page is read-only until arranging is built). */
-const INCOMPLETE_ROWS: ReadonlySet<string> = new Set(["admin", "reports-trends-shown-together"]);
+ * `reports-trends-shown-together`, whose page is read-only until arranging is built; slice RM1a: `alerts-rules-watches`, whose rules, watches and
+ * strength have no page yet). */
+const INCOMPLETE_ROWS: ReadonlySet<string> = new Set(["admin", "reports-trends-shown-together", "alerts-rules-watches"]);
 
 function routeListProblems(listText: string, pages: readonly PageModule[], functionsText: string): string[] {
   const found: string[] = [];
