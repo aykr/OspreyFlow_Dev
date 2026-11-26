@@ -22,8 +22,8 @@ What a mistake would do, and the case that catches it:
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Iterator
-from contextlib import contextmanager
+from collections.abc import AsyncIterator, Iterator
+from contextlib import asynccontextmanager, contextmanager
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
@@ -363,6 +363,23 @@ def _as(private_key: rsa.RSAPrivateKey, sub: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {sign_token(private_key, claims)}"}
 
 
+@asynccontextmanager
+async def _app_graph() -> AsyncIterator[GraphArcadeDBAdapter]:
+    """The running app's own database (`ospreyflow`), never `arcadedb_adapter`'s separate one,
+    opened as the app's lifespan opens it (`build_run_resources`: the database created if absent,
+    then the schema). These tests write to it *before* the app starts, so each makes it itself: on
+    a fresh ArcadeDB, run alone, the schema was refused with "Database 'ospreyflow' is not
+    available", and the file passed in CI only because an earlier file had created it."""
+    client = ArcadeDBClient(ArcadeDBConfig.from_env(database="ospreyflow"))
+    try:
+        await client.create_database_if_absent()
+        graph = GraphArcadeDBAdapter(client, SCHEME)
+        await graph.apply_schema(load_default_ontology())
+        yield graph
+    finally:
+        await client.aclose()
+
+
 async def _case_with_an_alert() -> str:
     store = await InvestigationStore.connect(PostgresConfig.from_env().dsn)
     alerts = await AlertStore.connect(PostgresConfig.from_env().dsn)
@@ -370,14 +387,8 @@ async def _case_with_an_alert() -> str:
         case = await store.create(AUTHOR, name="Reports case")
         await give_case_its_dataset(case.id, AUTHOR)
         await store.set_grant(case.id, VIEWER, AccessLevel.VIEWER, by=AUTHOR)
-        # The running app's own database, never `arcadedb_adapter`'s separate one.
-        client = ArcadeDBClient(ArcadeDBConfig.from_env(database="ospreyflow"))
-        try:
-            graph = GraphArcadeDBAdapter(client, SCHEME)
-            await graph.apply_schema(load_default_ontology())
+        async with _app_graph() as graph:
             (a,) = await _write(graph, [_node("Person", {"family_name": "A"}, dataset=dataset_for(AUTHOR))])
-        finally:
-            await client.aclose()
         await alerts.save(_alert(case.id, [a], "structuring", dataset=dataset_for(AUTHOR)))
         return case.id
     finally:
@@ -390,23 +401,20 @@ async def _case_with_an_alert_and_one_over_a_hidden_link() -> str:
     the SECRET link between them they cannot, in the running app's own database."""
     case = await _case_with_an_alert()
     alerts = await AlertStore.connect(PostgresConfig.from_env().dsn)
-    client = ArcadeDBClient(ArcadeDBConfig.from_env(database="ospreyflow"))
     try:
-        graph = GraphArcadeDBAdapter(client, SCHEME)
-        await graph.apply_schema(load_default_ontology())
-        a, b = await _write(graph, [_node("Person", {"family_name": n}, dataset=dataset_for(AUTHOR))
-                                    for n in ("C", "D")])  # fmt: skip
-        tx = await graph.begin_transaction()
-        (link,) = await graph.upsert_edges(
-            [EdgeWrite(id=new_edge_id(), type="ASSOCIATE_OF", source=a, target=b, provenance=_provenance(),
-                       handling=_handling("SECRET"), created_by="test", created_at=datetime.now(UTC),
-                       datasets=[dataset_for(AUTHOR)])], tx)  # fmt: skip
-        await graph.commit_transaction(tx)
+        async with _app_graph() as graph:
+            a, b = await _write(graph, [_node("Person", {"family_name": n}, dataset=dataset_for(AUTHOR))
+                                        for n in ("C", "D")])  # fmt: skip
+            tx = await graph.begin_transaction()
+            (link,) = await graph.upsert_edges(
+                [EdgeWrite(id=new_edge_id(), type="ASSOCIATE_OF", source=a, target=b, provenance=_provenance(),
+                           handling=_handling("SECRET"), created_by="test", created_at=datetime.now(UTC),
+                           datasets=[dataset_for(AUTHOR)])], tx)  # fmt: skip
+            await graph.commit_transaction(tx)
         await alerts.save(_alert(case, [a, b], "circular_flow", dataset=dataset_for(AUTHOR))
                           .model_copy(update={"edge_ids": [link]}))  # fmt: skip
         return case
     finally:
-        await client.aclose()
         await alerts.close()
 
 
@@ -563,10 +571,7 @@ async def _pole_case(dataset_id: str, *, with_hidden: bool, other_dataset: str) 
             await datasets.close()
     finally:
         await store.close()
-    client = ArcadeDBClient(ArcadeDBConfig.from_env(database="ospreyflow"))
-    try:
-        graph = GraphArcadeDBAdapter(client, SCHEME)
-        await graph.apply_schema(load_default_ontology())
+    async with _app_graph() as graph:
         p1, p2, org = await _write(graph, [
             _node("Person", {"family_name": "A"}, dataset=dataset_id),
             _node("Person", {"family_name": "B"}, dataset=dataset_id),
@@ -599,8 +604,6 @@ async def _pole_case(dataset_id: str, *, with_hidden: bool, other_dataset: str) 
             if with_hidden or not hidden
         ]
         await _write(graph, nodes, edges)
-    finally:
-        await client.aclose()
     return case.id
 
 
