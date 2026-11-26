@@ -72,11 +72,11 @@ async function draw(page: Page, c: SceneCase): Promise<Buffer> {
   await expect(canvas).toHaveAttribute("data-canvas-state", "drawn");
   const ids = await page.evaluate(() => window.__COMPARE__!.nodeIds);
   await layoutSettled(page, ids);
-  // The scene's own places, then the view fitted to them as a person fits it (F, the canvas focused).
+  // The scene's own places, then the view fitted to them by the canvas's own F. The key is sent to the canvas
+  // without focusing it, as `harness.tsx` sends its menu keys: focus would put the keyboard's ring on the first node,
+  // which is not part of the scene.
   await page.evaluate(() => window.__COMPARE__!.pin());
-  await canvas.focus();
-  await page.keyboard.press("f");
-  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await canvas.dispatchEvent("keydown", { key: "f", bubbles: true });
   await layoutSettled(page, ids);
   const camera = await page.evaluate(() => window.__CANVAS__!.cameraState());
   expect(camera, "the view fitted to the scene").toEqual({ x: 0.5, y: 0.5, ratio: 1 });
@@ -94,23 +94,33 @@ async function draw(page: Page, c: SceneCase): Promise<Buffer> {
   }
   await page.waitForTimeout(400);
   await frames(page);
-  if (c.exported) {
-    const base64 = await page.evaluate(async () => {
-      const blob = await window.__CANVAS__!.exportImage({
-        osprey_mark: "OspreyFlow",
-        investigation_id: "canvas-compare",
-        exported_at: "2026-11-26T00:00:00Z",
-        resolution_threshold: 0.95,
-        handling_level: "OFFICIAL",
+  // The picture once it has stopped changing: a node's drawing (`@sigma/node-image`) arrives a frame or more after
+  // the node, so the first frame after a fit need not be the scene. Two pictures alike, half a second apart.
+  const shot = () => page.screenshot({ clip: box, animations: "disabled", caret: "hide" });
+  let last = await shot();
+  for (let i = 0; i < 20; i++) {
+    await page.waitForTimeout(500);
+    const now = await shot();
+    if (now.equals(last)) {
+      if (!c.exported) return now;
+      const base64 = await page.evaluate(async () => {
+        const blob = await window.__CANVAS__!.exportImage({
+          osprey_mark: "OspreyFlow",
+          investigation_id: "canvas-compare",
+          exported_at: "2026-11-26T00:00:00Z",
+          resolution_threshold: 0.95,
+          handling_level: "OFFICIAL",
+        });
+        const bytes = new Uint8Array(await blob.arrayBuffer());
+        let text = "";
+        for (const b of bytes) text += String.fromCharCode(b);
+        return btoa(text);
       });
-      const bytes = new Uint8Array(await blob.arrayBuffer());
-      let text = "";
-      for (const b of bytes) text += String.fromCharCode(b);
-      return btoa(text);
-    });
-    return Buffer.from(base64, "base64");
+      return Buffer.from(base64, "base64");
+    }
+    last = now;
   }
-  return page.screenshot({ clip: box, animations: "disabled", caret: "hide" });
+  throw new Error(`the ${c.name} scene never stopped changing`);
 }
 
 const tolerance = JSON.parse(readFileSync(new URL("TOLERANCE.json", FOLDER), "utf8")) as Tolerance & Record<string, unknown>;
