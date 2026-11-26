@@ -901,6 +901,9 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
       expect(choosingProblems(planted("server/views/casesWords.ts", (t) => `${t}\nconst x = [].sort();\n`))).not.toEqual([]);
       expect(choosingProblems(planted("tree-govuk/cases.njk", (t) => t.replace("in view.rows %}", 'in view.rows | sort(attribute="name") %}')))).not.toEqual([]);
       expect(choosingProblems(planted("tree-govuk/cases.njk", (t) => t.replace("in r.attachments %}", 'in r.attachments | reject("odd") %}')))).not.toEqual([]);
+      // GR1e: a cap on the real loop that reads the history's steps, and on the template's loop that draws them.
+      expect(choosingProblems(planted("server/views/casesWords.ts", (t) => t.replace("for (const step of body as unknown[])", "for (const step of (body as unknown[]).slice(0, 100))")))).not.toEqual([]);
+      expect(choosingProblems(planted("tree-govuk/cases.njk", (t) => t.replace("in view.history.rows %}", "in view.history.rows | batch(100) | first %}")))).not.toEqual([]);
       const copied = planted("server/views/casesWords.ts", (t) => `${t}\nexport const POLE = "${POLE_LABEL}";\n`);
       expect(copied.some((s) => SHARED_SENTENCES.some((sentence) => s.text.includes(sentence)))).toBe(true);
     });
@@ -948,7 +951,7 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
 /** The case page's contents, in order: its parts' addresses on the page. */
 const CONTENTS = ["#about", "#brief", "#history"];
 const CONTENTS_TEXT = ["About this case", "Brief", "History"];
-const HISTORY_CAPTION = "Changes to this case, oldest first";
+const HISTORY_CAPTION = "Changes to this case, in the order the case records them";
 const HISTORY_COLUMNS = ["Step", "When", "Restore"];
 const CAN = "Can be restored";
 const CANNOT = "Cannot be restored";
@@ -1192,7 +1195,11 @@ describe("the history part of a case's page (scenario CS, slice GR1e)", () => {
         ["a label in the page's own words", real.replace(">Changed<", ">Something changed<"), (h) => historyProblems(h, sent)],
         ["the steps newest first", real.replace(/<tbody>([\s\S]*?)<\/tbody>/, (_m, rows: string) => `<tbody>${rows.split("\n").filter(Boolean).reverse().join("\n")}\n</tbody>`), (h) => historyProblems(h, sent)],
         ["a step's time left out", real.replace(`<td>${utcStampOf(sent[0]?.created_at ?? "")}</td>`, "<td></td>"), (h) => historyProblems(h, sent)],
-        ["a restore button offered", real.replace(`<td>${CAN}</td>`, `<td><button>Restore</button></td>`), (h) => historyProblems(h, sent)],
+        ["a step skipped", real.replace(/<tbody>([\s\S]*?)<\/tbody>/, (_m, rows: string) => `<tbody>${rows.split("\n").filter((_r, i) => i !== 2).join("\n")}</tbody>`), (h) => historyProblems(h, sent)],
+        ["a step added", real.replace(/<tbody>([\s\S]*?)<\/tbody>/, (_m, rows: string) => `<tbody>${rows}${/<tr>[\s\S]*?<\/tr>/.exec(rows)?.[0] ?? ""}\n</tbody>`), (h) => historyProblems(h, sent)],
+        ["the steps cut off at three", real.replace(/<tbody>([\s\S]*?)<\/tbody>/, (_m, rows: string) => `<tbody>${rows.split("\n").slice(0, 4).join("\n")}\n</tbody>`), (h) => historyProblems(h, sent)],
+        ["a restore button after the table", real.replace("</table>", '</table><button type="button">Restore the latest</button>'), (h) => historyProblems(h, sent)],
+        ["the History part's heading in other words", real.replace('<h2 id="history">History</h2>', '<h2 id="history">Steps</h2>'), (h) => historyProblems(h, sent)],
         ["a count of a step's nodes from another read", real.replace(">Expanded<", ">Expanded (12 nodes)<"), (h) => countProblems(h, sent)],
         ["a count of steps", real.replace(HISTORY_CAPTION, `${HISTORY_CAPTION} (5)`), (h) => countProblems(h, sent)],
         ["a step's identifier printed", real.replace(`<td>${CANNOT}</td>`, `<td data-step="h-brief">${CANNOT}</td>`), idProblems],
@@ -1204,8 +1211,25 @@ describe("the history part of a case's page (scenario CS, slice GR1e)", () => {
         expect(html, label).not.toBe(real);
         expect(check(html).length, label).toBeGreaterThan(0);
       }
+      // Each of these fails for the reason it names, not by another path.
+      const only = (label: string, html: string, problem: RegExp): void => {
+        const found = historyProblems(html, sent);
+        expect(found.length, `${label}: ${JSON.stringify(found)}`).toBe(1);
+        expect(found[0], label).toMatch(problem);
+      };
+      only("a step cut off", real.replace(/<tbody>([\s\S]*?)<\/tbody>/, (_m, rows: string) => `<tbody>${rows.split("\n").slice(0, 5).join("\n")}\n</tbody>`), /4 rows were drawn for 5 steps sent/);
+      only("a control after the table", real.replace("</table>", '</table><button type="button">Restore the latest</button>'), /offers a control/);
+      only("the heading", real.replace('<h2 id="history">History</h2>', '<h2 id="history">Steps</h2>'), /heading is not a second-level History/);
       const ferry = (await getAs(w, pageOf("c-ferry"))).text;
       expect(emptyHistoryProblems(ferry)).toEqual([]);
+      // The empty-brief check reads the Brief part: from its own heading, holding the sentence, and not the contents' list before it.
+      expect(briefPartOf(ferry).startsWith('<h2 id="brief">')).toBe(true);
+      expect(briefPartOf(ferry)).toContain(CASES_WORDS.noBrief);
+      expect(briefPartOf(ferry)).not.toContain(CASES_WORDS.contentsTitle);
+      expect(mainOf(ferry)).toMatch(/<ul>/);
+      expect(emptyBriefProblems(ferry)).toEqual([]);
+      const listInBrief = emptyBriefProblems(ferry.replace(`<p>${CASES_WORDS.noBrief}</p>`, `<p>${CASES_WORDS.noBrief}</p><ul><li>A requirement</li></ul>`));
+      expect(listInBrief).toEqual(["the empty brief is drawn as a list"]);
       const emptyTable = `<table class="table"><caption class="caption">${HISTORY_CAPTION}</caption><thead><tr><th scope="col">Step</th></tr></thead><tbody></tbody></table>`;
       expect(emptyHistoryProblems(ferry.replace(`<p>${NO_HISTORY}</p>`, emptyTable))).not.toEqual([]);
     });
@@ -1223,6 +1247,11 @@ describe("the history part of a case's page (scenario CS, slice GR1e)", () => {
       const lenient = (h: unknown): unknown => caseView("c-harbour", b.case, b.brief, (h as Record<string, unknown>[]).map((s) => ({ restorable: true, ...s })), b.list);
       expect(caseView("c-harbour", b.case, b.brief, b.history, b.list)).toBeUndefined();
       expect(lenient(b.history)).toBeDefined();
+      // A reader that took a label the route cannot send as `Changed`: the real view refuses it, the lenient one draws.
+      const odd = withField("HistoryStepSummary", "label", "Removed 3 nodes");
+      const relabel = (h: unknown): unknown => caseView("c-harbour", odd.case, odd.brief, (h as Record<string, unknown>[]).map((s) => ({ ...s, label: SHOWN_LABELS.includes(s["label"] as string) ? s["label"] : "Changed" })), odd.list);
+      expect(caseView("c-harbour", odd.case, odd.brief, odd.history, odd.list)).toBeUndefined();
+      expect(relabel(odd.history)).toBeDefined();
       // A failed read drawn as an empty history: the real empty history's page, given as the failure.
       const w2 = await world({ history_answer: { status: 500, body: {} } });
       const failed = (await getAs(w2, pageOf("c-harbour"))).text;

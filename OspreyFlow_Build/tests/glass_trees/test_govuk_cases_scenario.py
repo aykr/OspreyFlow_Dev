@@ -458,11 +458,26 @@ def shown_labels(source: str) -> list[str] | None:
     return [strings[n] for n in fixed] + [strings["CHANGED"]]
 
 
+def not_restorable(source: str) -> list[str] | None:
+    """The labels whose steps the route sends as `restorable: false` (`history_labels.py`'s `NOT_RESTORABLE`)."""
+    strings: dict[str, str] = {}
+    for node in ast.parse(source).body:
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+            name, value = node.targets[0].id, node.value
+            if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                strings[name] = value.value
+            if name == "NOT_RESTORABLE" and isinstance(value, ast.Call) and value.args and isinstance(value.args[0], ast.Set):
+                names_ = [e.id for e in value.args[0].elts if isinstance(e, ast.Name)]
+                return [strings[n] for n in names_ if n in strings] if all(n in strings for n in names_) else None
+    return None
+
+
 SHOWN = "_SHOWN_LABELS = FIXED_LABELS | {CHANGED}"
 
 
 def labels_problems(data: dict[str, Any]) -> list[str]:
-    """The page (`HISTORY_LABELS`) and the fixture (`SHOWN_LABELS`) allow exactly the labels the route can send."""
+    """The page (`HISTORY_LABELS`) and the fixture (`SHOWN_LABELS`) allow exactly the labels the route can send, and the fixture's
+    `NOT_RESTORABLE` is the route's (the page reads `restorable` itself and holds no such list)."""
     found: list[str] = []
     route = shown_labels(data["history_labels"])
     if route is None:
@@ -475,6 +490,14 @@ def labels_problems(data: dict[str, Any]) -> list[str]:
             found.append(f"{where} declares no {listed} list")
         elif sorted(names(page.group(1))) != sorted(route):
             found.append(f"{where}'s {listed} are {sorted(names(page.group(1)))}, but the route can send {sorted(route)}")
+    route_fixed = not_restorable(data["history_labels"])
+    fixture_fixed = re.search(r"export const NOT_RESTORABLE(?::[^=]*)? = \[([^\]]*)\]", data["fixture"])
+    if route_fixed is None:
+        found.append("history_labels.py has no NOT_RESTORABLE of named strings")
+    elif fixture_fixed is None:
+        found.append("casesConduit.ts declares no NOT_RESTORABLE list")
+    elif sorted(names(fixture_fixed.group(1))) != sorted(route_fixed):
+        found.append(f"casesConduit.ts's NOT_RESTORABLE is {sorted(names(fixture_fixed.group(1)))}, but the route's is {sorted(route_fixed)}")
     return found
 
 
@@ -724,6 +747,12 @@ PLANTS += [
     ),
     ("a label dropped from the page", _replace("words", '"Edited the brief", ', ""), labels_problems, "casesWords.ts's HISTORY_LABELS"),
     ("a label dropped from the fixture", _replace("fixture", '"Edited the brief", ', ""), labels_problems, "casesConduit.ts's SHOWN_LABELS"),
+    (
+        "a label added to the route's not-restorable set",
+        _replace("history_labels", "NOT_RESTORABLE = frozenset({BRIEF_EDITED})", "NOT_RESTORABLE = frozenset({BRIEF_EDITED, REMOVED})"),
+        labels_problems,
+        "casesConduit.ts's NOT_RESTORABLE",
+    ),
     ("the route showing labels by another rule", _replace("history", SHOWN, "_SHOWN_LABELS = FIXED_LABELS"), labels_problems, "no longer shows"),
     (
         "a field added to a history step",

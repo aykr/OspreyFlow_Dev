@@ -50,19 +50,25 @@ test.describe("the cases page with scripts", () => {
     });
   });
 
-  test("CK4: Enter on the contents' History takes the reader to the history, a table of the steps with no stop of its own", async ({ page }) => {
+  test("CK4: Enter on each of the contents' links takes the reader to its part; the history is a table of the steps with no stop of its own", async ({ page }) => {
     await withCases(assets, async (base) => {
       await openCases(page, base, "/cases?case=k-harbour");
+      for (const [name, part] of [["About this case", "about"], ["Brief", "brief"]] as const) {
+        await page.getByRole("link", { name, exact: true }).focus();
+        await page.keyboard.press("Enter");
+        await expect(page).toHaveURL(new RegExp(`^${base}/cases\\?case=k-harbour#${part}$`));
+        await expect(page.locator(":target")).toHaveText(name);
+      }
       await page.getByRole("link", { name: "History" }).focus();
       await page.keyboard.press("Enter");
       await expect(page).toHaveURL(new RegExp(`^${base}/cases\\?case=k-harbour#history$`));
       await expect(page.locator(":target")).toHaveText("History");
-      const table = page.getByRole("table", { name: "Changes to this case, oldest first" });
-      await expect(table).toBeInViewport();
+      // `:target` is the proof the link was followed; the page is short, so being in view would prove nothing.
+      const table = page.getByRole("table", { name: "Changes to this case, in the order the case records them" });
       await expect(table.getByRole("columnheader")).toHaveText(["Step", "When", "Restore"]);
       await expect(table.getByRole("rowheader")).toHaveText(["Seeded", "Edited the brief"]);
       await expect(table.getByRole("row").last()).toContainText("Cannot be restored");
-      // The next stop after the part is the way back: the history holds none of its own.
+      // The next stop is the way back: the History part holds no stop of its own (this says nothing of where the link went: `:target` does).
       await page.keyboard.press("Tab");
       await expect(page.getByRole("link", { name: "Back to your cases" })).toBeFocused();
     });

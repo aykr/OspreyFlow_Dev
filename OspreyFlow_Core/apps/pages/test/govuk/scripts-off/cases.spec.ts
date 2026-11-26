@@ -42,14 +42,20 @@ test.describe("the cases page with scripts switched off", () => {
     });
   });
 
-  test("CO3: the contents' History works by Enter with no script, and a case with no step says so", async ({ page }) => {
+  test("CO3: each of the contents' links works by Enter with no script, and a case with no step says so", async ({ page }) => {
     await withCases(assets, async (base) => {
       await openCases(page, base, "/cases?case=k-harbour");
+      for (const [name, part] of [["About this case", "about"], ["Brief", "brief"]] as const) {
+        await page.getByRole("link", { name, exact: true }).focus();
+        await page.keyboard.press("Enter");
+        await expect(page).toHaveURL(new RegExp(`^${base}/cases\\?case=k-harbour#${part}$`));
+        await expect(page.locator(":target")).toHaveText(name);
+      }
       await page.getByRole("link", { name: "History" }).focus();
       await page.keyboard.press("Enter");
       await expect(page).toHaveURL(new RegExp(`^${base}/cases\\?case=k-harbour#history$`));
       await expect(page.locator(":target")).toHaveText("History");
-      await expect(page.getByRole("table", { name: "Changes to this case, oldest first" }).getByRole("rowheader")).toHaveText(["Seeded", "Edited the brief"]);
+      await expect(page.getByRole("table", { name: "Changes to this case, in the order the case records them" }).getByRole("rowheader")).toHaveText(["Seeded", "Edited the brief"]);
       await openCases(page, base, "/cases?case=k-ferry");
       await expect(page.getByText("Nothing has changed in this case yet.")).toBeVisible();
       expect(await tabOrder(page)).toEqual(CASE_TAB_ORDER);

@@ -54,7 +54,7 @@ export const CASES_WORDS = {
   ],
   history: "History",
   historyLede: "This page only shows the steps. It restores none.",
-  historyCaption: "Changes to this case, oldest first",
+  historyCaption: "Changes to this case, in the order the case records them",
   historyColumns: ["Step", "When", "Restore"],
   canRestore: "Can be restored",
   cannotRestore: "Cannot be restored",
@@ -247,7 +247,7 @@ function stepOf(body: unknown): StepRow | undefined {
   return { label, when: utcStampOf(created_at), restore: restorable ? CASES_WORDS.canRestore : CASES_WORDS.cannotRestore };
 }
 
-/** `GET /history` as rows, every step in the order sent (the route's, oldest first); `undefined` when it is not a list of steps. */
+/** `GET /history` as rows, every step in the order sent (the route's: `seq`, then the time); `undefined` when it is not a list of steps. */
 function historyOf(body: unknown): HistoryView | undefined {
   if (!Array.isArray(body)) return undefined;
   const rows: StepRow[] = [];
