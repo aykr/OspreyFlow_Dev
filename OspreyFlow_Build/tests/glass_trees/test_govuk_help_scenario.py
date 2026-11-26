@@ -271,9 +271,10 @@ def route_problems(data: dict[str, Any]) -> list[str]:
     # Slice GR3a added the alert monitoring page (`/reports`): its row, `reports-figures`, carries the route.
     # Slice GR4a's trends shown together (`/packs/trends`) is the fourth; its row, `reports-trends-shown-together`, keeps an empty route
     # while the function is incomplete (`test_govuk_pack_trends_scenario.py`). The fifth, the cases page (slice GR1a), is the first part
-    # of the `cases-and-views` row, whose route stays empty likewise (`test_govuk_cases_scenario.py`).
-    if data["routes"] != ["/help", "/admin/people", "/reports", "/packs/trends", "/cases"]:
-        return [f"the route list is {data['routes']!r}: the tree has five pages, /help, /admin/people, /reports, /packs/trends and /cases"]
+    # of the `cases-and-views` row, whose route stays empty likewise (`test_govuk_cases_scenario.py`), and the sixth, a case's drawing
+    # boards (slice GG4a), the first part of the `drawing-boards` row (`test_govuk_boards_scenario.py`).
+    if data["routes"] != ["/help", "/admin/people", "/reports", "/packs/trends", "/cases", "/cases/boards"]:
+        return [f"the route list is {data['routes']!r}: the tree has six pages, /help, /admin/people, /reports, /packs/trends, /cases and /cases/boards"]
     if routed != ["/help", "/reports"]:
         return [f"the rows that have a route are {routed!r}, not just /help and /reports"]
     return []
@@ -407,7 +408,7 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
     ("the old combined top bar row back", _row("functions", "top-bar-home", id="top-bar-home-help"), function_problems, "owner ruled it split"),
     ("reports not split", _row("functions", "reports-figures", id="reports"), function_problems, "owner ruled it split"),
     ("the dashboards row given a slice", _row("functions", "reports-dashboards", slice="GR3"), function_problems, "must be later"),
-    ("a route in the list the code has no page for", lambda d: d["routes"].append("/welcome"), route_problems, "five pages"),
+    ("a route in the list the code has no page for", lambda d: d["routes"].append("/welcome"), route_problems, "six pages"),
     ("a row routed with the list left short", _row("functions", "top-bar-home", route="/"), route_problems, "not just /help"),
     ("no register row", _drop("register", "govuk-frontend"), register_problems, "not one"),
     ("a licence that is not MIT", _register_row(licence="GPL-3.0-only"), register_problems, "not MIT"),

@@ -34,8 +34,8 @@ export const KEYBOARD_CASES: Case[] = [
 
 /** The stops of the list, in the page's own order: the skip link, the layout's sign-out, each case's link, the way back. */
 export const LIST_TAB_ORDER = ["a: Skip to main content", "button: Sign out", "a: Harbour watch", "a: Ferry routes", "a: Back to Home"];
-/** The stops of a case's page: the skip link, the sign-out, the way back to the cases, the way back to Home. */
-export const CASE_TAB_ORDER = ["a: Skip to main content", "button: Sign out", "a: Back to your cases", "a: Back to Home"];
+/** The stops of a case's page: the skip link, the sign-out, its drawing boards (slice GG4a), the way back to the cases, the way back to Home. */
+export const CASE_TAB_ORDER = ["a: Skip to main content", "button: Sign out", "a: Drawing boards in this case", "a: Back to your cases", "a: Back to Home"];
 
 export async function withCases(assets: Assets, run: (base: string) => Promise<void>): Promise<void> {
   const token = bearer();

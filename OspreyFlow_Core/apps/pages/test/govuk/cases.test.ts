@@ -553,7 +553,7 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
       expect(refusalProblems(res, unknown), id).toEqual([]);
       expect(calls(w.conduit), id).toEqual([`GET /v1/investigations/${id}`]);
     }
-    for (const query of ["?case=", "?case=c-harbour&case=c-ferry", "?case=c-harbour&case=", "?case=.", "?case=..", "?case=%2E%2E"]) {
+    for (const query of ["?case=", "?case=c-harbour&case=c-ferry", "?case=c-harbour&case=", "?case=.", "?case=..", "?case=%2E%2E", "?case=c-harbour%2Fbrief", "?case=c-harbour%2Fviews"]) {
       w.conduit.calls.splice(0);
       const res = await getAs(w, `${PATH}${query}`);
       expect(refusalProblems(res, unknown), query).toEqual([]);
@@ -735,8 +735,8 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
     expect(structureProblems(one.text)).toEqual([]);
     const hrefs = (html: string): (string | undefined)[] => focusable(html).map((s) => s.href ?? s.text);
     expect(hrefs(list.text)).toEqual(["#main", "Sign out", ...MINE.map(pageOf), "/"]);
-    expect(hrefs(one.text)).toEqual(["#main", "Sign out", PATH, "/"]);
-    expect(focusable(one.text).map((s) => s.text).slice(2)).toEqual([CASES_WORDS.toCases, CASES_WORDS.back]);
+    expect(hrefs(one.text)).toEqual(["#main", "Sign out", "/cases/boards?case=c-harbour", PATH, "/"]);
+    expect(focusable(one.text).map((s) => s.text).slice(2)).toEqual([CASES_WORDS.boards, CASES_WORDS.toCases, CASES_WORDS.back]);
     expect(headings(mainOf(one.text)).map((h) => h.level)).toEqual([1, 2, 2, 3, 3]);
   });
 

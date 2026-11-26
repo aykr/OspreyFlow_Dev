@@ -11,3 +11,4 @@ routes:
   - /reports
   - /packs/trends
   - /cases
+  - /cases/boards

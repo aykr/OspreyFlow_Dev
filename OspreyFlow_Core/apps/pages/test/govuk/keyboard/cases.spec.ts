@@ -40,6 +40,13 @@ test.describe("the cases page with scripts", () => {
       await expect(page.getByRole("heading", { level: 1 })).toHaveText("Harbour watch");
       await expect(page.getByText("Which vessels berth after dark?")).toBeVisible();
       expect(await tabOrder(page)).toEqual(CASE_TAB_ORDER);
+      // The case's drawing boards (slice GG4a): Enter on the link opens the boards page of this case; the boards page's own walk is
+      // `boards.spec.ts`. Back by the browser's history.
+      await page.getByRole("link", { name: "Drawing boards in this case" }).focus();
+      await page.keyboard.press("Enter");
+      await expect(page).toHaveURL(new RegExp(`^${base}/cases/boards\\?case=k-harbour$`));
+      await page.goBack();
+      await expect(page).toHaveURL(new RegExp(`^${base}/cases\\?case=k-harbour$`));
       await page.getByRole("link", { name: "Back to your cases" }).focus();
       await page.keyboard.press("Enter");
       await expect(page).toHaveURL(new RegExp(`^${base}/cases$`));
