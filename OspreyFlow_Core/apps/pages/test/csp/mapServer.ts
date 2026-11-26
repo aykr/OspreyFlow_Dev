@@ -307,6 +307,7 @@ export async function startMapServer(): Promise<MapServer> {
   const policies: { builder: string; sent: string }[] = [];
   const requests = new Map<string, PageRequest>();
   let archiveCase: ArchiveCase = "ranged";
+  let current: PageRequest | undefined;
   let origins = { self: "", elsewhere: "" };
 
   // ---- elsewhere: another origin, recording everything that reaches it, and answering it as a real tile host would.
@@ -337,10 +338,14 @@ export async function startMapServer(): Promise<MapServer> {
   });
   // The real policy, first, as `server/app.ts:223` mounts it.
   app.use(securityHeaders());
-  // A plant, if this page's request names one: applied to the builder's own output, after the builder, before anything is sent.
+  // A plant, if the page open now names one: applied to the builder's own output, after the builder, before anything is sent,
+  // on every response while that page is open (the spec runs one page at a time). Every response, not only the page's: a
+  // dedicated worker is governed by the policy on its own script's response, not by its page's (measured: with `connect-src`
+  // widened on the page alone, both browsers still refuse the worker's outside tile under the worker's own policy).
   app.use((req, res, next) => {
     const key = typeof req.query["page"] === "string" ? req.query["page"] : undefined;
-    const pageRequest = key === undefined ? undefined : requests.get(key);
+    if (req.path === "/map") current = key === undefined ? undefined : requests.get(key);
+    const pageRequest = current;
     const builder = String(res.getHeader("Content-Security-Policy") ?? "");
     if (pageRequest?.plant) res.setHeader("Content-Security-Policy", pageRequest.plant(builder, origins));
     if (req.path === "/map") policies.push({ builder, sent: String(res.getHeader("Content-Security-Policy") ?? "") });
@@ -351,7 +356,7 @@ export async function startMapServer(): Promise<MapServer> {
 
   app.get("/map", (req, res) => {
     const key = String(req.query["page"] ?? "");
-    const pageRequest = requests.get(key);
+    const pageRequest = current;
     if (!pageRequest) {
       res.status(404).type("text/plain").send("no such page");
       return;
