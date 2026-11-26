@@ -1,0 +1,1 @@
+tests/harness/test_gateway_token_reader_role.py	OspreyFlow_Core/	census(CORE): every .py, .sql, .sh, .tpl, .yaml and .yml under OspreyFlow_Core outside node_modules, venvs, __pycache__, .git, tests and test, and outside ClickHouse paths, for readers of the gateway token table
