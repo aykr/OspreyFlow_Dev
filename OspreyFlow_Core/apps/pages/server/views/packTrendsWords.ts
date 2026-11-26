@@ -1,6 +1,6 @@
 /**
  * The words of trends shown together, and the view it is drawn from (slice GR4a; ADR-152 decisions 5, 6, 10 and 12, invariant I21;
- * FUNCTIONS row `reports-figures`; scenario TS). Nothing here is a call or a right: a word, or a function from what the Conduit answered
+ * FUNCTIONS row `reports-trends-shown-together`; scenario TS). Nothing here is a call or a right: a word, or a function from what the Conduit answered
  * to what the template draws.
  *
  * What a pack and a trend are said in is the shared package's (`packages/glass-shared/src/reports/packText.ts`), imported and never

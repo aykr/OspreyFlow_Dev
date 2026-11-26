@@ -8,7 +8,7 @@
  * (`trees`, the Default tree's alone when left out), and the service mounts the ones that name the tree it was started with
  * (`OSPREY_PAGES_TREE`). Help (slice GR2a) is the first page of the GOV.UK tree, and has no Default twin yet; the Admin People list
  * (slice AD3a) is the second, the first section of the `admin` row; the alert monitoring figures (slice GR3a) are its third; trends shown
- * together (slice GR4a) is the fourth, a second page of the `reports-figures` row.
+ * together (slice GR4a) is the fourth, the page of its own row, `reports-trends-shown-together`.
  * `tree-govuk/routes.yaml` lists the paths of the pages that name `govuk`, and `test/govuk/help.test.ts` holds the two in step.
  */
 import type { PageModule } from "./pages.js";

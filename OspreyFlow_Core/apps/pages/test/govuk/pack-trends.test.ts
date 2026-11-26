@@ -1,6 +1,6 @@
 /**
  * Trends shown together: a pack's saved trends on one read-only page of the GOV.UK tree (slice GR4a; ADR-152 decisions 5, 6, 7, 10 and
- * 12, invariant I21; FUNCTIONS row `reports-figures`; scenario TS of `spec/08_ACCEPTANCE_SCENARIOS.md`, written first; the owner's
+ * 12, invariant I21; FUNCTIONS row `reports-trends-shown-together`; scenario TS of `spec/08_ACCEPTANCE_SCENARIOS.md`, written first; the owner's
  * rulings of 25 November 2026). `tests/glass_trees/test_govuk_pack_trends_scenario.py` holds the scenario and this file in step: each
  * case's id is a row of the scenario.
  *

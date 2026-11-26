@@ -1,11 +1,11 @@
 /**
  * Trends shown together, a read-only page of the GOV.UK tree (slice GR4a; ADR-152 decisions 5, 6, 7, 10 and 12, invariant I21;
- * FUNCTIONS row `reports-figures`; scenario TS; the owner's rulings of 25 November 2026):
+ * FUNCTIONS row `reports-trends-shown-together`; scenario TS; the owner's rulings of 25 November 2026):
  *
  *   GET  /packs/trends?case={case id}&pack={pack id}   one pack's trend items, in the pack's stored order, each as its figures drawn
  *
- * The address is for now: the owner ruled `/packs/{pack_id}/trends`, but a page's path is a plain path (`pages.ts`) and the pack routes
- * need the case as well as the pack, so the two go in the query, as the dataset map's do, until he rules (GR4a's away report).
+ * The address is the owner's to keep (his answer of 25 November 2026, which replaces `/packs/{pack_id}/trends`): a page's path is a plain
+ * path (`pages.ts`) and the pack routes need the case as well as the pack, so the two go in the query, as the dataset map's do.
  *
  * Decision 10 says this page is "a pack of trend items shown together on one page" with no new Conduit route, so it reads the pack
  * through the same door a script's call takes (`conduit.ts`), as the person, with their bearer and nothing of the browser's, and shows
@@ -25,8 +25,8 @@
  *    not be read (a 502), with no chart, no table and no part of either (rule 2).
  *
  * It is the GOV.UK tree's alone: a GOV.UK page may exist before its Default twin (the owner, 24 November 2026). GET is the only method
- * it answers, and it has no form, control or script. Its id is the `reports-figures` row's, whose route stays empty until the function
- * is complete.
+ * it answers, and it has no form, control or script. Its id is its own row's, `reports-trends-shown-together` (one id is one page in a tree, and
+ * `reports-figures` is the alert monitoring page's), whose route stays empty until the function is complete.
  */
 import type { Request, Response } from "express";
 
@@ -119,7 +119,7 @@ async function packTrendsGet(req: Request, res: Response): Promise<void> {
 }
 
 export const packTrends: PageModule = {
-  id: "reports-figures",
+  id: "reports-trends-shown-together",
   path: "/packs/trends",
   methods: ["GET"],
   trees: ["govuk"],
