@@ -1,6 +1,6 @@
 # GG2c away report: the working set's delta client moves to `glass-shared` (26 November 2026, D246 away round)
 
-**In progress; this is the report as far as it goes (written at the owner's word, 12:05 UTC).** Branch `away/GG2c` in
+**Done, 12:10 UTC.** Every case's green is shown; every planted fault but case 7's (an equality) was shown red at its real call site. Two open points: the integration test was not run against a real Conduit, and the perf case is red on `main` itself on this machine (questions 1 and 5). Branch `away/GG2c` in
 `~/away-gg2c`, from `origin/main` at `41ed4f195`. Not pushed, not merged; written now, merges only after WS4b (decision
 9). Built as drafted (`drafts/2026-11-26:…/drafts_2026-11-26/GG2c.md`), every proposal (a), as the owner ruled. Synthetic
 data only. Every test run through `~/osprey-d246/d246_ns.sh` (nice 19, its own network namespace, no containers).
@@ -77,8 +77,10 @@ same one case and pass the same three. The budget half of I11 is therefore shown
 
 ## Other checks
 
-- `doc_citations_check`: red, on `process/lanes/v062/slice-line/README.md:131` citing `tests/run.sh`, which is not this
-  slice's file. Whether it is red on `main` too is being checked next.
+- `doc_citations_check` (and so `test_doc_citations_check.py::test_the_repository_itself_is_clean`): **red on `main`
+  too**. The same two findings appear on the baseline tree at `41ed4f195`: `process/lanes/v062/slice-line/README.md:131` cites
+  `tests/run.sh`, which does not exist. This branch does not touch that file. The other 9 cases of
+  `test_doc_citations_check.py` pass. The moved paths add no broken citation.
 - `test_file_coverage_check`: green (1295 files, no drift).
 
 ## Findings beside the slice
@@ -102,3 +104,7 @@ same one case and pass the same three. The budget half of I11 is therefore shown
    should away rounds get a row?
 4. **The guard test `deltaClientHome.test.ts` is outside the draft's file list.** Keep it, or have the move proved some
    other way?
+5. **Case 6 against a real Conduit** needs the stack, so it waits for the seat's container checks or a lease holder's
+   `npm run test:integration --workspace apps/workspace`. Who runs it before the merge?
+6. **`main`'s `doc_citations_check` is red** (`slice-line/README.md:131` → `tests/run.sh`). That belongs to whoever owns the
+   slice-line README, not to this slice. It is noted here so the merge gate's red is not blamed on GG2c.
