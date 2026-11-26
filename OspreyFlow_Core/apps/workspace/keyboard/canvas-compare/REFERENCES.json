@@ -1,16 +1,18 @@
 {
-  "made_at": "2026-11-26T11:00:04.514Z",
+  "made_at": "2026-11-26T11:13:27.391Z",
   "made_by": "OspreyFlow away builder",
-  "reason": "WS4a: the canvas-look comparison s first references, drawn on Sigma 3.0.3 before the port",
-  "commit": "985a1ef253354268c55e81b45c0f4507fc0d7fef",
+  "reason": "WS4a: the references the port to Sigma 4 is judged by, drawn on Sigma 3.0.3 before it",
+  "commit": "e0d7d7ccfc0397d4e80c07663497d4a7ee7bd93d",
   "machine": {
     "platform": "linux 6.8.0-149-generic x64",
     "cpu": "AMD Ryzen 7 3700X 8-Core Processor",
     "node": "v22.23.5",
     "chromium": "156.0.8078.4",
-    "renderer": "Chromium headless, software WebGL (SwiftShader), device scale 1"
+    "webgl": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+    "scale": "device scale 1"
   },
   "scenes": {
+    "communities": "26b74b55bff0f8f05a80c62616d92e2e60b6d7640fe3a4cc0d61c100d6adba04",
     "export": "f1eb0215f3f33a87bc02fded8e46b86e3f12cdfb373f0e38eee002e5976c8af4",
     "hover": "ac77e752664ae8a5675ecb0a21085f2ae1a2c0027331908efe563de80550218a",
     "labels": "5b96a87dab3ef81140ce3224f3274e5de46442a9275d1a244bdac94f021ba66d",
