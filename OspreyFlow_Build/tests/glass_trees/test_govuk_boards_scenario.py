@@ -22,6 +22,9 @@ This file holds the document, the page test, the `drawing-boards` row, the route
   may-be-absent lists not the models' own                            -> `test_the_field_census_is_the_models_fields`
 * a closed field's values not the models' own                        -> `test_the_page_allows_exactly_the_models_values`
 * the checked fields not the scenario's "Checked, not drawn" sentence -> `test_the_field_census_is_the_models_fields`
+* a drawn item's source said until GG4b: either source field not left
+  out, a table with a column for it, the words for a missing note, or
+  a scenario that does not say why                                    -> `test_no_source_is_drawn_until_gg4b`
 
 The models are read from their source by `ast` (the classes' annotated fields; `exclude=True` for a field never on the wire; and the keys a
 `model_serializer` pops when unset, for a field that may be absent), so a field added to a route's model fails this test until the page
@@ -494,7 +497,45 @@ def values_problems(data: dict[str, Any]) -> list[str]:
     return found
 
 
+#: The two tables that held a source on the away branch, each with the columns it has until GG4b (the owner's ruling of 26 November
+#: 2026): the page's list in `boardsWords.ts`, and the scenario row that names them.
+NO_SOURCE_COLUMNS: dict[str, tuple[str, list[str]]] = {
+    "drawnColumns": ("BD3", ["Item", "Type", "Marking", "Grading"]),
+    "linkColumns": ("BD4", ["Link", "Type", "From", "To", "Drawn or loaded", "Marking", "Grading"]),
+}
+SOURCE_FIELDS = ("source_note", "source_document")
+
+
+def source_problems(data: dict[str, Any]) -> list[str]:
+    """No drawn item's source is said until GG4b: the route sends the document to every reader of the board, and a drawn item needs a
+    note or a document, so either field, or a note's absence, would tell a reader a document is there."""
+    found: list[str] = []
+    section = section_of(data["spec_08"])
+    census = census_of(data["words"])
+    _, _, left = census.get("DrawnAssertion", ([], [], []))
+    for field in SOURCE_FIELDS:
+        if field not in left:
+            found.append(f"DrawnAssertion.{field} is not left out by the page")
+    rows = rows_of(section)
+    for listed, (row_id, columns) in NO_SOURCE_COLUMNS.items():
+        page = re.search(rf"^\s*{listed}: \[([^\]]*)\],", data["words"], flags=re.MULTILINE)
+        if page is None or names(page.group(1)) != columns:
+            found.append(f"the page's {listed} are {names(page.group(1)) if page else None}, not {columns}")
+        said = f"columns {', '.join(columns)}"
+        behaviour = rows.get(row_id, [""])[0]
+        if not re.search(re.escape(said) + r"(?=[);.])", behaviour):
+            found.append(f"{row_id} does not say its {said!r} and no other")
+    for word in ("noNote", "loadedSource"):
+        if re.search(rf"\b{word}\b", data["words"]):
+            found.append(f"boardsWords.ts still holds the words {word}")
+    paragraph = next((p for p in section.split("\n\n") if p.startswith("**Left out, by field name.**")), "")
+    if "`source_note` and `source_document` (left out until GG4b" not in paragraph:
+        found.append("the left-out sentence does not say the two source fields are left out until GG4b, and why")
+    return found
+
+
 CHECKS = (
+    source_problems,
     scenario_problems,
     prose_problems,
     citation_problems,
@@ -550,6 +591,10 @@ def test_the_field_census_is_the_models_fields() -> None:
 
 def test_the_page_allows_exactly_the_models_values() -> None:
     assert values_problems(inputs()) == []
+
+
+def test_no_source_is_drawn_until_gg4b() -> None:
+    assert source_problems(inputs()) == []
 
 
 # ---------------------------------------------------------------------------------------------------- planted faults (rule 15)
@@ -773,6 +818,55 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
         _replace("words", 'export const OPTIONS = ["save_as_view", "filter", "promote_to_batch"] as const;', 'export const OPTIONS = ["save_as_view", "filter"] as const;'),
         values_problems,
         "the page's OPTIONS",
+    ),
+    # No source until GG4b.
+    (
+        "the source note claimed as drawn again",
+        _replace("words", '"original_grading", "source_note", "source_document"', '"original_grading", "source_document"'),
+        source_problems,
+        "DrawnAssertion.source_note is not left out",
+    ),
+    (
+        "the drawn table's source column back",
+        _replace("words", 'drawnColumns: ["Item", "Type", "Marking", "Grading"],', 'drawnColumns: ["Item", "Type", "Marking", "Grading", "Source note"],'),
+        source_problems,
+        "the page's drawnColumns",
+    ),
+    (
+        "the links table's source column back",
+        _replace("words", '"Drawn or loaded", "Marking", "Grading"],', '"Drawn or loaded", "Marking", "Grading", "Source note"],'),
+        source_problems,
+        "the page's linkColumns",
+    ),
+    (
+        "the words for a missing note back",
+        _replace("words", "  drawnNote:", '  noNote: "No note given",\n  drawnNote:'),
+        source_problems,
+        "still holds the words noNote",
+    ),
+    (
+        "the loaded link's source words back",
+        _replace("words", "  drawnNote:", '  loadedSource: "A dataset this case reads",\n  drawnNote:'),
+        source_problems,
+        "still holds the words loadedSource",
+    ),
+    (
+        "the scenario's drawn columns ending in a source",
+        _in_section("columns Item, Type, Marking, Grading;", "columns Item, Type, Marking, Grading, Source note;"),
+        source_problems,
+        "BD3 does not say",
+    ),
+    (
+        "the scenario's link columns ending in a source",
+        _in_section("Drawn or loaded, Marking, Grading)", "Drawn or loaded, Marking, Grading, Source note)"),
+        source_problems,
+        "BD4 does not say",
+    ),
+    (
+        "the reason for leaving the source out dropped",
+        _in_section("(left out until GG4b", "(left out"),
+        source_problems,
+        "left out until GG4b",
     ),
 ]
 

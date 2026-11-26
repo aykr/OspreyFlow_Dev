@@ -10,7 +10,8 @@
  * Which test fails if the invariant is broken (rule 12):
  *  - a board missing, added, out of order, a column other than the five, a count the page made, a name not a link     -> BD1
  *  - an empty list drawn as a table, or as headings with no rows                                                         -> BD2
- *  - a drawn item without its marking, grading or source, a reference not said as loaded, a document's id drawn           -> BD3
+ *  - a drawn item without its marking or grading, a reference not said as loaded                                         -> BD3
+ *  - a drawn item's or link's source said in any way until GG4b: a note, a document's id, "No note given", a column       -> BD3
  *  - a link listed twice, an end looked up outside the route's items or said as unknown                                  -> BD4
  *  - a private board, another case's, none, no level, no right told apart, or told in other words than an unknown path's -> BD5
  *  - the withdrawn count said to another reader, said at zero, made by the page, or naming an item                       -> BD6
@@ -347,8 +348,59 @@ function labelOf(item: Item): string {
   return `Unnamed ${item.type}`;
 }
 const gradingSaid = (g: { scheme: string; source: string; intelligence: string; handling: string }): string => `${g.source}${g.intelligence}${g.handling} (${g.scheme})`;
-/** A source note as written; a document is never said (the route sends its id to readers who may not read it: a question). */
-const sourceSaid = (d: NonNullable<Item["drawn"]>): string => d.source_note ?? BOARDS_WORDS.noNote;
+
+// ------------------------------------------------------------------------------------------------ no source (until GG4b)
+
+/** A board with an item drawn from a note alone, one from a document alone and one from both, a drawn link carrying each, and a loaded
+ * item and link beside them. No source of any of them may reach the page: the route sends a document's id to every reader of the board,
+ * and a drawn item needs a note or a document, so even "no note" would tell a reader a document is there (the owner's ruling). */
+const SOURCES_OF: Record<string, { source_note: string | null; source_document: string | null }> = {
+  "d-s-note": { source_note: "Overheard at the chandlery", source_document: null },
+  "d-s-doc": { source_note: null, source_document: "doc-sealed-statement" },
+  "d-s-both": { source_note: "Copied from the berth register", source_document: "doc-berth-register" },
+  "l-s-note": { source_note: "Told by the night watchman", source_document: null },
+  "l-s-doc": { source_note: null, source_document: "doc-sealed-intercept" },
+  "l-s-both": { source_note: "Read in the pilot log", source_document: "doc-pilot-log" },
+};
+const sourced = (id: string, label: string): NonNullable<Item["drawn"]> => drawnBy(ALEX, "b-sources", `i-${id}`, label, SOURCES_OF[id]);
+const SOURCE_ITEMS: Item[] = [
+  { id: "n-s-vessel", type: "Vessel", properties: { name: "Grey Heron" }, marking: "OFFICIAL" },
+  { id: "n-s-owner", type: "Person", properties: { name: "Ira Vale" }, marking: "OFFICIAL" },
+  { id: "d-s-note", type: "Person", properties: {}, marking: "OFFICIAL", drawn: sourced("d-s-note", "First lead") },
+  { id: "d-s-doc", type: "Person", properties: {}, marking: "OFFICIAL", drawn: sourced("d-s-doc", "Second lead") },
+  { id: "d-s-both", type: "Person", properties: {}, marking: "OFFICIAL", drawn: sourced("d-s-both", "Third lead") },
+];
+const SOURCE_LINKS: Link[] = [
+  { id: "l-s-note", type: "KNOWS", source: "d-s-note", target: "n-s-owner", marking: "OFFICIAL", drawn: sourced("l-s-note", "First tie") },
+  { id: "l-s-doc", type: "KNOWS", source: "d-s-doc", target: "n-s-owner", marking: "OFFICIAL", drawn: sourced("l-s-doc", "Second tie") },
+  { id: "l-s-both", type: "KNOWS", source: "d-s-both", target: "n-s-vessel", marking: "OFFICIAL", drawn: sourced("l-s-both", "Third tie") },
+  { id: "l-s-loaded", type: "OWNS", source: "n-s-owner", target: "n-s-vessel", marking: "OFFICIAL" },
+];
+const SOURCE_BOARD: Board = { id: "b-sources", case_id: CASE, name: "Where from", created_by: ALEX, created_at: "2026-11-12T10:00:00Z", shared: false, references: ["n-s-vessel", "n-s-owner"], drawn: ["d-s-note", "d-s-doc", "d-s-both"] };
+const sourceWorld = (): Promise<World> => world({ boards: [SOURCE_BOARD], items: SOURCE_ITEMS, links: SOURCE_LINKS });
+const NOTES_AND_DOCUMENTS: string[] = Object.values(SOURCES_OF).flatMap((s) => [s.source_note, s.source_document].filter((v): v is string => v !== null));
+/** What the drawn and links tables must never say. "Source" is matched in any case. */
+const SOURCE_WORDS = [/no note given/i, /source/i, /a dataset this case reads/i];
+
+/** Every sign of a source on a board's page, in words: a note's text or a document's id anywhere in the whole HTML, and a source's words
+ * in the drawn or links table. The same function reads the real page and each planted one. */
+function sourceProblems(html: string): string[] {
+  const whole = unescape(html);
+  const found = NOTES_AND_DOCUMENTS.filter((value) => whole.includes(value)).map((value) => `the page holds ${JSON.stringify(value)}`);
+  const tables = [...mainOf(html).matchAll(/<table\b[^>]*>[\s\S]*?<\/table>/g)].map((m) => m[0]);
+  for (const caption of [BOARDS_WORDS.drawnCaption, BOARDS_WORDS.linksCaption]) {
+    const table = tables.find((t) => t.includes(`>${caption}</caption>`));
+    if (table === undefined) {
+      found.push(`there is no table captioned ${JSON.stringify(caption)} to read`);
+      continue;
+    }
+    for (const word of SOURCE_WORDS) {
+      const said = word.exec(unescape(textOf(table)));
+      if (said) found.push(`the table ${JSON.stringify(caption)} says ${JSON.stringify(said[0])}`);
+    }
+  }
+  return found;
+}
 
 /** Every fault in the list as drawn against what the route sent: the same function reads the real page and each planted one (BD1). */
 function listProblems(html: string, w: World, ids: string[]): string[] {
@@ -384,7 +436,7 @@ function boardProblems(html: string, w: World, boardId: string): string[] {
       if (drawnTable.rows.length !== drawnItems.length) found.push(`${drawnTable.rows.length} drawn rows for ${drawnItems.length} drawn items sent`);
       drawnItems.forEach((item, i) => {
         const d = item.drawn as NonNullable<Item["drawn"]>;
-        const want = [`${d.label} ${BOARDS_WORDS.drawnNote}`, item.type, item.marking, gradingSaid(d.grading), sourceSaid(d)];
+        const want = [`${d.label} ${BOARDS_WORDS.drawnNote}`, item.type, item.marking, gradingSaid(d.grading)];
         if (JSON.stringify(drawnTable.rows[i]?.cells) !== JSON.stringify(want)) found.push(`drawn row ${i} is ${JSON.stringify(drawnTable.rows[i]?.cells)}, not ${JSON.stringify(want)}`);
       });
     }
@@ -419,7 +471,6 @@ function boardProblems(html: string, w: World, boardId: string): string[] {
           d ? BOARDS_WORDS.drawn : BOARDS_WORDS.loaded,
           link.marking,
           d ? gradingSaid(d.grading) : BOARDS_WORDS.notGraded,
-          d ? sourceSaid(d) : BOARDS_WORDS.loadedSource,
         ];
         if (JSON.stringify(linksTable.rows[i]?.cells) !== JSON.stringify(want)) found.push(`link row ${i} is ${JSON.stringify(linksTable.rows[i]?.cells)}, not ${JSON.stringify(want)}`);
       });
@@ -708,14 +759,15 @@ describe("the boards page on the GOV.UK tree (scenario BD)", () => {
     expect(boardProblems(res.text, w, "b-quay")).toEqual([]);
     const text = mainText(res.text);
     for (const fact of [BOARDS_WORDS.private, utcStampOf("2026-11-10T09:30:00Z")]) expect(text).toContain(fact);
-    // Every drawn item is said as drawn, with its marking and its grading; a document is said by its kind alone.
+    // Every drawn item is said as drawn, with its marking and its grading; no source is said (the next case).
     const drawnRows = tableCalled(res.text, BOARDS_WORDS.drawnCaption)?.rows ?? [];
     expect(drawnRows.map((r) => r.head)).toEqual(["Unknown male “Tall” Drawn, not loaded", "White van Drawn, not loaded", "Night crew Drawn, not loaded"]);
     expect(drawnRows.map((r) => r.cells[2])).toEqual(["OFFICIAL", "OFFICIAL-SENSITIVE", "OFFICIAL"]);
     expect(drawnRows.map((r) => r.cells[3])).toEqual(["A11 (5x5x5)", "B21 (5x5x5)", "C32 (5x5x5)"]);
-    // A source note as written; an item with only a document says no note was given, and no document is said, even by its kind.
-    expect(drawnRows.map((r) => r.cells[4])).toEqual(["Seen from the harbour wall", "No note given", "Seen from the harbour wall"]);
-    expect(text).not.toContain("A document of the case");
+    // Four columns and no fifth: no source note, and no document by its identifier or its kind.
+    expect(BOARDS_WORDS.drawnColumns).toEqual(["Item", "Type", "Marking", "Grading"]);
+    expect(drawnRows.map((r) => r.cells.length)).toEqual([4, 4, 4]);
+    expect(text).not.toMatch(/Seen from the harbour wall|No note given|A document of the case/);
     const loadedRows = tableCalled(res.text, BOARDS_WORDS.loadedCaption)?.rows ?? [];
     expect(loadedRows.map((r) => r.head)).toEqual([`Morning Star ${BOARDS_WORDS.loadedNote}`, `Rowan Hale ${BOARDS_WORDS.loadedNote}`]);
     expect(BOARDS_WORDS.loadedNote).toBe("A dataset this case reads: a live reference, not editable here");
@@ -730,6 +782,25 @@ describe("the boards page on the GOV.UK tree (scenario BD)", () => {
     }
     const unnamed = await world({ items: ITEMS.map((i) => (i.id === "n-vessel" ? { ...i, properties: {} } : i)) });
     expect(tableCalled((await getAs(unnamed, boardOfPath("b-quay"))).text, BOARDS_WORDS.loadedCaption)?.rows[0]?.head).toBe(`Unnamed Vessel ${BOARDS_WORDS.loadedNote}`);
+  });
+
+  it("BD3: the board page sends no source: over items and links drawn from a note, a document and both, no note, document id or source word", async () => {
+    const w = await sourceWorld();
+    // The route does send them, so their absence from the page is the page's doing.
+    const sent = JSON.stringify(openedOf(SOURCE_BOARD, w.reader, w.options, UNIT));
+    for (const value of NOTES_AND_DOCUMENTS) expect(sent, value).toContain(value);
+    const res = await getAs(w, boardOfPath("b-sources"));
+    expect(res.status).toBe(200);
+    expect(tableCalled(res.text, BOARDS_WORDS.drawnCaption)?.rows.map((r) => r.head)).toEqual(["First lead Drawn, not loaded", "Second lead Drawn, not loaded", "Third lead Drawn, not loaded"]);
+    expect(tableCalled(res.text, BOARDS_WORDS.linksCaption)?.rows.map((r) => r.head)).toEqual(["First tie", "Second tie", "Third tie", "owns"]);
+    expect(sourceProblems(res.text)).toEqual([]);
+    expect(tableCalled(res.text, BOARDS_WORDS.linksCaption)?.columns).toEqual(["Link", "Type", "From", "To", "Drawn or loaded", "Marking", "Grading"]);
+    // An item with a note and one without are drawn alike: nothing of a row says which has a document.
+    const shape = (table: string): number[] => tableCalled(res.text, table)?.rows.map((r) => r.cells.length) ?? [];
+    expect(shape(BOARDS_WORDS.drawnCaption)).toEqual([4, 4, 4]);
+    expect(shape(BOARDS_WORDS.linksCaption)).toEqual([7, 7, 7, 7]);
+    expect("noNote" in BOARDS_WORDS).toBe(false);
+    expect("loadedSource" in BOARDS_WORDS).toBe(false);
   });
 
   it("BD4: each link is listed once, in the order sent, both ends named as the route's items name them; an end outside them is not drawn", async () => {
@@ -1135,14 +1206,32 @@ describe("the boards page on the GOV.UK tree (scenario BD)", () => {
       expect(hiddenProblems(real.replace("</main>", "<p>Some items are withheld from you.</p></main>"))).not.toEqual([]);
       expect(neverProblems(real.replace("</main>", "<p>1 item is hidden from you</p></main>"))).not.toEqual([]);
       expect(neverProblems(real.replace("White van", "Hidden informant"))).not.toEqual([]);
-      // A document said by its identifier.
-      expect(neverProblems(real.replace("No note given", "doc-photo-7"))).not.toEqual([]);
-      expect(neverProblems(real.replace("No note given", "A document of the case"))).not.toEqual([]);
+      // A document said by its identifier, or by its kind.
+      for (const said of ["doc-photo-7", "A document of the case"]) {
+        const planted = real.replace(">B21 (5x5x5)<", `>${said}<`);
+        expect(planted, said).not.toBe(real);
+        expect(neverProblems(planted), said).not.toEqual([]);
+      }
       // The fixture sending the hidden item's count as `missing`, which the real route never does: the page draws what it is sent.
       const b = openedBody();
       b["missing"] = 2;
       const w2 = await world({ board_answer: { status: 200, body: b } });
       expect(mainText((await getAs(w2, boardOfPath("b-quay"))).text)).toContain("2 items you placed have since been withdrawn.");
+    });
+
+    it("BD17: the no-source check fails for a note, a document's id or a source's words in a table, and for a table it cannot find", async () => {
+      const w = await sourceWorld();
+      const real = (await getAs(w, boardOfPath("b-sources"))).text;
+      expect(sourceProblems(real)).toEqual([]);
+      const inCell = (said: string): string => real.replace("<td>OFFICIAL</td>", `<td>${said}</td>`);
+      for (const value of NOTES_AND_DOCUMENTS) expect(sourceProblems(inCell(value)), value).toContain(`the page holds ${JSON.stringify(value)}`);
+      // Anywhere in the whole HTML, not only in a table: a title, an attribute.
+      expect(sourceProblems(real.replace("<table", '<table data-from="doc-pilot-log"'))).toContain('the page holds "doc-pilot-log"');
+      for (const said of ["No note given", "Source note", "A dataset this case reads"]) expect(sourceProblems(inCell(said)), said).not.toEqual([]);
+      const header = real.replace('<th scope="col">Grading</th>', '<th scope="col">Grading</th><th scope="col">Source note</th>');
+      expect(header).not.toBe(real);
+      expect(sourceProblems(header)).toContain('the table "Drawn items on this board" says "Source"');
+      expect(sourceProblems(real.replace(`>${BOARDS_WORDS.linksCaption}</caption>`, ">Links</caption>"))).not.toEqual([]);
     });
 
     it("BD17: the refusal's check fails for a 'not shared with you' sentence, the 404 passed through with the Conduit's words, another status", async () => {
@@ -1204,6 +1293,9 @@ describe("the boards page on the GOV.UK tree (scenario BD)", () => {
         return { ...CENSUS, [model]: lists };
       };
       expect(await censusProblems(moved("DrawnAssertion", "asserted_by", "drawn"))).toEqual(["DrawnAssertion.asserted_by is drawn but changes no page that is still drawn"]);
+      // Neither source field changes any page (until GG4b).
+      expect(await censusProblems(moved("DrawnAssertion", "source_note", "drawn"))).toEqual(["DrawnAssertion.source_note is drawn but changes no page that is still drawn"]);
+      expect(await censusProblems(moved("DrawnAssertion", "source_document", "drawn"))).toEqual(["DrawnAssertion.source_document is drawn but changes no page that is still drawn"]);
       expect(await censusProblems(moved("BoardOpened", "layout", "drawn"))).toEqual(["BoardOpened.layout is drawn but changes no page that is still drawn"]);
       expect(await censusProblems(moved("Grading", "handling", "left"))).toEqual(["Grading.handling is left out but changes the page"]);
       expect(await censusProblems(moved("Board", "drawn", "left"))).toEqual(["Board.drawn is left out but changes the page"]);

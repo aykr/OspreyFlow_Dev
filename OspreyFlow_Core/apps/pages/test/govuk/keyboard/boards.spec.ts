@@ -61,7 +61,8 @@ test.describe("the boards page with scripts", () => {
       await expect(page.getByRole("banner")).toHaveCount(1);
       await expect(page.getByRole("main")).toHaveCount(1);
       const drawn = page.getByRole("table", { name: "Drawn items on this board" });
-      await expect(drawn.getByRole("columnheader")).toHaveText(["Item", "Type", "Marking", "Grading", "Source note"]);
+      await expect(drawn.getByRole("columnheader")).toHaveText(["Item", "Type", "Marking", "Grading"]);
+      await expect(page.getByRole("table", { name: "Links on this board" }).getByRole("columnheader")).toHaveText(["Link", "Type", "From", "To", "Drawn or loaded", "Marking", "Grading"]);
       await expect(drawn.getByRole("rowheader")).toHaveText([/^Tall man\s*Drawn, not loaded$/]);
       const loaded = page.getByRole("table", { name: "Loaded items on this board" });
       await expect(loaded.getByRole("rowheader")).toHaveText([/^Evening Tide\s*A dataset this case reads: a live reference, not editable here$/]);
