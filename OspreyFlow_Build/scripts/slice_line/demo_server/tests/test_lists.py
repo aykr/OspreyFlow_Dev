@@ -39,6 +39,20 @@ def test_the_real_caddy_test_is_left_out_here_and_never_run_under_the_guard():
     assert name in [r["name"] for r in listed] and name not in unlisted
 
 
+
+def test_ad1c_s_verifier_test_is_left_out_here_and_never_run_under_the_guard():
+    """AD1c's test_gateway_token_reader_role.py runs the step's verifier in postgres:16.4 by its registry digest, its
+    one docker run, which the guard exempts (D234's pattern). Where the docker CLI or its daemon is missing it skips.
+    This server has no container tooling, so listed run container-guarded it would pass the check and skip here,
+    counted passed though never run; it is listed not run, and the Mac's gate runs it (the owner, 26 November 2026).
+    The row's note begins `pending: AD1c.` (004), so it holds on main before AD1c lands and is an ordinary row after."""
+    name = "OspreyFlow_Build/tests/harness/test_gateway_token_reader_role.py"
+    rows = {(r["kind"], r["name"]): r for r in lists.read_tsv(lists.LISTS)}
+    assert (rows[("test", name)]["verdict"], rows[("test", name)]["reason"]) == ("not-run", "container")
+    listed, unlisted = lists.not_run_tests(REPO)
+    assert name in [r["name"] for r in listed] and name not in unlisted
+
+
 MAKE_BUILD = "ci: core-check good-check\ncore-check:\n\t$(MAKE) -C ../OspreyFlow_Core check\ngood-check:\n\techo ok\n"
 MAKE_CORE = "check: lint\nlint:\n\techo ok\n"
 LISTS = ("kind\tname\tverdict\treason\tevidence\tnote\n"

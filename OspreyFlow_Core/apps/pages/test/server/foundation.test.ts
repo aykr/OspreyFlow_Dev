@@ -424,11 +424,11 @@ describe("the route-module convention", () => {
     expect(() => served({ pages: [{ ...a, methods: [] }] })).toThrow(/method/i);
   });
 
-  it("reads the real FUNCTIONS.yaml: every id the convention can name is a row there, 49 of them", async () => {
+  it("reads the real FUNCTIONS.yaml: every id the convention can name is a row there, 50 of them", async () => {
     const { functionIdsFromFile } = await import("../../server/pages.js");
     const ids = functionIdsFromFile();
     const rows = [...readFileSync(join(PAGES, "FUNCTIONS.yaml"), "utf8").matchAll(/^ {2}- id: (\S+)\s*$/gm)].map((m) => m[1]);
-    expect(ids.size).toBe(49);
+    expect(ids.size).toBe(50);
     expect([...ids].sort()).toEqual([...rows].sort());
     expect(ids.has("studio-frame")).toBe(true);
   });

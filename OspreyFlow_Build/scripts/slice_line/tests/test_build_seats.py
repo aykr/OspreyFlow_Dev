@@ -32,7 +32,7 @@ d = os.path.dirname(order_path)
 o = json.load(open(order_path))
 cfg = json.load(open(os.environ["SEAT_FAKE"])) if os.environ.get("SEAT_FAKE") else {}
 head = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
-json.dump({"cwd": os.getcwd(), "head": head,
+json.dump({"cwd": os.getcwd(), "head": head, "path": os.environ.get("PATH"), "env": sorted(os.environ),
            "prompt": o["prompt"], "records": sorted(os.listdir(os.path.join(d, "records")))},
           open(os.path.join(d, "records", "ran.json"), "w"))
 time.sleep(cfg.get("sleep", 0))

@@ -50,3 +50,12 @@ The acceptance test; the existing extraction and review tests the builder names 
 
 The recipe rules (SE9e); the media store's addressing; the extraction profile's entity types (Document stays allowed:
 only the two properties are refused).
+
+## Round 2 (the conductor, 26 November 2026, 20:58 UTC): the merge gate's refusal
+
+The merge gate refused round 1's tip `04f7793` on another slice's test, `tests/glass_trees/test_govuk_pack_trends_scenario.py`
+(GR4a's): `citation_diff_problems` reads `process/lanes/v062/away/GR4a_ADR152_DECISION10_CITATION.diff`, which cites
+`services/api/app.py:19895` and others by line, and your `app.py` change moved those lines ("app.py:19895 does not hold
+'/packs/{pack_id}/items"'"). **This round: correct only the line numbers in that diff's citations to where the same cited
+text now stands on your merge result** (nothing else in the diff, no test, no other file), and keep round 1's work as it
+is. Then the pack-trends scenario test is green on the merge result, and your frozen checks are green.

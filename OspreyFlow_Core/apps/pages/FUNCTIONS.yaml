@@ -206,7 +206,7 @@ functions:
     name: "Cases, case brief, saved views, history (also access, settings, datasets, domains, new case)"
     where: "apps/workspace/src/investigation/, apps/workspace/src/views/, apps/workspace/src/history/"
     slice: "R4 (list), R5"
-    scenario: "A7, B14, B21"
+    scenario: "A7, B14, B21, CS1, CS2, CS3, CS4, CS5, CS6, CS7, CS8, CS9, CS10, CS11, CS12, CS13, CS14, CS15"
     route: ""
     status: "planned"
   # The plan has not yet named a build for this row; the inventory's own slice is kept.
@@ -298,6 +298,16 @@ functions:
     slice: "GR3"
     scenario: "AM1, AM2, AM3, AM4, AM5, AM6, AM7, AM8, AM9, AM10, AM11"
     route: "/reports"
+    status: "planned"
+  # The row of the new page of ADR-152 decision 10 (slice GR4a), "Trends shown together", at `/packs/trends` in the GOV.UK tree. It has a row of
+  # its own because one id is one page in a tree (`server/pages.ts`), and `reports-figures` above is slice GR3a's page. The page is read-only;
+  # arranging the trends is a later slice's (the owner, 25 November 2026), so the function is not complete and its route stays empty.
+  - id: reports-trends-shown-together
+    name: "Reports: trends shown together, a pack's saved trends on one page, read-only"
+    where: "apps/workspace/src/reports/PackItemView.tsx (a pack item's trend, shown in the Packs tab); GOV.UK page apps/pages/server/packTrends.ts"
+    slice: "GR4a"
+    scenario: "TS1, TS2, TS3, TS4, TS5, TS6, TS7, TS8, TS9, TS10, TS11, TS12, TS13, TS14, TS15"
+    route: ""
     status: "planned"
   # The other half of the old `reports` row (the owner, 24 November 2026): the dashboards are later, and no slice has them yet.
   - id: reports-dashboards

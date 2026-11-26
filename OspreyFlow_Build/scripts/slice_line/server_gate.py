@@ -163,14 +163,55 @@ def older_runs(slice_id: str, tip: str, newest: str | None) -> list[str]:
     return ids[:OLDER_RUNS]
 
 
+def newer_runs(slice_id: str, tip: str, rid: str | None) -> list[str]:
+    """The ids of the slice's runs at this tip that EW_RUNS records after `rid`'s own last line, newest first; [] when
+    the log does not hold `rid` (nothing is known to be newer). Only a shortcut: element() refuses another slice or tip."""
+    try:
+        lines = EW_RUNS.read_text().splitlines()
+    except OSError:
+        return []
+    rows = []
+    for ln in lines:
+        try:
+            r = json.loads(ln)
+        except ValueError:
+            continue
+        if isinstance(r, dict) and r.get("slice") == slice_id and r.get("tip") == tip \
+                and isinstance(r.get("id"), str) and RUN_ID.match(r["id"]):
+            rows.append(r["id"])
+    if not rid or rid not in rows:
+        return []
+    after = rows[len(rows) - rows[::-1].index(rid):]
+    ids: list[str] = []
+    for x in reversed(after):
+        if x != rid and x not in ids:
+            ids.append(x)
+    return ids[:OLDER_RUNS]
+
+
+def newer_green(slice_id: str, tip: str, rid: str | None) -> tuple[str, dict] | None:
+    """RM1a, 26 November 2026: a newer run of this slice at this tip supersedes an older red when the newest of them
+    with a verdict passed. A newer red never yields to an older green, and a run with no verdict decides nothing."""
+    for newer in newer_runs(slice_id, tip, rid):
+        o = element(fetch(newer), slice_id, tip)
+        if has_verdict(o):
+            return (newer, o) if o.get("verdict") == "pass" else None
+    return None
+
+
 def server_result(slice_id: str, tip: str) -> tuple[str | None, dict | None]:
     """(run id, this slice's element) as fetched; (rid, None) when the note names a run that cannot be fetched or is
     not for this slice at this tip. When the note's run finished with no verdict (an error: SE6c, 23 November 2026,
     run f8394584d97477d3, "nothing was run", sent again after its stack's own run), the newest earlier run of the slice
     at this tip that has one is read instead, and the element says which run had none: an error never hides a verdict,
-    and the older run must still be the same candidate as the Mac's (same_candidate)."""
+    and the older run must still be the same candidate as the Mac's (same_candidate). A red the note names is
+    superseded by a newer green the log records for the same slice at the same tip (newer_green): that run is read, and
+    the element names the red it superseded."""
     rid = run_id(slice_id, tip)
     e = element(fetch(rid), slice_id, tip)
+    if is_red(e):  # a newer green of the same slice at the same tip supersedes it (RM1a; newer_green)
+        g = newer_green(slice_id, tip, rid)
+        return (g[0], {**g[1], "superseded_red": rid}) if g else (rid, e)
     if not e or e.get("state") != "done" or has_verdict(e):
         return rid, e
     for older in older_runs(slice_id, tip, rid):

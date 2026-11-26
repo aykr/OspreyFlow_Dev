@@ -3,6 +3,45 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 26 November 2026, 20:24 UTC: overnight, 26 to 27 November (the owner, in chat; away 21:30 to about 07:30)
+
+1. Keep the line moving: starts, verifiers on the Mac, merges, and trains of up to three where the server has tested a stack. Records commits only straight after a merge or train.
+2. **GG5a** (away/GG5a) comes in like GR1a. Its question 1 (the pmtiles 4.5.0 exact pin, the workspace's own version) is approved on the owner's standing word (D274, technical). Its CI patch and its ADR-152 decision 8 diff wait for the owner in the morning; it may merge without them.
+3. **GR1d and WS4b wait for the owner's answers in the morning; neither starts.** WS4b's speed is measured on the server overnight (away/WS4b-perf).
+4. Anything that is the owner's (security, keys, ADRs, a stop at a round limit) goes to the top of a 07:00 report; never accepted narrower; no switch of the owner's is changed. Something that blocks a slice stops that slice only; the line moves on.
+5. The 07:00 report: merges overnight, what is verified and waiting, what stopped and why, and what each away report asks of the owner.
+
+## 26 November 2026, 20:13 UTC: RM1a's last round; verifiers back on the Mac (the owner, in chat)
+
+- **The dial line is out:** verifiers run on the Mac again. GG3a's failed server run (`361735d22464d46a`) leaves it at verifying, round 1, with no round spent.
+- **RM1a:** the owner's send-back line is for its conflicts with main after GR1a's and GR4a's merges (the shared page lists, routes, scenario and pins: append-only, both sides kept, main's first). **One round only: round 8 of 8.** If its verifier then finds anything that is not from taking main in, the conductor stops it for the owner rather than spend another round.
+
+## 26 November 2026, 16:08 UTC: this evening's order (B) (the owner, in chat)
+
+When the server stack reports, **GR1a merges alone** and its five parts start. **Then merges hold for line-fix's combined apply** (62, 63, 58, 59, 60; about 50 minutes, the owner runs it). After "applied" the owner switches the merge train on, and the conductor runs **one train of SE9d, SE9e and SE9f on the Mac's whole gate** (`gate_on_build` stays off), watched, reporting each step. **Then a second train: RM1a, CO3b, GG2c**, if verified. Records commits only straight after each merge or train.
+
+## 26 November 2026, 15:40 UTC: the plan agreed; the merge train (the owner, in chat)
+
+The conductor's plan is agreed: GR1a, SE9d and SE9e merge back to back; then the five starts; the next stack is RM1a, SE9f and CO3b; then GG2c and WS4a. **GG2c Q3:** the conductor runs its integration test under `stack_lease.sh` before its merge. **Proposal 2 is line-fix's hand-back 60 (the merge train),** in tonight's combined apply; after it lands, the train takes the server's tested stack (main plus A, B, C) as one gate run. The conductor tells line-fix what 60 needs (`LINE_FIX_NOTES_2026-11-26.md`). **Proposal 1 (two server runs side by side) goes to line-fix now.**
+
+## 26 November 2026, 15:38 UTC: GG2c's answers; records after merges (the owner, in chat)
+
+- **GG2c:** Q1, before-equals-after on one machine is accepted for a move with behaviour unchanged; GitHub's run is the green check. Q2, `OSPREY_PORTS_SLOT=0` inside a D246 namespace is accepted. Q3, the integration test runs once against a leased stack before the merge; the conductor says if the owner must run it.
+- **Records commits** (scan rows and every other) are held until straight after a merge, so no pending server green is voided.
+- The owner's second SE8g clear-stop line is in.
+
+## 26 November 2026, 14:50 UTC: SE8g (a) (the owner, in chat)
+
+SE8g grows by (a): `await client.create_database_if_absent()` in the four helpers its guard found (`test_assessment_routes.py`, `test_export_routes.py`, `test_statelessness.py`), test setup only, nothing loosened. The owner's clear-stop line is in.
+
+## 26 November 2026, 14:44 UTC: GG2c in; GG5a and GR1d away (the owner, in chat)
+
+`away/GG2c` comes in like GR1a (round 1 merges the branch); by the owner's ruling of 10:45 (D268) GG2c may merge before WS4b. **GG5a (from origin/main) and GR1d (from away/GR1a) are away rounds on the server until 22:00:** no line builder starts for them; each comes in when its report appears.
+
+## 26 November 2026, 13:26 UTC: the 62 hold cancelled; hand-backs together at about 17:30 (the owner, in chat)
+
+The hold for hand-back 62 is cancelled. GR4a merges, and merges and starts carry on as normal all afternoon. **No hand-back is applied until about 17:30 UTC**, when the owner applies 62, 63, 58, 59 and 60 together, with a warning first. **AD1c waits for 63** (its `lists.tsv` row) until then.
+
 ## 26 November 2026, about 12:40 UTC: SE9e (a); the extract route; GG2a's add-round (the owner, in chat)
 
 - **SE9e: (a).** Refuse every recipe binding of `object_ref` and `media_kind` on a Document, at validation and at load; only the engine's own writes set them; case 3 becomes "refused" (the owner's word). The owner's SE9e clear-stop line is in.

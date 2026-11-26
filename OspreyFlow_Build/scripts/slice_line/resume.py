@@ -1157,8 +1157,8 @@ def locks(slice_id: str, action: str) -> list:
         elif action not in DURING_MERGE:
             raise Busy(f"another merge is running ({busy}): {action} waits for it (only {', '.join(DURING_MERGE)}, on "
                           "another slice, go on meanwhile). Nothing changed.")
-        elif busy in (slice_id, "?"):
-            raise Busy(f"another merge is running ({slice_id if busy == slice_id else 'of a slice its record does not name'}"
+        elif busy == "?" or slice_id in busy.split("+"):  # a train holds each of its parts (merge_slice.train)
+            raise Busy(f"another merge is running ({slice_id if busy == slice_id else 'of a slice its record does not name' if busy == '?' else 'a train of ' + busy}"
                           f"): {action} on {slice_id} waits for it. Nothing changed.")
         else:
             global MERGE_RUNNING

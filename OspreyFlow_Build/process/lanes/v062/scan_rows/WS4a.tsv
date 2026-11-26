@@ -1,0 +1,1 @@
+tests/glass_trees/test_no_sigma_class_names_in_the_workspace.py	OspreyFlow_Core/apps/workspace/	walks every .ts, .tsx, .js, .mjs, .css and .html file under apps/workspace for a Sigma class name a gate or a test reads

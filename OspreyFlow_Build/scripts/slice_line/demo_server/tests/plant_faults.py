@@ -241,6 +241,10 @@ M = [
  (E, '    if retest and retest.get("earlier"):', '    if False:', "already_red_on_this_main_is_left_out"),
  (E, '"tree": d.get("tree"), "main": d.get("main"),', '"tree": d.get("tree"),', "which_main_each_run_was_on"),
  (E, '    stack           the members up to and including this one, in merge order', '    stack           the members', "docstring_names_every_field"),
+ # 63 (the owner, 26 November 2026): AD1c's verifier test listed not run, its row pending until AD1c lands
+ (D + "lists.tsv", "test\tOspreyFlow_Build/tests/harness/test_gateway_token_reader_role.py\tnot-run\tcontainer\t", "test\tOspreyFlow_Build/tests/harness/test_gateway_token_reader_role.py\trun\tcontainer-guarded\t", "ad1c_s_verifier_test_is_left_out"),
+ (D + "lists.tsv", "test\tOspreyFlow_Build/tests/harness/test_gateway_token_reader_role.py\tnot-run\tcontainer\t", "test\tOspreyFlow_Build/tests/harness/test_gateway_token_reader_role.py\tnot-run\tsplit\t", "ad1c_s_verifier_test_is_left_out"),
+ (D + "lists.tsv", "\tpending: AD1c. its one docker run", "\tits one docker run", "lists_match_this_repository"),
  # 017, item 1 (the owner, 25 November 2026): the build checks, sent with the early warning
  ('early_warning.py', '            built = send_checks(a.slice, branch, tip)', '            built = "not sent"', 'test_build_send and (build_checks_are_sent)'),
  ('early_warning.py', '    if not BUILD_SETTING.is_file():\n        return "not sent (no build setting)"', '    if False:\n        return "not sent (no build setting)"', 'test_build_send and (without_the_build_setting)'),
