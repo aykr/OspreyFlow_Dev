@@ -574,7 +574,7 @@ RUNNING = "merge.running.json"
 
 def merging() -> str | None:
     """The slice a running merge holds the lock for; None when no merge runs. A merge that runs but whose record cannot
-    be read gives "?" (every slice is then taken as the merging one)."""
+    be read gives "?" (every slice is then taken as the merging one). A train gives its parts joined by "+"."""
     fh = (c.DATA / "merge.lock").open("a")
     try:
         fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -814,6 +814,8 @@ def gate_findings(log_text: str) -> tuple[list[str], list[dict]]:
 def refuse_to_builder(slice_id: str, tip: str, why: str, findings: list[dict], tests: int, refused_for: str) -> None:
     """Record the gate's refusal as findings the builder's prompt carries, and put the slice where the board shows it;
     resume.py send-back returns it to the builder."""
+    if TRAIN is not None:  # in a train no part is blamed: the train stops, and each part merges alone (train())
+        raise TrainBroken(f"{slice_id}: {why}")
     c.write_json(c.rec_dir(slice_id) / f"verify-gate-{tip}.json",
                  {"slice": slice_id, "commit": tip, "verdict": "findings", "passes": [], "findings": findings,
                   "note": f"written by merge_slice.py: {why}; not a verifier session", "at": c.now()})
@@ -1603,8 +1605,9 @@ def merge(slice_id: str) -> dict:
     held = server_hold(slice_id)  # the owner's word of 22 November 2026, item 1: a server red is rerun before the slot
     if held:
         raise Refused(held)
-    fh = lock()
-    c.write_json(c.DATA / RUNNING, {"slice": slice_id, "pid": os.getpid(), "at": c.now()})
+    fh = lock() if TRAIN is None else None  # a train holds the lock for all its parts (train())
+    if TRAIN is None:
+        c.write_json(c.DATA / RUNNING, {"slice": slice_id, "pid": os.getpid(), "at": c.now()})
     trees: list[Path] = []
     rec = c.rec_dir(slice_id)
     log = rec / f"merge-{uuid.uuid4().hex[:8]}.log"
@@ -1613,6 +1616,8 @@ def merge(slice_id: str) -> dict:
     try:
         prog.step(1)
         base = main_ready(records=True)  # 9: the conductor's uncommitted records do not hold a merge (below)
+        if TRAIN is not None:  # in a train: onto the candidate before it (main, then main and the parts before it)
+            base = TRAIN["base"]
         note(watch_github())  # 1c: a test of ours red twice stops merging
         github_stop()
         github = github_at_merge()  # a record, never a decision (1a: GitHub is a second opinion, not a gate)
@@ -1631,7 +1636,8 @@ def merge(slice_id: str) -> dict:
         prog.rec["tip"] = tip
         if subprocess.run(["git", "merge-base", "--is-ancestor", tip, base], cwd=c.REPO).returncode == 0:
             raise Refused(f"{branch} is already on main.")
-        log_rerun(slice_id, tip)
+        if TRAIN is None:
+            log_rerun(slice_id, tip)
         accepted = acceptance(slice_id, tip)
         verify = accepted["verifier"] if accepted else verifier_pass(slice_id, tip)
         touched = c.git(["diff", "--name-only", f"{base}...{tip}"], c.REPO).splitlines()
@@ -1748,6 +1754,11 @@ def merge(slice_id: str) -> dict:
             raise Refused("the pure tests that scan the files this slice touches are red on the merge result ("
                           + ", ".join(scans) + f"). See {log}")
         drop_env(after)  # the full gate builds its own, fresh
+        if TRAIN is not None:  # in a train: the gate runs once, on the last part's candidate (train())
+            prog.finish("in a train", "its own steps passed on the train's candidate; the train's gate decides")
+            return {"slice": slice_id, "build": frozen["build"], "tip": tip, "base": base, "merged": merged,
+                    "log": log, "verify": verify, "github": github, "scan_rows": scan_rows, "touched": touched,
+                    "accepted": accepted}
 
         # 7. today's full gate on the merge result
         prog.step(5)
@@ -1818,6 +1829,9 @@ def merge(slice_id: str) -> dict:
         prog.finish("merged")
         return done
     except Stalled as e:  # the owner, 24 November 2026: a silent command is not the part's fault
+        if TRAIN is not None:  # in a train: nothing recorded against the part; it merges alone next (train())
+            prog.finish("in a train that stopped", str(e))
+            raise TrainBroken(f"{slice_id}: {e}") from None
         c.write_json(rec / f"refusal-stalled-{uuid.uuid4().hex[:8]}.json",
                      {"kind": "stalled", "slice": slice_id, "tip": prog.rec.get("tip"), "target": e.target,
                       "seconds": e.seconds, "merge_log": log.name, "note": "not a fault of the part: no round, no finding",
@@ -1830,6 +1844,9 @@ def merge(slice_id: str) -> dict:
             pass
         raise Refused(str(e)) from None
     except Refused as e:
+        if TRAIN is not None:  # in a train: nothing recorded against the part; it merges alone next (train())
+            prog.finish("in a train that stopped", str(e))
+            raise TrainBroken(f"{slice_id}: {e}") from None
         c.set_state(slice_id, last_merge_refusal=c.now())
         prog.finish("refused", str(e))
         try:  # the owner's file 005: each refusal's cause in a few words, counted by cause on the board
@@ -1852,8 +1869,186 @@ def merge(slice_id: str) -> dict:
             drop_tree(t)
             shutil.rmtree(t, ignore_errors=True)
             shutil.rmtree(gate_pytest_base(t), ignore_errors=True)  # the full gate's pytest base (1e)
+        if TRAIN is None:
+            (c.DATA / RUNNING).unlink(missing_ok=True)
+        if fh:
+            fh.close()
+
+
+# ------------------------------------------------------------------ the merge train (the owner's ask of 26 November 2026, 3)
+
+#: The owner's switch for the merge train ("on" only; off as built), and the trains' own log.
+TRAIN_SWITCH = "merge_train"
+TRAINS = "trains"
+TRAIN_MAX = 3
+#: The train being run (train()): {"base": the candidate the next part merges onto}. None outside a train.
+TRAIN: dict | None = None
+
+
+class TrainBroken(Refused):
+    """A part's own steps did not pass on the train's candidate: the train stops; nothing is recorded against anyone."""
+
+
+def train_on() -> bool:
+    f = c.DATA / TRAIN_SWITCH
+    try:
+        return not f.is_symlink() and f.is_file() and f.read_text().strip() == "on"
+    except OSError:
+        return False
+
+
+def train_record(row: dict) -> None:
+    d = c.DATA / TRAINS
+    d.mkdir(parents=True, exist_ok=True)
+    with (d / "trains.jsonl").open("a") as fh:
+        fh.write(json.dumps(row) + "\n")
+
+
+def land_train(parts: list[dict], base: str, gated: str) -> tuple[list[str], list[str]]:
+    """The commits main is fast-forwarded to, one per part in order, and the commits that moved main under the train's
+    gate (26 November 2026: the conductor's records commits come about one an hour, and a train's gate takes about an
+    hour). Main still the base: the tested merge commits. Moved by records commits: land()'s checks on the whole train
+    (records commits only, none of them in a path any part changed, the scan rows or an owner's file), then each part's
+    tested merge commit made again on the moved main, in order, kept only when its tree differs from the tested one in
+    exactly the records commits' files, each as main has it; each names the commit tested. Anything else refuses, as
+    land() does: the train lands nothing, and each part merges alone."""
+    touched = sorted({f for r in parts for f in r["touched"]})
+    landed, under = land("+".join(r["slice"] for r in parts), base, gated, parts[-1]["tip"], touched)
+    if not under:
+        return [r["merged"] for r in parts], []
+    now = c.git(["rev-parse", "HEAD"], c.REPO)
+    paths = sorted(c.git(["diff", "--name-only", "--no-renames", base, now], c.REPO).split())
+    prev, made = now, []
+    for r in parts:
+        p = subprocess.run(["git", "merge-tree", "--write-tree", "--merge-base", base, r["merged"], now], cwd=c.REPO,
+                           capture_output=True, text=True)
+        tree = p.stdout.split("\n", 1)[0].strip()
+        differ = sorted(c.git(["diff", "--name-only", "--no-renames", r["merged"], tree], c.REPO).split()) \
+            if p.returncode == 0 and tree else None
+        if differ != paths:
+            raise Refused(f"main moved while the train was being tested (from {base[:10]} to {now[:10]}), and "
+                          f"{r['slice']}'s tested merge on the moved main differs from it in more than the records "
+                          "commits' files. Nothing landed.")
+        msg = c.git(["log", "-1", "--format=%B", r["merged"]], c.REPO).rstrip() + f"\nSlice-Tested: {r['merged']}"
+        prev = c.git(["commit-tree", tree, "-p", prev, "-p", r["tip"], "-m", msg], c.REPO)
+        made.append(prev)
+    if c.git(["rev-parse", f"{prev}^{{tree}}"], c.REPO) != c.git(["rev-parse", f"{landed}^{{tree}}"], c.REPO):
+        raise Refused(f"main moved while the train was being tested (from {base[:10]} to {now[:10]}), and the train "
+                      "made again does not end on the tree land() checked. Nothing landed.")
+    return made, under
+
+
+def train(ids: list[str]) -> dict:
+    """merge_slice.py train <ID> <ID> [<ID>] (the owner's ask of 26 November 2026, item 3; behind merge_train, "on"
+    only): up to three verified parts merged together and tested as one. Each part's own steps run as its merge runs
+    them (merge()), each on the candidate before it: main, then main and the parts before it. Then one full gate on the
+    last candidate, as a merge's gate runs (the build account's when gate_on_build is on). Green: main is fast-forwarded
+    to the last candidate, through each part's own merge commit in order, and each part is recorded merged. Anything
+    else (a part's own step, the gate red or not run, main moved meanwhile): nothing is recorded against any part, the
+    lock is let go, and each part is merged alone, in order, by its own merge, which blames only its own red."""
+    global TRAIN
+    if not train_on():
+        raise Refused(f"the merge train is off (the owner's switch {TRAIN_SWITCH}): merge each part alone.")
+    if not 2 <= len(ids) <= TRAIN_MAX or len(set(ids)) != len(ids):
+        raise Refused(f"a train is 2 to {TRAIN_MAX} different parts, in the order they land.")
+    for sid in ids:
+        if not re.fullmatch(r"[A-Za-z0-9]{1,16}", sid):
+            raise Refused(f"{sid!r} is not a part's name.")
+        if c.state(sid).get("phase") != "verified":
+            raise Refused(f"{sid} is not verified: a train takes only verified parts.")
+    tid = f"train-{uuid.uuid4().hex[:8]}"
+    d = c.DATA / TRAINS
+    d.mkdir(parents=True, exist_ok=True)
+    log = d / f"{tid}.log"
+    t0 = time.monotonic()
+    fh = lock()
+    c.write_json(c.DATA / RUNNING, {"slice": "+".join(ids), "train": ids, "pid": os.getpid(), "at": c.now()})
+    parts: list[dict] = []
+    why = None
+    made: list[str] = []
+    under: list[str] = []
+    gate_tree_dir = None
+    try:
+        base0 = main_ready(records=True)
+        cand = base0
+        for sid in ids:
+            TRAIN = {"base": cand}
+            try:
+                r = merge(sid)
+            except TrainBroken as e:
+                why = str(e)
+                break
+            except Refused as e:  # before its steps began (a server hold): the same, nothing recorded
+                why = f"{sid}: {e}"
+                break
+            finally:
+                TRAIN = None
+            parts.append(r)
+            cand = r["merged"]
+        on_build, code = None, None
+        if not why:
+            log.open("a").write(f"the train {tid}: {', '.join(ids)} on main {base0[:10]}; the gate on {cand[:10]}\n")
+            gate_tree_dir = temp_tree(cand, tid)
+            on_build = BUILD_GATE(ids[-1], base0, cand, gate_tree_dir, log)
+            code = gate_on_build(on_build, gate_tree_dir, base0, log)
+            if code != 0:
+                why = f"the train's full gate on {cand[:10]} was {'not run (network)' if code == NETWORK else 'red'}"
+        if not why:
+            with records_lock():  # no records commit between the check and the fast-forward
+                try:
+                    made, under = land_train(parts, base0, cand)
+                except Refused as e:
+                    why = str(e)
+                else:
+                    c.git(["merge", "--ff-only", made[-1]], c.REPO)
+    finally:
+        if gate_tree_dir:
+            drop_tree(gate_tree_dir)
+            shutil.rmtree(gate_tree_dir, ignore_errors=True)
+            shutil.rmtree(gate_pytest_base(gate_tree_dir), ignore_errors=True)
         (c.DATA / RUNNING).unlink(missing_ok=True)
         fh.close()
+    row = {"train": tid, "parts": ids, "at": c.now(), "seconds": round(time.monotonic() - t0), "log": str(log)}
+    if why:
+        log.open("a").write(f"\nTHE TRAIN STOPPED: {why}. Nothing is recorded against any part; each merges alone, "
+                            "in order.\n")
+        train_record({**row, "result": "each alone", "why": why})
+        alone = []
+        for sid in ids:
+            try:
+                done = merge(sid)
+                alone.append({"slice": sid, "result": "merged", "merge": done.get("merge")})
+            except Refused as e:
+                alone.append({"slice": sid, "result": "refused", "why": str(e)[:300]})
+        return {"train": tid, "result": "each alone", "why": why, "alone": alone}
+    for r, landed in zip(parts, made):
+        done = {"slice": r["slice"], "build": r["build"], "merge": landed, "tip": r["tip"], "base": r["base"],
+                "acceptance_run": r["log"].name, "gate_run": str(log), "verifier": r["verify"].get("passes"),
+                "github_at_merge": r["github"], "at": c.now(), "train": {"id": tid, "parts": ids, "gated": cand}}
+        if under:  # records commits that moved main under the train's gate, landed beneath it (land_train())
+            done.update(tested_merge=r["merged"], records_under_gate=under)
+        if r["scan_rows"]:
+            done["scan_rows"] = r["scan_rows"]
+        if on_build is not None:
+            done["build_gate"] = {k: v for k, v in on_build.items() if k not in ("plan", "log")}
+        live = c.read_json(log.with_suffix(".live.json"))
+        if live:
+            done["live_step"] = live
+        if r["accepted"]:
+            done["accepted_findings"] = {"count": len(r["accepted"]["findings"]), "findings": r["accepted"]["findings"],
+                                         "record": f"accepted-{r['tip']}.json", "by": r["accepted"].get("by")}
+        c.write_json(c.rec_dir(r["slice"]) / "merged.json", done)
+        c.set_state(r["slice"], phase="merged", merge=landed)
+    train_record({**row, "result": "merged", "gated": cand, "landed": made[-1],
+                  **({"records_under_gate": under} if under else {})})
+    push = subprocess.run([str(Path(__file__).resolve().parent / "push_main.sh")], cwd=c.REPO, capture_output=True,
+                          text=True)
+    said = (push.stdout + push.stderr).strip()[-400:]
+    for r in parts:
+        f = c.rec_dir(r["slice"]) / "merged.json"
+        c.write_json(f, {**c.read_json(f), "push": {"exit": push.returncode, "said": said}})
+    return {"train": tid, "result": "merged", "gated": cand, "parts": [{"slice": r["slice"], "merge": landed}
+                                                                       for r, landed in zip(parts, made)]}
 
 
 PUSH_PENDING = "push.pending"
@@ -2268,6 +2463,8 @@ def main() -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     m = sub.add_parser("merge")
     m.add_argument("slice")
+    tr = sub.add_parser("train")  # the owner's ask of 26 November 2026, item 3; behind merge_train
+    tr.add_argument("slices", nargs="+")
     r = sub.add_parser("records")
     r.add_argument("-m", "--message", required=True)
     r.add_argument("paths", nargs="+")
@@ -2304,7 +2501,8 @@ def main() -> int:
 
 def beat_words(a) -> str:
     """The heartbeat's words: the command, and for a merge its step (from the progress record)."""
-    words = f"merge_slice.py {a.cmd}" + (f" {a.slice}" if getattr(a, "slice", None) else "")
+    words = f"merge_slice.py {a.cmd}" + (f" {a.slice}" if getattr(a, "slice", None) else "") + (
+        f" {' '.join(a.slices)}" if getattr(a, "slices", None) else "")
     st = (PROGRESS.rec.get("step") if PROGRESS is not None else None) or {}
     if a.cmd == "merge" and st:
         words += f": step {st.get('n')} of {st.get('of')}, {st.get('name')}" + (f" ({st['part']})" if st.get("part") else "")
@@ -2316,6 +2514,8 @@ def dispatch(a) -> None:
     if a.cmd == "merge":
         done = merge(a.slice)
         print(json.dumps(done, indent=1))
+    elif a.cmd == "train":
+        print(json.dumps(train(a.slices), indent=1))
     elif a.cmd == "push-pending":
         print(push_pending())
     elif a.cmd == "watch-github":

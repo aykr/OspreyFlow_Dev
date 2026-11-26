@@ -914,6 +914,26 @@ M = [
  ('merge_slice.py', '    log.open("a").write(f"\\n--- the build account\'s gate (run {on_build[\'run_id\']}): red; its log follows ---\\n{text}\\n"', '    log.open("a").write(f"\\n--- the build account\'s gate (run {on_build[\'run_id\']}): red ---\\n"', 'test_build_gate and not test_build_gate_runner and (build_red)'),
  ('merge_slice.py', '        if server.get("counted"):\n            code = FULL_GATE(after, base, log, targets=server["plan"]["targets"])', '        if False:\n            code = FULL_GATE(after, base, log, targets=server["plan"]["targets"])', 'test_build_gate and not test_build_gate_runner and (early_warning_green)'),
  ('merge_slice.py', '        if on_build and on_build.get("used"):\n            done["build_gate"]', '        if False:\n            done["build_gate"]', 'test_build_gate and not test_build_gate_runner and (build_pass)'),
+ ('merge_slice.py', '        return not f.is_symlink() and f.is_file() and f.read_text().strip() == "on"\n    except OSError:\n        return False\n\n\ndef train_record', '        return f.is_file()\n    except OSError:\n        return False\n\n\ndef train_record', 'test_merge_train and (switch_off)'),
+ ('merge_slice.py', '    if not 2 <= len(ids) <= TRAIN_MAX or len(set(ids)) != len(ids):', '    if False:', 'test_merge_train and (two_or_three)'),
+ ('merge_slice.py', '        if c.state(sid).get("phase") != "verified":\n            raise Refused(f"{sid} is not verified: a train', '        if False:\n            raise Refused(f"{sid} is not verified: a train', 'test_merge_train and (two_or_three)'),
+ ('merge_slice.py', '        if TRAIN is not None:  # in a train: onto the candidate before it (main, then main and the parts before it)\n            base = TRAIN["base"]', '        if False:\n            base = TRAIN["base"]', 'test_merge_train and (green_train or train_of_two)'),
+ ('merge_slice.py', '    if TRAIN is not None:  # in a train no part is blamed: the train stops, and each part merges alone (train())\n        raise TrainBroken', '    if False:\n        raise TrainBroken', 'test_merge_train and (red_on_the_train or carries_no_blame)'),
+ ('merge_slice.py', '    except Refused as e:\n        if TRAIN is not None:  # in a train: nothing recorded against the part; it merges alone next (train())', '    except Refused as e:\n        if False:', 'test_merge_train and (red_on_the_train)'),
+ ('merge_slice.py', "        if TRAIN is not None:  # in a train: the gate runs once, on the last part's candidate (train())", '        if False:', 'test_merge_train and (green_train or train_of_two)'),
+ ('merge_slice.py', '            if code != 0:\n                why = f"the train\'s full gate', '            if False:\n                why = f"the train\'s full gate', 'test_merge_train and (red_train_gate)'),
+ ('merge_slice.py', '                    made, under = land_train(parts, base0, cand)', '                    made, under = [r["merged"] for r in parts], []', 'test_merge_train and (records_commit or anything_but)'),
+ ('merge_slice.py', '        alone = []\n        for sid in ids:', '        alone = []\n        for sid in ids[:0]:', 'test_merge_train and (red_train_gate or red_on_the_train)'),
+ ('merge_slice.py', '        c.set_state(r["slice"], phase="merged", merge=landed)\n    train_record', '    train_record', 'test_merge_train and (green_train)'),
+# 60 (26 November 2026): a train lands over records commits, each part's merge made again beneath them
+ ('merge_slice.py', '        prev = c.git(["commit-tree", tree, "-p", prev, "-p", r["tip"]', '        prev = c.git(["commit-tree", tree, "-p", now, "-p", r["tip"]', 'test_merge_train and (records_commit)'),
+ ('merge_slice.py', '.rstrip() + f"\\nSlice-Tested: {r[\'merged\']}"\n        prev =', '.rstrip()\n        prev =', 'test_merge_train and (records_commit)'),
+ ('merge_slice.py', '            done.update(tested_merge=r["merged"], records_under_gate=under)', '            pass', 'test_merge_train and (records_commit)'),
+ ('merge_slice.py', '    landed, under = land("+".join(r["slice"] for r in parts), base, gated, parts[-1]["tip"], touched)', '    landed, under = gated, c.git(["rev-list", f"{base}..HEAD"], c.REPO).split()', 'test_merge_train and (anything_but)'),
+ ('merge_slice.py', '    fh = lock()\n    c.write_json(c.DATA / RUNNING, {"slice": "+".join(ids)', '    fh = open(os.devnull)\n    c.write_json(c.DATA / RUNNING, {"slice": "+".join(ids)', 'test_merge_train and (waits_for_no_one)'),
+ ('merge_slice.py', 'c.write_json(c.DATA / RUNNING, {"slice": "+".join(ids), "train": ids,', 'c.write_json(c.DATA / RUNNING, {"slice": ids[0], "train": ids,', 'test_merge_train and (running_record)'),
+ ('merge_slice.py', '        if TRAIN is None:\n            (c.DATA / RUNNING).unlink(missing_ok=True)\n        if fh:', '        (c.DATA / RUNNING).unlink(missing_ok=True)\n        if fh:', 'test_merge_train and (running_record)'),
+ ('resume.py', '        elif busy == "?" or slice_id in busy.split("+"):', '        elif busy in (slice_id, "?"):', 'test_merge_train and (against_resume)'),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.
