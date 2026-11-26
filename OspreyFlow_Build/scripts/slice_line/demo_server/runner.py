@@ -86,9 +86,27 @@ SLICE_REF = re.compile(r"\Arefs/heads/lane/slice-([A-Za-z0-9]+)\Z")
 SHA = re.compile(r"\A[0-9a-f]{40}\Z")
 #: merge_slice.py's own patterns for a failing test and a failed make target.
 FAILED_TEST = p.FAILED_TEST  # one pattern, which the summary (010) also reads logs with
+#: A terminal's colour and cursor codes. vitest writes them into the log even with no terminal ("<ESC>[41m<ESC>[1m FAIL
+#: <ESC>[22m<ESC>[49m src/a.test.ts > ..."), and a line read with them in never matches FAILED_TEST (D249).
+ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
+#: A test file named in a line: what a Playwright ✘ line has and vitest's own × line for one case does not.
+TEST_FILE = re.compile(r"\S+\.(?:test|spec)\.[cm]?[jt]sx?\b")
 MAKE_ERROR = p.MAKE_ERROR
 #: tests/local_docker_guard.py's skip, as pytest -rs prints it.
 DOCKER_SKIP = re.compile(r"^SKIPPED \[\d+\] ([^:\s]+):\d+: a server-only test: it calls the docker CLI")
+
+
+def failing_test(ln: str) -> str | None:
+    """The failing test a log line names, read with its colour codes taken out (D249), or None. vitest's per-case
+    "×  <case> 5609ms" line names no file and ends in its time; its "FAIL  <file> > <group> > <case>" line names the
+    same case with its file, so only that one is taken, and a name never carries a time that differs run to run."""
+    plain = ANSI.sub("", ln)
+    m = FAILED_TEST.match(plain)
+    if not m:
+        return None
+    if m.group(2) is not None and plain.lstrip()[:1] in "×✘" and not TEST_FILE.search(plain):
+        return None
+    return (m.group(1) or m.group(2) or "").strip() or None
 
 
 def now() -> str:
@@ -984,12 +1002,11 @@ def gate(tree: Path, job: Path, log: Path, deadline: float, result: dict) -> lis
                 names += [n for n in pending if n not in names]
                 pending = []
                 continue
-            m = FAILED_TEST.match(ln)
-            if m:
-                n = (m.group(1) or m.group(2) or "").strip()
-                if n and n not in result["failing"]["tests"]:
+            n = failing_test(ln)
+            if n:
+                if n not in result["failing"]["tests"]:
                     result["failing"]["tests"].append(n)
-                if n and n not in pending:
+                if n not in pending:
                     pending.append(n)
             m = DOCKER_SKIP.match(ln)
             if m:

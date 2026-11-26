@@ -996,6 +996,13 @@ def fetch(argv: list) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
+    # the owner, 25 November 2026: a long run says it is still running; its words name the slices only, never a setting
+    words = "early_warning.py " + " ".join(x for x in argv if re.fullmatch(r"[A-Za-z0-9]+", x))[:120]
+    with c.heartbeat(words.strip()):
+        return _main(argv)
+
+
+def _main(argv: list[str]) -> int:
     if argv[:1] in (["fetch"], ["summary"]):
         return fetch(argv)
     if argv[:1] == ["standing"]:

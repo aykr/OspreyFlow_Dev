@@ -48,8 +48,9 @@ ROOT = HERE.parent
 HANDOFF = ROOT / "handoff"
 LOCK_NAME = "model.lock"  # in handoff/: the runner's, readable by this account; jobs hold it shared, this alone (015)
 SUMMARIES = ROOT / "summaries"
-VERSION = "sum-3"  # sum-2: identical failures grouped; asked twice, and a difference said. sum-3 (015): asked only
-#                     alone, when it fits the card, and unloaded at once
+VERSION = "sum-4"  # sum-2: identical failures grouped; asked twice, and a difference said. sum-3 (015): asked only
+#                     alone, when it fits the card, and unloaded at once. sum-4: a failing target's section starts with
+#                     the failing vitest cases its part of the log names, which its last 60 lines had cut off
 KEEP = 40  # summaries kept, as the runner keeps results (KEEP_JOBS)
 
 MODEL = "qwen2.5-coder:14b"
@@ -75,6 +76,11 @@ SECTION_CHARS = 3000
 TOTAL_CHARS = 24000  # about 8000 tokens of code-like text at 3 characters a token: with the prompt and reply, < NUM_CTX
 MAX_FAILURES = 30
 TARGET_LINES = 60  # the lines before make's error kept for a failing target
+#: A failing target's own named cases (vitest's FAIL lines, the error under each, its Test Files and Tests counts),
+#: found anywhere in that target's part of the log and put at the head of its section, so they are never cut off with
+#: the lines above its last TARGET_LINES (sum-4). At most this many lines, of at most CASE_CHARS each.
+NAMED_LINES = 24
+CASE_CHARS = 300
 MAX_REPLY_CHARS = 8000
 MAX_BODY_BYTES = 65536
 MAX_CAUSE_CHARS = 400
@@ -85,6 +91,11 @@ CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
 HEADER = re.compile(r"^_{3,} (.+?) _{3,}$")
 RULE = re.compile(r"^={3,}( .* )?={3,}$|^={5,}$")
 STEP = re.compile(r"^\$ (.+?)   \(in .*\)$")  # the runner's own line before each command (run_step)
+#: vitest's own line for a failing case or file ("FAIL  src/a.test.ts > a group > a case", "FAIL  src/a.test.ts [ ... ]"),
+#: with its colour taken out; and the line that ends its run with the counts.
+VITEST_FAIL = re.compile(r"^\s*FAIL\s+\S+\.(?:test|spec)\.[cm]?[jt]sx?\b")
+VITEST_ERROR = re.compile(r"^\s*(?:\w*Error\b|Error:|Caused by:)")
+VITEST_COUNTS = re.compile(r"^\s*(?:Test Files|Tests)\s+\d+ failed\b")
 SUMMARY_LINE = re.compile(r"^(?:FAILED|ERROR) (\S+)(?: - (.*))?$")
 #: What in a cause counts as naming a test or a file: each must appear in the extract, or the advice is dropped.
 NAMED = re.compile(r"[\w./-]*\.(?:py|ts|tsx|js|mjs|jsx|sh|yml|yaml|toml|json|md|tsv|cfg|ini|txt)(?:::[\w.\[\]-]+)*"
@@ -131,8 +142,34 @@ def section_for_test(test_id: str, blocks: list) -> list | None:
     return next((b for b in hits if base and any(base in ln for ln in b)), hits[0])
 
 
+def named_cases(part: list) -> list:
+    """The lines of a target's part of the log that name a failing vitest case, each with the error line under it, and
+    the counts that end the run: at most NAMED_LINES, each cut to CASE_CHARS (sum-4)."""
+    out = []
+    for i, ln in enumerate(part):
+        if VITEST_FAIL.match(ln) or VITEST_COUNTS.match(ln):
+            out.append(ln.strip()[:CASE_CHARS])
+            nxt = next((x for x in part[i + 1:i + 4] if x.strip()), "")
+            if VITEST_FAIL.match(ln) and VITEST_ERROR.match(nxt):
+                out.append("  " + nxt.strip()[:CASE_CHARS])
+    if len(out) > NAMED_LINES:
+        out = out[:NAMED_LINES - 1] + ["[... %d more lines naming failing cases left out ...]" % (len(out) - NAMED_LINES + 1)]
+    return out
+
+
+def with_cases(part: list) -> list:
+    """A target's section: its last TARGET_LINES, with the failing cases its part names, wherever they are, at the head."""
+    tail = part[-TARGET_LINES:]
+    cases = named_cases(part)
+    if not cases:
+        return tail
+    return ["the failing cases this target's output names (found by the summary, sum-4):"] + cases + [
+        "[... its last %d lines follow ...]" % len(tail)] + tail
+
+
 def section_for_target(target: str, lines: list) -> list | None:
-    """The lines before make's own error for `target` (the last one), back to the step's start: at most TARGET_LINES."""
+    """The lines before make's own error for `target` (the last one), back to the step's start: at most TARGET_LINES,
+    with any failing case that part of the log names (vitest's FAIL lines) put first, wherever it was (sum-4)."""
     end = None
     for i, ln in enumerate(lines):
         m = p.MAKE_ERROR.match(ln)
@@ -143,12 +180,12 @@ def section_for_target(target: str, lines: list) -> list | None:
             m = STEP.match(ln)
             if m and m.group(1).split()[-1] == target:
                 j = next((k for k in range(i + 1, len(lines)) if STEP.match(lines[k])), len(lines))
-                return lines[i:j][-TARGET_LINES:]
+                return with_cases(lines[i:j])
         return None
     start = end
     while start > 0 and not STEP.match(lines[start - 1]) and not p.MAKE_ERROR.match(lines[start - 1]):
         start -= 1
-    return lines[max(start, end - TARGET_LINES):end + 1]
+    return with_cases(lines[start:end + 1])
 
 
 DIGITS = re.compile(r"0x[0-9a-fA-F]+|\b[0-9a-f]{7,}\b|\d+")

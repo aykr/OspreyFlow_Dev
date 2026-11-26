@@ -223,6 +223,11 @@ def prove(spec: dict, slot: int | str | None = None, tip: str | None = None, log
     built as CI builds it, its venv outside the scratch tree, closed ports, the slot). `checks=False` leaves the checks
     to slice_start.py, which runs them in the slice's own worktree (checks_in_tree)."""
     problems: list[str] = []
+    with c.heartbeat(f"dry run of {spec.get('id') or 'a slice'}'s commands on main"):  # the owner, 25 November 2026
+        return _prove(spec, slot, tip, log, checks, problems)
+
+
+def _prove(spec: dict, slot, tip, log, checks: bool, problems: list[str]) -> list[str]:
     tree = scratch_tree("main")
     venv = Path(tempfile.mkdtemp(prefix="slice-dryrun-venv-"))
     if log is None:

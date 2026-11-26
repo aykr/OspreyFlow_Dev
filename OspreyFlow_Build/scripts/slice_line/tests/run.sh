@@ -12,4 +12,18 @@ if [ -n "${SLICE_LINE_PY:-}" ]; then PY="$SLICE_LINE_PY"
 elif [ -x "$TOP/OspreyFlow_Core/.venv/bin/python" ]; then PY="$TOP/OspreyFlow_Core/.venv/bin/python"
 else PY="$MAIN/OspreyFlow_Core/.venv/bin/python"; fi
 cd "$HERE"
-exec env PYTHONDONTWRITEBYTECODE=1 ARCADEDB_HTTP_PORT=9 POSTGRES_PORT=9 "$PY" -m pytest -q -p no:cacheprovider -c "$HERE/pytest.ini" "$HERE" "$@"
+# The heartbeat (the owner, 25 November 2026; common.heartbeat): a line on standard error at least every 30 seconds while
+# the suite runs, so a running suite is told from a stalled one. The merge's stall check never counts it as output.
+beat() {
+  local s=""
+  trap 'kill "$s" 2>/dev/null; exit 0' TERM
+  local t0=$SECONDS
+  while :; do
+    sleep "${OSPREY_HEARTBEAT_SECONDS:-30}" & s=$!
+    wait "$s"
+    echo "[heartbeat $(date -u +%Y-%m-%dT%H:%M:%SZ)] tests/run.sh: the slice line's suite, $((SECONDS - t0)) s in" >&2
+  done
+}
+beat & hb=$!
+trap 'kill "$hb" 2>/dev/null; wait "$hb" 2>/dev/null' EXIT
+env PYTHONDONTWRITEBYTECODE=1 ARCADEDB_HTTP_PORT=9 POSTGRES_PORT=9 "$PY" -m pytest -q -p no:cacheprovider -c "$HERE/pytest.ini" "$HERE" "$@"

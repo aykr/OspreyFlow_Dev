@@ -71,6 +71,9 @@ runner.SYSTEM_SOCKETS = tuple(harness.get("sockets", []))
 runner.KEPT = runner.KEPT + tuple(harness.get("keep", []))
 runner.MAX_QUEUE = harness.get("max_queue", runner.MAX_QUEUE)
 runner.MAX_BUNDLE = harness.get("max_bundle", runner.MAX_BUNDLE)
+runner.SEAT_WORKER = [sys.executable, __file__, runner_py, sys.argv[2], "_seat"]
+if harness.get("seat_run"):
+    runner.SEAT_RUN = harness["seat_run"]
 sys.exit(runner.main(sys.argv[3:]))
 """
 EXPECTED = ["opentofu-check", "chart-check", "cp-policy-check", "trivy", "trivy-image-api", "harness-a11y"]
@@ -305,9 +308,12 @@ def test_a_slice_that_does_not_merge_cleanly_is_a_conflict_and_nothing_runs(bw):
 @pytest.mark.parametrize("command,reason", [
     (None, "shape"), ("", "shape"), ("checks", "shape"), ("checks s1", "shape"), ("checks S1 extra", "shape"),
     ("checks S1;sh", "shape"), ("checks  S1", "shape"), ("bash", "shape"), ("_work", "shape"),
-    ("start S1 builder", "not-yet"), ("stop S1", "not-yet"), ("status", "not-yet"),
+    ("start S1", "shape"), ("stop S1", "shape"), ("status", "shape"), ("start S1 scout", "shape"),
+    ("start s1 builder", "shape"), ("status S1 builder extra", "shape"), ("start S1 builder;sh", "shape"),
+    ("restart S1 builder", "shape"), ("attach S1 builder", "shape"), ("_seat S1 builder", "shape"),  # a fourth verb
+    ("sh -c id", "shape"), ("bash -l", "shape"), ("tmux attach", "shape"),                            # a shell
 ])
-def test_anything_but_checks_is_refused_and_logged_by_reason_and_length_never_its_text(bw, command, reason):
+def test_anything_but_the_four_verbs_is_refused_and_logged_by_reason_and_length_never_its_text(bw, command, reason):
     w = bw
     code, said = forced(w, command, bundle(w))
     assert code == 3 and said["state"] == "refused" and said["reason"] == reason, said
@@ -390,3 +396,23 @@ def test_a_job_it_cannot_read_is_recorded_as_an_error_and_the_next_still_runs(bw
     assert r["verdict"] == "pass", r
     said = json.loads((broken / "result.json").read_text())
     assert said["verdict"] == "error" and "could not be run or recorded" in said["words"], said
+
+
+@pytest.mark.parametrize("part", ["AD1c", "PL7f", "IS5a0", "SE8f", "GR3a"])
+def test_checks_takes_the_lines_real_part_names(bw, part):
+    """The line's parts end in a small letter (AD1c, PL7f; IS5a0 has a digit after it): the forced command takes the
+    early warning's own shape for a part's name (protocol.SLICE_PATTERN, a capital first), not capitals and digits
+    only. Before 26 November 2026 every real part was refused as the wrong shape."""
+    w = bw
+    sh(["git", "branch", "-f", f"lane/slice-{part}", "lane/slice-S1"], w["mac"], w["env"])
+    code, said = forced(w, f"checks {part}", bundle(w, "refs/heads/main", f"refs/heads/lane/slice-{part}"))
+    assert code == 0 and said["state"] == "started", said
+    r = done(w, said["id"])
+    assert r["slice"] == part and r["verdict"] in ("pass", "fail"), r
+    assert committed(w, part)["slice"] == part
+
+
+@pytest.mark.parametrize("cmd", ["checks ad1c", "checks 1AD", "checks AD1c-x", "checks AD1cAD1cAD1cAD1cA"])
+def test_checks_still_refuses_what_is_not_a_parts_name(bw, cmd):
+    code, said = forced(bw, cmd, bundle(bw))
+    assert code != 0 and said["reason"] == "shape", said

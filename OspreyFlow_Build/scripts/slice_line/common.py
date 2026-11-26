@@ -58,6 +58,94 @@ def now() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
 
+#: The heartbeat (the owner, 25 November 2026): every long script of the line says it is still running at least this
+#: often, so a running script is told from a stalled one. A line of its own shape, on standard error:
+#:     [heartbeat 2026-11-25T05:12:30Z] merge_slice.py merge S1: step 5 of 9, the full gate, 4 min 30 s in
+#: tests/run.sh prints the same shape. A heartbeat line is never output: the merge's stall check (merge_slice.run)
+#: and the board's "stalled" (the progress record's output_at) read past it, since tests/run.sh beats inside the
+#: merge's own `make ci` and its log. OSPREY_HEARTBEAT_SECONDS is for the line's tests.
+HEARTBEAT_SECONDS = 30
+HEARTBEAT_MARK = b"[heartbeat "
+HEARTBEAT_LINE = re.compile(rb"\[heartbeat \d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ\][^\n]*\n")
+
+
+def heartbeat_seconds() -> float:
+    try:
+        return max(0.1, float(os.environ.get("OSPREY_HEARTBEAT_SECONDS") or HEARTBEAT_SECONDS))
+    except ValueError:
+        return HEARTBEAT_SECONDS
+
+
+def took(seconds: float) -> str:
+    m, s = divmod(int(seconds), 60)
+    return f"{m} min {s} s" if m else f"{s} s"
+
+
+@contextlib.contextmanager
+def heartbeat(what, stream=None):
+    """While the block runs, a heartbeat line every heartbeat_seconds() on standard error: `what` (words, or a
+    function giving them, read at each beat) and the time since the block began. A beat that cannot be written is
+    skipped; the block is never slowed or failed by it."""
+    import sys
+    import threading
+    stop, t0 = threading.Event(), time.monotonic()
+
+    def beat() -> None:
+        while not stop.wait(heartbeat_seconds()):
+            try:
+                words = what() if callable(what) else what
+                out = stream or sys.stderr
+                out.write(f"[heartbeat {now()}] {words}, {took(time.monotonic() - t0)} in\n")
+                out.flush()
+            except Exception:  # noqa: BLE001 - a heartbeat never fails what it watches
+                pass
+    t = threading.Thread(target=beat, daemon=True)
+    t.start()
+    try:
+        yield
+    finally:
+        stop.set()
+
+
+class OutputWatch:
+    """How long a log has gone without output, heartbeat lines not counted (a heartbeat says a script is running, not
+    that it is getting anywhere). Reads only what was added since its last look; a heartbeat line not yet whole is
+    held back for the next look."""
+
+    def __init__(self, path: Path, from_start: bool = False):
+        self.path = Path(path)
+        try:
+            self.offset = 0 if from_start else self.path.stat().st_size
+        except OSError:
+            self.offset = 0
+        self.carry = b""
+        self.last = time.monotonic()
+        self.last_wall = now()
+
+    def look(self) -> float:
+        """Seconds since the log last grew by anything but heartbeat lines."""
+        try:
+            with self.path.open("rb") as fh:
+                fh.seek(self.offset)
+                new = fh.read()
+        except OSError:
+            new = b""
+        self.offset += len(new)
+        data = self.carry + new
+        i = data.rfind(HEARTBEAT_MARK)
+        if i != -1 and b"\n" not in data[i:]:
+            data, self.carry = data[:i], data[i:]
+        else:
+            self.carry = b""
+            for k in range(min(len(HEARTBEAT_MARK) - 1, len(data)), 0, -1):
+                if data.endswith(HEARTBEAT_MARK[:k]):
+                    data, self.carry = data[:-k], data[-k:]
+                    break
+        if HEARTBEAT_LINE.sub(b"", data):
+            self.last, self.last_wall = time.monotonic(), now()
+        return time.monotonic() - self.last
+
+
 def parse_slices(text: str) -> list[dict]:
     rows = [ln for ln in text.splitlines() if ln.strip() and not ln.startswith("#")]
     out = []
@@ -332,18 +420,19 @@ def deliver_rulings(tree: Path) -> str | None:
 
 #: The scout's table of every open case, before a slice's fifth round (the owner, 21 November 2026: after round 4 a
 #: read-only scout lists every open case as a table, and rounds 5 to 8 are judged against it; no fifth round without
-#: it): slices/<ID>_ROUND<N>_TABLE.md beside the slice's brief, N 5 or more, in the main checkout (committed or not).
+#: it): slices/<ID>_ROUND<N>_TABLE.md beside the slice's brief, N the round's own number (5 or more), in the main
+#: checkout (committed or not).
 TABLE_ROUND = 5
 
 
-def round_table(slice_id: str) -> Path | None:
-    """The slice's open-case table for rounds 5 on, or None when there is none."""
-    folder = REPO / V062_REL / "slices"
-    for f in sorted(folder.glob(f"{slice_id}_ROUND*_TABLE.md")) if folder.is_dir() else []:
-        m = re.fullmatch(rf"{re.escape(slice_id)}_ROUND(\d+)_TABLE\.md", f.name)
-        if m and int(m.group(1)) >= TABLE_ROUND and f.read_text().strip():
-            return f
-    return None
+def round_table(slice_id: str, round_: int) -> Path | None:
+    """The slice's open-case table for this round, from round 5 on: the one whose number is the round's own, not
+    empty; None when it is missing (the conductor, 25 November 2026: the first table in name order was taken, so
+    ROUND10 beat ROUND6, 11 and 12, and builders were given their part's oldest table)."""
+    if round_ < TABLE_ROUND:
+        return None
+    f = REPO / V062_REL / "slices" / f"{slice_id}_ROUND{int(round_)}_TABLE.md"
+    return f if f.is_file() and f.read_text().strip() else None
 
 
 #: The owner's written word for resume.py (README, "Resuming a slice"): lines `<slice> <action> <YYYY-MM-DD>`, one use
