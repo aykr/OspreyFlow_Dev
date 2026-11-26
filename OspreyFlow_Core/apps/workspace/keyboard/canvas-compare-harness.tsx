@@ -30,6 +30,8 @@ declare global {
       nodeIds: string[];
       /** The product's label face loaded (false: the picture would be drawn in a fallback). */
       facesLoaded: boolean;
+      /** The browser's WebGL renderer, as it names itself: the references belong to one. */
+      renderer: string;
       /** Puts each node at its fixed place; the spec then fits the view. */
       pin: () => void;
     };
@@ -161,7 +163,34 @@ function chainScene(): Scene {
   return { nodes, edges, at };
 }
 
+/** ADR-119: over 10,000 links, so the canvas groups by community and, at the fitted view, draws one link between each
+ * pair of communities (`communityLinkLayer.ts`) in place of every link. Eight communities of 60, each fully linked
+ * within (8 × 1,770 = 14,160 links), and community `i` linked to the next by `i + 1` links, so the links between
+ * communities differ in width. Each community sits on a small ring of its own, the eight on a large one. The
+ * communities are found by the canvas's own seeded Louvain (`communities.ts`), so they are the same every time. */
+function communitiesScene(): Scene {
+  const scene: Scene = { nodes: [], edges: [], at: {} };
+  const COMMUNITIES = 8;
+  const SIZE = 60;
+  const id = (c: number, n: number) => `k${c}-${n}`;
+  for (let c = 0; c < COMMUNITIES; c++) {
+    const cx = 400 * Math.cos((2 * Math.PI * c) / COMMUNITIES);
+    const cy = 400 * Math.sin((2 * Math.PI * c) / COMMUNITIES);
+    for (let n = 0; n < SIZE; n++) {
+      scene.nodes.push(node(id(c, n)));
+      scene.at[id(c, n)] = [cx + 60 * Math.cos((2 * Math.PI * n) / SIZE), cy + 60 * Math.sin((2 * Math.PI * n) / SIZE)];
+      for (let m = 0; m < n; m++) scene.edges.push(edge(`k${c}-${m}-${n}`, id(c, m), id(c, n), "KNOWS"));
+    }
+  }
+  for (let c = 0; c < COMMUNITIES; c++) {
+    const next = (c + 1) % COMMUNITIES;
+    for (let k = 0; k <= c; k++) scene.edges.push(edge(`between-${c}-${k}`, id(c, k), id(next, k), "KNOWS"));
+  }
+  return scene;
+}
+
 export const SCENES: Record<string, () => Scene> = {
+  communities: communitiesScene,
   links: linksScene,
   nodes: nodesScene,
   labels: labelsScene,
@@ -184,6 +213,13 @@ applyTheme("dark");
 await import("../src/design/fonts");
 await loadLookFaces(["400", "600"], [`400 11px ${NODE_LABEL_FONT}`]);
 const facesLoaded = document.fonts.check(`400 11px 'Atkinson Hyperlegible Next'`);
+/** The WebGL renderer this browser draws with (SwiftShader, a GPU's own name, ...). */
+function webglRenderer(): string {
+  const gl = document.createElement("canvas").getContext("webgl");
+  if (!gl) return "no WebGL";
+  const named = gl.getExtension("WEBGL_debug_renderer_info");
+  return String(named ? gl.getParameter(named.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+}
 
 const canvasHandle = createRef<GlassCanvasHandle>();
 window.__CANVAS__ = {
@@ -196,6 +232,7 @@ window.__COMPARE__ = {
   scene: sceneName,
   nodeIds: scene.nodes.map((n) => n.id),
   facesLoaded,
+  renderer: webglRenderer(),
   pin: () => {
     for (const [id, [x, y]] of Object.entries(scene.at)) {
       // Sigma's y grows upwards; the places above are written as the canvas shows them.

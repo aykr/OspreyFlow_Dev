@@ -9,7 +9,7 @@
 // the commit message.
 import { execFileSync, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { arch, cpus, platform, release } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -28,7 +28,10 @@ if (process.env.CI) {
   process.exit(2);
 }
 const git = (...args) => execFileSync("git", args, { cwd: WORKSPACE, encoding: "utf8" }).trim();
-const dirty = git("status", "--porcelain", "--", "src/canvas", "src/export", "src/map", "keyboard/canvas-compare-harness.tsx");
+const dirty = git(
+  "status", "--porcelain", "--", "src/canvas", "src/export", "src/map", "../../packages/glass-shared/src/canvas",
+  "keyboard/canvas-compare-harness.tsx", "keyboard/canvas-compare.spec.ts", "keyboard/canvasCompare.ts", "keyboard/pngPixels.ts",
+);
 if (dirty) {
   console.error(`refused: the canvas's own files have uncommitted changes, so the look the references record could not be found again:\n${dirty}`);
   process.exit(2);
@@ -62,9 +65,12 @@ const record = {
     cpu: cpus()[0]?.model ?? "unknown",
     node: process.version,
     chromium: browser.stdout.trim() || "unknown",
-    renderer: "Chromium headless, software WebGL (SwiftShader), device scale 1",
+    // As the browser names it, read by the spec while it drew (`renderer.txt`, removed below).
+    webgl: readFileSync(join(HERE, "renderer.txt"), "utf8").trim(),
+    scale: "device scale 1",
   },
   scenes,
 };
+rmSync(join(HERE, "renderer.txt"));
 writeFileSync(join(HERE, "REFERENCES.json"), `${JSON.stringify(record, null, 2)}\n`);
 console.log(`made ${Object.keys(scenes).length} references; commit them with REFERENCES.json and the reason: ${reason}`);

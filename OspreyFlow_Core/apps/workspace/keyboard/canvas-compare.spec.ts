@@ -42,6 +42,8 @@ export const CASES: readonly SceneCase[] = [
   { name: "selected-node", scene: "selected-node" },
   { name: "selected-link", scene: "selected-link" },
   { name: "export", scene: "chain", exported: true },
+  // ADR-119: one link between each pair of communities at the fitted view (`communityLinkLayer.ts`).
+  { name: "communities", scene: "communities" },
 ];
 
 const WRITING = process.env.CANVAS_COMPARE_WRITE === "1";
@@ -68,9 +70,35 @@ async function draw(page: Page, c: SceneCase): Promise<Buffer> {
   await page.goto(`/keyboard/canvas-compare-harness.html?scene=${c.scene}`);
   await page.waitForFunction(() => window.__COMPARE__ !== undefined);
   expect(await page.evaluate(() => window.__COMPARE__!.facesLoaded), "the product's label face loaded").toBe(true);
+  // The references belong to one renderer (pixels differ between graphics stacks): drawn with another, this machine
+  // cannot judge the look against them, and says so rather than reporting a changed look.
+  const renderer = await page.evaluate(() => window.__COMPARE__!.renderer);
+  if (WRITING) writeFileSync(new URL("renderer.txt", FOLDER), `${renderer}\n`);
+  else {
+    const made = readReferences([]).record?.machine?.webgl;
+    expect(renderer, `the references were made with the WebGL renderer ${made}; make a set of this machine's own to compare here`).toBe(made);
+  }
   const canvas = page.getByRole("application", { name: "Network canvas" });
   await expect(canvas).toHaveAttribute("data-canvas-state", "drawn");
   const ids = await page.evaluate(() => window.__COMPARE__!.nodeIds);
+  if (c.scene === "communities") {
+    // The communities arrive from a worker and arrange the nodes when they do: the scene is pinned only after, once
+    // the layer of links between communities has drawn.
+    await expect
+      .poll(
+        () =>
+          page.evaluate(() => {
+            const layer = document.querySelector<HTMLCanvasElement>('[data-canvas-layer="community-links"]');
+            if (!layer) return -1;
+            const data = layer.getContext("2d")!.getImageData(0, 0, layer.width, layer.height).data;
+            let drawn = 0;
+            for (let i = 3; i < data.length; i += 4) if (data[i]! > 0) drawn += 1;
+            return drawn;
+          }),
+        { timeout: 60_000 },
+      )
+      .toBeGreaterThan(0);
+  }
   await layoutSettled(page, ids);
   // The scene's own places, then the view fitted to them by the canvas's own F. The key is sent to the canvas
   // without focusing it, as `harness.tsx` sends its menu keys: focus would put the keyboard's ring on the first node,

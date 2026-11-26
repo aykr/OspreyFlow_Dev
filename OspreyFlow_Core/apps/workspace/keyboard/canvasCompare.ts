@@ -11,9 +11,10 @@ import { readPng } from "./pngPixels";
 
 export const FOLDER = new URL("./canvas-compare/", import.meta.url);
 
-/** The most the tolerance may ever be set to. A tolerance above it would let a dashed link drawn solid, or a label a
- * pixel larger, pass: the comparison refuses to run with one (case 5). */
-export const CEILING = { channel: 32, share: 0.002 } as const;
+/** The most the tolerance may ever be set to: the comparison refuses to run with more (case 5). Set below the
+ * smallest share any planted fault gave in its own scene (a dashed link drawn solid: 723 of 540,000 pixels, 0.00134;
+ * `process/lanes/v062/away/WS4a_records/plant_compare.log`), so even at the ceiling each of them is red. */
+export const CEILING = { channel: 32, share: 0.0005 } as const;
 
 export interface Tolerance {
   channel: number;
