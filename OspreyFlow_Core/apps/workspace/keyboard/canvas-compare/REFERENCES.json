@@ -1,8 +1,8 @@
 {
-  "made_at": "2026-11-26T11:13:27.391Z",
+  "made_at": "2026-11-26T11:25:23.910Z",
   "made_by": "OspreyFlow away builder",
-  "reason": "WS4a: the references the port to Sigma 4 is judged by, drawn on Sigma 3.0.3 before it",
-  "commit": "e0d7d7ccfc0397d4e80c07663497d4a7ee7bd93d",
+  "reason": "WS4a: the map scene added; the references the port to Sigma 4 is judged by, drawn on Sigma 3.0.3 before it",
+  "commit": "cba671014a3b8b82a2c483ee0f77a9ce79e87eb3",
   "machine": {
     "platform": "linux 6.8.0-149-generic x64",
     "cpu": "AMD Ryzen 7 3700X 8-Core Processor",
@@ -18,6 +18,7 @@
     "labels": "5b96a87dab3ef81140ce3224f3274e5de46442a9275d1a244bdac94f021ba66d",
     "links-zoomed-out": "568bbf58ca0a1366ca0471a8473759ee1e7e3d078102f2ce3c3a5e607e9bef37",
     "links": "2b20440ff38f5d6b9e597b128a7eb98debf393236462e599c027fc11046eeb25",
+    "map": "d52376cab4c59c5b66067b5c07f304ca21ba7328a6ed73c9c287e47a9fc8b99a",
     "nodes": "2154868dfc8d77586a720f7d12cfeb0a27c98a5420402bf721254ae641c34912",
     "selected-link": "4c018e4cd09295401655051def52eb0b4d8338e5b408c0017231e728eda8ab83",
     "selected-node": "f0b6e342650b8351f12fc308c785b1ca4568ce7b805b48f851b582e36b9e1e5d"
