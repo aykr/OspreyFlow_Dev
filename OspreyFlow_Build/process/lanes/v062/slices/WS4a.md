@@ -55,7 +55,7 @@ red on main and green after round 1's merge).
 
 ## Checks (pure; store ports pinned to 9)
 
-`npm test --workspace apps/workspace`; `npm run lint`; `npm run typecheck`; `node scripts/same_drawing_versions_check.mjs`;
+`npm test --workspace apps/workspace`; `npm run lint`; `npm run typecheck`; (the I20 script and its two new tests run through the acceptance command: they arrive with the away branch);
 `node scripts/no_react_check.mjs`; the two acceptance Python tests and `test_no_react_check.py`, `test_pages_foundation.py`;
 `ruff check .`.
 
