@@ -73,7 +73,8 @@ createRoot(container).render(
 // name the renderer gives its own elements. Until WS4a this waited for Sigma 3's nodes canvas to appear,
 // which Sigma 4 does not make (ADR-152 decision 9), so on Sigma 4 the gate would have timed out rather
 // than measured. "mounted" is set in the same task as that canvas appeared, so the figure means what it
-// always meant; "drawn" (the first finished frame) is the mark for a gate that wants the frame itself.
+// always meant. "drawn" is a frame the renderer finished after that (on Sigma 3 not its first, which its
+// constructor draws before anything can listen), for a gate that wants a later frame.
 // This harness never touches the network the real app's `onOpen`/delta events would mark readiness from.
 const READY = '[role="application"][aria-label="Network canvas"][data-canvas-state]';
 requestAnimationFrame(() => {

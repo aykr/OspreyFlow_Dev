@@ -6,13 +6,16 @@
 //                         "mounted"  the renderer is constructed on the canvas, with its layers in the page (what the
 //                                    budget gate's readiness has always meant: `perf/harness.tsx`'s `readyAt`, which
 //                                    until WS4a waited for Sigma 3's nodes canvas to appear);
-//                         "drawn"    the renderer has finished drawing at least one frame.
+//                         "drawn"    the renderer has since finished a frame. On Sigma 3 that is not its first: the
+//                                    constructor draws that one before anything can listen, so a canvas still
+//                                    "mounted" has been drawn once already.
 //                       Absent while no renderer is mounted (before the first, and after it is taken down).
 //   data-canvas-layer   on each canvas the renderer draws on: "links", "link-labels", "nodes", "labels", "hovers",
 //                       "hover-nodes", "pointer", and the canvas's own "community-links" (ADR-119).
 //
-// The developer repository's `tests/glass_trees/test_no_sigma_class_names_in_the_workspace.py` fails on any `sigma-`
-// class name left in the workspace, so nothing finds the canvas any other way.
+// `canvasMarks.test.ts` holds both states and their taking off, without a browser. The developer repository's
+// `tests/glass_trees/test_no_sigma_class_names_in_the_workspace.py` fails on any `sigma-` class name left in the
+// workspace, so nothing finds the canvas any other way.
 import type Sigma from "sigma";
 
 export const CANVAS_STATE = "data-canvas-state";
@@ -47,7 +50,7 @@ export function markState(element: HTMLElement | null, state: CanvasState | null
   else element.setAttribute(CANVAS_STATE, state);
 }
 
-/** Marks the element "mounted" now and "drawn" after the renderer's first finished frame; returns what takes the
+/** Marks the element "mounted" now and "drawn" after the next frame the renderer finishes; returns what takes the
  * marks off (the renderer's teardown calls it). */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- any graph's renderer: only its events are heard
 export function markRenderer(element: HTMLElement | null, sigma: Sigma<any, any, any>): () => void {
