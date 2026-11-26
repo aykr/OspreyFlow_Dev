@@ -742,9 +742,9 @@ def _the_figures(lowered: bool = False) -> Any:
     """`_case_report`'s answer: the figures, and whether they were lowered by what the reader may
     not see (the figures' own computation says: `reports.case_report_and_withheld`)."""
 
-    async def figures(*args: Any, **kwargs: Any) -> Any:
-        from schemas.domain import ReportFigures
+    from schemas.domain import ReportFigures
 
+    async def figures(*args: Any, **kwargs: Any) -> tuple[ReportFigures, bool]:
         return ReportFigures(period_weeks=12, as_of=date(2026, 11, 21), generated_at=NOW,
                              alerts_total=3), lowered  # fmt: skip
 
