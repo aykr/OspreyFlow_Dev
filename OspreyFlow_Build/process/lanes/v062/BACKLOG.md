@@ -570,3 +570,11 @@ Accepted on the owner's standing line (gaps in a test only, from round 3) or his
 ### New row 42 (26 November 2026, the owner's batch: the live step)
 
 **The live step's stack gains ClickHouse and Azurite (and Keycloak if a group needs it)**, a small part. Line-fix then makes the live step pay group by group, after hand-back 61.
+
+### New row 43 (26 November 2026, GR4a's accepted gap in a test: on the standing line, tip `c33f6d1802`)
+
+**spec/08's scenario TS still names the board page under `reports-figures`** (about line 863, and row TS14 at about line 880), while `FUNCTIONS.yaml` and the tests give it `reports-trends-shown-together`. The scenario test reads only fixed phrases and cited source words, so it cannot see the drift. The spec change is the owner's (proposed in the 12:45 report); after it, a test that reads the TS rows' function ids from spec/08 closes the gap.
+
+### New row 44 (26 November 2026, GR4a's accepted gap in a test: on the standing line, tip `c33f6d1802`)
+
+**No plant shows the page refusing a withheld trend's title or figures** (`pack-trends.test.ts`, the plants about lines 721 to 726: the withheld sentence's count, an empty chart, an empty table, the order). A plant that draws the withheld trend's title and asserts it is caught is owed (rule 15; rule 7's withheld item at its real shape).
