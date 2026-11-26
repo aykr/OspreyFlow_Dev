@@ -1,0 +1,78 @@
+PLANT 1 case 1: the dotted program swapped for EdgeLineProgram in GlassCanvas's program table (a dotted link drawn solid)
+  exit 1; ['6 failed', '5 passed (46.4s)']
+  red: ['the canvas draws the export scene as its reference does', 'the canvas draws the hover scene as its reference does', 'the canvas draws the links scene as its reference does', 'the canvas draws the links-zoomed-out scene as its reference does', 'the canvas draws the selected-link scene as its reference does', 'the canvas draws the selected-node scene as its reference does']
+  canvas-compare links: 1668 of 540000 pixels differ by more than 16 (share 0.003089); 1788 differ at all
+  canvas-compare links-zoomed-out: 480 of 540000 pixels differ by more than 16 (share 0.000889); 560 differ at all
+  canvas-compare nodes: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  canvas-compare labels: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  canvas-compare hover: 250 of 540000 pixels differ by more than 16 (share 0.000463); 270 differ at all
+  canvas-compare selected-node: 250 of 540000 pixels differ by more than 16 (share 0.000463); 270 differ at all
+  canvas-compare selected-link: 250 of 540000 pixels differ by more than 16 (share 0.000463); 270 differ at all
+  canvas-compare export: 270 of 540000 pixels differ by more than 16 (share 0.000500); 270 differ at all
+  canvas-compare communities: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+PLANT 2 case 1b: the dashed program swapped for EdgeLineProgram (an inferred link drawn solid)
+  exit 1; ['2 failed', '9 passed (42.6s)']
+  red: ['the canvas draws the links scene as its reference does', 'the canvas draws the links-zoomed-out scene as its reference does']
+  canvas-compare links: 723 of 540000 pixels differ by more than 16 (share 0.001339); 748 differ at all
+  canvas-compare links-zoomed-out: 63 of 540000 pixels differ by more than 16 (share 0.000117); 160 differ at all
+  canvas-compare nodes: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  canvas-compare labels: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  canvas-compare hover: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  canvas-compare selected-node: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  canvas-compare selected-link: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  canvas-compare export: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  canvas-compare communities: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+PLANT 3 case 2: labelStyle.ts's label font one pixel larger
+  exit 1; ['9 failed', '2 passed (48.1s)']
+  red: ['the canvas draws the communities scene as its reference does', 'the canvas draws the export scene as its reference does', 'the canvas draws the hover scene as its reference does', 'the canvas draws the labels scene as its reference does', 'the canvas draws the links scene as its reference does', 'the canvas draws the links-zoomed-out scene as its reference does', 'the canvas draws the nodes scene as its reference does', 'the canvas draws the selected-link scene as its reference does', 'the canvas draws the selected-node scene as its reference does']
+  canvas-compare links: 3023 of 540000 pixels differ by more than 16 (share 0.005598); 3515 differ at all
+  canvas-compare links-zoomed-out: 3037 of 540000 pixels differ by more than 16 (share 0.005624); 3515 differ at all
+  canvas-compare nodes: 1495 of 540000 pixels differ by more than 16 (share 0.002769); 1951 differ at all
+  canvas-compare labels: 2108 of 540000 pixels differ by more than 16 (share 0.003904); 2396 differ at all
+  canvas-compare hover: 261 of 540000 pixels differ by more than 16 (share 0.000483); 551 differ at all
+  canvas-compare selected-node: 234 of 540000 pixels differ by more than 16 (share 0.000433); 300 differ at all
+  canvas-compare selected-link: 234 of 540000 pixels differ by more than 16 (share 0.000433); 300 differ at all
+  canvas-compare export: 264 of 540000 pixels differ by more than 16 (share 0.000489); 300 differ at all
+  canvas-compare communities: 2231 of 540000 pixels differ by more than 16 (share 0.004131); 2795 differ at all
+PLANT 4 case 2b: the export's watermark words changed (chartExport.ts)
+  exit 0; ['11 passed (51.5s)']
+  red: []
+  canvas-compare links: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  canvas-compare links-zoomed-out: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  canvas-compare nodes: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  canvas-compare labels: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  canvas-compare hover: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  canvas-compare selected-node: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  canvas-compare selected-link: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  canvas-compare export: 5 of 540000 pixels differ by more than 16 (share 0.000009); 7 differ at all
+  canvas-compare communities: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+PLANT 5 case 3: ADR-119's community links turned off at their real switch (drawsCommunityLinks, glass-shared)
+  exit 1; ['1 failed', '10 passed (1.7m)']
+  red: ['the canvas draws the communities scene as its reference does']
+  canvas-compare links: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  canvas-compare links-zoomed-out: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  canvas-compare nodes: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  canvas-compare labels: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  canvas-compare hover: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  canvas-compare selected-node: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  canvas-compare selected-link: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  canvas-compare export: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+PLANT 6 case 5: a tolerance of 100% (anything passes)
+  exit 1; ['10 failed', '1 passed (47.0s)']
+  red: ['the canvas draws the communities scene as its reference does', 'the canvas draws the export scene as its reference does', 'the canvas draws the hover scene as its reference does', 'the canvas draws the labels scene as its reference does', 'the canvas draws the links scene as its reference does', 'the canvas draws the links-zoomed-out scene as its reference does', 'the canvas draws the nodes scene as its reference does', 'the canvas draws the selected-link scene as its reference does', 'the canvas draws the selected-node scene as its reference does', "the comparison's tolerance is within its ceiling ──────"]
+PLANT 7 case 6: a reference replaced by hand (links.png overwritten with labels.png)
+  exit 1; ['2 failed', '9 passed (43.8s)']
+  red: ['every reference is the one the reference-making command recorded', 'the canvas draws the links scene as its reference does']
+  canvas-compare links: 17166 of 540000 pixels differ by more than 16 (share 0.031789); 18112 differ at all
+  canvas-compare links-zoomed-out: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  canvas-compare nodes: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  canvas-compare labels: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  canvas-compare hover: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  canvas-compare selected-node: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  canvas-compare selected-link: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  canvas-compare export: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  canvas-compare communities: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+restored: M OspreyFlow_Core/apps/workspace/keyboard/canvas-compare/make-references.mjs
+ M OspreyFlow_Core/apps/workspace/keyboard/canvas-look.spec.ts
+ M OspreyFlow_Core/apps/workspace/perf/harness.tsx
+?? OspreyFlow_Build/process/lanes/v062/away/WS4a_AWAY_REPORT.md

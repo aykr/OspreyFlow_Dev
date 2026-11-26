@@ -139,7 +139,7 @@ test("node labels are drawn in a light colour on the dark theme", async ({ page 
   await settledPositions(page, "n0", "n1");
   await page.waitForTimeout(500);
   const ink = await page.evaluate(() => {
-    const canvas = document.querySelector<HTMLCanvasElement>("canvas.sigma-labels");
+    const canvas = document.querySelector<HTMLCanvasElement>('[data-canvas-layer="labels"]');
     if (!canvas) return null;
     const data = canvas.getContext("2d")!.getImageData(0, 0, canvas.width, canvas.height).data;
     let drawn = 0;

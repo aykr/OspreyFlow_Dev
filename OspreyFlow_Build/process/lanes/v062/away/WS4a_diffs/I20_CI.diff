@@ -1,0 +1,11 @@
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -38,6 +38,8 @@
+       # (I13's type half is the lint rule for `packages/glass-shared/**`, run by the line above.)
+       - run: node scripts/no_react_check.mjs
+       - run: node scripts/version_isolation_check.mjs
++      # ADR-152 I20: the same drawing versions in both front ends, or a difference written in the version window.
++      - run: node scripts/same_drawing_versions_check.mjs
+ 
+   typecheck:
+     runs-on: ubuntu-latest

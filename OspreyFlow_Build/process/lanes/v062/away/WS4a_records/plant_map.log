@@ -1,0 +1,16 @@
+PLANT 6 case 4: the map layer's camera sync offset by a pixel (sigmaMaplibreLayer.ts's syncMapWithSigma)
+  exit 1; ['1 failed', '11 passed (43.9s)']
+  red: ['the canvas draws the map scene as its reference does ──']
+  canvas-compare links: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  canvas-compare links-zoomed-out: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  canvas-compare nodes: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  canvas-compare labels: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  canvas-compare hover: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  canvas-compare selected-node: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  canvas-compare selected-link: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  canvas-compare export: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  canvas-compare communities: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  canvas-compare map: 399 of 700000 pixels differ by more than 16 (share 0.000570); 1713 differ at all
+restored: ?? OspreyFlow_Build/process/lanes/v062/away/WS4a_AWAY_REPORT.md
+?? OspreyFlow_Build/process/lanes/v062/away/WS4a_diffs/COMPARE_CI.diff
+?? OspreyFlow_Build/process/lanes/v062/away/WS4a_diffs/COMPARE_CORE_MAKEFILE.diff

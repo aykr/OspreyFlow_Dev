@@ -1,0 +1,5 @@
+{
+  "channel": 16,
+  "share": 0.0001,
+  "set_from": "WS4a, 26 November 2026: three runs of Sigma 3.0.3 against its own references on the machine REFERENCES.json names (the server's build account, D246 namespace, load 4.9 to 8.0): every scene differed in 0 pixels at all, in each run (process/lanes/v062/away/WS4a_records/compare-sigma3-self.log). The smallest share a planted fault gave in any scene was 63 of 540,000 pixels (0.000117: a dashed link drawn solid, zoomed out), so the share is set below it, at 54 pixels; the channel allows a step of 16 in any of red, green, blue or opacity for antialiasing on another x86 processor, which has not been measured (CI's own run is owed before the gate is wired)."
+}

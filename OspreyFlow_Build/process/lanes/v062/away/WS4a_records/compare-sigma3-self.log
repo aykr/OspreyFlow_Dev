@@ -1,0 +1,39 @@
+== run 1 of 3, sigma3-self, 440237bc9 (tree 0 changed files), start 11:13:41, load 27.29 16.26 11.84
+exit 0
+canvas-compare links: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare links-zoomed-out: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare nodes: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare labels: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare hover: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare selected-node: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare selected-link: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare export: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare communities: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  11 passed (1.2m)
+   end 11:14:56, load 31.12 19.78 13.41
+== run 2 of 3, sigma3-self, 440237bc9 (tree 0 changed files), start 11:14:57, load 31.12 19.78 13.41
+exit 0
+canvas-compare links: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare links-zoomed-out: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare nodes: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare labels: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare hover: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare selected-node: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare selected-link: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare export: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare communities: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  11 passed (1.3m)
+   end 11:16:15, load 30.93 22.84 15.04
+== run 3 of 3, sigma3-self, 440237bc9 (tree 1 changed files), start 11:16:15, load 30.93 22.84 15.04
+exit 0
+canvas-compare links: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare links-zoomed-out: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare nodes: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare labels: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare hover: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare selected-node: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare selected-link: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare export: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare communities: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  11 passed (52.6s)
+   end 11:17:11, load 22.02 21.77 15.12

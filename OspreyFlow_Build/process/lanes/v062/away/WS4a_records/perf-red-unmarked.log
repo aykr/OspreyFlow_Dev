@@ -1,0 +1,9 @@
+== run 1 of 1, red-unmarked, cf1b6fbde (tree 6 changed files), start 10:53:13, load 6.29 7.18 5.92
+exit 1
+[1/1] perf/perf.spec.ts:18:1 › 50k/250k fixture reaches a first interactive frame within the CI software-render budget
+  1) perf/perf.spec.ts:18:1 › 50k/250k fixture reaches a first interactive frame within the CI software-render budget 
+    TimeoutError: page.waitForFunction: Timeout 60000ms exceeded.
+    Error Context: test-results/perf-50k-250k-fixture-reac-34615-e-CI-software-render-budget/error-context.md
+  1 failed
+    perf/perf.spec.ts:18:1 › 50k/250k fixture reaches a first interactive frame within the CI software-render budget 
+   end 10:54:17, load 5.37 6.74 5.85

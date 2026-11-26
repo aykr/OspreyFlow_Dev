@@ -1,0 +1,232 @@
+// The canvas-look comparison (ADR-152 decision 9; ADR-002 Amendment 1, item 5; slice WS4a). WS4, the React
+// workspace's move to Sigma 4, is held to it: each fixed scene (`canvas-compare-harness.tsx`) is drawn by the real
+// canvas and its whole painted area compared against a reference image kept in `canvas-compare/`, within the one
+// pixel tolerance in `canvas-compare/TOLERANCE.json` and never above `CEILING` (`canvasCompare.ts`). There is no list
+// of accepted differences.
+//
+// The references are made only by `npm run canvas-compare:references -- --reason "…"`
+// (`canvas-compare/make-references.mjs`), which records who made them, why, on which machine and from which commit in
+// `canvas-compare/REFERENCES.json`; this spec refuses a reference that record does not bear out, and never writes one
+// itself (unlike `toHaveScreenshot`, which writes a missing one and passes). Made on Sigma 3, they are what WS4b's port
+// to Sigma 4 must still draw.
+//
+// Pixels differ between graphics stacks, so the references and the tolerance belong to one renderer: Chromium's
+// software WebGL (SwiftShader), as on CI's hosted runners, at a device scale of 1. The tolerance was set from three
+// runs of Sigma 3 against its own references (`TOLERANCE.json` records them and the machine).
+import { readFileSync, writeFileSync } from "node:fs";
+
+import { expect, test, type Page } from "@playwright/test";
+
+import { CEILING, FOLDER, compare, readReferences, toleranceRefusal, type Tolerance } from "./canvasCompare";
+import { layoutSettled } from "./layoutSettled";
+import { FIXTURE_FILE } from "./mapTilesFixture";
+import { FIXTURE_BEARER_TOKEN } from "./mapTilesToken";
+
+interface SceneCase {
+  /** The reference's name (`canvas-compare/<name>.png`). */
+  name: string;
+  /** The harness's scene (`canvas-compare-harness.tsx`); none for the map. */
+  scene?: string;
+  /** The Map view on GG6's synthetic tiles (`map-tiles-harness.tsx`) in place of the graph canvas. */
+  map?: boolean;
+  /** A zoom after the fit (1 is 100%; above 1 is zoomed out). */
+  zoom?: number;
+  /** A node the pointer rests on (its hover drawing). */
+  hover?: string;
+  /** The canvas's exported PNG (`exportImage`, `chartExport.ts`) in place of a screenshot. */
+  exported?: boolean;
+}
+
+export const CASES: readonly SceneCase[] = [
+  { name: "links", scene: "links" },
+  { name: "links-zoomed-out", scene: "links", zoom: 3 },
+  { name: "nodes", scene: "nodes" },
+  { name: "labels", scene: "labels" },
+  { name: "hover", scene: "chain", hover: "c1" },
+  { name: "selected-node", scene: "selected-node" },
+  { name: "selected-link", scene: "selected-link" },
+  { name: "export", scene: "chain", exported: true },
+  // ADR-119: one link between each pair of communities at the fitted view (`communityLinkLayer.ts`).
+  { name: "communities", scene: "communities" },
+  // The Map view: MapLibre on GG6's synthetic PMTiles archive with the canvas's Sigma layer over it
+  // (`sigmaMaplibreLayer.ts`).
+  { name: "map", map: true },
+];
+
+const WRITING = process.env.CANVAS_COMPARE_WRITE === "1";
+
+test.use({ viewport: { width: 1000, height: 700 }, deviceScaleFactor: 1, reducedMotion: "reduce" });
+
+// Everything the page draws over the canvas that is not the canvas's drawing: its controls and legend (the toolbar
+// is not drawn at all, `toolbarHidden`). The grid behind the graph is the canvas's own and stays.
+const CHROME = "button, select, label, .canvas-legend, .canvas-zoom, .selection-bar { visibility: hidden !important; }";
+
+async function frames(page: Page, count = 3): Promise<void> {
+  await page.evaluate(
+    (n) =>
+      new Promise<void>((resolve) => {
+        const step = (left: number) => (left === 0 ? resolve() : requestAnimationFrame(() => step(left - 1)));
+        step(n);
+      }),
+    count,
+  );
+}
+
+/** The references belong to one WebGL renderer (pixels differ between graphics stacks): drawn with another, this
+ * machine cannot judge the look against them, and says so rather than reporting a changed look. Writing, it records
+ * the renderer for the command (`renderer.txt`). */
+async function checkRenderer(page: Page): Promise<void> {
+  const renderer = await page.evaluate(() => {
+    const gl = document.createElement("canvas").getContext("webgl");
+    if (!gl) return "no WebGL";
+    const named = gl.getExtension("WEBGL_debug_renderer_info");
+    return String(named ? gl.getParameter(named.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+  });
+  if (WRITING) writeFileSync(new URL("renderer.txt", FOLDER), `${renderer}\n`);
+  else {
+    const made = readReferences([]).record?.machine?.webgl;
+    expect(renderer, `the references were made with the WebGL renderer ${made}; make a set of this machine's own to compare here`).toBe(made);
+  }
+}
+
+/** The picture inside `box` once it has stopped changing: two alike, half a second apart. A node's drawing
+ * (`@sigma/node-image`) arrives a frame or more after the node, and a map's tiles after its style. */
+async function settledShot(page: Page, box: { x: number; y: number; width: number; height: number }, name: string): Promise<Buffer> {
+  const shot = () => page.screenshot({ clip: box, animations: "disabled", caret: "hide" });
+  let last = await shot();
+  for (let i = 0; i < 20; i++) {
+    await page.waitForTimeout(500);
+    const now = await shot();
+    if (now.equals(last)) return now;
+    last = now;
+  }
+  throw new Error(`the ${name} scene never stopped changing`);
+}
+
+/** Draws `c` and returns its picture as PNG bytes. */
+async function draw(page: Page, c: SceneCase): Promise<Buffer> {
+  if (c.map) return drawMap(page);
+  await page.goto(`/keyboard/canvas-compare-harness.html?scene=${c.scene}`);
+  await page.waitForFunction(() => window.__COMPARE__ !== undefined);
+  expect(await page.evaluate(() => window.__COMPARE__!.facesLoaded), "the product's label face loaded").toBe(true);
+  await checkRenderer(page);
+  const canvas = page.getByRole("application", { name: "Network canvas" });
+  await expect(canvas).toHaveAttribute("data-canvas-state", "drawn");
+  const ids = await page.evaluate(() => window.__COMPARE__!.nodeIds);
+  if (c.scene === "communities") {
+    // The communities arrive from a worker and arrange the nodes when they do: the scene is pinned only after, once
+    // every community's bubble is drawn with its name. Not once the layer of links between communities has drawn:
+    // that is the very thing the scene compares, and a wait on it would fail the scene before the comparison could
+    // (case 3's plant turns the layer off at its switch, and must be red in the comparison, not in the wait).
+    await expect(page.locator('[data-testid="bubble-overlay"] text')).toHaveCount(8, { timeout: 60_000 });
+  }
+  await layoutSettled(page, ids);
+  // The scene's own places, then the view fitted to them by the canvas's own F. The key is sent to the canvas
+  // without focusing it, as `harness.tsx` sends its menu keys: focus would put the keyboard's ring on the first node,
+  // which is not part of the scene.
+  await page.evaluate(() => window.__COMPARE__!.pin());
+  await canvas.dispatchEvent("keydown", { key: "f", bubbles: true });
+  await layoutSettled(page, ids);
+  const camera = await page.evaluate(() => window.__CANVAS__!.cameraState());
+  expect(camera, "the view fitted to the scene").toEqual({ x: 0.5, y: 0.5, ratio: 1 });
+  if (c.zoom) {
+    await page.evaluate((ratio) => window.__CANVAS__!.zoomTo(ratio), c.zoom);
+    await layoutSettled(page, ids);
+  }
+  await page.addStyleTag({ content: CHROME });
+  const box = (await canvas.boundingBox())!;
+  if (c.hover) {
+    const at = await page.evaluate((id) => window.__CANVAS__!.viewportPositionOf(id), c.hover);
+    await page.mouse.move(box.x + at!.x, box.y + at!.y);
+  } else {
+    await page.mouse.move(0, 0);
+  }
+  await page.waitForTimeout(400);
+  await frames(page);
+  const picture = await settledShot(page, box, c.name);
+  if (!c.exported) return picture;
+  const base64 = await page.evaluate(async () => {
+    const blob = await window.__CANVAS__!.exportImage({
+      osprey_mark: "OspreyFlow",
+      investigation_id: "canvas-compare",
+      exported_at: "2026-11-26T00:00:00Z",
+      resolution_threshold: 0.95,
+      handling_level: "OFFICIAL",
+    });
+    const bytes = new Uint8Array(await blob.arrayBuffer());
+    let text = "";
+    for (const b of bytes) text += String.fromCharCode(b);
+    return btoa(text);
+  });
+  return Buffer.from(base64, "base64");
+}
+
+/** The Map view's scene (`map-tiles-harness.tsx`, GG6): MapLibre drawing the synthetic PMTiles archive, with the canvas's
+ * Sigma layer bound over it (`src/map/sigmaMaplibreLayer.ts`) and three located nodes. The archive is served as
+ * `map-tiles.spec.ts` serves it: ranged, and only with the harness's bearer token. Returns the frame's settled
+ * picture. */
+async function drawMap(page: Page): Promise<Buffer> {
+  const archive = readFileSync(FIXTURE_FILE);
+  await page.route("**/fixture/map-tiles.pmtiles", async (route) => {
+    if (route.request().headers()["authorization"] !== `Bearer ${FIXTURE_BEARER_TOKEN}`) {
+      await route.fulfill({ status: 401, contentType: "application/json", body: '{"detail":"Not authenticated"}' });
+      return;
+    }
+    const common = { "accept-ranges": "bytes", etag: '"gg6-fixture"', "content-type": "application/octet-stream" };
+    const range = /^bytes=(\d+)-(\d*)$/.exec(route.request().headers()["range"] ?? "");
+    if (!range) return route.fulfill({ status: 200, headers: common, body: archive });
+    const start = Number(range[1]);
+    const end = Math.min(range[2] === "" ? archive.length - 1 : Number(range[2]), archive.length - 1);
+    await route.fulfill({
+      status: 206,
+      headers: { ...common, "content-range": `bytes ${start}-${end}/${archive.length}` },
+      body: archive.subarray(start, end + 1),
+    });
+  });
+  // No glyphs, as in `map-tiles.spec.ts`: the bundled style's labels are not drawn, so no face can differ.
+  await page.route("**/fonts/**", (route) =>
+    route.fulfill({ status: 200, contentType: "text/html", body: "<!doctype html><title>Glass</title>" }),
+  );
+  await page.goto("/keyboard/map-tiles-harness.html");
+  await checkRenderer(page);
+  await expect.poll(() => page.evaluate(() => window.__MAP__?.loaded() ?? false), { timeout: 30_000 }).toBe(true);
+  await expect.poll(() => page.evaluate(() => window.__MAP__?.areTilesLoaded() ?? false), { timeout: 30_000 }).toBe(true);
+  await page.mouse.move(0, 0);
+  const box = (await page.locator("main > div").first().boundingBox())!;
+  return settledShot(page, box, "map");
+}
+
+const tolerance = JSON.parse(readFileSync(new URL("TOLERANCE.json", FOLDER), "utf8")) as Tolerance & Record<string, unknown>;
+
+test("the comparison's tolerance is within its ceiling", () => {
+  expect(toleranceRefusal(tolerance), `ceiling: channel ${CEILING.channel}, share ${CEILING.share}`).toBeNull();
+});
+
+test("every reference is the one the reference-making command recorded", () => {
+  test.skip(WRITING, "the references are being made");
+  expect(readReferences(CASES.map((c) => c.name)).problems).toEqual([]);
+});
+
+for (const c of CASES) {
+  test(`the canvas draws the ${c.name} scene as its reference does`, async ({ page }, info) => {
+    const picture = await draw(page, c);
+    const reference = new URL(`${c.name}.png`, FOLDER);
+    if (WRITING) {
+      // Only the command writes (it sets the reason); never in CI.
+      expect(process.env.CANVAS_COMPARE_REASON?.trim(), "a reason, given to the command").toBeTruthy();
+      expect(process.env.CI, "references are never made in CI").toBeFalsy();
+      writeFileSync(reference, picture);
+      return;
+    }
+    expect(toleranceRefusal(tolerance)).toBeNull();
+    await info.attach(`${c.name}-actual.png`, { body: picture, contentType: "image/png" });
+    const result = compare(picture, readFileSync(reference), tolerance.channel);
+    // Also any difference at all, for the record the tolerance is set from (`TOLERANCE.json`).
+    const exact = compare(picture, readFileSync(reference), 0);
+    console.log(
+      `canvas-compare ${c.name}: ${result.differing} of ${result.width * result.height} pixels differ by more than ${tolerance.channel} ` +
+        `(share ${result.share.toFixed(6)}); ${exact.differing} differ at all`,
+    );
+    expect(result.share, `the share of pixels unlike the reference (tolerance ${tolerance.share})`).toBeLessThanOrEqual(tolerance.share);
+  });
+}
