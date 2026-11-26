@@ -16,7 +16,7 @@ cd "$HERE"
 # the suite runs, so a running suite is told from a stalled one. The merge's stall check never counts it as output.
 beat() {
   local s=""
-  trap 'kill "$s" 2>/dev/null; exit 0' TERM
+  trap 'kill "$s" 2>/dev/null || true; exit 0' TERM  # || true: under set -e a failed kill (the sleep just ended) exited 1
   local t0=$SECONDS
   while :; do
     sleep "${OSPREY_HEARTBEAT_SECONDS:-30}" & s=$!
@@ -25,5 +25,5 @@ beat() {
   done
 }
 beat & hb=$!
-trap 'kill "$hb" 2>/dev/null; wait "$hb" 2>/dev/null' EXIT
+trap 'kill "$hb" 2>/dev/null || true; wait "$hb" 2>/dev/null || true' EXIT  # the suite's own exit stands, whatever the beat's
 env PYTHONDONTWRITEBYTECODE=1 ARCADEDB_HTTP_PORT=9 POSTGRES_PORT=9 "$PY" -m pytest -q -p no:cacheprovider -c "$HERE/pytest.ini" "$HERE" "$@"

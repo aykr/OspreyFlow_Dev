@@ -115,6 +115,26 @@ def test_a_suite_that_only_beats_is_still_ended_as_stalled(world):
     assert took < 40, took
 
 
+@pytest.mark.parametrize("rel", ["tests/run.sh", "demo_server/tests/run.sh"])
+def test_a_passing_suite_never_ends_red_by_its_own_beat(world, rel):
+    """The apply of 55, 26 November 2026, 06:42: tests/run.sh exited 1 with every test it ran green. The beat's TERM
+    trap ran `kill "$s"` under set -e; when its sleep had just ended, the kill failed and the beat exited 1 before
+    `exit 0`, and the suite's EXIT trap waited on it, also under set -e, so the suite ended 1. A race, so many runs,
+    each with a fast beat and a suite that passes: every one must end 0."""
+    w = world
+    py = fake_python(w, 0.05)
+    codes = [run_suite(w, suite_cmd(w, py, rel, every="0.01")).returncode for _ in range(40)]
+    assert codes == [0] * 40, codes
+
+
+@pytest.mark.parametrize("rel", ["tests/run.sh", "demo_server/tests/run.sh"])
+def test_a_failing_suite_keeps_its_own_exit_through_the_beat(world, rel):
+    w = world
+    py = fake_python(w, 0.05, code=3)
+    codes = {run_suite(w, suite_cmd(w, py, rel, every="0.01")).returncode for _ in range(40)}
+    assert codes == {3}, codes
+
+
 def test_a_suite_that_prints_between_its_beats_is_not_ended(world):
     w = world
     loop = w["tmp"] / "slowpy"
