@@ -863,7 +863,7 @@ store. Tests: `tests/ingest/test_held_content.py`, `tests/conformance/media_stor
 **A `Document` holds its own text (ADR-127 decisions 1 and 2).** A `Document` entity row may name a
 column as its own *document text*. The text goes to the media store and the `Document` itself carries
 `object_ref` and `media_kind: text`: no second node and no `HOLDS`. Its title is a bound `title` if
-there is one, otherwise the text's first words; its `object_ref` and `media_kind` cannot be bound. Because the `Document` is the row's own entity, every
+there is one, otherwise the text's first words. Because the `Document` is the row's own entity, every
 link in the row can name it, so one report row gives the report and its `MENTIONED_IN` links from the
 people, number and areas it names. A row whose text cell is empty is rejected, naming the field. A
 `Document` holds only its own text: an image or video file on a `Document` entity is refused at Map
@@ -871,6 +871,17 @@ save. A `Document` matched by reference is not rewritten by the row. Every link 
 row declares: one naming an undeclared reference is refused at Map save and at run, while a declared
 entity skipped on a row by its `when` condition simply has no links on that row. Tests:
 `tests/ingest/test_document_holds_its_own_text.py`, `test_document_holds_its_own_text_live.py`.
+
+**Only the engine sets a `Document`'s file** (the owner, 26 November 2026). No recipe may set
+`object_ref` or `media_kind` on any `Document`, with or without content, from a column or as a fixed
+value. A media reference is content-addressed and nothing records which dataset stored a file, so a
+bound one could name another dataset's file, which would then be served to whoever may read the new
+`Document`, at the loader's marking. A file this dataset itself stored is refused the same way. The
+recipe rules refuse the binding at Map save, publish, release, the seed and at run; the load asks
+again of each row, in Test as in a run, so a binding the rules missed writes nothing of its row. Both
+name the recipe's entity and the property, never a file, its dataset or its marking. What the engine
+writes itself (a `Document`'s own text, held content) is unchanged. Test:
+`tests/ingest/test_document_object_ref_same_dataset.py`.
 
 ### Files: the unstructured path, built for images, videos and text (ADR-094 step 3)
 
