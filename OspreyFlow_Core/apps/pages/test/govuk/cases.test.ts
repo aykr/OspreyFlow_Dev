@@ -752,7 +752,7 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
 
   it("CS11: every field of the six models is drawn or named as left out; a drawn field changes the page and a left-out one does not", async () => {
     expect(await censusProblems(CENSUS)).toEqual([]);
-  });
+  }, 30_000);
 
   it("CS12: both pages are whole in structure, read-only, and their stops come in order", async () => {
     const w = await world();
@@ -891,7 +891,8 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
       expect(await censusProblems(moved("BriefAttachment", "title", "drawn"))).toEqual(["BriefAttachment.title is drawn but changes nothing"]);
       expect(await censusProblems(moved("BriefRequirement", "status", "left"))).toEqual(["BriefRequirement.status is left out but changes the page"]);
       expect(await censusProblems(moved("InvestigationListing", "tab_hidden", "left"))).toEqual(["InvestigationListing.tab_hidden is left out but changes the page"]);
-    });
+      // Each census draws both pages once a field of six models (GR1e added the history's): past vitest's 5 s default under load.
+    }, 30_000);
 
     it("CS15: the source checks fail for a filter, a sort or a cut in the page's code, and for a shared sentence written again", () => {
       const sources = sourcesOfThePage();
