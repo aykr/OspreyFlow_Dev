@@ -465,10 +465,11 @@ describe("OSPREY_PAGES_TREE decides which tree serves every route, `/` included"
     expect(help.trees).toEqual(["govuk"]);
     expect(PAGES).toContain(help);
     // Slice GR3a's alert monitoring page is the tree's third, and the Default tree's twin of it is not built; slice GR1a's cases page
-    // is its fifth, likewise.
+    // is its fifth and slice GG4a's boards page its sixth, likewise.
     expect(alertMonitoring.trees).toEqual(["govuk"]);
     expect(PAGES).toContain(alertMonitoring);
-    for (const page of PAGES) if (page !== help && page !== alertMonitoring && page.path !== "/admin/people" && page.path !== "/packs/trends" && page.path !== "/cases") expect(page.trees ?? ["default"], page.id).toEqual(["default"]);
+    const govukOnly = ["/admin/people", "/packs/trends", "/cases", "/cases/boards"];
+    for (const page of PAGES) if (page !== help && page !== alertMonitoring && !govukOnly.includes(page.path)) expect(page.trees ?? ["default"], page.id).toEqual(["default"]);
   });
 
   it("HP7: what decides a route's tree is the module's own list: the same Help page, named for both, is served by both (rule 15)", async () => {
@@ -524,8 +525,8 @@ function listedRoutes(text: string): string[] {
 }
 
 /** A row whose function is not complete: its pages are in the list, and its own `route` stays empty until every section has one (slice AD3a: `admin`; slice GR4a:
- * `reports-trends-shown-together`, whose page is read-only until arranging is built; slice GR1a: `cases-and-views`). */
-const INCOMPLETE_ROWS: ReadonlySet<string> = new Set(["admin", "reports-trends-shown-together", "cases-and-views"]);
+ * `reports-trends-shown-together`, whose page is read-only until arranging is built; slice GR1a: `cases-and-views`; slice GG4a: `drawing-boards`). */
+const INCOMPLETE_ROWS: ReadonlySet<string> = new Set(["admin", "reports-trends-shown-together", "cases-and-views", "drawing-boards"]);
 
 function routeListProblems(listText: string, pages: readonly PageModule[], functionsText: string): string[] {
   const found: string[] = [];
@@ -548,7 +549,7 @@ describe("the route list", () => {
 
   it("HP9: is the paths the govuk tree has pages for, and the rows of FUNCTIONS.yaml that name them carry the same route", () => {
     expect(routeListProblems(listText, PAGES, functionsText)).toEqual([]);
-    expect(listedRoutes(listText)).toEqual(["/help", "/admin/people", "/reports", "/packs/trends", "/cases"]);
+    expect(listedRoutes(listText)).toEqual(["/help", "/admin/people", "/reports", "/packs/trends", "/cases", "/cases/boards"]);
   });
 
   it("HP9: the route table registers each page under its own id and path, once: the list is one route a page", () => {
@@ -559,6 +560,7 @@ describe("the route list", () => {
       ["reports-figures", "/reports", ["GET"]],
       ["reports-trends-shown-together", "/packs/trends", ["GET"]],
       ["cases-and-views", "/cases", ["GET"]],
+      ["drawing-boards", "/cases/boards", ["GET"]],
     ]);
   });
 });

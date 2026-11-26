@@ -22,13 +22,19 @@ rmSync(out, { recursive: true, force: true });
 execFileSync(process.execPath, [tsc, "-p", "tsconfig.build.json", "--outDir", out], { cwd: root, stdio: "inherit" });
 cpSync(join(root, "tree-default"), join(out, "tree-default"), { recursive: true });
 cpSync(join(root, "tree-govuk"), join(out, "tree-govuk"), { recursive: true });
-// The three server files that import the shared package (`server/views/helpWords.ts`: the Help page's words are `roles.ts`'s, never
+// The server files that import the shared package (`server/views/helpWords.ts`: the Help page's words are `roles.ts`'s, never
 // written again; `server/views/packTrendsWords.ts`: trends shown together say a pack and a trend in `packages/glass-shared/src/reports/packText.ts`'s words, slice GR4a;
-// `server/views/casesWords.ts`: the cases page says a level, a domain pack and a moment in the package's words, slice GR1a)
+// `server/views/casesWords.ts`: the cases page says a level, a domain pack and a moment in the package's words, slice GR1a;
+// `server/views/boardsWords.ts`: the boards page says a moment in the package's words, slice GG4a)
 // are bundled with the package's source, over what `tsc` wrote: `tsc` checks them against `server/types/glassShared.d.ts` and the
 // compiled service imports no workspace package at run time (the image's run-time stage holds none). Nothing else is bundled.
 await build({
-  entryPoints: [join(root, "server", "views", "helpWords.ts"), join(root, "server", "views", "packTrendsWords.ts"), join(root, "server", "views", "casesWords.ts")],
+  entryPoints: [
+    join(root, "server", "views", "helpWords.ts"),
+    join(root, "server", "views", "packTrendsWords.ts"),
+    join(root, "server", "views", "casesWords.ts"),
+    join(root, "server", "views", "boardsWords.ts"),
+  ],
   outdir: join(out, "server", "views"),
   bundle: true,
   format: "esm",
