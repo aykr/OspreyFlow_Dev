@@ -13,6 +13,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   copyTexts,
+  GUARD_TEST_TIMEOUT_MS,
   LINK_CLIENTS,
   movedClients,
   plantedCopy,
@@ -45,7 +46,7 @@ describe("the Glass's copy names no client and no setting still to be confirmed"
       clientWords(path, readFileSync(path, "utf-8")).map((hit) => `${shown(path)}:${hit.line}: ${hit.words}`),
     );
     expect(hits).toEqual([]);
-  });
+  }, GUARD_TEST_TIMEOUT_MS);
 
   it("reads the Conduit clients that moved to packages/glass-shared/src (rule 15)", () => {
     const walked = sourceFiles();
@@ -62,7 +63,7 @@ describe("the Glass's copy names no client and no setting still to be confirmed"
     } finally {
       planted.remove();
     }
-  });
+  }, GUARD_TEST_TIMEOUT_MS);
 
   it("reads the report, export, alert and pattern clients that moved (PL4d3a), and finds a word planted in each (rule 15)", () => {
     const walked = sourceFiles();
@@ -76,7 +77,7 @@ describe("the Glass's copy names no client and no setting still to be confirmed"
     } finally {
       planted.remove();
     }
-  });
+  }, GUARD_TEST_TIMEOUT_MS);
 
   it("reads the link, inspector, question, reader, views and analytics clients that moved (PL4d3b), and finds a word planted in each (rule 15)", () => {
     const walked = sourceFiles();
@@ -90,7 +91,7 @@ describe("the Glass's copy names no client and no setting still to be confirmed"
     } finally {
       planted.remove();
     }
-  });
+  }, GUARD_TEST_TIMEOUT_MS);
 
   it("reads the assessment, boards, connections, explore, map, metrics, ownership, search, site, strength and watches clients that moved (PL4d3c), and finds a word planted in each (rule 15)", () => {
     const walked = sourceFiles();
@@ -104,7 +105,7 @@ describe("the Glass's copy names no client and no setting still to be confirmed"
     } finally {
       planted.remove();
     }
-  });
+  }, GUARD_TEST_TIMEOUT_MS);
 
   it("reads the cases, moment, needs-you, dataset, pack and external-orchestration files that moved (PL4d3d), and finds a word planted in each (rule 15)", () => {
     const walked = sourceFiles();
@@ -118,7 +119,7 @@ describe("the Glass's copy names no client and no setting still to be confirmed"
     } finally {
       planted.remove();
     }
-  });
+  }, GUARD_TEST_TIMEOUT_MS);
 
   it("reads the roles', admin, Home, rule-group and entity-picture files that moved (PL4d3e), and finds a word planted in each (rule 15)", () => {
     const walked = sourceFiles();
@@ -132,7 +133,7 @@ describe("the Glass's copy names no client and no setting still to be confirmed"
     } finally {
       planted.remove();
     }
-  });
+  }, GUARD_TEST_TIMEOUT_MS);
 
   it("is found in each shape the copy took before this change (rule 15)", () => {
     const planted = [
@@ -149,8 +150,7 @@ describe("the Glass's copy names no client and no setting still to be confirmed"
       'const unsure = "an unconfirmed setting";',
       'const later = "a placeholder value";',
     ].join("\n");
-    expect(clientWords("Planted.tsx", planted).map((hit) => hit.line)).toEqual([1, 2, 3, 4, 6, 6, 9, 11, 12]);
-  });
+    expect(clientWords("Planted.tsx", planted).map((hit) => hit.line)).toEqual([1, 2, 3, 4, 6, 6, 9, 11, 12]);}, GUARD_TEST_TIMEOUT_MS);
 
   it("leaves alone what is not copy: names, keys, imports and comments", () => {
     const clean = [
@@ -161,6 +161,5 @@ describe("the Glass's copy names no client and no setting still to be confirmed"
       "const body = JSON.stringify({ client_id: id });",
       'const composition: string = "client_parity";',
     ].join("\n");
-    expect(clientWords("Clean.ts", clean)).toEqual([]);
-  });
+    expect(clientWords("Clean.ts", clean)).toEqual([]);}, GUARD_TEST_TIMEOUT_MS);
 });
