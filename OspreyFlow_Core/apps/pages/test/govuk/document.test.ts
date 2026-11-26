@@ -47,7 +47,7 @@ import { testClock } from "../support/clock.js";
 import { cookieFrom, csrfFromPage, request } from "../support/http.js";
 import { generateSecret } from "../support/secret.js";
 import { bearer, providerFor } from "../support/studioWorld.js";
-import { NOT_FOUND_CASE, NOT_FOUND_DOCUMENT, RIGHT_REFUSAL, UNKNOWN_BEARER, documentConduit, readerViewOf } from "./documentConduit.js";
+import { NOT_FOUND_CASE, NOT_FOUND_DOCUMENT, PNG, RIGHT_REFUSAL, UNKNOWN_BEARER, documentConduit, readerViewOf } from "./documentConduit.js";
 import type { Case, Doc, DocumentConduit, DocumentConduitOptions, Reader, Span } from "./documentConduit.js";
 
 const PAGES_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -76,9 +76,6 @@ const CASES: Case[] = [
 ];
 const LEVELS: Reader["levels"] = { [CASE]: "viewer", "c-ferry": "editor", "c-away": "author" };
 const CLEARANCE = 2;
-
-/** A 1x1 PNG: a real picture, so the browser specs can see it load. */
-export const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
 
 const base = (over: Partial<Doc> & Pick<Doc, "id">): Doc => ({
   case_id: CASE,
@@ -155,13 +152,21 @@ const MARKUP: Doc = base({
   text: "<script>alert(1)</script> <img src=x onerror=y>",
   spans: [span(0, 8, "<i>Type</i>", "asserted", "n-mk-1")],
 });
+// A span whose place is not in the text, as the real route can send one: the designation route checks the words with a Python slice,
+// which accepts an end past the text ("abc"[1:99] == "bc"), and a second extraction replaces the kept text under accepted spans.
+const STALE: Doc = base({
+  id: "d-stale",
+  title: "Re-read note",
+  text: "Ada met the board.",
+  spans: [span(0, 3, "Person", "asserted", "n-st-1"), span(8, 99, "Organisation", "inferred", "n-st-2"), span(12, 12, "Thing", "asserted", "n-st-3")],
+});
 const SECRET: Doc = base({ id: "d-secret", title: "Above the reader", text: "Not yours.", marking: 5 });
 const PERSON: Doc = base({ id: "d-person", type: "Person", title: "Not a document" });
 const ELSEWHERE: Doc = base({ id: "d-elsewhere", case_id: "c-ferry", title: "In another case" });
 const UNSHARED: Doc = base({ id: "d-unshared", case_id: "c-unshared", title: "In an unshared case" });
 const AWAY: Doc = base({ id: "d-away", case_id: "c-away", title: "In another unit's case" });
 
-const DOCS: Doc[] = [LEDGER, OVERLAP, EMAIL, PHOTO, NO_FILE, FILM, KEPT, ODD, UNTITLED, MARKUP, SECRET, PERSON, ELSEWHERE, UNSHARED, AWAY];
+const DOCS: Doc[] = [LEDGER, OVERLAP, EMAIL, PHOTO, NO_FILE, FILM, KEPT, ODD, UNTITLED, MARKUP, STALE, SECRET, PERSON, ELSEWHERE, UNSHARED, AWAY];
 
 interface World {
   app: Express;
@@ -353,12 +358,16 @@ const HOW: Record<Span["provenance_state"], string> = {
 };
 const codePoints = (text: string): string[] => Array.from(text);
 const wordsOf = (text: string, s: Pick<Span, "start" | "end">): string => codePoints(text).slice(s.start, s.end).join("");
+// The fixture leaves out a span the reader may not see, as the route does (`dossier.py`'s `narrow_to_visible`): the page is only ever
+// sent the rest, so what these checks prove is that the page draws what it is sent, not the route's filter (the Conduit's own tests').
 const visible = (d: Doc): Span[] => d.spans.filter((s) => (s.marking ?? 0) <= CLEARANCE);
+/** A span whose words are in the text: it starts before it ends, and ends within the text. */
+const placed = (d: Doc, s: Span): boolean => s.start < s.end && s.end <= codePoints(d.text).length;
 
 /** The marked passages the text must hold: overlapping spans joined into one, touching ones kept apart, in order. */
 function passagesOf(d: Doc): string[] {
   const groups: { start: number; end: number }[] = [];
-  for (const s of visible(d)) {
+  for (const s of visible(d).filter((one) => placed(d, one))) {
     const last = groups[groups.length - 1];
     if (last && s.start < last.end) last.end = Math.max(last.end, s.end);
     else groups.push({ start: s.start, end: s.end });
@@ -383,7 +392,9 @@ function markProblems(html: string, d: Doc): string[] {
   if (!table) return [...found, "the page has no table of marked words"];
   if (table.caption !== DOCUMENT_WORDS.caption) found.push(`the caption is ${JSON.stringify(table.caption)}`);
   if (JSON.stringify(table.columns) !== JSON.stringify(DOCUMENT_WORDS.columns)) found.push(`the columns are ${JSON.stringify(table.columns)}`);
-  const want = spans.map((s) => ({ words: wordsOf(d.text, s), type: s.entity_type, how: HOW[s.provenance_state] }));
+  const want = spans.map((s) => ({ words: placed(d, s) ? wordsOf(d.text, s) : DOCUMENT_WORDS.notInText, type: s.entity_type, how: HOW[s.provenance_state] }));
+  const said = mainText(html).includes(DOCUMENT_WORDS.someNotPlaced);
+  if (said !== spans.some((s) => !placed(d, s))) found.push(`the page ${said ? "says" : "does not say"} that some marked words are not in the text`);
   if (JSON.stringify(table.rows) !== JSON.stringify(want)) found.push(`the rows are ${JSON.stringify(table.rows)}, not ${JSON.stringify(want)}`);
   return found;
 }
@@ -574,6 +585,17 @@ describe("one document of a case in the reader, on the GOV.UK tree (scenario DR)
     const res = await getAs(w, pageOf(CASE, EMAIL.id));
     expect(mainText(res.text)).toContain("Sent on 3 March 2026 at 14:05 UTC");
     expect(DOCUMENT_WORDS.sentOn("2026-11-26T09:05:00Z")).toBe("Sent on 26 November 2026 at 09:05 UTC");
+    // A time with no offset (Pydantic's for a plain datetime) is UTC, the Conduit's, whatever the server's own zone.
+    const zone = process.env["TZ"];
+    process.env["TZ"] = "Asia/Tokyo";
+    try {
+      expect(new Date("2026-07-03T14:05:00").getUTCHours()).toBe(5); // the engine reads it as local time: the zone took
+      expect(DOCUMENT_WORDS.sentOn("2026-07-03T14:05:00")).toBe("Sent on 3 July 2026 at 14:05 UTC");
+      expect(DOCUMENT_WORDS.sentOn("2026-07-03T14:05:00+01:00")).toBe("Sent on 3 July 2026 at 13:05 UTC");
+    } finally {
+      if (zone === undefined) delete process.env["TZ"];
+      else process.env["TZ"] = zone;
+    }
     expect(neverProblems(res.text)).toEqual([]);
     const ledger = await getAs(w, pageOf(CASE, LEDGER.id));
     expect(mainText(ledger.text)).not.toContain("Sent on");
@@ -655,10 +677,8 @@ describe("one document of a case in the reader, on the GOV.UK tree (scenario DR)
     const unrighted = await world({ rights: [] });
     const res = await getAs(unrighted, pageOf(CASE, LEDGER.id));
     expect(refusalProblems(res, await getAs(unrighted, NOWHERE))).toEqual([]);
-    for (const status of [403, 409, 422]) {
-      const odd = await world({ reader_answer: { status, body: { detail: "refused" } } });
-      expect(refusalProblems(await getAs(odd, pageOf(CASE, LEDGER.id)), await getAs(odd, NOWHERE)), String(status)).toEqual([]);
-    }
+    const odd = await world({ reader_answer: { status: 403, body: { detail: "this needs the viewer level on the case" } } });
+    expect(refusalProblems(await getAs(odd, pageOf(CASE, LEDGER.id)), await getAs(odd, NOWHERE))).toEqual([]);
     const queries = [
       "",
       `?case=${CASE}`,
@@ -703,6 +723,10 @@ describe("one document of a case in the reader, on the GOV.UK tree (scenario DR)
 
   it("DR11: a failed read draws nothing of the document (502); an ended session says to sign in again (401)", async () => {
     const failures: WorldOptions[] = [
+      // Any 4xx but a refusal (403, 404) or a 401 says nothing of the document: could not be read, never "not found".
+      { reader_answer: { status: 429, body: { detail: "slow down" } } },
+      { reader_answer: { status: 409, body: { detail: "conflict" } } },
+      { reader_answer: { status: 422, body: { detail: [] } } },
       { reader_answer: { status: 500, body: { detail: "boom" } } },
       { reader_answer: { status: 503, body: { detail: "down" } } },
       { reader_answer: { status: 200, body: "not json" } },
@@ -754,8 +778,6 @@ describe("one document of a case in the reader, on the GOV.UK tree (scenario DR)
       ["MessageSpan", "start", -1],
       ["MessageSpan", "start", 1.5],
       ["MessageSpan", "start", "0"],
-      ["MessageSpan", "end", 999],
-      ["MessageSpan", "end", 0],
       ["MessageSpan", "provenance_state", "confirmed"],
       ["MessageSpan", "entity_type", null],
       ["MessageSpan", "node_id", 3],
@@ -767,15 +789,30 @@ describe("one document of a case in the reader, on the GOV.UK tree (scenario DR)
     const reversed = censusBody();
     reversed.spans = [reversed.spans[1] as Record<string, unknown>, reversed.spans[0] as Record<string, unknown>];
     expect(viewOf(reversed)).toBeUndefined();
-    const empty = withField("MessageSpan", "end", 0);
-    expect(viewOf(empty)).toBeUndefined();
+    // A span whose place is not in the text (past its end, or ending where it starts) is no fault of the body: the real route can send
+    // one. It marks nothing, keeps its row, said in words, and the page says so above the text.
+    for (const end of [999, 0]) {
+      const view = viewOf(withField("MessageSpan", "end", end));
+      expect(view, `end ${end}`).toBeDefined();
+      expect(view?.someNotPlaced, `end ${end}`).toBe(true);
+      expect(view?.rows[0]?.lines, `end ${end}`).toBeUndefined();
+      expect(view?.pieces.filter((p) => p.marked).map((p) => p.lines.join("\n")), `end ${end}`).toEqual(["Brook"]);
+    }
+    expect(viewOf(censusBody())?.someNotPlaced).toBe(false);
+    const w = await world();
+    const stale = await getAs(w, pageOf(CASE, STALE.id));
+    expect(stale.status).toBe(200);
+    expect(markProblems(stale.text, STALE)).toEqual([]);
+    expect(drawnText(stale.text)?.marks).toEqual(["Ada"]);
+    expect(tableOf(stale.text)?.rows.map((r) => r.words)).toEqual(["Ada", "Not in the text as it is now", "Not in the text as it is now"]);
     // A span's end is counted in characters as the Conduit counts them: one past a character outside the basic plane is still inside.
     const astral = censusBody();
     astral["text"] = "📦ab";
     astral["spans"] = [{ start: 0, end: 3, node_id: "n-a", entity_type: "Thing", provenance_state: "asserted" }];
     expect(viewOf(astral)).toBeDefined();
+    expect(viewOf(astral)?.rows[0]?.lines).toEqual(["📦ab"]);
     astral["spans"] = [{ start: 0, end: 4, node_id: "n-a", entity_type: "Thing", provenance_state: "asserted" }];
-    expect(viewOf(astral)).toBeUndefined();
+    expect(viewOf(astral)?.rows[0]?.lines).toBeUndefined();
     for (const top of [null, {}, "x", [], [null]]) expect(viewOf(top), JSON.stringify(top)).toBeUndefined();
     // And through the service: one missing field of each model is the 502 page.
     for (const [model, field] of [["DocumentReaderView", "spans"], ["MessageSpan", "provenance_state"]] as const) {
@@ -785,7 +822,7 @@ describe("one document of a case in the reader, on the GOV.UK tree (scenario DR)
 
   it("DR13: no graph id is in the page, in any text or attribute", async () => {
     const w = await world();
-    for (const d of [LEDGER, OVERLAP, EMAIL, PHOTO, FILM, KEPT, ODD, UNTITLED, MARKUP]) {
+    for (const d of [LEDGER, OVERLAP, EMAIL, PHOTO, FILM, KEPT, ODD, UNTITLED, MARKUP, STALE]) {
       const res = await getAs(w, pageOf(CASE, d.id));
       expect(res.status, d.id).toBe(200);
       expect(neverProblems(res.text), d.id).toEqual([]);
@@ -856,21 +893,25 @@ describe("one document of a case in the reader, on the GOV.UK tree (scenario DR)
       const w = await world();
       const real = (await getAs(w, pageOf(CASE, LEDGER.id))).text;
       expect(markProblems(real, LEDGER)).toEqual([]);
+      const stale = (await getAs(w, pageOf(CASE, STALE.id))).text;
+      expect(markProblems(stale, STALE)).toEqual([]);
       const overlap = (await getAs(w, pageOf(CASE, OVERLAP.id))).text;
       expect(markProblems(overlap, OVERLAP)).toEqual([]);
       const plants: [string, string, Doc][] = [
         ["a proposed span drawn as confirmed", real.replace(HOW.inferred, HOW.asserted), LEDGER],
         ["a span marked one character late", real.replace("<mark>Ada Quill</mark> ", "A<mark>da Quill </mark>"), LEDGER],
         ["a span's words doubled", real.replace("<mark>Ada Quill</mark>", "<mark>Ada Quill</mark>Ada Quill"), LEDGER],
-        ["a hidden span drawn", real.replace("Brook Vale", "<mark>Brook Vale</mark>"), LEDGER],
+        ["a span the page was not sent drawn", real.replace("Brook Vale", "<mark>Brook Vale</mark>"), LEDGER],
+        ["a span whose place is not in the text left unsaid", stale.replace(DOCUMENT_WORDS.someNotPlaced, ""), STALE],
+        ["a span whose place is not in the text drawn as other words", stale.replace(`<th scope="row">${DOCUMENT_WORDS.notInText}</th>`, '<th scope="row">board.</th>'), STALE],
         ["a row of the table dropped", real.replace(/<tr><th scope="row">Harbour Board<\/th>[\s\S]*?<\/tr>/, ""), LEDGER],
         ["overlapping spans each marked, the overlap doubled", overlap.replace("<mark>Harbour Board</mark>", "<mark>Harbour Board</mark><mark>Board</mark>"), OVERLAP],
         ["touching spans joined", overlap.replace("<mark>Ada</mark><mark>Quill</mark>", "<mark>AdaQuill</mark>"), OVERLAP],
         ["a line break lost", overlap.replace("<br>", " "), OVERLAP],
       ];
       for (const [label, html, d] of plants) {
-        expect(html, label).not.toBe(d === LEDGER ? real : overlap);
-        expect(markProblems(html, d).length + neverProblems(html).length, label).toBeGreaterThan(0);
+        expect(html, label).not.toBe(d === LEDGER ? real : d === STALE ? stale : overlap);
+        expect(markProblems(html, d), label).not.toEqual([]);
       }
     });
 

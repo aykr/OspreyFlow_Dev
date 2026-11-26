@@ -1,9 +1,10 @@
 {#- One document of a case in the reader (slice GG3b; scenario DR), read-only, drawn on the server and complete without a script. The
     title is the one heading of the first level; then, for an email, when it was sent; the file, where there is one (a picture as an
-    img, a film as a video with its own controls that loads nothing until it is played, any other file a link, never shown); the text with each marked passage a mark element
-    and each line break a br, written on one line so the template adds no space to the text; and the marked words as a table with a
-    caption, column headers (th, scope col) and a row header for each span's words. Nothing here is a form, a button or a control of the
-    page's own, and nothing counts: the page draws what it is given, in the order given. The words are `server/views/documentWords.ts`'s. -#}
+    img, a film as a video with its own controls that loads nothing until it is played, any other file a link, never shown); the
+    text with each marked passage a mark element and each line break a br, written on one line so the template adds no space to the
+    text; and the marked words as a table with a caption, column headers (th, scope col) and a row header for each span's words (or
+    the words that say a span's place is not in the text). Nothing here is a form, a button or a control of the page's own, and
+    nothing counts: the page draws what it is given, in the order given. The words are `server/views/documentWords.ts`'s. -#}
 {% extends "layout.njk" %}
 {% block content %}
 {% if view.kind == "document" %}
@@ -18,6 +19,7 @@
 {% endif %}
 <h2>{{ words.textHeading }}</h2>
 {% if view.truncated %}<p>{{ words.truncated }}</p>{% endif %}
+{% if view.someNotPlaced %}<p>{{ words.someNotPlaced }}</p>{% endif %}
 {% if view.pieces.length %}
 <p id="document-text">{% for piece in view.pieces %}{% if piece.marked %}<mark>{% endif %}{% for line in piece.lines %}{% if not loop.first %}<br>{% endif %}{{ line }}{% endfor %}{% if piece.marked %}</mark>{% endif %}{% endfor %}</p>
 {% else %}
@@ -32,7 +34,7 @@
 <tr>{% for column in words.columns %}<th scope="col">{{ column }}</th>{% endfor %}</tr>
 </thead>
 <tbody>
-{% for row in view.rows %}<tr><th scope="row">{% for line in row.lines %}{% if not loop.first %}<br>{% endif %}{{ line }}{% endfor %}</th><td>{{ row.type }}</td><td>{{ row.how }}</td></tr>
+{% for row in view.rows %}<tr><th scope="row">{% if row.lines %}{% for line in row.lines %}{% if not loop.first %}<br>{% endif %}{{ line }}{% endfor %}{% else %}{{ words.notInText }}{% endif %}</th><td>{{ row.type }}</td><td>{{ row.how }}</td></tr>
 {% endfor %}</tbody>
 </table>
 {% else %}

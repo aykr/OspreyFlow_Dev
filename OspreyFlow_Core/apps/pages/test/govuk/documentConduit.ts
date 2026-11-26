@@ -98,6 +98,9 @@ export interface DocumentConduit {
   stop(): Promise<void>;
 }
 
+/** A 1x1 PNG: a real picture, so a browser can be seen to load it (synthetic: one grey pixel). */
+export const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
+
 export const NOT_FOUND_CASE = { error: "investigation_not_found" };
 export const NOT_FOUND_DOCUMENT = { error: "document_not_found" };
 /** The resolver's reason for a bearer it does not know: one of its own sentences (`packages/principal_auth`), standing for all. */

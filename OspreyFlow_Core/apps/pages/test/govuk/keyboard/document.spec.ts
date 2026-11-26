@@ -9,7 +9,7 @@ import { expect, test } from "@playwright/test";
 
 import { buildScratchAssets, tabOrder, viaProxy } from "../helpServer.js";
 import type { Assets } from "../helpServer.js";
-import { CASE_ID, DOCUMENT_TAB_ORDER, FILM_TAB_ORDER, openDocument, tabOrderPastControls, withDocuments } from "../documentServer.js";
+import { CASE_ID, DOCUMENT_TAB_ORDER, FILM_TAB_ORDER, KEPT_TAB_ORDER, openDocument, tabOrderPastControls, withDocuments } from "../documentServer.js";
 
 let assets: Assets;
 test.beforeAll(async () => {
@@ -65,6 +65,17 @@ test.describe("the reader page with scripts", () => {
       await page.keyboard.press("Enter");
       await expect(page).toHaveURL(new RegExp(`^${base}/$`));
       await expect(page.getByRole("heading", { level: 1 })).toHaveText("Home");
+    });
+  });
+
+  test("DK4: a file of another kind is a link in its place, and Enter on it opens the file through the forwarder", async ({ page }) => {
+    await withDocuments(assets, async (base) => {
+      await openDocument(page, base, "k-kept");
+      expect(await tabOrder(page)).toEqual(KEPT_TAB_ORDER);
+      await page.getByRole("link", { name: "Open the document's file" }).focus();
+      await page.keyboard.press("Enter");
+      await expect(page).toHaveURL(new RegExp(`^${base}/v1/investigations/${CASE_ID}/documents/k-kept/file$`));
+      await expect(page.locator("body")).toHaveText("A kept note, from the file.");
     });
   });
 });

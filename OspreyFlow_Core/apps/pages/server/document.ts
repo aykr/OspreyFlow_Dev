@@ -13,12 +13,12 @@
  * a film's address is the forwarder's path for the file, which the browser loads as its own read (audited `read_document_file`).
  *
  * What the page answers (the owner's rulings of 26 November 2026 on GG3b's draft, D268):
- *  - the read refused (any 4xx but a 401: a document the reader may not see, one in another case, one that does not exist, the case's
- *    gate, the right to investigate): a 404 with the page of a path nothing serves, drawn from the same words and template, with none
+ *  - the read refused (a 404: a document the reader may not see, one in another case, one that does not exist, the case's gate; a
+ *    403: the right to investigate): a 404 with the page of a path nothing serves, drawn from the same words and template, with none
  *    of the Conduit's words;
  *  - a `case` or a `document` missing, empty, repeated, a dot segment or not a plain value: the same 404, and nothing is asked;
  *  - a 401: the Studio's words, to sign in again (a 401);
- *  - the Conduit failing, not answering, or answering what the page cannot draw from (the strict reader, `views/documentWords.ts`):
+ *  - any other 4xx (a 429, say), the Conduit failing, not answering, or answering what the page cannot draw from (the strict reader, `views/documentWords.ts`):
  *    could not be read (a 502), with no text, no mark, no table and no file (rule 2).
  *
  * It is the GOV.UK tree's alone for now: a service started for the Default tree answers `/cases/document` as a path nothing serves. GET
@@ -32,7 +32,7 @@ import { ConduitUnreachable, conduitFor, v1 } from "./conduit.js";
 import type { Conduit, Reply } from "./conduit.js";
 import type { ForwardSettings } from "./config.js";
 import type { PageModule } from "./pages.js";
-import { DOCUMENT_WORDS, documentView } from "./views/documentWords.js";
+import { DOCUMENT_WORDS, caseHref, documentView } from "./views/documentWords.js";
 import { NOT_FOUND } from "./views/notFoundWords.js";
 import { refusalWords } from "./views/studioWords.js";
 
@@ -57,7 +57,9 @@ async function ask(conduit: Conduit, path: string): Promise<Reply | undefined> {
 /** A value named once, as a plain value. `.` and `..` are refused too: `v1` encodes each segment, but a dot segment is one the
  * address's own parser folds away, so it would ask another route than the reader's. */
 const plain = (value: unknown): value is string => typeof value === "string" && value !== "" && value !== "." && value !== "..";
-const refused = (reply: Reply): boolean => reply.status >= 400 && reply.status < 500 && reply.status !== 401;
+/** The route's refusals: 404 for a document or a case the reader may not see or that is not there, 403 for want of the right. Any other
+ * 4xx (a 429, a 413) is not a refusal of this reader and says nothing of the document: it is "could not be read", never "not found". */
+const refused = (reply: Reply): boolean => reply.status === 403 || reply.status === 404;
 const notFound = (res: Response): void => void res.status(404).render("error", { ...NOT_FOUND });
 
 async function documentGet(req: Request, res: Response): Promise<void> {
@@ -65,7 +67,7 @@ async function documentGet(req: Request, res: Response): Promise<void> {
   const documentId = req.query["document"];
   if (!plain(caseId) || !plain(documentId)) return notFound(res);
   const title = DOCUMENT_WORDS.about;
-  const unreadable = (status = 502): void => void res.status(status).render("document", context(title, { kind: "unreadable", caseHref: `/cases?case=${encodeURIComponent(caseId)}` }));
+  const unreadable = (status = 502): void => void res.status(status).render("document", context(title, { kind: "unreadable", caseHref: caseHref(caseId) }));
   const ended = (): void => void res.status(401).render("document", context(title, { kind: "ended" }, { ended: refusalWords(401, undefined, "") }));
 
   const settings = req.app.locals["studio"] as Settings;

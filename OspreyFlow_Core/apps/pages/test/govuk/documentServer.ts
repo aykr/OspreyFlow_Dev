@@ -14,7 +14,7 @@ import type { Page } from "@playwright/test";
 
 import type { Assets } from "./helpServer.js";
 import { casesConduit } from "./casesConduit.js";
-import { documentConduit } from "./documentConduit.js";
+import { PNG, documentConduit } from "./documentConduit.js";
 import type { Doc } from "./documentConduit.js";
 import { MemorySessionStore } from "../../server/sessionStore.js";
 import { main } from "../../server/start.js";
@@ -24,7 +24,6 @@ import { bearer } from "../support/studioWorld.js";
 
 const UNIT = "keyboard-unit";
 export const CASE_ID = "k-harbour";
-const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
 
 const doc = (over: Partial<Doc> & Pick<Doc, "id">): Doc => ({
   case_id: CASE_ID,
@@ -54,10 +53,13 @@ export const KEYBOARD_DOCUMENTS: Doc[] = [
   }),
   doc({ id: "k-photo", title: "Gate photograph", media_kind: "image", has_file: true, file: { bytes: PNG, type: "image/png" } }),
   doc({ id: "k-film", title: "Quay camera", media_kind: "video", has_file: true, file: { bytes: Buffer.from("synthetic film"), type: "video/webm" } }),
+  doc({ id: "k-kept", title: "Kept text", text: "A kept note.", media_kind: "text", has_file: true, file: { bytes: Buffer.from("A kept note, from the file."), type: "text/plain" } }),
 ];
 
 /** The stops of a document's page: the skip link, the layout's sign-out, the way back to the case, the way back to Home. */
 export const DOCUMENT_TAB_ORDER = ["a: Skip to main content", "button: Sign out", "a: Back to the case", "a: Back to Home"];
+/** A kept text's page has the file's link before the ways back. */
+export const KEPT_TAB_ORDER = ["a: Skip to main content", "button: Sign out", "a: Open the document's file", "a: Back to the case", "a: Back to Home"];
 /** A film's page has one stop more, the film's own controls, before the ways back. */
 export const FILM_TAB_ORDER = ["a: Skip to main content", "button: Sign out", "video: A film from the document", "a: Back to the case", "a: Back to Home"];
 
