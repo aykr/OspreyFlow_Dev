@@ -812,8 +812,21 @@ async def test_a_dashboard_reads_the_case_it_was_granted_and_no_other(
         async def resolve_principal(self, _token: str) -> Principal:
             return dashboard
 
-    class _Ledger(RefusingLedger):
-        pass
+    # Two writers, two stand-ins: the export ledger takes one entry, and `AuditWriter.record` takes
+    # its fields by name. One class for both answered 500 once it took the ledger's shape alone.
+    class _Audit:
+        async def record(
+            self,
+            *,
+            principal: Principal,
+            action: str,
+            resolved_query: dict[str, Any],
+            result_cardinality: int,
+            investigation_id: str | None = None,
+            justification: str | None = None,
+            conn: Any = None,
+        ) -> None:
+            return None
 
     from schemas.domain import ReportFigures
 
@@ -839,8 +852,8 @@ async def test_a_dashboard_reads_the_case_it_was_granted_and_no_other(
     for dependency in (get_alerts_store, get_analytics, get_compute, get_explore, get_graph,
                        get_held_rows, get_ontology, get_target_models):  # fmt: skip
         app.dependency_overrides[dependency] = lambda: _NoDatasets()
-    app.dependency_overrides[get_audit] = lambda: _Ledger()
-    app.dependency_overrides[get_export_ledger] = lambda: _Ledger()
+    app.dependency_overrides[get_audit] = lambda: _Audit()
+    app.dependency_overrides[get_export_ledger] = lambda: RefusingLedger()
     original = (app_module._case_report, app_module.reports_module.feed_rows)
     app_module._case_report = _figures  # no `ignore`: a type checker run here sees the shape
     app_module.reports_module.feed_rows = lambda _figures: []  # type: ignore[assignment]
