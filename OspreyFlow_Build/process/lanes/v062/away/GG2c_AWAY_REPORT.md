@@ -151,3 +151,24 @@ checks", once at question 6): `away/` is not one of the folders the check skips.
 green on this branch. The slice's frozen checks do not run it; the merge's full gate does.
 
 **Still open, the owner's:** questions 1, 3 and 5. Nothing was built for them.
+
+## Round 2 in the line, on the Mac (26 November 2026): the guard walks the whole workspace
+
+**The verifier's finding.** `deltaClientHome.test.ts` walked a hand-written list of folders. `deck-capture/`,
+`compute-tier1/`, `scripts/`, `test/`, `map-build/` and the workspace's root files were not on it. **Reproduced first:** with
+a copy of the client and a harness importing `../src/workingset/deltaClient` planted in `deck-capture/`, the guard passed
+3 of 3.
+
+**The fix.** The guard walks the whole of `apps/workspace`, skipping only `node_modules` and `dist`. It also reads `.jsx`
+and `.cjs`, knows a copy or an import of any source extension (before, a `.js` copy or a `./deltaClient.js` import passed),
+and fails on a folder it cannot read instead of passing over it. Its new case runs the same scan and the same two
+detectors over a planted temporary tree, a folder nobody has made yet included; it was red against the list (`3617c43`).
+
+**Planted again at the real call sites** (the tree checked clean after each): stale files in `deck-capture/`,
+`compute-tier1/`, the root and a new folder turned both real cases red; a stale import added to
+`deck-capture/fraud-timeline-harness.tsx` turned the import case red.
+
+**The frozen checks, on this fix:** exit 0. `glass-shared` 475 tests; the workspace 3958 tests (round 1's 3957 and the new
+case) and its budget config 3/3; lint, typecheck, `no_react_check` and `version_isolation_check` green. The frozen
+acceptance: the guard 4/4, the export test 2/2. Keyboard, a11y, perf and the integration test were not run in this round:
+it changes the guard test alone.
