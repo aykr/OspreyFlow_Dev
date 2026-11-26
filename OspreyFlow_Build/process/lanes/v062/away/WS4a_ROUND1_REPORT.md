@@ -139,8 +139,24 @@ faults the away branch brought in were red there (4 tests). `apps/pages/VERSION_
 `scripts/manifest_areas.toml` (now in "page service server", beside `PARITY_EXCEPTIONS.yaml`), and a comment in
 `canvasMarks.ts` named the developer folder. Both fixed in `11864d5`; the two failing files and the two acceptance
 Python files then gave 178 passed. The suites above were not run again: one change is a comment, the other a manifest
-rule. **Still red, and not mine to add:** the scan map has no row for
-`tests/glass_trees/test_no_sigma_class_names_in_the_workspace.py`, which walks `OspreyFlow_Core/apps/workspace/`.
+rule. **Red when this was first written, and not mine to add:** the scan map had no row for
+`tests/glass_trees/test_no_sigma_class_names_in_the_workspace.py`, which walks `OspreyFlow_Core/apps/workspace/`. Main
+has since taken that row (`6608379`, `scan_rows/WS4a.tsv`); the merge applies it to `scan_map.tsv`.
+
+**Run again at `438e624`** (14:31 to 14:35 UTC, main merged into the lane up to `5278f2b`; this Mac, load about
+5 to 13 at the start):
+
+- The frozen acceptance's two parts: `canvasCompare.test.ts` and the two Python files, green. The Python files ran in
+  one call with `test_no_react_check.py` and `test_pages_foundation.py`: 102 passed.
+- `same_drawing_versions_check.mjs`, with and without `--release`: PASS. `package-lock.json` is as on main.
+- `npm test --workspace apps/workspace`: 410 files, 3,977 tests and the 3 budget tests passed. `npm run lint`,
+  `npm run typecheck`, `no_react_check.mjs`, `ruff check .`: pass. These Python runs used the worktree's own `.venv`.
+- The browser suites (budget gate, keyboard, accessibility) and the comparison were **not** run again. From `a3ecfdd` to
+  here, the only changes under `apps/workspace`, `packages`, `scripts` and the two root package files are the comment
+  and the manifest rule above.
+- The owner's diffs, applied to a throwaway index only (nothing applied to the tree), still fit in this order:
+  `I20_CORE_MAKEFILE`, `COMPARE_CORE_MAKEFILE`, `I20_CI`, `COMPARE_CI`, `I20_RELEASE_LOCAL`, `I20_PUBLISH`.
+  `COMPARE_CI_REFERENCES` applies to the tree as it is. `COMPARE_CORE_MAKEFILE` does not apply alone, as said above.
 
 ## For the owner
 
