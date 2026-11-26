@@ -156,6 +156,16 @@ async function openMap(page: Page, browser: string, request: PageRequest): Promi
   if (state.idle) {
     const until = Date.now() + DRAWN_MS;
     do {
+      // One more frame first: headless WebKit can leave the frame it presented at `idle` short of tiles the map holds
+      // (measured: the same partial picture for six seconds), until the map is asked to draw again.
+      await page.evaluate(
+        () =>
+          new Promise<void>((done) => {
+            const map = window.__MAP__!;
+            map.once("render", () => requestAnimationFrame(() => done()));
+            map.triggerRepaint();
+          }),
+      );
       drawn = await coloursDrawn(page);
       if (drawn.water >= DRAWN && drawn.landcover >= DRAWN && drawn.raster >= DRAWN) break;
       await page.waitForTimeout(250);
