@@ -79,7 +79,7 @@ same one case and pass the same three. The budget half of I11 is therefore shown
 
 - `doc_citations_check` (and so `test_doc_citations_check.py::test_the_repository_itself_is_clean`): **red on `main`
   too**. The same two findings appear on the baseline tree at `41ed4f195`: `process/lanes/v062/slice-line/README.md:131` cites
-  `tests/run.sh`, which does not exist. This branch does not touch that file. The other 9 cases of
+  the line's test runner (run.sh) by a short path under tests/, where no such file exists. This branch does not touch that file. The other 9 cases of
   `test_doc_citations_check.py` pass. The moved paths add no broken citation.
 - `test_file_coverage_check`: green (1295 files, no drift).
 
@@ -106,5 +106,48 @@ same one case and pass the same three. The budget half of I11 is therefore shown
    other way?
 5. **Case 6 against a real Conduit** needs the stack, so it waits for the seat's container checks or a lease holder's
    `npm run test:integration --workspace apps/workspace`. Who runs it before the merge?
-6. **`main`'s `doc_citations_check` is red** (`slice-line/README.md:131` → `tests/run.sh`). That belongs to whoever owns the
-   slice-line README, not to this slice. It is noted here so the merge gate's red is not blamed on GG2c.
+6. **`main`'s `doc_citations_check` is red** (`slice-line/README.md:131`, a short path to run.sh that names no file). That
+   belongs to whoever owns the slice-line README, not to this slice. It is noted here so the merge gate's red is not blamed on
+   GG2c.
+
+## Round 1 in the line, on the Mac (26 November 2026, D247)
+
+`away/GG2c` was merged into `lane/slice-GG2c` (`6295f58`, no conflict, on `f9b9d54`). **Everything above this section was
+measured on the server.** This section is the Mac's own: Node 24.10.0 (the server ran 22.23.5), Playwright slot 21, load
+averages between about 8 and 45 while it ran. The report's lines above are as the server wrote them, except the two
+quotations of `main`'s broken citation (below).
+
+| Step | The server (after) | The Mac (this branch) |
+| --- | --- | --- |
+| frozen acceptance | cases 1 and 4 green | the guard 3/3, the export test 2/2 |
+| workspace vitest | 408 files, 3957 tests | the same: 408 files, 3957 tests |
+| workspace budget config | 2/3 in the full run (`MatrixView.budget`, machine load) | **3/3** |
+| glass-shared vitest | 6 files, all passed | 6 files, 475 tests passed |
+| typecheck, lint, `no_react_check`, `version_isolation_check` | green | green |
+| `test_file_coverage_check` | green, 1295 files | green, 1296 files |
+| keyboard | the whole run: 1514 passed, 5 skipped | **only** `view-over-cap.spec.ts` and `views.spec.ts` (the harness this slice edits): 37 passed. The whole run was not repeated |
+| a11y | the whole run: 1222 passed | **only** `every-harness.spec.ts` for `view-over-cap-harness.html`: 8 passed. The whole run was not repeated |
+| perf | red before and after | **not run** (the owner's question 1) |
+| integration test (case 6) | failed, `ECONNREFUSED` | **not run**: it needs the stack, and no lease was taken (the owner's question 5) |
+
+**The frozen acceptance, red on the Mac.** With the client, its unit tests, the index and the three importers put back to
+`f9b9d54`'s text and the two new tests kept: the guard failed 2 of 3 (four files left in the workspace; `src/App.tsx` among
+five relative importers) and the export test failed 2 of 2 (`expected 'undefined' to be 'function'`).
+
+**The planted faults, run again on the Mac** (each file's bytes saved and written back, the tree checked clean after each):
+P1, P2, P3-react, P3-sigma, P3-maplibre-type, P4, P5 and P6 each gave the result the table above records, including the two
+that stay green (`test_file_coverage_check` under P2, `typecheck` under P4; and `version_isolation_check` under the
+type-only import). P6's `test:integration` half was not run (case 6).
+
+**Case 2, corrected (question 2, ruled (a)).** What catches its plant is the workspace's vitest run and the guard test
+`deltaClientHome.test.ts`. `test_file_coverage_check` reads no TypeScript. The draft's table now says so. A TypeScript half
+of that check is not this slice's.
+
+**Question 4, ruled (a):** the guard test is kept.
+
+**The citation check (question 6).** Hand-back 61 (`b72aaba`) fixed `main`'s own red: the README is no longer reported. But
+on the merged branch the check was **still red, on this report's own two quotations** of the broken path (once at "Other
+checks", once at question 6): `away/` is not one of the folders the check skips. Both are reworded here, and the check is
+green on this branch. The slice's frozen checks do not run it; the merge's full gate does.
+
+**Still open, the owner's:** questions 1, 3 and 5. Nothing was built for them.
