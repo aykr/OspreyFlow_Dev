@@ -29,9 +29,14 @@ cannot draw above their own clearance.
 
 1. **Find every place a case's ceiling reaches a reader** (`BoardOpened`, any other model or route that carries it, the
    generated TypeScript, the workspace and the GOV.UK board page as readers of it). List them in your report. If any path
-   other than `open()` sends it, it gets the same rule in the same change; if one cannot (a write-side refusal's words, for
-   instance `above_the_ceiling`'s "this case's ceiling, {ceiling}" at about line 219), **stop and say so**: the owner
-   decides what a refusal may name.
+   other than `open()` sends it, it gets the same rule in the same change.
+   **A refusal's words (the owner, 26 November 2026, 12:15 UTC): a refusal names only the capped ceiling the board
+   already sent that reader, never the real one.** `check_marking`'s `above_the_ceiling` (`services/api/boards.py`
+   about lines 216 to 220) says "{marking} is above this case's ceiling, {ceiling}: nothing drawn in this case may be
+   marked above {ceiling}" with the case's **real** ceiling. The check itself stays against the real ceiling (case 5);
+   **its words name the reader's capped ceiling** (the same value `open()` sends that reader). Every other refusal or
+   error that names a ceiling (find them; list them) follows the same rule. If a path cannot know the reader's capped
+   ceiling, **stop and say so**.
 2. **No decision-record text is edited.** If the rule needs an ADR-143 or ADR-152 decision 11 change, write it as a diff
    file, `OspreyFlow_Build/process/lanes/v062/GG4j_ADR_AMENDMENT.diff`, applying cleanly to main's `spec/06_DECISIONS.md`
    (`git apply --check`, said in your report), and say so at the top of your report: the merge waits for the owner's
@@ -47,6 +52,7 @@ cannot draw above their own clearance.
 | 3 | B's answer, whatever the case's real ceiling above B is | byte for byte the same `BoardOpened` shape and `ceiling` | the real ceiling's name in any field B receives |
 | 4 | B tries to draw above B's clearance | refused as today | the write check given the reader's ceiling in place of the case's |
 | 5 | A drawing above the case's real ceiling | refused as today (`above_the_ceiling`) | the same |
+| 5b | B's refusal words for a drawing above the case's real ceiling, at `check_marking`'s real call site | `above_the_ceiling`, naming B's capped ceiling (what B's `BoardOpened.ceiling` said), never the real one | today's words (the real ceiling's name in the detail) |
 | 6 | Every other path found in step 1 | the same rule | the rule put in `open()` alone |
 
 ## Acceptance test

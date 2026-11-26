@@ -1,7 +1,5 @@
 # Slice WS4a · WS4 · The three gates the workspace's move to Sigma 4 is judged by, on Sigma 3 (round 1 merges `away/WS4a`; the owner, 26 November 2026)
 
-> **Start held until the owner answers the away report's questions (the owner, 13:40).**
-
 - **Build id:** WS4 (the React workspace's drawing library; ADR-152 decisions 6 and 9, invariant I20; ADR-002 Amendment 1)
 - **Dial setting:** balanced · **Rounds limit:** the dial's (8) · **After:** nothing (the away branch is from main at `41ed4f195`); it may start beside GG2a (the owner's early start, 26 November, about 10:35 UTC)
 - **The owner's rulings:** every proposal (a) of `slices/drafts_2026-11-25/WS4a.md` with the 26 November corrections
@@ -16,7 +14,26 @@ it whole, "What to read first" before anything. **Every figure in it was taken o
 none is a measurement of the Mac or CI.** Its diffs in `away/WS4a_diffs/` (CI, Core Makefile, release, publish) **stay
 diffs for the owner: apply none.**
 
-Then, under the owner's answers to the report's five questions (written into this brief before the start):
+**The owner's answers to the report's five questions (26 November 2026, 12:15 UTC; `RULINGS.md`):**
+
+- **Q1 (a):** GG2a's merge writes the `sigma` entry in `apps/pages/VERSION_WINDOW.yaml` (workspace 3.0.3, pages 4.0.6,
+  the day it opens), and WS4b removes it. **You write no window entry.**
+- **Q2 (b): CI's reference set first.** The comparison's references are made on CI's runner before the comparison is
+  wired, not on the server's SwiftShader. You **write the diff** that makes them there (the CI step and its upload, beside
+  `away/WS4a_diffs/COMPARE_CI.diff`, say which), **for the owner; apply nothing to CI**. Until that set exists, the
+  server-made references are not a gate's.
+- **Q3 (a): one "ready" moment for both front ends in 0.7.0.** The workspace's budget keeps "mounted", like for like
+  with the page service's, for WS4b. **This replaces the owner's 10:35 GG2a Q2 (a)** (no stricter first-frame end is
+  built anywhere in 0.7.0). Say in your report where each front end's ready moment is read.
+- **Q4 (a), once you add a test for the release-local diff:** `away/WS4a_diffs/I20_RELEASE_LOCAL.diff` (to
+  `tools/release_local.py`) has no test. **Add one to the same diff**, in the shape of `tests/test_release_owed.py`'s
+  cases: a release is refused, in words naming the entry, while the window lists anything, and is not refused when it is
+  empty. **Red first (rule 15):** in a scratch copy of main with the diff applied, the case fails with
+  `window_refusal()`'s call removed from `main()` and passes with it; record both runs in your report. The diff, with its
+  test, and `I20_PUBLISH.diff` stay diffs for the owner.
+- **Q5:** I20's third test (`test_no_sigma_page_merges_in_the_window.py`) comes with GG2a's merge, not here.
+
+Then:
 
 1. **I20:** `node scripts/same_drawing_versions_check.mjs` green on main's lockfile with `apps/pages/VERSION_WINDOW.yaml`
    empty; `test_same_drawing_versions.py` green, with one of its planted lockfile shapes run again red at the real call
@@ -44,5 +61,6 @@ red on main and green after round 1's merge).
 
 ## Out of scope
 
-Sigma 4 in the workspace (WS4b); CI and Makefile wiring (the owner's diffs); I20's third test,
-`test_no_sigma_page_merges_in_the_window.py` (the report's question 5); the release gates' diffs.
+Sigma 4 in the workspace (WS4b); the version-window entry (GG2a's merge, Q1); CI and Makefile wiring (the owner's diffs,
+Q2's included); I20's third test, `test_no_sigma_page_merges_in_the_window.py` (GG2a's merge, Q5); applying the release
+gates' diffs (yours to extend with Q4's test, the owner's to apply).

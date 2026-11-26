@@ -3,6 +3,15 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 26 November 2026, 12:15 UTC: the owner's answers (security, WS4a, GR1e) (the owner, in chat)
+
+(The conductor's earlier headings today were not read from the clock and run about two hours ahead of UTC; from here every time is `date -u`.)
+
+- **GG3b Q1:** yes: a Conduit security part for the document-reader route's `sender_id`, `recipient_id` and `edge_id`, **before RL2**. **GG3b Q8:** (i) a PDF is served as a download (`Content-Disposition: attachment`), never shown in the page; (ii) yes, a security part: a recipe binds `object_ref` on a Document only to a file of the same dataset; (iii) the PID pack's picture references: a backlog bug. **GG4j:** a refusal names only the capped ceiling the board already sent that reader, never the real one. C040 noted.
+- **WS4a:** Q1 (a); Q2 (b), CI's reference set first, as a diff to the owner; Q3 (a), the same "ready" moment for both front ends in 0.7.0, **which replaces the 10:35 GG2a Q2 (a): GG2a needs no extra round**; Q4 (a) once WS4a adds a test for the release-local diff; Q5 with GG2a's merge. **Start WS4a.**
+- **GR1e:** GR1a Q1 is (a), the query form (ruled at 10:30). GR1e is accepted as built; its Q1 and Q2 (Conduit parts) go to the backlog after RL2.
+- **GG2a's Mac run:** the owner runs the command once at a quiet moment, and first says "quiet window". From then until "done", the conductor holds merges and the early warning's Mac-side steps.
+
 ## 26 November 2026, about 13:40 UTC: "applied" (61); away rounds in; GG4b ruled (the owner, in chat)
 
 - **Hand-back 61 is on main (`b72aaba`):** the citation red and the beat race are fixed. Starts and merges resume in the conductor's order.

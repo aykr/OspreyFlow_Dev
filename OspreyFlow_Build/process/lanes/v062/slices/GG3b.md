@@ -24,11 +24,27 @@ Then:
    scripts-off specs (`keyboard/document.spec.ts`, `scripts-off/document.spec.ts`, by `npm run test:keyboard:govuk
    --workspace apps/pages`), and the route-list pins. Run three of its planted faults again at the real call site
    (rule 15), one of them the `nosniff` header's; restore each from a saved copy, never by `git checkout`.
-3. **The report's nine questions are not ruled.** Questions 1 (the email's graph ids, rule 3), 2 (the file through the
-   front door, an ADR-152 decision 7 matter) and 8 (security notes) are the owner's: change nothing for them. The page
-   already draws none of the email's ids (DR3 draws the sent time only): **keep it so; a test that fails if the page
-   draws `sender_id`, `recipient_id` or `edge_id` must exist, or write it, red first.** The rest are built in their
-   conservative reading: leave them as built and list them at the top of your report.
+3. **The owner's answers (26 November 2026, 12:15 UTC; `RULINGS.md`):**
+   - **Q1 (the email's graph ids, rule 3): a separate Conduit security part, SE9d** (the route withholds `sender_id`,
+     `recipient_id` and `edge_id` from a reader who may not see them). **Change nothing in the route here.** The page
+     already draws none of them (DR3 draws the sent time only): **keep it so; a test that fails if the page draws
+     `sender_id`, `recipient_id` or `edge_id` must exist, or write it, red first.**
+   - **Q8 (i): a PDF is served as a download, never shown in the page.** `document_file_route`
+     (`OspreyFlow_Core/services/api/app.py` about lines 7938 to 7959) answers `Response(content=data,
+     media_type=content_type)` for every type; the media store maps `.pdf` to `application/pdf`
+     (`packages/adapters/media_objectstore/__init__.py`, `EXTENSIONS` about line 23, `content_type_of` about line 53).
+     **Make the route answer `application/pdf` with `Content-Disposition: attachment`** (a file name of the route's own,
+     never one a loader supplied; say which), and the page draw no PDF inline (no `img`, `iframe`, `object` or `embed`
+     for it; at most a link to the download). The page service's forwarder already copies `Content-Disposition` back
+     (`apps/pages/server/forward.ts:89`); pin that for this route. **Red first (rule 15):** a route test and a page test,
+     each failing with the header removed (or the PDF drawn inline) at the real call site, green after.
+   - **Q8 (ii): a separate security part, SE9e** (a recipe binds `object_ref` on a Document only to a file of the same
+     dataset). Change nothing for it here.
+   - **Q8 (iii): the PID pack's picture references do not match the store's shape** (404): backlog row 46. Change
+     nothing for it here.
+   - **Q2** (the file through the front door, an ADR-152 decision 7 matter) is still the owner's: change nothing for it.
+   - The rest (Q3 to Q7, Q9) are built in their conservative reading (everything else (a)): leave them as built and list
+     them at the top of your report.
 
 ## Acceptance test
 
@@ -45,5 +61,6 @@ As GR1a's, with the document scenario: `npm test --workspace apps/pages`; `npm r
 
 ## Out of scope
 
-Any Conduit change (questions 1, 3 and 8 are later parts if the owner rules them); the front door (question 2); a list of
+Any Conduit change but Q8 (i)'s header on `document_file_route` (Q1 is SE9d's, Q8 (ii) SE9e's, question 3 a later part);
+the front door (question 2); a list of
 a case's documents; uploads.
