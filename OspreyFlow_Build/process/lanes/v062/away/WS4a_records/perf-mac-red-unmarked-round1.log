@@ -1,0 +1,7 @@
+WS4a round 1: the budget gate's first-frame case with markRenderer's call removed at GlassCanvas.tsx (the canvas never marks itself), on the builder's Mac, at b6f781f; the file restored byte for byte.
+planted: markRenderer's call removed at GlassCanvas.tsx -> exit 1
+  ✘  1 perf/perf.spec.ts:18:1 › 50k/250k fixture reaches a first interactive frame within the CI software-render budget (1.0m)
+    TimeoutError: page.waitForFunction: Timeout 60000ms exceeded.
+    > 43 |   await page.waitForFunction(() => window.__PERF__?.readyAt != null, undefined, {
+  1 failed
+restored byte for byte: True

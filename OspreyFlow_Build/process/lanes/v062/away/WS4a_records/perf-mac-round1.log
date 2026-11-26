@@ -1,0 +1,38 @@
+WS4a round 1: the budget gate on the builder's Mac (this machine's figures, not CI's and not a quiet-machine measurement; other seats were running).
+machine: Apple M3 Pro, 12 CPUs, 36 GB, macOS 26.7.3, node v24.10.0
+commit: b6f781f
+before: 12:38:43Z load 41.96 32.21 29.17
+
+> @ospreyflow/workspace@0.0.0 test:perf
+> playwright test --config perf/playwright.config.ts
+
+
+Running 4 tests using 2 workers
+
+perf profile: 11260 ms sampled; heaviest by self time:
+  6618 ms  (program) :0
+  929 ms  (idle) :0
+  419 ms  (garbage collector) :0
+  408 ms  nodeReducer GlassCanvas.tsx:1289
+  306 ms  addNode sigma.esm-Bqlozw9M.js:1927
+  254 ms  addEdge sigma.esm-Bqlozw9M.js:1962
+  235 ms  EdgeData.attachMulti graphology.js:296
+  210 ms  render sigma.esm-Bqlozw9M.js:1886
+  200 ms  process sigma.esm-Bqlozw9M.js:1589
+  190 ms  addEdge graphology.js:2433
+  155 ms  addEdgeToProgram sigma.esm-Bqlozw9M.js:2056
+  118 ms  applyNodeDefaults sigma.esm-Bqlozw9M.js:1110
+perf long frames: 4 in all, 3 after readyAt 3221 ms, 3027 ms long; script 3010 ms, rendering 1188 ms
+  at 1695 ms: 2722 ms (performWorkUntilDeadline react-dom_client.js?v=d1d82cf3)
+  at 10959 ms: 246 ms (TimerHandler:setTimeout GlassCanvas.tsx)
+  at 11205 ms: 60 ms (TimerHandler:setTimeout GlassCanvas.tsx)
+perf first frame: 11280 ms in all; {"responseEnd":16,"domContentLoaded":1693,"readyAt":3221,"modules":173,"slowestModule":641}
+  ✓  1 perf/perf.spec.ts:18:1 › 50k/250k fixture reaches a first interactive frame within the CI software-render budget (11.6s)
+perf sweep: 2262.4 ms per frame over 8 frames in 18099 ms
+  ✓  3 perf/perf.spec.ts:77:1 › a sustained pan/zoom sweep holds a CI-appropriate minimum frame rate (50.6s)
+  ✓  4 perf/perf.spec.ts:181:1 › the fixture itself is the documented 50k/250k shape (2ms)
+  ✓  2 perf/community-links.spec.ts:24:1 › a large working set opens grouped by community, its links between communities drawn until zoomed in (1.1m)
+
+  4 passed (1.1m)
+exit 0
+after: 12:39:51Z load 42.33 34.83 30.43
