@@ -1,5 +1,7 @@
 # Slice GG4b · GG4 · A drawn item's source document is never told to a reader who may not read it, on any read path; the board's ceiling is told only to a reader cleared for it (a security part; the owner, 26 November 2026)
 
+> **Built as an away round on the server (the owner, 26 November 2026, about 11:10 UTC).** No line builder starts from this brief. When `away/GG4b`'s report appears, the conductor adds a "Round 1 (D247)" section: round 1 merges `away/GG4b`. The rest of this brief is the standard the merged work is judged by (every proposal (a); the ADR-143 amendment as a diff for the owner's approval before merge; never accepted narrower).
+
 - **Build id:** GG4 (rule 3: no field, count or inference tells a reader of an item they may not see)
 - **Dial setting:** balanced · **Rounds limit:** the dial's (8) · **After:** GG4a
 - **A security part, SE7c's shape. Never accepted narrower. Judged by the verifier, the server and the full gate** (the owner's word, 26 November 2026, about 10:35 UTC, `RULINGS.md`: "every proposal (a)").

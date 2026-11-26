@@ -3,6 +3,10 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 26 November 2026, about 11:10 UTC: five away rounds; starts wait for 61 (the owner, in chat)
+
+Away on the server: GG2c, GR1e, and from about 10:45 GG4b, WS4a and GG3b. **No line builder starts for these five:** each comes in like GR1a when its report appears (round 1 merges the away branch). The line takes SE8g, AD1c, GR1a, GG4a, GA1a, GG3a, GR1b and GG4c, in that order, **once 61 lands.**
+
 ## 26 November 2026, about 10:35 UTC: the adviser's batch, all as recommended (the owner, in chat)
 
 - **Security:** GG4a drops its source column until GG4b. **GG4b is cut now as a security part (SE7c's shape):** every proposal (a); its ADR-143 amendment comes as a diff for the owner's approval before merge; never accepted narrower.
