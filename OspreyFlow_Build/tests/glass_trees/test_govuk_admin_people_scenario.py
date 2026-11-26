@@ -63,7 +63,7 @@ TITLE = re.compile(r"""\b(?:it|test)\(\s*(?:"|')(AP\d+): """)
 PAGE_TEST_NAME = "admin-people.test.ts"
 PATH = "/admin/people"
 EXPECTED_IDS = [f"AP{n}" for n in range(1, 12)]
-EXPECTED_FUNCTIONS = 49
+EXPECTED_FUNCTIONS = 50
 
 #: What each behaviour of the page is, by id: a behaviour with no scenario is one nobody will build or test.
 BRIEF: dict[str, tuple[str, ...]] = {
@@ -275,9 +275,10 @@ def function_problems(data: dict[str, Any]) -> list[str]:
 
 
 def route_problems(data: dict[str, Any]) -> list[str]:
-    if data["routes"] != ["/help", PATH, "/reports"]:
+    # Slice GR3a added the alert monitoring page (`/reports`), and slice GR4a trends shown together (`/packs/trends`) after it.
+    if data["routes"] != ["/help", PATH, "/reports", "/packs/trends"]:
         return [
-            f"the route list is {data['routes']!r}: the tree has three pages, /help, {PATH} and /reports"
+            f"the route list is {data['routes']!r}: the tree has four pages, /help, {PATH}, /reports and /packs/trends"
         ]
     return []
 
@@ -514,13 +515,13 @@ PLANTS: list[
         "a route in the list the code has no page for",
         lambda d: d["routes"].append("/welcome"),
         route_problems,
-        "three pages",
+        "four pages",
     ),
     (
         "the People path left out of the list",
         lambda d: d["routes"].remove(PATH),
         route_problems,
-        "three pages",
+        "four pages",
     ),
     (
         "the page at another path",
