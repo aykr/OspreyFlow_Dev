@@ -134,6 +134,14 @@ was. What its records hold:
   again after it.
 - `test:perf`: 4 passed, above.
 
+**Found by the Stop hook's scans, after the runs above.** My hand-run checks did not include the mapped scans, and two
+faults the away branch brought in were red there (4 tests). `apps/pages/VERSION_WINDOW.yaml` was in no area of
+`scripts/manifest_areas.toml` (now in "page service server", beside `PARITY_EXCEPTIONS.yaml`), and a comment in
+`canvasMarks.ts` named the developer folder. Both fixed in `11864d5`; the two failing files and the two acceptance
+Python files then gave 178 passed. The suites above were not run again: one change is a comment, the other a manifest
+rule. **Still red, and not mine to add:** the scan map has no row for
+`tests/glass_trees/test_no_sigma_class_names_in_the_workspace.py`, which walks `OspreyFlow_Core/apps/workspace/`.
+
 ## For the owner
 
 1. `COMPARE_CI_REFERENCES.diff`, its `env -u CI` included (above).
