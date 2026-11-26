@@ -1,0 +1,19 @@
+# The version window (ADR-152 decision 9; ADR-002 Amendment 1, item 3; invariant I20).
+#
+# Both front ends, apps/workspace and apps/pages, resolve the same versions of sigma, @sigma/*, maplibre-gl and
+# graphology. The only exception is a difference written here, with the day it opened, while slice WS4 is open, and
+# no release is cut while this file lists anything. `scripts/same_drawing_versions_check.mjs` reads the resolved tree
+# in package-lock.json against this file; `--release` refuses while it lists anything.
+#
+# Empty, it reads `windows: []`. Open, each difference is one entry naming the package, the version each front end
+# resolves, and the day it opened:
+#
+#   windows:
+#     - package: sigma
+#       apps/workspace: 3.0.3
+#       apps/pages: 4.0.6
+#       opened: 2026-11-26
+#
+# An entry the lockfile no longer bears out (the versions moved, or the difference closed) fails the check: take it
+# out in the same change that closes the difference.
+windows: []
