@@ -104,7 +104,7 @@ Browsers: Chromium 156.0.8078.4 and WebKit 27.2 (Playwright 1.64.1's builds), he
 | 10p | `connect-src` widened **on the page's own response alone**, with case 7's style | The worker's response still carries the builder's own policy, and the worker refuses the tile (`connect-src refused <other>/tiles/… in the worker`). Finding 2, kept as a case. |
 | 13 | The table lists every directive the builder sends | the 11 names, exactly |
 | 14 to 24 | Each directive set to `'none'` | the table above. Each case first asserts that the plant reached the browser (the page's policy and the worker's both carry `<directive> 'none'`). A needed directive is then refused by name and is the only one refused; an unneeded one changes nothing. With `style-src 'none'`, the map is also shown still drawing every layer. |
-| 25 | `script-src` with the nonce alone | loads in both browsers (the measurement in the table's first row) |
+| 25 | `script-src` with the nonce alone | loads and draws every layer in both browsers, asserted since round 1 on the Mac (below); away, the case only printed its result |
 
 Every case also checks **the worker's own policy**: each response that served the worker file must carry the builder's own
 policy (`the worker's script was served with no policy` / `the worker's policy is not the builder's own`). Case 1 shows it
@@ -253,3 +253,37 @@ Sigma 4 proof** (decision 9; the workspace still pins `"sigma": "^3.0.0"`, `apps
    on map pages for such browsers. That is a change to `headers.ts`, which is the owner's.
 4. **Firefox** (draft question 2 (b)) was not run, by the ruling. The spec takes a third project in one line, but this machine
    has no Firefox build. For the owner, if ever wanted.
+
+## Round 1 in the line, on the Mac (26 November 2026)
+
+`away/GG5a` merged into `lane/slice-GG5a` with no conflict. The sections above are the server's and are unchanged but for row
+25. macOS 26.7.3, arm64, Node 24.10.0; Playwright 1.64.1.
+
+**The owner's answers to the four questions** (the slice's brief, Round 1): 1 (a), keep the exact `pmtiles` 4.5.0 pin (D274);
+2, `ci-wiring.patch` and `GG5a_ADR152_DECISION8_RUN.diff` stay diffs for the owner, neither applied (both pass
+`git apply --check` from the repository root); 3 (a), **the policy stays as it is: `server/headers.ts` is not changed**; 4,
+Firefox is not run.
+
+**One fix, in `map.spec.ts`.** Case 25 asserted only that the policy sent had no `script-src 'self'`, and printed the rest, so
+it could not fail if the map stopped loading. It now asserts that nothing but the two changed policies is named. Shown red in
+both browsers by planting the nonce alone with a value the page's script tag does not carry: `policy violation:
+script-src-elem refused …/assets/pages/map-page-LW46NTDY.js in the document`, `the map never reached load`. Restored, green.
+
+**The runs** (22:19:38 to 22:23:45 UTC, on the fixed spec): Chromium 156.0.8078.4, 28 of 28; WebKit 27.2, 28 of 28. An
+earlier pair on the spec as merged was also 28 and 28. The real page drew water 91,357 px, land cover 99,208 px and raster
+286,283 px in both, the server's own figures, and the built asset names are the same. The directive table and every plant
+came out as above.
+
+**WebKit and the frozen command.** This Mac's shared Playwright cache has no `webkit-2370`, so the frozen acceptance command
+as first run here (22:09:59 UTC) gave Chromium 28 passed and WebKit 28 failed, each `Executable doesn't exist`. A builder
+writes only inside its worktree, so the WebKit runs above set `PLAYWRIGHT_BROWSERS_PATH` to a git-ignored folder under this
+worktree's `node_modules`, installed there with `PLAYWRIGHT_SKIP_BROWSER_GC=1`. **The frozen command stays red for WebKit
+until that build is in the shared cache**, installed by someone allowed to write there:
+`cd OspreyFlow_Core && PLAYWRIGHT_SKIP_BROWSER_GC=1 npx --no-install playwright install webkit`.
+
+**The checks, against the server's.** `npm test --workspace apps/pages`: 1,086 of 1,086 (49 files), so finding 7's two
+traversal reds do not happen here. `tsc -p apps/pages/tsconfig.json` (finding 7; not a frozen check): 201 errors, none in
+`test/csp`. Pass: lint, the root typecheck, the page's own `tsconfig`, `no_react_check`, `version_isolation_check`,
+`licence-check` (94 Python and 444 Node packages, all allowed), `tests/test_doc_citations_check.py` (10 passed),
+`doc_citations_check`, `test_file_coverage_check`. `ruff` not run: no Python touched.
+
