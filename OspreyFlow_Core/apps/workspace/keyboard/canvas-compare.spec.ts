@@ -115,21 +115,10 @@ async function draw(page: Page, c: SceneCase): Promise<Buffer> {
   const ids = await page.evaluate(() => window.__COMPARE__!.nodeIds);
   if (c.scene === "communities") {
     // The communities arrive from a worker and arrange the nodes when they do: the scene is pinned only after, once
-    // the layer of links between communities has drawn.
-    await expect
-      .poll(
-        () =>
-          page.evaluate(() => {
-            const layer = document.querySelector<HTMLCanvasElement>('[data-canvas-layer="community-links"]');
-            if (!layer) return -1;
-            const data = layer.getContext("2d")!.getImageData(0, 0, layer.width, layer.height).data;
-            let drawn = 0;
-            for (let i = 3; i < data.length; i += 4) if (data[i]! > 0) drawn += 1;
-            return drawn;
-          }),
-        { timeout: 60_000 },
-      )
-      .toBeGreaterThan(0);
+    // every community's bubble is drawn with its name. Not once the layer of links between communities has drawn:
+    // that is the very thing the scene compares, and a wait on it would fail the scene before the comparison could
+    // (case 3's plant turns the layer off at its switch, and must be red in the comparison, not in the wait).
+    await expect(page.locator('[data-testid="bubble-overlay"] text')).toHaveCount(8, { timeout: 60_000 });
   }
   await layoutSettled(page, ids);
   // The scene's own places, then the view fitted to them by the canvas's own F. The key is sent to the canvas
