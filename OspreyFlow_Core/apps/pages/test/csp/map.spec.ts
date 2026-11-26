@@ -611,6 +611,8 @@ test("the directive table: script-src with the nonce alone (no 'self')", async (
     plant: (policy, origins) => setDirective("script-src", /script-src[^;]*('nonce-[^']+')/.exec(policy)![1]!)(policy, origins),
   });
   record("script-src nonce only", run);
-  console.log(`SCRIPT-NONCE-ONLY [${browserName}] ${JSON.stringify(failures(run).filter((f) => !f.startsWith("the policy sent") && !f.startsWith("the worker's policy")))}`);
   expect(run.policy.received).not.toMatch(/script-src 'self'/);
+  // The map still loads and draws every layer: the only things named are the two policies the plant changed.
+  const others = failures(run).filter((f) => !f.startsWith("the policy sent is not the builder's own") && !f.startsWith("the worker's policy is not"));
+  expect(others, "script-src with the nonce alone changed the map").toEqual([]);
 });
