@@ -15,7 +15,7 @@ and the case that catches it:
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 
 import pytest
@@ -169,7 +169,7 @@ class _Audit:
 
 
 @pytest.fixture
-async def served() -> Iterator[tuple[TestClient, _Audit]]:
+async def served() -> AsyncIterator[tuple[TestClient, _Audit]]:
     """The real route over the real service, so the content type is the store's own mapping of the
     reference's extension, never one a test hands the route."""
     service, media, _, _, _, working = await _service()
