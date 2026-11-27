@@ -3,6 +3,18 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 27 November 2026, about 16:40 UTC: 66 applied, and the order after it (the owner, in chat)
+
+1. **66 is on main as `22d967f`** (two pages built side by side merge cleanly: a union merge for the two page lists, the build finds its bundles, and no test pins the route list). The hold is over. `22d967f` is pushed with the conductor's next records commit.
+2. **Rule 5, by `git merge-tree` against `22d967f`:** only a part that still conflicts gets a round, and its verifier then runs again. Against `22d967f`:
+   - These still conflict: GR1b, GG4b, GA1a and GG3a. They go back to take main in now, with no round spent.
+   - GG3b conflicts too, newly, in the glass-trees scenario tests and the pages tests that 66 changed. It takes the same round when a builder's slot frees.
+   - GG2a conflicts in `apps/pages/package.json` and the lockfile. Its round 5 (`slices/GG2a_ROUND5_TABLE.md`) starts only after WS4a merges.
+   - These apply cleanly and go to their turn as they are: SE9d, SE9g, SE9h, SE9i, SE9j, SE9k, SE8g, GG2c, WS4a and AD1c.
+3. **The order:** SE9d's merge again, then GR1b. Then the server stacks and trains as planned, with SE9g and SE9h in the queue.
+4. **The conductor's note to a builder taking main in after 66** (this item is not the owner's ruling): keep both sides. Where 66 made a test read the page list rather than pin a route list, the branch's new page joins the list main now reads, and no pinned list comes back.
+5. **65 is still to apply.** This evening, before the overnight gates, the owner gets a gap in which no merge is running.
+
 ## 27 November 2026, about 13:45 UTC: SE9i, SE9j, SE9k, and builders during the hold (the owner, in chat)
 
 1. **The hold for 66 is on merges only.** While main is held, the builders are kept busy (up to the dial's 4): the next unbuilt parts whose briefs are on main and that wait on no unmerged part start on their own lane branches, and verifiers run too. **Nothing merges until the owner says "applied".**
