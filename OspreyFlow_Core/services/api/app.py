@@ -2961,6 +2961,27 @@ async def _audit_denied(
     )
 
 
+def require_right_recording_refusal(right: Right) -> Any:
+    """`require_right` for a case read whose refusal is recorded too (SE9h): the same check and the
+    same 403, with `_audit_denied`'s row, saying what was needed, written first. It runs before the
+    case is looked for, so the row holds the path's id and says nothing of whether there is such a
+    case."""
+    check = require_right(right)
+
+    async def _dependency(
+        investigation_id: str, principal: PrincipalDep, audit: AuditDep
+    ) -> Principal:
+        try:
+            await check(principal)
+        except HTTPException:
+            await _audit_denied(audit, principal, investigation_id, {"needed": right.value})
+            raise
+        return principal
+
+    _dependency.required_right = right  # type: ignore[attr-defined]
+    return _dependency
+
+
 InvestigationViewerDep = Annotated[Investigation, Depends(_authorized_at(AccessLevel.VIEWER))]
 
 
@@ -4333,10 +4354,22 @@ async def create_composite_route(
 
 @app.get("/v1/investigations/{investigation_id}/datasets")
 async def case_datasets_route(
-    investigation: InvestigationViewerDep, principal: PrincipalDep, datasets: DatasetsDep
+    investigation: InvestigationViewerDep,
+    principal: PrincipalDep,
+    datasets: DatasetsDep,
+    audit: AuditDep,
 ) -> list[Dataset]:
-    """The datasets this case reads (ADR-099); none to a caller holding no right (Amendment 11)."""
-    return await datasets.of_case(investigation.id, principal)
+    """The datasets this case reads (ADR-099); none to a caller holding no right (Amendment 11).
+    Audited as `get_investigation` is, naming no dataset and counting none (SE9h)."""
+    reads = await datasets.of_case(investigation.id, principal)
+    await audit.record(
+        principal=principal,
+        action="get_investigation_datasets",
+        investigation_id=investigation.id,
+        resolved_query={},
+        result_cardinality=1,
+    )
+    return reads
 
 
 @app.put(
@@ -4582,24 +4615,35 @@ class AccessView(BaseModel):
 
 @app.get(
     "/v1/investigations/{investigation_id}/access",
-    dependencies=[Depends(require_right(Right.SHARE_CASE))],
+    dependencies=[Depends(require_right_recording_refusal(Right.SHARE_CASE))],
 )
 async def get_investigation_access(
     investigation: InvestigationViewerDep,
     principal: PrincipalDep,
     investigations: InvestigationsDep,
     principal_names: PrincipalNamesDep,
+    audit: AuditDep,
 ) -> AccessView:
+    """The caller's level, and to an Author who else holds one. Audited as `get_investigation` is,
+    naming no grantee and no level (SE9h); the right's refusal is recorded by its dependency."""
     level = await investigations.effective_level(investigation.id, principal)
-    if level is not AccessLevel.AUTHOR:
-        return AccessView(your_level=level, unit_level=None, grants=None)
-    grants = await investigations.list_grants(investigation.id)
-    return AccessView(
-        your_level=level,
-        unit_level=await investigations.unit_level(investigation.id),
-        grants=grants,
-        names=await principal_names.display_names(grants),
+    view = AccessView(your_level=level, unit_level=None, grants=None)
+    if level is AccessLevel.AUTHOR:
+        grants = await investigations.list_grants(investigation.id)
+        view = AccessView(
+            your_level=level,
+            unit_level=await investigations.unit_level(investigation.id),
+            grants=grants,
+            names=await principal_names.display_names(grants),
+        )
+    await audit.record(
+        principal=principal,
+        action="get_investigation_access",
+        investigation_id=investigation.id,
+        resolved_query={},
+        result_cardinality=1,
     )
+    return view
 
 
 class UnitLevelInput(BaseModel):

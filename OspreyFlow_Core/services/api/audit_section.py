@@ -269,6 +269,8 @@ READS_AND_OTHER: tuple[str, ...] = (
     "explore_starter_run", "explore_whats_new", "export", "export_pack", "extract_document",
     "extract_email", "geospatial_build_basemap", "geospatial_verify_map",
     "get_dataset_source_profile", "get_dossier_document", "get_history", "get_investigation",
+    # SE9h: the case's access list and the datasets it reads, each read recorded.
+    "get_investigation_access", "get_investigation_datasets",
     "get_resolution_threshold", "get_site", "get_studio_recipe_draft", "get_studio_recipe_profile",
     "get_studio_recipe_sample_row", "hotlist_audience_changed", "hotlist_match_notified",
     "hotlist_match_suppressed", "hotlists_create", "kyc_status", "links_among", "list_dashboards",
