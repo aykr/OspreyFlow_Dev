@@ -38,6 +38,7 @@ from ports.graph import GraphPort
 from schemas.domain import ExpandRequest, Node, NodeWrite, Principal
 from schemas.search import SearchPageRequest
 from tests.conformance.graph_port.test_drawn_documents import (
+    DOCUMENT_DATASET,
     LAYER,
     NINO,
     SOURCE_DATASET,
@@ -47,6 +48,7 @@ from tests.conformance.graph_port.test_drawn_documents import (
     _link,
     _loaded_provenance,
     _node,
+    _while_the_case_reads_it,
     _world,
     _write,
 )
@@ -133,6 +135,30 @@ async def test_the_working_set_never_sends_a_drawn_items_source_document_its_rea
             _assert_with(for_c, held.d)
             visible, visible_links = await service.visible_membership(case, B)
             assert held.d not in "".join(e.model_dump_json() for e in [*visible, *visible_links])
+
+
+async def test_the_working_sets_snapshot_follows_the_datasets_the_readers_case_reads(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Item 2's other half: C is cleared for D throughout. The items are added while the case
+    reads D's own dataset; once it no longer does, C's snapshot, replayed delta and pushed delta
+    hold D nowhere, and the elements are still sent."""
+    async with factory.context() as graph:
+        held = await _world(graph, document_dataset=DOCUMENT_DATASET)
+        reading = _while_the_case_reads_it(C)
+        async with _working_set(graph) as (service, case, store):
+            nodes = await graph.get_nodes([held.b, held.c], reading)
+            links = await graph.get_edges([held.cb], reading)
+            await service.seed(case, nodes, links, reading)
+            (stored,) = await store.deltas_after(case, 0) or []
+
+            for principal, check in ((reading, _assert_with), (C, _assert_without)):
+                (snapshot,) = await service.sync(case, principal, last_acknowledged_seq=None)
+                (replayed,) = await service.sync(case, principal, last_acknowledged_seq=0)
+                pushed = await service.project_live(case, stored, principal)
+                for delta in (snapshot, replayed, pushed):
+                    assert [e.id for e in delta.edges] == [held.cb]  # type: ignore[union-attr]
+                    check(delta, held.d)
 
 
 async def _searched(graph: GraphPort, reader: Principal) -> Any:

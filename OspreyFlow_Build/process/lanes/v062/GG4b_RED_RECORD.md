@@ -51,6 +51,33 @@ over `ontology/test_drawn_source_document_withheld.py`, `services/api/working_se
 | adapter | one read for each record | `_cited_for` | 1 |
 | Q3 | the old promotion check | `Promotions._problems` | 1 |
 
+## The dataset half of "may read" (the verifier's finding, round 3)
+
+Every world above gave all its readers the same datasets with D inside one of them, so only the handling half of item
+2 was exercised. The new cases put D in a dataset of its own, keep the reader cleared for it, and take that dataset
+out of what the reader's case reads after drawing. The code was right and is unchanged: green as written, then each
+fault below planted at its real call site, as `principal.model_copy(update={"datasets": ...})`, with `None`
+("dropped") or the reader's own datasets plus D's ("widened", the author's reach with the reader's clearance). Each
+file's saved bytes were written back into it and its hash checked. Run over the adapter's pure test, the working-set
+read paths, `services/api/test_drawn_source_document_datasets.py` (the real app, the case's datasets changed in the
+dataset store) and the acceptance test: 67 cases; **the 60 there before (`-k "not dataset"`) stayed green under
+every one of these faults.**
+
+| The fault planted | Where | Red |
+| --- | --- | --- |
+| datasets dropped; datasets widened | `GraphArcadeDBAdapter._documents` | 2 and 2: the adapter's own, `get_nodes` and `get_edges` |
+| datasets dropped | `GraphArcadeDBAdapter._cited_for` | 2: the same |
+| datasets dropped; datasets widened | `WorkingSetService._readable_documents` | 4 and 4: snapshot, replayed, pushed, and the view, search and writer's answer |
+| datasets dropped; datasets widened | the `read` call in `readable_cited_documents` | 7 and 7: those six and the board route |
+
+The adapter's pure fake judged classification alone; it now applies the dataset step as the query carries it, to a
+link's ends too (rule 15).
+
+The two store cases (`test_no_read_sends_the_document_to_a_reader_whose_case_no_longer_reads_its_dataset`, every
+adapter read; `test_the_working_sets_snapshot_follows_the_datasets_the_readers_case_reads`) were smoke-run over
+`BoardGraph` and the fake working-set store (the first over `get_nodes` and `get_edges` alone): green as written, red
+with the datasets dropped at `readable_cited_documents`' read. **Not yet seen against a store.**
+
 ## Owed at merge: the two guides (their versions and PDFs are set at merge)
 
 Left unchanged here: a guide's content changes only with a new version row and its PDF printed again

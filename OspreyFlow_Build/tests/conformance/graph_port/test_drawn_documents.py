@@ -10,7 +10,8 @@ every adapter read that returns a node or a link: `get_node`, `get_nodes`, `get_
 `shared_contacts`. B is sent each drawn element with D in neither place; C is sent D in both. A
 re-marking by a later write is caught by the next read, and a read written back
 (`sources_in_full`) keeps D. B's answers have the same shape whether D is hidden from them or does
-not exist (rule 3).
+not exist (rule 3). "May read" has two halves here, the document's handling and the case's datasets:
+a reader cleared for D whose case no longer reads D's dataset is sent it by no read.
 
 Written before the adapter was changed (rule 1), and red against it: every read sent B the id.
 Needs a live ArcadeDB (`make conformance` runs the directory).
@@ -54,6 +55,8 @@ pytestmark = [
 
 SOURCE_DATASET = "source-dataset"
 LAYER = "analyst-layer-case-a"
+#: A dataset of D's own, which a case may read or stop reading apart from everything else.
+DOCUMENT_DATASET = "statements-dataset"
 BOARD_LOCATOR = "a drawing board of the case"
 WHEN = datetime(2026, 11, 1, tzinfo=UTC)
 NINO = "QQ123456C"
@@ -70,6 +73,12 @@ def _reader(who: str, clearance: str) -> Principal:
 A = _reader("analyst-a", "SECRET")
 B = _reader("analyst-b", "OFFICIAL")
 C = _reader("analyst-c", "SECRET")
+
+
+def _while_the_case_reads_it(reader: Principal) -> Principal:
+    """`reader` as the Conduit scopes them while the case reads D's own dataset too. Unchanged,
+    `reader` is the same person once the case no longer reads it."""
+    return reader.model_copy(update={"datasets": [SOURCE_DATASET, LAYER, DOCUMENT_DATASET]})
 
 
 def _handling(classification: str, code: str = "P") -> Handling:
@@ -144,15 +153,18 @@ async def _write(graph: GraphPort, nodes: list[NodeWrite], edges: list[EdgeWrite
     await graph.commit_transaction(tx)
 
 
-async def _world(graph: GraphPort, document_id: str | None = None) -> SimpleNamespace:
-    """Two loaded people, `a` and `b`; the document D (SECRET, in the source); a drawn person `c`
-    and a drawn place, each citing D; a loaded link a to b and a drawn link c to b citing D. With
-    `document_id`, the items cite that id instead, and no D is written."""
+async def _world(
+    graph: GraphPort, document_id: str | None = None, *, document_dataset: str = SOURCE_DATASET
+) -> SimpleNamespace:
+    """Two loaded people, `a` and `b`; the document D (SECRET, in `document_dataset`, the source
+    unless said); a drawn person `c` and a drawn place, each citing D; a loaded link a to b and a
+    drawn link c to b citing D. With `document_id`, the items cite that id instead, and no D is
+    written."""
     document = _node(
         "Document",
         _loaded_provenance(),
         classification="SECRET",
-        datasets=(SOURCE_DATASET,),
+        datasets=(document_dataset,),
         title="Sealed statement",
     )
     cited = document_id or document.id
@@ -242,6 +254,26 @@ async def test_every_read_sends_a_drawn_items_document_only_to_a_reader_who_may_
                 assert drawn, f"{read} returned no drawn element to {reader.id}"
                 wrong = [e.id for e in drawn if not check(e, held.d)]
                 assert wrong == [], f"{read}, as {reader.id}"
+
+
+async def test_no_read_sends_the_document_to_a_reader_whose_case_no_longer_reads_its_dataset(
+    factory: GraphAdapterFactory,
+) -> None:
+    """Item 2's other half, the case's datasets. A and C are cleared for D throughout, and every
+    other element stays within what they read: only whether the case reads D's own dataset
+    differs. While it does, each read sends them D; once it does not, no read does."""
+    async with factory.context() as graph:
+        held = await _world(graph, document_dataset=DOCUMENT_DATASET)
+        for reader in (A, C):
+            for principal, check in (
+                (_while_the_case_reads_it(reader), _with_the_document),
+                (reader, _without_the_document),
+            ):
+                for read, elements in (await _every_read(graph, held, principal)).items():
+                    drawn = _drawn(elements)
+                    assert drawn, f"{read} returned no drawn element to {reader.id}"
+                    wrong = [e.id for e in drawn if not check(e, held.d)]
+                    assert wrong == [], f"{read}, as {reader.id}, reading {principal.datasets}"
 
 
 async def test_a_document_re_marked_after_drawing_is_caught_by_the_next_read(

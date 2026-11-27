@@ -110,12 +110,12 @@ def _person(node_id: str, provenance: Provenance, datasets: Sequence[str], **pro
     )
 
 
-def _document(document_id: str, marking: str) -> Node:
+def _document(document_id: str, marking: str, dataset: str = SOURCE_DATASET) -> Node:
     return Node(
         id=document_id,
         type="Document",
         properties={"title": "Sealed statement"},
-        **_common(_loaded_provenance(), marking, [SOURCE_DATASET]),
+        **_common(_loaded_provenance(), marking, [dataset]),
     )
 
 
@@ -131,10 +131,17 @@ def _link(edge_id: str, source: str, target: str, provenance: Provenance) -> Edg
 
 class _World:
     """A loaded hub, and `items` drawn people each linked to it by a drawn link; each drawn item
-    and link cites `documents[n % len(documents)]`. Each document is held, marked SECRET, unless
-    `held` is false."""
+    and link cites `documents[n % len(documents)]`. Each document is held, marked SECRET, in
+    `document_dataset`, unless `held` is false."""
 
-    def __init__(self, items: int = 1, documents: int = 1, *, held: bool = True) -> None:
+    def __init__(
+        self,
+        items: int = 1,
+        documents: int = 1,
+        *,
+        held: bool = True,
+        document_dataset: str = SOURCE_DATASET,
+    ) -> None:
         self.cited = [D, *[f"{D}-{n}" for n in range(1, documents)]]
         self.hub = _person("p-hub", _loaded_provenance(), [SOURCE_DATASET], family_name="Ward")
         self.drawn = [
@@ -156,10 +163,8 @@ class _World:
             )
             for n, node in enumerate(self.drawn)
         ]
-        marked = [_document(i, "SECRET") for i in self.cited] if held else []
-        self.graph = BoardGraph(
-            ONTOLOGY, nodes=[self.hub, *self.drawn, *marked], edges=self.links
-        )
+        marked = [_document(i, "SECRET", document_dataset) for i in self.cited] if held else []
+        self.graph = BoardGraph(ONTOLOGY, nodes=[self.hub, *self.drawn, *marked], edges=self.links)
         self.graph.expand_result = Subgraph(nodes=[self.hub, *self.drawn], edges=self.links)
         self.store = FakeWorkingSetStore()
         self.service = WorkingSetService(self.graph, self.store, SCHEME)
@@ -409,6 +414,59 @@ async def test_search_never_returns_a_drawn_items_source_document_its_reader_may
         assert (D in found.model_dump_json()) is expected, reader.id
 
 
+# --- the other half of "may read": the case's datasets (item 2) -------------------------------
+
+#: A dataset of D's own, which a case may read or stop reading apart from everything else.
+STATEMENTS = "statements"
+
+
+def _while_the_case_reads_it(reader: Principal) -> Principal:
+    """`reader` as the Conduit scopes them (`scope_to_case`) while the case reads D's dataset.
+    Unchanged, `reader` is the same person once the case no longer reads it."""
+    return reader.model_copy(update={"datasets": [SOURCE_DATASET, LAYER, STATEMENTS]})
+
+
+@pytest.mark.parametrize("delivery", DELIVERIES)
+async def test_a_reader_whose_case_no_longer_reads_the_documents_dataset_is_not_sent_it(
+    delivery: str,
+) -> None:
+    """C and the author, A, are cleared for D throughout; only the case's datasets change after the
+    items are on the working set. While the case reads D's dataset each is sent D; afterwards each
+    is sent the drawn node and the drawn link with D in neither place."""
+    world = _World(document_dataset=STATEMENTS)
+    await world.seed(_while_the_case_reads_it(C))
+
+    for reader in (C, A):
+        before = await _delivered(world, delivery, _while_the_case_reads_it(reader))
+        _assert_with(SimpleNamespace(nodes=_one(before, "node").nodes, edges=before.edges))
+
+        after = await _delivered(world, delivery, reader)
+        _assert_without(after)
+
+
+async def test_a_view_a_search_and_a_writers_answer_follow_the_cases_datasets_too() -> None:
+    world = _World(document_dataset=STATEMENTS)
+    reading = _while_the_case_reads_it(C)
+    await world.seed(reading)
+
+    for reader, expected in ((reading, True), (C, False)):
+        nodes, edges = await world.service.visible_membership(CASE, reader)
+        said = "".join(e.model_dump_json() for e in [*nodes, *edges])
+        assert [n.id for n in nodes] == ["p-hub", "n-0000"] and len(edges) == 1, "all still sent"
+        assert (D in said) is expected, reader.datasets
+        for path in ("index", "fallback"):
+            index = _Index(_reply([_hit("n-0000", 100.0)])) if path == "index" else None
+            found = await _searched(world, reader, index)
+            assert [n.id for n in found.nodes] == ["n-0000"]
+            assert (D in found.model_dump_json()) is expected, (path, reader.datasets)
+
+    # Added again by C once the case no longer reads D's dataset: the answer has no D, and what is
+    # stored and published keeps it (item 5).
+    outcome = await world.service.expand(CASE, ExpandRequest(node_ids=["p-hub"]), C)
+    assert D not in outcome.model_dump_json()
+    _assert_with(outcome.to_publish())
+
+
 # --- row 12: the leak test --------------------------------------------------------------------
 
 
@@ -520,9 +578,7 @@ async def test_an_answer_with_nothing_drawn_reads_no_document() -> None:
 async def test_a_document_only_a_hidden_drawn_item_cites_is_not_asked_about() -> None:
     world = _World()
     secret = world.drawn[0].model_copy(
-        update={
-            "handling": world.drawn[0].handling.model_copy(update={"classification": "SECRET"})
-        }
+        update={"handling": world.drawn[0].handling.model_copy(update={"classification": "SECRET"})}
     )
     await world.store.add_nodes(CASE, [world.hub, secret])
     await world.store.add_edges(CASE, world.links)
