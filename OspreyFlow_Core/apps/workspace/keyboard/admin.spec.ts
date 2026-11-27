@@ -5,6 +5,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { ADMIN_ACTIONS } from "@ospreyflow/glass-shared";
 import { assertAllCovered, registerCovered } from "../../provedActions";
+import { plantLateAgeing } from "./lateAgeingPlant";
 
 const REGISTRY = "ADMIN_ACTIONS";
 const PERSON = { id: "u1", username: "osprey-demo-analyst", name: "Demo Analyst", enabled: true, roles: ["analyst"],
@@ -205,6 +206,8 @@ async function serve(page: Page, opts: { owns?: boolean; entra?: boolean; refuse
       return json(200, [{ ...SCHEDULE.last_run, run_id: "r0", outcome: "missed", rows_read: null, failure: "the deployment was not running then" }]);
     return json(404, {});
   });
+  // CO3e's proof plant, off unless the switch is set (./lateAgeingPlant.ts).
+  if (process.env.OSPREY_PLANT_LATE_AGEING === "1") await plantLateAgeing(page);
   return asked;
 }
 
