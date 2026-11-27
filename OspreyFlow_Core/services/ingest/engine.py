@@ -94,6 +94,7 @@ from .recipe_rules import (
     RecipeRuleError,
     check_recipe_rules,
     deduplicate_list_problems,
+    document_file_problems,
     handling_bindings,
     holds_content,
     literal_handling,
@@ -1049,6 +1050,11 @@ def _resolve_row(
         if not _condition_holds(entity.when, row):
             entities.append(_ResolvedEntity(entity, None))
             continue
+        # SE9e: a Document's file is the engine's to name (`_write_entity`, `_write_held_content`).
+        # Asked here as well as of the recipe, so a binding the recipe check missed writes nothing
+        # of the row, in Test as in a load; by the binding, so an empty cell lets none through.
+        if bound := document_file_problems(entity):
+            raise RowRejected("; ".join(bound))
         properties = _resolve_properties(
             entity.properties, row, connector_defaults=connector_defaults
         )

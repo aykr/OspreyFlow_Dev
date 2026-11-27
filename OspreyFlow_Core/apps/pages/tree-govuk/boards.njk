@@ -1,0 +1,112 @@
+{#- A case's drawing boards and one board's drawn items and links (slice GG4a; scenario BD), read-only, drawn on the server and complete
+    without a script. Each list is a table with a caption, column headers (th, scope col) and a row header for each row: the list's holds
+    each board's name as a link; a board's three tables hold its drawn items, its loaded items and its links, in the order sent. Nothing
+    here is a form, a button or a control, and nothing counts: the page draws what it is given, in the order given (the drawn items'
+    count is the route's own). The words are `server/views/boardsWords.ts`'s. -#}
+{% extends "layout.njk" %}
+{% block content %}
+{% if view.kind == "table" %}
+<h1>{{ words.listTitle }}</h1>
+<p>{{ words.lede }}</p>
+<table class="table">
+<caption class="caption">{{ words.caption }}</caption>
+<thead>
+<tr>{% for column in words.columns %}<th scope="col">{{ column }}</th>{% endfor %}
+</tr>
+</thead>
+<tbody>
+{% for row in view.rows %}<tr><th scope="row"><a href="{{ row.href }}">{{ row.name }}</a></th><td>{{ row.shared }}</td><td>{{ row.drawn }}</td><td>{{ row.made }}</td></tr>
+{% endfor %}</tbody>
+</table>
+<p><a href="{{ view.toCase }}">{{ words.toCase }}</a></p>
+<p><a href="/">{{ words.back }}</a></p>
+{% elif view.kind == "empty" %}
+<h1>{{ words.listTitle }}</h1>
+<p>{{ words.noBoards }}</p>
+<p><a href="{{ view.toCase }}">{{ words.toCase }}</a></p>
+<p><a href="/">{{ words.back }}</a></p>
+{% elif view.kind == "board" %}
+<h1>{{ view.name }}</h1>
+<h2>{{ words.about }}</h2>
+<dl>
+<dt>{{ words.sharedLabel }}</dt><dd>{{ view.shared }}</dd>
+<dt>{{ words.made }}</dt><dd>{{ view.made }}</dd>
+</dl>
+{% if view.withdrawn %}<p>{{ view.withdrawn }}</p>{% endif %}
+{% if view.empty %}
+<p>{{ words.emptyBoard }}</p>
+{% else %}
+<h2>{{ words.drawnCaption }}</h2>
+{% if view.drawn.length %}
+<table class="table">
+<caption class="caption">{{ words.drawnCaption }}</caption>
+<thead>
+<tr>{% for column in words.drawnColumns %}<th scope="col">{{ column }}</th>{% endfor %}
+</tr>
+</thead>
+<tbody>
+{% for r in view.drawn %}<tr><th scope="row">{{ r.label }}<p>{{ words.drawnNote }}</p></th>{% for cell in r.cells %}<td>{{ cell }}</td>{% endfor %}</tr>
+{% endfor %}</tbody>
+</table>
+{% else %}
+<p>{{ words.nothingDrawn }}</p>
+{% endif %}
+<h2>{{ words.loadedCaption }}</h2>
+{% if view.loaded.length %}
+<table class="table">
+<caption class="caption">{{ words.loadedCaption }}</caption>
+<thead>
+<tr>{% for column in words.loadedColumns %}<th scope="col">{{ column }}</th>{% endfor %}
+</tr>
+</thead>
+<tbody>
+{% for r in view.loaded %}<tr><th scope="row">{{ r.label }}<p>{{ words.loadedNote }}</p></th><td>{{ r.type }}</td><td>{{ r.marking }}</td></tr>
+{% endfor %}</tbody>
+</table>
+{% else %}
+<p>{{ words.nothingLoaded }}</p>
+{% endif %}
+<h2>{{ words.linksCaption }}</h2>
+{% if view.links.length %}
+<table class="table">
+<caption class="caption">{{ words.linksCaption }}</caption>
+<thead>
+<tr>{% for column in words.linkColumns %}<th scope="col">{{ column }}</th>{% endfor %}
+</tr>
+</thead>
+<tbody>
+{% for r in view.links %}<tr><th scope="row">{{ r.label }}</th>{% for cell in r.cells %}<td>{{ cell }}</td>{% endfor %}</tr>
+{% endfor %}</tbody>
+</table>
+{% else %}
+<p>{{ words.noLinks }}</p>
+{% endif %}
+{% endif %}
+<p><a href="{{ view.toBoards }}">{{ words.toBoards }}</a></p>
+<p><a href="/">{{ words.back }}</a></p>
+{% elif view.kind == "too-large" %}
+<h1>{{ words.tooLargeTitle }}</h1>
+<p>{{ view.says }}</p>
+<h2>{{ words.whatYouCanDo }}</h2>
+<ul>
+{% for option in view.options %}<li>{{ option }}</li>
+{% endfor %}</ul>
+<p>{{ words.noPageYet }}</p>
+<p><a href="{{ view.toBoards }}">{{ words.toBoards }}</a></p>
+<p><a href="/">{{ words.back }}</a></p>
+{% elif view.kind == "ended" %}
+<h1>{{ title }}</h1>
+<p role="alert">{{ ended }}</p>
+<p><a href="/">{{ words.back }}</a></p>
+{% elif view.kind == "unreadable-board" %}
+<h1>{{ title }}</h1>
+<p role="alert">{{ words.unreadableBoard }}</p>
+<p><a href="{{ view.toBoards }}">{{ words.toBoards }}</a></p>
+<p><a href="/">{{ words.back }}</a></p>
+{% else %}
+<h1>{{ title }}</h1>
+<p role="alert">{{ words.unreadableList }}</p>
+<p><a href="{{ view.toCase }}">{{ words.toCase }}</a></p>
+<p><a href="/">{{ words.back }}</a></p>
+{% endif %}
+{% endblock %}

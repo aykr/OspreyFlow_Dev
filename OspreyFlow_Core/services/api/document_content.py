@@ -54,6 +54,7 @@ from .link_ids import as_stored
 from .review import (
     CandidateNotPendingError,
     DocumentNotFoundError,
+    EngineOnlyPropertyError,
     ExtractionCandidateNotFoundError,
     ExtractionCandidateRecord,
     ExtractionCandidateStore,
@@ -408,6 +409,8 @@ class DocumentContentService:
                         words="not a finding of this document",
                     )
                 )
+            except EngineOnlyPropertyError as error:
+                refusals.append(BulkAcceptRefusal(candidate_id=candidate_id, words=str(error)))
         return DocumentBulkAcceptResult(accepted=accepted, refusals=refusals)
 
     async def accept(

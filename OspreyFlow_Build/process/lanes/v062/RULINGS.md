@@ -3,6 +3,43 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 27 November 2026, after 03:21 UTC: WS4b's look (D281; the owner, in chat)
+
+The owner viewed the comparison.
+
+1. **Export: not accepted.** The link lines are missing from the export, which is a fault.
+2. **Hover and selected link: not accepted.** Link labels must be written beside the line as Sigma 3 wrote them, through a local 2D edge-label layer on Sigma 4.
+3. **Every other scene keeps Sigma 4's drawing.**
+4. **WS4b's look round is building away on the server** (`away/WS4b-look`). **WS4b does not start in the line** until that round reports and the owner has seen the three scenes again.
+5. WS4b's speed questions go to the owner separately; they are not the conductor's.
+
+## 27 November 2026, 03:21 UTC: the morning answers (the owner, in chat)
+
+1. **GG4b (security):** its ADR-143 amendment (`lane/slice-GG4b`, `92605bf`) is **approved with (a) on all five**:
+   - **Q1:** neither note nor document goes to a reader who cannot read the document. The three small front-end changes are included: the GOV.UK board page accepts such an item; the React inspector's sentence; the React drawing form.
+   - **Q2:** editing an old item must add a note.
+   - **Q3:** promotion requires a note, whoever asks.
+   - **Q4:** at most one batched document read per answer.
+   - **Q5:** document reads do not grow with the number of items, and the live step meets `spec/02` §5.
+   - The owner's clear-stop line is in (`resume.tsv`, 27 November).
+2. **SE9d:** the refreeze line is in, for its corrected `schemas-check` command (`PY=` its acceptance environment, as GG4b's and GG4j's).
+3. **GG5a:** WebKit is installed in the shared cache; the clear-stop line is in.
+4. **RM1a:** the send-back line is in, for one more take-main-in. **It merges straight after, before any other page part.**
+5. **Standing, from now until RL2:** a verified part that conflicts with main **only** in the shared GOV.UK lists may go back to take main in on the conductor's own word, with no round spent. The shared lists are `spec/08`, the scenario tests, `pageList`, routes and pins. Anything else still goes to the owner.
+
+## 26 November 2026, 20:24 UTC: overnight, 26 to 27 November (the owner, in chat; away 21:30 to about 07:30)
+
+1. Keep the line moving: starts, verifiers on the Mac, merges, and trains of up to three where the server has tested a stack. Records commits only straight after a merge or train.
+2. **GG5a** (away/GG5a) comes in like GR1a. Its question 1 (the pmtiles 4.5.0 exact pin, the workspace's own version) is approved on the owner's standing word (D274, technical). Its CI patch and its ADR-152 decision 8 diff wait for the owner in the morning; it may merge without them.
+3. **GR1d and WS4b wait for the owner's answers in the morning; neither starts.** WS4b's speed is measured on the server overnight (away/WS4b-perf).
+4. Anything that is the owner's (security, keys, ADRs, a stop at a round limit) goes to the top of a 07:00 report; never accepted narrower; no switch of the owner's is changed. Something that blocks a slice stops that slice only; the line moves on.
+5. The 07:00 report: merges overnight, what is verified and waiting, what stopped and why, and what each away report asks of the owner.
+
+## 26 November 2026, 20:13 UTC: RM1a's last round; verifiers back on the Mac (the owner, in chat)
+
+- **The dial line is out:** verifiers run on the Mac again. GG3a's failed server run (`361735d22464d46a`) leaves it at verifying, round 1, with no round spent.
+- **RM1a:** the owner's send-back line is for its conflicts with main after GR1a's and GR4a's merges (the shared page lists, routes, scenario and pins: append-only, both sides kept, main's first). **One round only: round 8 of 8.** If its verifier then finds anything that is not from taking main in, the conductor stops it for the owner rather than spend another round.
+
 ## 26 November 2026, 16:08 UTC: this evening's order (B) (the owner, in chat)
 
 When the server stack reports, **GR1a merges alone** and its five parts start. **Then merges hold for line-fix's combined apply** (62, 63, 58, 59, 60; about 50 minutes, the owner runs it). After "applied" the owner switches the merge train on, and the conductor runs **one train of SE9d, SE9e and SE9f on the Mac's whole gate** (`gate_on_build` stays off), watched, reporting each step. **Then a second train: RM1a, CO3b, GG2c**, if verified. Records commits only straight after each merge or train.

@@ -17,7 +17,7 @@ The row is the page's own because one id is one page in a tree (`server/pages.ts
 * the `reports-trends-shown-together` row left without its scenario ids, given a
   route while the function is incomplete, its name or where moved, or
   `reports-figures` given this scenario's ids                          -> `test_the_pages_own_row_carries_the_scenario_and_no_route`
-* a route list that is not the paths the tree has pages for            -> `test_the_route_list_has_the_four_pages`
+* a route list that is not the paths the tree has pages for            -> `test_the_route_list_has_the_five_pages`
 * the page module not the row's, at the path, for the GOV.UK tree
   alone, answering GET alone, or not in the one table of pages         -> `test_the_page_module_is_its_own_rows_at_its_path`
 * the "no scenario" list holding the page's row                        -> `test_the_known_without_scenario_list_no_longer_holds_the_row`
@@ -84,7 +84,9 @@ GR3A_ROW = "reports-figures"
 EXPECTED_IDS = [f"TS{n}" for n in range(1, 16)]
 #: 49 until this slice, which added the page's own row (the conductor's round-3 table, 25 November 2026).
 EXPECTED_FUNCTIONS = 50
-EXPECTED_ROUTES = ["/help", "/admin/people", "/reports", PATH, "/cases"]
+#: The sixth, a case's drawing boards (slice GG4a, `test_govuk_boards_scenario.py`), is listed after the cases page, and slice RM1a's
+#: alert queue (`/alert-queue`) after that.
+EXPECTED_ROUTES = ["/help", "/admin/people", "/reports", PATH, "/cases", "/cases/boards", "/alert-queue"]
 
 #: The owner's table of cases for GR4a (`process/lanes/v062/slices/GR4a.md`), by number, and the rows that carry each.
 CASES: dict[str, tuple[str, ...]] = {
@@ -346,7 +348,7 @@ def function_problems(data: dict[str, Any]) -> list[str]:
 
 def route_problems(data: dict[str, Any]) -> list[str]:
     if data["routes"] != EXPECTED_ROUTES:
-        return [f"the route list is {data['routes']!r}: the tree has five pages, {EXPECTED_ROUTES}"]
+        return [f"the route list is {data['routes']!r}: the tree has seven pages, {EXPECTED_ROUTES}"]
     return []
 
 
@@ -427,7 +429,7 @@ def test_the_pages_own_row_carries_the_scenario_and_no_route() -> None:
     assert function_problems(inputs()) == []
 
 
-def test_the_route_list_has_the_four_pages() -> None:
+def test_the_route_list_has_the_five_pages() -> None:
     assert route_problems(inputs()) == []
 
 
@@ -549,8 +551,8 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
         "its id",
     ),
     ("the dashboards row given a scenario", _row("reports-dashboards", scenario="TS1"), function_problems, "reports-dashboards"),
-    ("a route in the list the code has no page for", lambda d: d["routes"].append("/welcome"), route_problems, "five pages"),
-    ("the path left out of the list", lambda d: d["routes"].remove(PATH), route_problems, "five pages"),
+    ("a route in the list the code has no page for", lambda d: d["routes"].append("/welcome"), route_problems, "seven pages"),
+    ("the path left out of the list", lambda d: d["routes"].remove(PATH), route_problems, "seven pages"),
     ("the page at another path", _replace("page_module", f'path: "{PATH}"', 'path: "/packs/board"'), module_problems, "its path"),
     ("the page for both trees", _replace("page_module", 'trees: ["govuk"]', 'trees: ["default", "govuk"]'), module_problems, "GOV.UK tree alone"),
     ("the page answering POST", _replace("page_module", 'methods: ["GET"]', 'methods: ["GET", "POST"]'), module_problems, "GET alone"),
@@ -559,7 +561,7 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
     ("the word board in the page's code", _replace("page_module", "export const packTrends", "const boardName = 1;\nexport const packTrends"), module_problems, "says board"),
     (
         "a cited route line that drifted (the add-item route as it was before main moved)",
-        _replace("citation_diff", "services/api/app.py:19895", "services/api/app.py:19861"),
+        _replace("citation_diff", "services/api/app.py:19905", "services/api/app.py:19861"),
         citation_diff_problems,
         "services/api/app.py:19861 does not hold",
     ),

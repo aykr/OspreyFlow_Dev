@@ -387,11 +387,29 @@ def on_server(seat: dict) -> bool:
 
 
 def server_run(slice_id: str, seat: str, rnd: int, prompt: str, settings: dict, account: str, branch: str, tree: Path,
-               records: dict) -> dict:
+               records: dict, mac=None, fell_back: dict | None = None) -> dict:
+    """The seat on the server. One that did no work there (not started, or no session's result with the part's branch
+    where it was: server_seat.ServerSeatNotRun) is run on the Mac at once by `mac`, written to the part's
+    server-fallback.jsonl and said (the owner's word of 26 November 2026, evening: server verifiers run unattended).
+    `fell_back`, kept by the caller, sends any later try of the same seat (launch_seat's) straight to the Mac."""
     import server_seat
+    if fell_back is not None and fell_back.get("why") and mac:
+        return mac()
     try:
         return server_seat.run(slice_id, seat, rnd, prompt, settings["model"], settings["effort"], account, branch, tree,
                                records)
+    except server_seat.ServerSeatNotRun as e:
+        if not mac:
+            raise ServerSeatRefused(f"SERVER SEAT {slice_id}: {e}. The part stays where it was; nothing of the Mac's "
+                                    "changed.") from None
+        tip = c.git(["rev-parse", branch], c.REPO)
+        with (c.rec_dir(slice_id) / "server-fallback.jsonl").open("a") as fh:
+            fh.write(json.dumps({"at": c.now(), "seat": seat, "round": rnd, "tip": tip, "why": str(e)}) + "\n")
+        if fell_back is not None:
+            fell_back["why"] = str(e)
+        print(f"SERVER SEAT {slice_id}: {e}. The {seat} runs on the Mac now (logged in server-fallback.jsonl; the part "
+              "unchanged).", flush=True)
+        return mac()
     except server_seat.ServerSeatError as e:
         raise ServerSeatRefused(f"SERVER SEAT {slice_id}: {e}. The part stays where it was; nothing of the Mac's "
                                 "changed.") from None
@@ -459,14 +477,16 @@ def builder(slice_id: str) -> int:
         prompt += (f"\n\nThis round is judged against the scout's table of every open case, {table} (read it whole): "
                    "close its open rows; nothing outside it is this round's work.")
     tip0 = c.git(["rev-parse", frozen["branch"]], c.REPO)
-    if on_server(seat):  # 017-2: the dial's where: server
+    mac = lambda: launch("builder", st["account"], wt, prompt, seat["model"], seat["effort"],  # noqa: E731
+                         {"OSPREY_SLICE": slice_id, "OSPREY_SLICE_WORKTREE": str(wt),
+                          **({"OSPREY_PORTS_SLOT": str(st["slot"])} if st.get("slot") else {})},
+                         c.rec_dir(slice_id) / f"builder-r{st['round']}-{uuid.uuid4().hex[:6]}.jsonl")
+    if on_server(seat):  # 017-2: the dial's where: server; on the Mac at once if it did no work there
+        fell_back: dict = {}
         call = lambda: server_run(slice_id, "builder", st["round"], prompt, seat, st["account"], frozen["branch"], wt,  # noqa: E731
-                                  {"frozen.json": frozen, "state.json": st})
+                                  {"frozen.json": frozen, "state.json": st}, mac, fell_back)
     else:
-        call = lambda: launch("builder", st["account"], wt, prompt, seat["model"], seat["effort"],  # noqa: E731
-                              {"OSPREY_SLICE": slice_id, "OSPREY_SLICE_WORKTREE": str(wt),
-                               **({"OSPREY_PORTS_SLOT": str(st["slot"])} if st.get("slot") else {})},
-                              c.rec_dir(slice_id) / f"builder-r{st['round']}-{uuid.uuid4().hex[:6]}.jsonl")
+        call = mac
     try:
         res = launch_seat(
             slice_id, "builder", f"round {st['round']}", st["account"], tip0, call,
@@ -533,14 +553,18 @@ def verifier(slice_id: str) -> int:
                   f"when the code does the wrong thing, '{GAP}' (a gap in a test) when the code may be right but no "
                   f"test would fail if it were wrong; a finding without a kind counts as a fault. Put "
                   f"the commit {tip} in your answer.{rulings}")
-        if on_server(seat):  # 017-2: the dial's where: server
-            call = lambda: server_run(slice_id, "verifier", st.get("round", 1), prompt, seat, account,  # noqa: E731
-                                      frozen["branch"], vt, {"frozen.json": frozen, "state.json": st})
+        mac = (lambda prompt=prompt, focus=focus:  # noqa: E731
+               launch("verifier", account, vt, prompt, seat["model"], seat["effort"],
+                      {"OSPREY_SLICE": slice_id, "OSPREY_SLICE_WORKTREE": str(vt)},
+                      c.rec_dir(slice_id) / f"verifier-{focus}-{uuid.uuid4().hex[:6]}.jsonl",
+                      ["--json-schema", json.dumps(VERDICT_SCHEMA)]))
+        if on_server(seat):  # 017-2: the dial's where: server; on the Mac at once if it did no work there
+            fell_back: dict = {}
+            call = lambda prompt=prompt, mac=mac, fell_back=fell_back: server_run(  # noqa: E731
+                slice_id, "verifier", st.get("round", 1), prompt, seat, account, frozen["branch"], vt,
+                {"frozen.json": frozen, "state.json": st}, mac, fell_back)
         else:
-            call = lambda: launch("verifier", account, vt, prompt, seat["model"], seat["effort"],  # noqa: E731
-                                  {"OSPREY_SLICE": slice_id, "OSPREY_SLICE_WORKTREE": str(vt)},
-                                  c.rec_dir(slice_id) / f"verifier-{focus}-{uuid.uuid4().hex[:6]}.jsonl",
-                                  ["--json-schema", json.dumps(VERDICT_SCHEMA)])
+            call = mac
         try:
             res = launch_seat(
                 slice_id, "verifier", focus, account, tip, call,

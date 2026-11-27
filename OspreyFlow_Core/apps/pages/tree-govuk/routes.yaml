@@ -11,3 +11,5 @@ routes:
   - /reports
   - /packs/trends
   - /cases
+  - /cases/boards
+  - /alert-queue

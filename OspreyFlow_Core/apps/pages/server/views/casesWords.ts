@@ -53,6 +53,8 @@ export const CASES_WORDS = {
   kinds: { trend: "A saved trend", pattern: "A saved pattern", assessment: "An assessment", view: "A canvas view" },
   unreadableList: "Your cases could not be read just now. Nothing is shown, and nothing has changed. Try again in a few minutes.",
   unreadableCase: "This case could not be read just now. Nothing is shown, and nothing has changed. Try again in a few minutes.",
+  // The case's drawing boards (slice GG4a; scenario BD): a link to the boards page, which reads the boards' own route.
+  boards: "Drawing boards in this case",
   toCases: "Back to your cases",
   back: "Back to Home",
   // New case (slice GR1b). The two refusals, "You cannot make cases", the banner and the data question's two choices are the owner's
@@ -159,6 +161,8 @@ export interface CaseView {
   datasets: string[];
   made: string;
   brief: BriefView;
+  /** The address of the case's drawing boards. */
+  boards: string;
 }
 
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
@@ -175,6 +179,8 @@ const isTime = (value: unknown): value is string => isText(value) && !Number.isN
 
 /** The address of a case's page: one page with the case in its query (a page's path is a plain path: `pages.ts`). */
 export const caseHref = (id: string): string => `/cases?case=${encodeURIComponent(id)}`;
+/** The address of a case's drawing boards (slice GG4a): the boards page, under the cases page, in the same query form. */
+export const caseBoardsHref = (id: string): string => `/cases/boards?case=${encodeURIComponent(id)}`;
 
 /** One row of `GET /v1/investigations`, read strictly; `undefined` when it is not one. */
 function listingOf(row: unknown):
@@ -288,6 +294,7 @@ export function caseView(caseId: string, investigation: unknown, brief: unknown,
     datasets: listed.datasets,
     made: utcStampOf(created_at),
     brief: briefView,
+    boards: caseBoardsHref(caseId),
   };
 }
 

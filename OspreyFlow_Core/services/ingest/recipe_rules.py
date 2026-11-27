@@ -22,6 +22,26 @@ from schemas.ingest import DeduplicateConfig, RecipeEdge, RecipeEntity, RowTempl
 
 FILE_KINDS = frozenset({"image_file", "video_file"})
 
+#: The `Document` properties that name its file in the media store, which the engine alone sets.
+ENGINE_FILE_PROPERTIES = ("object_ref", "media_kind")
+
+
+def document_file_problems(entity: RecipeEntity) -> list[str]:
+    """SE9e (the owner, 26 November 2026): no recipe binds `object_ref` or `media_kind` on a
+    `Document`, from a column or as a fixed value, whatever its content. A media reference is
+    content-addressed and nothing records which dataset stored it, so a bound one could name
+    another dataset's file, which is then served to whoever may read this Document. Asked when a
+    recipe is checked and again of each row at load (`engine._resolve_row`). The words name the
+    recipe's entity and the property only, never a file, its dataset or its marking (rule 3)."""
+    if entity.type != "Document":
+        return []
+    return [
+        f"{entity.ref!r} is a Document, whose {name!r} the engine alone sets, for its own text or "
+        "a file it stores: a pipeline cannot set it, from a column or as a fixed value."
+        for name in ENGINE_FILE_PROPERTIES
+        if name in entity.properties
+    ]
+
 
 def deduplicate_list_problems(config: DeduplicateConfig) -> list[str]:
     """A key part bound through an adapter whose output is a list (`split`): a key part is one
@@ -400,15 +420,8 @@ def recipe_rule_violations(
                 "(content kind document_text); a file is held by the entity it belongs to "
                 "(ADR-094)."
             )
-    # ADR-127: the text's place in the media store is the engine's to write, never a column's.
     for entity in template.entities:
-        if entity.type == "Document" and entity.content is not None:
-            for name in ("object_ref", "media_kind"):
-                if name in entity.properties and entity.content.kind == "document_text":
-                    problems.append(
-                        f"{entity.ref!r} is a Document that holds its own text, which sets "
-                        f"{name!r} itself; it cannot be bound to a column."
-                    )
+        problems.extend(document_file_problems(entity))
     # ADR-127 Amendment 15: `optional` leaves a property out when its cell is empty, so it is
     # only for a property the ontology does not require, and not the one an entity is matched on
     # (no match key, no match); a time binding has no property to leave out.

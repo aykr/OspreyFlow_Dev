@@ -18,7 +18,8 @@ harness.json, written by the test itself (never the environment):
      "shield_wait": <seconds>,        how long a breach is checked again before the run is refused (default 0
                                        here, so a refusal is seen at once; runner.py's own is 5 minutes)
      "shield_recheck": <seconds>,     how often it is checked again meanwhile (default 0.05; runner.py's own 30)
-     "summary_wait": <seconds> | null}  how long a starting job waits for the summary's model (015); null: runner.py's
+     "summary_wait": <seconds> | null,  how long a starting job waits for the summary's model (015); null: runner.py's
+     "meminfo": "<a file>" | null}    /proc/meminfo's stand-in (two stacks side by side: the room check)
 
 The job the direct launch starts runs through this wrapper again, with the same harness file, so it sees the same
 stand-ins. Everything else is runner.py's own: its command parsing, its refusals, its bundle checks, its merge.
@@ -84,6 +85,8 @@ if conf.get("min_free") is not None:
     runner.p.MIN_FREE_BYTES = int(conf["min_free"])
 runner.SHIELD_WAIT_SECONDS = float(conf.get("shield_wait", 0))
 runner.SHIELD_RECHECK_SECONDS = float(conf.get("shield_recheck", 0.05))
+if conf.get("meminfo"):
+    runner.MEMINFO = Path(conf["meminfo"])
 if conf.get("summary_wait") is not None:
     runner.SUMMARY_WAIT_SECONDS = float(conf["summary_wait"])
 sys.exit(runner.main([str(RUNNER), *sys.argv[3:]]))
