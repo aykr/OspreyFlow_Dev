@@ -1,6 +1,6 @@
 /**
- * The reader's cases and one case's page with its brief, read-only, on the GOV.UK tree (slice GR1a; ADR-152 decisions 1, 4, 5, 6, 7 and
- * 12; FUNCTIONS row `cases-and-views`; scenario CS of `spec/08_ACCEPTANCE_SCENARIOS.md`, written first).
+ * The reader's cases and one case's page with its brief and its history, read-only, on the GOV.UK tree (slices GR1a and GR1e; ADR-152
+ * decisions 1, 4, 5, 6, 7 and 12; FUNCTIONS row `cases-and-views`; scenario CS of `spec/08_ACCEPTANCE_SCENARIOS.md`, written first).
  * `tests/glass_trees/test_govuk_cases_scenario.py` holds the scenario and this file in step: each case's id is a row of the scenario.
  *
  * There is no React-first proof (the React list is a menu and the React brief an editor): the proof is the real service started for the
@@ -21,6 +21,16 @@
  *  - a form, a control, a skipped heading, a stop out of order                                                    -> CS12
  *  - a script, a handler, an inline style                                                                         -> CS13
  *  - the page in the Default tree, left out of the route list, the shared words written again                    -> CS14
+ *  - a step missing, added, out of order, without its time, a brief edit said as restorable, a restore offered  -> CS16
+ *  - a label in the page's own words, a label the route cannot send drawn                                       -> CS17
+ *  - an empty history drawn as an empty table                                                                    -> CS18
+ *  - a size or count of anything in the history                                                                  -> CS19
+ *  - a step's identifier on the page                                                                             -> CS20
+ *  - the history's refusal passed through, or told apart from a path nothing serves                             -> CS21
+ *  - the history read twice in one render, or by the list                                                        -> CS22
+ *  - a missing or wrong field of a step read as a default                                                        -> CS23
+ *  - a failed history read drawn as an empty history, an ended session not said                                  -> CS24
+ *  - a contents link missing, out of order, or to no part                                                        -> CS25
  * Every planted fault is the real page (or the real view, or the real file) with one thing changed, run through the same function that
  * finds nothing in the real one (CS15, rule 15).
  */
@@ -45,7 +55,7 @@ import { testClock } from "../support/clock.js";
 import { cookieFrom, csrfFromPage, request } from "../support/http.js";
 import { generateSecret } from "../support/secret.js";
 import { bearer, providerFor, textOf } from "../support/studioWorld.js";
-import { NOT_FOUND_CASE, UNKNOWN_BEARER, briefOf, casesConduit, investigationOf, listingOf, rightRefusal } from "./casesConduit.js";
+import { NOT_FOUND_CASE, SHOWN_LABELS, UNKNOWN_BEARER, briefOf, casesConduit, historyOf, investigationOf, listingOf, rightRefusal } from "./casesConduit.js";
 import type { Case, CasesConduit, CasesConduitOptions, Reader } from "./casesConduit.js";
 
 // The compiled service is checked against `server/types/glassShared.d.ts`; this holds each declaration the cases page added to the
@@ -95,6 +105,7 @@ const CASES: Case[] = [
       priority: "",
       requirements: [{ id: "r-toll", text: "Which lorries pass the toll twice in an hour?", status: "open", answered_at: null, attachments: [] }],
     },
+    history: [{ id: "h-toll", label: "Seeded", created_at: "2026-09-14T08:00:00Z" }],
   },
   {
     id: "c-harbour",
@@ -121,6 +132,15 @@ const CASES: Case[] = [
         { id: "r-sign", text: "Who signs the manifests?", status: "open", answered_at: null, attachments: [{ kind: "pattern", id: "p-sign", title: "Signatures" }] },
       ],
     },
+    // Five steps in the store's order (`seq`), one a brief edit and one an old numbered label the route sends as `Changed`. Neither by
+    // label (either way) nor newest first is this order, so a page that sorted would show.
+    history: [
+      { id: "h-seed", label: "Seeded", created_at: "2026-08-01T09:10:00Z" },
+      { id: "h-expand", label: "Expanded", created_at: "2026-08-02T11:20:00Z" },
+      { id: "h-brief", label: "Edited the brief", created_at: "2026-08-03T08:00:00Z" },
+      { id: "h-old", label: "Removed 3 nodes", created_at: "2026-08-04T15:45:00Z" },
+      { id: "h-links", label: "Showed links among the view", created_at: "2026-08-05T17:30:00Z" },
+    ],
   },
   {
     id: "c-ferry",
@@ -309,7 +329,7 @@ const refusalProblems = (refused: { status: number; text: string }, unknown: { s
   refused.status === unknown.status && withoutNonce(refused.text) === withoutNonce(unknown.text) ? [] : ["the refusal is not the page of a path nothing serves"];
 
 /** Words and identifiers the page must never show: the Conduit's refusals, a right's name, an attachment's title or id, an account id. */
-const NEVER = ["investigation_not_found", "right_required", "investigate", "Withheld assessment", "Berths after dark", "Quay view", "Signatures", "t-berths", "v-quay", "p-sign", "a-hidden", "acct-", "ds-quay", "r-berth", UNIT, "not have access"];
+const NEVER = ["investigation_not_found", "right_required", "investigate", "Withheld assessment", "Berths after dark", "Quay view", "Signatures", "t-berths", "v-quay", "p-sign", "a-hidden", "acct-", "ds-quay", "r-berth", UNIT, "not have access", "h-seed", "h-brief", "Removed 3 nodes", "history_step"];
 const neverProblems = (html: string): string[] => NEVER.filter((word) => strip(html).includes(word)).map((word) => `the page shows ${JSON.stringify(word)}`);
 
 // ------------------------------------------------------------------------------------------------ what the page should draw
@@ -368,11 +388,20 @@ function inOrderProblems(text: string, words: string[]): string[] {
   return [];
 }
 
+/** The Brief part of a case's page: from its heading to the next part's (the History, GR1e). The page's contents are a list of their own,
+ * before it, and are not the brief's. A page with no Brief heading is all brief, so a plant that drops the heading is still read. */
+function briefPartOf(html: string): string {
+  const main = mainOf(html);
+  const start = main.search(/<h2\b[^>]*\sid="brief"/);
+  const end = main.search(/<h2\b[^>]*\sid="history"/);
+  return start === -1 ? main : main.slice(start, end > start ? end : main.length);
+}
+
 /** What an empty brief must be (CS5): said in words, with no list and no heading of the brief's parts. */
 const emptyBriefProblems = (html: string): string[] => {
   const found: string[] = [];
   if (!mainText(html).includes(CASES_WORDS.noBrief)) found.push("the empty brief is not said in words");
-  if (/<ol|<ul/.test(mainOf(html))) found.push("the empty brief is drawn as a list");
+  if (/<ol|<ul/.test(briefPartOf(html))) found.push("the empty brief is drawn as a list");
   if (mainText(html).includes(CASES_WORDS.priority)) found.push("the empty brief is drawn with its parts' headings");
   return found;
 };
@@ -386,7 +415,12 @@ const failedListProblems = (html: string): string[] => {
 };
 
 /** The calls one render of a case's page must make, and no others (CS8). */
-const caseCalls = (id: string): string[] => [`GET /v1/investigations/${encodeURIComponent(id)}`, `GET /v1/investigations/${encodeURIComponent(id)}/brief`, "GET /v1/investigations"];
+const caseCalls = (id: string): string[] => [
+  `GET /v1/investigations/${encodeURIComponent(id)}`,
+  `GET /v1/investigations/${encodeURIComponent(id)}/brief`,
+  `GET /v1/investigations/${encodeURIComponent(id)}/history`,
+  "GET /v1/investigations",
+];
 const callProblems = (made: string[], want: string[]): string[] => (JSON.stringify(made) === JSON.stringify(want) ? [] : [`the page asked ${JSON.stringify(made)}, not ${JSON.stringify(want)}`]);
 
 // ------------------------------------------------------------------------------------------------ the sources
@@ -413,6 +447,7 @@ const sampleReader: Reader = { token: "t", unit: UNIT, rights: ["investigate"], 
 const listBody = (): Record<string, unknown>[] => MINE.map((id) => listingOf(CASES.find((c) => c.id === id) as Case, sampleReader));
 const caseBody = (): Record<string, unknown> => investigationOf(harbour);
 const briefBody = (): { priority: string; requirements: Record<string, unknown>[] } => briefOf(harbour, sampleReader) as never;
+const historyBody = (): Record<string, unknown>[] => historyOf(harbour);
 
 /** A different valid value for each field of each model: a drawn field must change the page with it, a left-out field must not. */
 const OTHER: Record<string, Record<string, unknown>> = {
@@ -421,17 +456,19 @@ const OTHER: Record<string, Record<string, unknown>> = {
   CaseBrief: { priority: "A different priority", requirements: [] },
   BriefRequirement: { id: "r-other", text: "A different requirement", status: "open", answered_at: "2025-01-03T04:05:00Z", attachments: [] },
   BriefAttachment: { id: "t-other", kind: "pattern", title: "A different title" },
+  HistoryStepSummary: { id: "h-other", label: "Removed", created_at: "2025-01-03T04:05:00Z", restorable: false },
 };
 
 interface Bodies {
   list: unknown;
   case: unknown;
   brief: unknown;
+  history: unknown;
 }
-const bodies = (): Bodies => ({ list: listBody(), case: caseBody(), brief: briefBody() });
+const bodies = (): Bodies => ({ list: listBody(), case: caseBody(), brief: briefBody(), history: historyBody() });
 
 /** The bodies with one field of one model changed (or removed, `value` undefined): for the listing, harbour's row; for a requirement
- * and an attachment, the first of harbour's brief. */
+ * and an attachment, the first of harbour's brief; for a step, harbour's first. */
 function withField(model: string, field: string, value: unknown): Bodies {
   const b = bodies();
   const set = (target: Record<string, unknown>): void => {
@@ -444,12 +481,13 @@ function withField(model: string, field: string, value: unknown): Bodies {
   if (model === "CaseBrief") set(brief);
   if (model === "BriefRequirement") set(brief.requirements[0] as never);
   if (model === "BriefAttachment") set(brief.requirements[0]?.attachments[0] as never);
+  if (model === "HistoryStepSummary") set((b.history as Record<string, unknown>[])[0] as Record<string, unknown>);
   return b;
 }
 
 /** Both pages as the real service draws them from these bodies (the fixture serves them through its real refusals). */
 async function drawn(b: Bodies): Promise<{ list: string; case: string; listStatus: number; caseStatus: number }> {
-  const w = await world({ list_answer: { status: 200, body: b.list }, case_answer: { status: 200, body: b.case }, brief_answer: { status: 200, body: b.brief } });
+  const w = await world({ list_answer: { status: 200, body: b.list }, case_answer: { status: 200, body: b.case }, brief_answer: { status: 200, body: b.brief }, history_answer: { status: 200, body: b.history } });
   const list = await getAs(w, PATH);
   const one = await getAs(w, pageOf("c-harbour"));
   return { list: mainOf(list.text), case: mainOf(one.text), listStatus: list.status, caseStatus: one.status };
@@ -533,14 +571,14 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
     const ferry = await getAs(w, pageOf("c-ferry"));
     expect(emptyBriefProblems(ferry.text)).toEqual([]);
     expect(mainText(ferry.text)).toContain("This case has no brief yet.");
-    expect(mainOf(ferry.text)).not.toMatch(/<ol|<ul/);
+    expect(briefPartOf(ferry.text)).not.toMatch(/<ol|<ul/);
     expect(mainText(ferry.text)).not.toContain(CASES_WORDS.priority);
     const toll = await getAs(w, pageOf("c-toll"));
     expect(mainText(toll.text)).toContain("No priority information requirement is set.");
     const w2 = await world({ brief_answer: { status: 200, body: { priority: "Only a priority", requirements: [] } } });
     const only = await getAs(w2, pageOf("c-harbour"));
     expect(mainText(only.text)).toContain("No information requirements yet.");
-    expect(mainOf(only.text)).not.toMatch(/<ol/);
+    expect(briefPartOf(only.text)).not.toMatch(/<ol/);
   });
 
   it("CS6: no level, another unit, no such case, an empty or repeated case: the very page of a path nothing serves, and nothing more is asked", async () => {
@@ -667,26 +705,26 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
 
   it("CS10: a body missing any field the route's model sends, or of the wrong shape, is the could-not-be-read page, never empty", async () => {
     expect(listView(listBody())).toBeDefined();
-    expect(caseView("c-harbour", caseBody(), briefBody(), listBody())).toBeDefined();
+    expect(caseView("c-harbour", caseBody(), briefBody(), historyBody(), listBody())).toBeDefined();
     const models = Object.keys(REQUIRED) as (keyof typeof REQUIRED)[];
-    expect(models.sort()).toEqual(["BriefAttachment", "BriefRequirement", "CaseBrief", "Investigation", "InvestigationListing"]);
+    expect(models.sort()).toEqual(["BriefAttachment", "BriefRequirement", "CaseBrief", "HistoryStepSummary", "Investigation", "InvestigationListing"]);
     let tried = 0;
     for (const model of models) {
       for (const field of REQUIRED[model]) {
         const b = withField(model, field, undefined);
-        const view = model === "InvestigationListing" ? listView(b.list) : caseView("c-harbour", b.case, b.brief, b.list);
+        const view = model === "InvestigationListing" ? listView(b.list) : caseView("c-harbour", b.case, b.brief, b.history, b.list);
         expect(view, `${model}.${field} removed`).toBeUndefined();
-        if (model === "InvestigationListing") expect(caseView("c-harbour", b.case, b.brief, b.list), `${model}.${field} removed, case page`).toBeUndefined();
+        if (model === "InvestigationListing") expect(caseView("c-harbour", b.case, b.brief, b.history, b.list), `${model}.${field} removed, case page`).toBeUndefined();
         tried += 1;
       }
     }
-    expect(tried).toBe(25);
+    expect(tried).toBe(29);
     // Every field of every model of a shape no field of these models has (an object): the type check of each field, one case a field.
     // (Found by planting: with one field's type check taken out, presence alone still passed every case above.)
     for (const model of models) {
       for (const field of REQUIRED[model]) {
         const b = withField(model, field, { wrong: true });
-        const view = model === "InvestigationListing" ? listView(b.list) : caseView("c-harbour", b.case, b.brief, b.list);
+        const view = model === "InvestigationListing" ? listView(b.list) : caseView("c-harbour", b.case, b.brief, b.history, b.list);
         expect(view, `${model}.${field} of the wrong shape`).toBeUndefined();
       }
     }
@@ -709,12 +747,13 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
     ];
     for (const [model, field, value] of wrong) {
       const b = withField(model, field, value);
-      expect(model === "InvestigationListing" ? listView(b.list) : caseView("c-harbour", b.case, b.brief, b.list), `${model}.${field} = ${JSON.stringify(value)}`).toBeUndefined();
+      expect(model === "InvestigationListing" ? listView(b.list) : caseView("c-harbour", b.case, b.brief, b.history, b.list), `${model}.${field} = ${JSON.stringify(value)}`).toBeUndefined();
     }
     for (const top of [null, {}, "x", [null]]) {
       expect(listView(top)).toBeUndefined();
-      expect(caseView("c-harbour", top, briefBody(), listBody())).toBeUndefined();
-      expect(caseView("c-harbour", caseBody(), top, listBody())).toBeUndefined();
+      expect(caseView("c-harbour", top, briefBody(), historyBody(), listBody())).toBeUndefined();
+      expect(caseView("c-harbour", caseBody(), top, historyBody(), listBody())).toBeUndefined();
+      expect(caseView("c-harbour", caseBody(), briefBody(), top, listBody())).toBeUndefined();
     }
     // And through the service: one missing field of each model is the 502 page.
     for (const [model, field] of [["InvestigationListing", "level"], ["Investigation", "domains"], ["CaseBrief", "priority"], ["BriefRequirement", "status"], ["BriefAttachment", "kind"]] as const) {
@@ -723,9 +762,9 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
     }
   });
 
-  it("CS11: every field of the five models is drawn or named as left out; a drawn field changes the page and a left-out one does not", async () => {
+  it("CS11: every field of the six models is drawn or named as left out; a drawn field changes the page and a left-out one does not", async () => {
     expect(await censusProblems(CENSUS)).toEqual([]);
-  });
+  }, 30_000);
 
   it("CS12: both pages are whole in structure, read-only, and their stops come in order", async () => {
     const w = await world();
@@ -735,9 +774,9 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
     expect(structureProblems(one.text)).toEqual([]);
     const hrefs = (html: string): (string | undefined)[] => focusable(html).map((s) => s.href ?? s.text);
     expect(hrefs(list.text)).toEqual(["#main", "Sign out", ...MINE.map(pageOf), "/"]);
-    expect(hrefs(one.text)).toEqual(["#main", "Sign out", "/cases/boards?case=c-harbour", PATH, "/"]);
-    expect(focusable(one.text).map((s) => s.text).slice(2)).toEqual([CASES_WORDS.boards, CASES_WORDS.toCases, CASES_WORDS.back]);
-    expect(headings(mainOf(one.text)).map((h) => h.level)).toEqual([1, 2, 2, 3, 3]);
+    expect(hrefs(one.text)).toEqual(["#main", "Sign out", ...CONTENTS, "/cases/boards?case=c-harbour", PATH, "/"]);
+    expect(focusable(one.text).map((s) => s.text).slice(2)).toEqual([...CASES_WORDS.contents.map((c) => c.text), CASES_WORDS.boards, CASES_WORDS.toCases, CASES_WORDS.back]);
+    expect(headings(mainOf(one.text)).map((h) => h.level)).toEqual([1, 2, 2, 2, 3, 3, 2]);
   });
 
   it("CS13: with scripts off both pages are whole: no script but the data block, no handler, no inline style", async () => {
@@ -864,7 +903,8 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
       expect(await censusProblems(moved("BriefAttachment", "title", "drawn"))).toEqual(["BriefAttachment.title is drawn but changes nothing"]);
       expect(await censusProblems(moved("BriefRequirement", "status", "left"))).toEqual(["BriefRequirement.status is left out but changes the page"]);
       expect(await censusProblems(moved("InvestigationListing", "tab_hidden", "left"))).toEqual(["InvestigationListing.tab_hidden is left out but changes the page"]);
-    });
+      // Each census draws both pages once a field of six models (GR1e added the history's): past vitest's 5 s default under load.
+    }, 30_000);
 
     it("CS15: the source checks fail for a filter, a sort or a cut in the page's code, and for a shared sentence written again", () => {
       const sources = sourcesOfThePage();
@@ -874,6 +914,9 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
       expect(choosingProblems(planted("server/views/casesWords.ts", (t) => `${t}\nconst x = [].sort();\n`))).not.toEqual([]);
       expect(choosingProblems(planted("tree-govuk/cases.njk", (t) => t.replace("in view.rows %}", 'in view.rows | sort(attribute="name") %}')))).not.toEqual([]);
       expect(choosingProblems(planted("tree-govuk/cases.njk", (t) => t.replace("in r.attachments %}", 'in r.attachments | reject("odd") %}')))).not.toEqual([]);
+      // GR1e: a cap on the real loop that reads the history's steps, and on the template's loop that draws them.
+      expect(choosingProblems(planted("server/views/casesWords.ts", (t) => t.replace("for (const step of body as unknown[])", "for (const step of (body as unknown[]).slice(0, 100))")))).not.toEqual([]);
+      expect(choosingProblems(planted("tree-govuk/cases.njk", (t) => t.replace("in view.history.rows %}", "in view.history.rows | batch(100) | first %}")))).not.toEqual([]);
       const copied = planted("server/views/casesWords.ts", (t) => `${t}\nexport const POLE = "${POLE_LABEL}";\n`);
       expect(copied.some((s) => SHARED_SENTENCES.some((sentence) => s.text.includes(sentence)))).toBe(true);
     });
@@ -914,6 +957,349 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
       expect(bare.map((c) => [c.datasets, c.dataset_ids])).toEqual([[[], []], [[], []], [[], []]]);
       const one = (await (await fetch(`${w2.conduit.url}/v1/investigations/c-harbour`, as2)).json()) as Record<string, unknown>;
       expect("domains_chosen" in one).toBe(false);
+    });
+  });
+});
+
+// ------------------------------------------------------------------------------------------------ the history (GR1e)
+
+/** The case page's contents, in order: its parts' addresses on the page. */
+const CONTENTS = ["#about", "#brief", "#history"];
+const CONTENTS_TEXT = ["About this case", "Brief", "History"];
+const HISTORY_CAPTION = "Changes to this case, in the order the case records them";
+const HISTORY_COLUMNS = ["Step", "When", "Restore"];
+const CAN = "Can be restored";
+const CANNOT = "Cannot be restored";
+const NO_HISTORY = "Nothing has changed in this case yet.";
+
+interface SentStep {
+  id: string;
+  label: string;
+  created_at: string;
+  restorable: boolean;
+}
+const sentHistory = (c: Case): SentStep[] => historyOf(c) as unknown as SentStep[];
+const STEP_IDS = (CASES.flatMap((c) => c.history ?? []) as { id: string }[]).map((s) => s.id);
+
+/** The History part of a case's page: from its heading to the way back to the cases ("" when it has none). */
+function historyPartOf(html: string): string {
+  const main = mainOf(html);
+  const start = main.search(/<h2\b[^>]*\sid="history"/);
+  if (start === -1) return "";
+  const end = main.indexOf('<p><a href="/cases">', start);
+  return main.slice(start, end === -1 ? main.length : end);
+}
+const historyTable = (html: string): ReturnType<typeof tableOf> => tableOf(`<main>${historyPartOf(html)}</main>`);
+
+/** What an empty history must be (CS18): said in words, with no table or part of one. */
+function emptyHistoryProblems(html: string): string[] {
+  const part = historyPartOf(html);
+  if (part === "") return ["the case's page has no History part"];
+  const found: string[] = [];
+  if (!unescape(textOf(part)).includes(NO_HISTORY)) found.push("the empty history is not said in words");
+  if (/<table|<caption|<th\b/.test(part)) found.push("the empty history is drawn as a table or part of one");
+  return found;
+}
+
+/** Every fault in the History part as drawn against what was sent: the same function reads the real page and each planted one (CS16). */
+function historyProblems(html: string, sent: SentStep[]): string[] {
+  const part = historyPartOf(html);
+  if (part === "") return ["the case's page has no History part"];
+  if (sent.length === 0) return emptyHistoryProblems(html);
+  const found: string[] = [];
+  if (!/^<h2\b[^>]*>History<\/h2>/.test(part)) found.push("the History part's heading is not a second-level History");
+  const table = historyTable(html);
+  if (!table) return [...found, "the History part has no table"];
+  if (table.caption !== HISTORY_CAPTION) found.push(`the caption is ${JSON.stringify(table.caption)}`);
+  if (JSON.stringify(table.columns) !== JSON.stringify(HISTORY_COLUMNS)) found.push(`the columns are ${JSON.stringify(table.columns)}`);
+  if (table.rows.length !== sent.length) found.push(`${table.rows.length} rows were drawn for ${sent.length} steps sent`);
+  sent.forEach((s, i) => {
+    const row = table.rows[i];
+    if (!row) return;
+    if (row.head !== s.label) found.push(`step ${i} is ${JSON.stringify(row.head)}, not the label sent, ${JSON.stringify(s.label)}`);
+    const want = [utcStampOf(s.created_at), s.restorable ? CAN : CANNOT];
+    if (JSON.stringify(row.cells.slice(1)) !== JSON.stringify(want)) found.push(`step ${i}'s cells are ${JSON.stringify(row.cells.slice(1))}, not ${JSON.stringify(want)}`);
+  });
+  if (/<(form|button|input|select|textarea)\b/.test(part)) found.push("the History part offers a control");
+  return found;
+}
+
+/** A number in the History part that is not a step's moment (CS19): a size, a count of nodes or edges, a count of steps. */
+function countProblems(html: string, sent: SentStep[]): string[] {
+  if (historyPartOf(html) === "") return ["the case's page has no History part"];
+  let text = unescape(textOf(historyPartOf(html)));
+  for (const s of sent) text = text.split(utcStampOf(s.created_at)).join(" ");
+  return /\d/.test(text) ? [`the History part says a number that is not a moment: ${JSON.stringify(text.trim())}`] : [];
+}
+
+/** A step's identifier anywhere in the page's bytes, comments included (CS20). */
+const idProblems = (html: string): string[] => STEP_IDS.filter((id) => html.includes(id)).map((id) => `the page holds the step id ${id}`);
+
+/** The contents (CS25): the stops after the sign-out are the three parts' links, each to an element of the main landmark. */
+function contentsProblems(html: string): string[] {
+  const stops = focusable(html).slice(2, 5);
+  const found: string[] = [];
+  if (JSON.stringify(stops.map((s) => s.href)) !== JSON.stringify(CONTENTS)) found.push(`the stops after the sign-out are ${JSON.stringify(stops.map((s) => s.href))}, not the contents`);
+  if (JSON.stringify(stops.map((s) => s.text)) !== JSON.stringify(CONTENTS_TEXT)) found.push(`the contents say ${JSON.stringify(stops.map((s) => s.text))}`);
+  for (const href of CONTENTS) if (!new RegExp(`\\sid="${href.slice(1)}"`).test(mainOf(html))) found.push(`the contents link ${href} goes to no part of the page`);
+  return found;
+}
+
+/** What a failed history read must be (CS24): the case's could-not-be-read alert, and nothing of the case, its brief or its history. */
+function failedHistoryProblems(html: string): string[] {
+  const found: string[] = [];
+  if (!mainText(html).includes(CASES_WORDS.unreadableCase) || !/<p role="alert">/.test(mainOf(html))) found.push("the failure is not said as the case's alert");
+  for (const word of ["Wharf watch", NO_HISTORY, HISTORY_CAPTION, CASES_WORDS.priority]) if (mainText(html).includes(word)) found.push(`a failed read draws ${JSON.stringify(word)}`);
+  return found;
+}
+
+describe("the history part of a case's page (scenario CS, slice GR1e)", () => {
+  it("CS16: after the brief, a table of every step sent, in the order sent, by its label, when it was made and whether it can be restored", async () => {
+    const w = await world();
+    const res = await getAs(w, pageOf("c-harbour"));
+    expect(res.status).toBe(200);
+    expect(historyProblems(res.text, sentHistory(harbour))).toEqual([]);
+    const rows = historyTable(res.text)?.rows ?? [];
+    expect(rows.map((r) => r.head)).toEqual(["Seeded", "Expanded", "Edited the brief", "Changed", "Showed links among the view"]);
+    expect(rows.map((r) => r.cells[2])).toEqual([CAN, CAN, CANNOT, CAN, CAN]);
+    const h = headings(mainOf(res.text)).map((x) => x.text);
+    expect(h.indexOf("History")).toBeGreaterThan(h.indexOf(CASES_WORDS.brief));
+    expect(structureProblems(res.text)).toEqual([]);
+    // The page says what `restorable` says, never what it would guess from the label.
+    const w2 = await world({
+      history_answer: {
+        status: 200,
+        body: [
+          { id: "h-x", label: "Edited the brief", created_at: "2026-08-06T10:00:00Z", restorable: true },
+          { id: "h-y", label: "Seeded", created_at: "2026-08-07T10:00:00Z", restorable: false },
+        ],
+      },
+    });
+    const told = historyTable((await getAs(w2, pageOf("c-harbour"))).text)?.rows ?? [];
+    expect(told.map((r) => r.cells[2])).toEqual([CAN, CANNOT]);
+    expect([CASES_WORDS.history, CASES_WORDS.historyCaption, CASES_WORDS.historyColumns, CASES_WORDS.canRestore, CASES_WORDS.cannotRestore]).toEqual(["History", HISTORY_CAPTION, HISTORY_COLUMNS, CAN, CANNOT]);
+  });
+
+  it("CS17: each label is drawn as the Conduit sent it; a stored label that is not fixed text is sent and drawn as Changed; one the route cannot send is could not be read", async () => {
+    const w = await world();
+    const rows = historyTable((await getAs(w, pageOf("c-harbour"))).text)?.rows ?? [];
+    expect(rows[3]?.head).toBe("Changed");
+    // Every label the route can send, drawn as sent.
+    const every = SHOWN_LABELS.map((label, i) => ({ id: `h-${i}`, label, created_at: `2026-08-0${(i % 9) + 1}T10:00:00Z`, restorable: label !== "Edited the brief" }));
+    const w2 = await world({ history_answer: { status: 200, body: every } });
+    const all = await getAs(w2, pageOf("c-harbour"));
+    expect(historyProblems(all.text, every)).toEqual([]);
+    for (const label of ["Removed 3 nodes", "Expanded by 4", "", "Branched from Harbour"]) {
+      const w3 = await world({ history_answer: { status: 200, body: [{ id: "h-z", label, created_at: "2026-08-06T10:00:00Z", restorable: true }] } });
+      const res = await getAs(w3, pageOf("c-harbour"));
+      expect(res.status, label).toBe(502);
+      expect(failedHistoryProblems(res.text), label).toEqual([]);
+    }
+  });
+
+  it("CS18: a case with no step says so in the History part, and draws no table there", async () => {
+    const w = await world();
+    const ferry = await getAs(w, pageOf("c-ferry"));
+    expect(ferry.status).toBe(200);
+    expect(emptyHistoryProblems(ferry.text)).toEqual([]);
+    expect(historyProblems(ferry.text, [])).toEqual([]);
+    expect(CASES_WORDS.noHistory).toBe(NO_HISTORY);
+    expect(structureProblems(ferry.text)).toEqual([]);
+  });
+
+  it("CS19: the History part says no number about a step's contents and no count of steps: its only figures are the moments", async () => {
+    const w = await world();
+    for (const c of [harbour, CASES[0] as Case, CASES[2] as Case]) {
+      const res = await getAs(w, pageOf(c.id));
+      expect(countProblems(res.text, sentHistory(c)), c.id).toEqual([]);
+    }
+    // The stored label that held a count is not on the page in any form.
+    expect(mainText((await getAs(w, pageOf("c-harbour"))).text)).not.toMatch(/Removed 3|\b3 nodes/);
+  });
+
+  it("CS20: no step's identifier is anywhere on the page, comments and attributes included", async () => {
+    const w = await world();
+    for (const id of ["c-harbour", "c-toll", "c-ferry"]) {
+      const res = await getAs(w, pageOf(id));
+      expect(idProblems(res.text), id).toEqual([]);
+      expect(neverProblems(res.text), id).toEqual([]);
+    }
+  });
+
+  it("CS21: a refusal of the history's read (any 4xx but a 401) is the very page of a path nothing serves, and the list is not asked", async () => {
+    for (const [status, body] of [[404, NOT_FOUND_CASE], [403, rightRefusal("investigate")], [409, { detail: "x" }], [422, { detail: "x" }]] as const) {
+      const w = await world({ history_answer: { status, body } });
+      const unknown = await getAs(w, NOWHERE);
+      w.conduit.calls.splice(0);
+      const res = await getAs(w, pageOf("c-harbour"));
+      expect(refusalProblems(res, unknown), String(status)).toEqual([]);
+      expect(calls(w.conduit), String(status)).toEqual(caseCalls("c-harbour").slice(0, 3));
+    }
+    // A reader with no right to investigate is refused at the brief, before the history is asked (the real routes' order).
+    const w = await world({ rights: [] });
+    await getAs(w, pageOf("c-harbour"));
+    expect(calls(w.conduit)).toEqual(caseCalls("c-harbour").slice(0, 2));
+  });
+
+  it("CS22: one render of a case's page asks for its history exactly once, and the list page never", async () => {
+    const w = await world();
+    await getAs(w, pageOf("c-harbour"));
+    expect(callProblems(calls(w.conduit), caseCalls("c-harbour"))).toEqual([]);
+    expect(calls(w.conduit).filter((c) => c.endsWith("/history"))).toEqual(["GET /v1/investigations/c-harbour/history"]);
+    w.conduit.calls.splice(0);
+    await getAs(w, PATH);
+    expect(calls(w.conduit)).toEqual(["GET /v1/investigations"]);
+  });
+
+  it("CS23: a history that is not a list, or a step missing or misshaping any field, is the case's could-not-be-read page, never a default", async () => {
+    expect(REQUIRED.HistoryStepSummary.sort()).toEqual(["created_at", "id", "label", "restorable"]);
+    for (const field of REQUIRED.HistoryStepSummary) {
+      const b = withField("HistoryStepSummary", field, undefined);
+      expect(caseView("c-harbour", b.case, b.brief, b.history, b.list), `${field} removed`).toBeUndefined();
+    }
+    const wrong: [string, unknown][] = [["id", null], ["id", 7], ["label", 7], ["label", null], ["created_at", "soon"], ["created_at", 0], ["restorable", "yes"], ["restorable", null], ["restorable", 1]];
+    for (const [field, value] of wrong) {
+      const b = withField("HistoryStepSummary", field, value);
+      expect(caseView("c-harbour", b.case, b.brief, b.history, b.list), `${field} = ${JSON.stringify(value)}`).toBeUndefined();
+    }
+    for (const top of [null, {}, "x", [null], [[]], { steps: [] }]) expect(caseView("c-harbour", caseBody(), briefBody(), top, listBody()), JSON.stringify(top)).toBeUndefined();
+    // And through the service: a step with no `restorable` (the model's default is true) is never taken as restorable.
+    for (const field of ["restorable", "created_at", "label", "id"]) {
+      const pages = await drawn(withField("HistoryStepSummary", field, undefined));
+      expect(pages.caseStatus, field).toBe(502);
+      expect(pages.case).not.toContain(CAN);
+    }
+  });
+
+  it("CS24: a failed history read is the case's could-not-be-read page (502), never an empty history; an ended session says to sign in again", async () => {
+    for (const options of [{ history_answer: { status: 500, body: { detail: "boom" } } }, { history_answer: { status: 503, body: { detail: "down" } } }, { history_answer: { status: 200, body: "not json" } }, { history_no_answer: true }] as WorldOptions[]) {
+      const w = await world(options);
+      const res = await getAs(w, pageOf("c-harbour"));
+      expect(res.status, JSON.stringify(options)).toBe(502);
+      expect(failedHistoryProblems(res.text), JSON.stringify(options)).toEqual([]);
+      // A refused status asks nothing more; a 200 that is not a list of steps is found by the reader, after the one read of the list.
+      const text = options.history_answer?.status === 200;
+      expect(calls(w.conduit), JSON.stringify(options)).toEqual(text ? caseCalls("c-harbour") : caseCalls("c-harbour").slice(0, 3));
+    }
+    const w = await world({ history_answer: { status: 401, body: { detail: "Not authenticated" } } });
+    const res = await getAs(w, pageOf("c-harbour"));
+    expect(res.status).toBe(401);
+    expect(mainText(res.text)).toContain(unescape(refusalWords(401, undefined, "")));
+    expect(mainText(res.text)).not.toContain(NO_HISTORY);
+  });
+
+  it("CS25: the page's contents link to its three parts, after the sign-out and before the ways back, and the History part holds no stop", async () => {
+    const w = await world();
+    for (const id of ["c-harbour", "c-ferry"]) {
+      const res = await getAs(w, pageOf(id));
+      expect(contentsProblems(res.text), id).toEqual([]);
+      expect(focusable(`<main>${historyPartOf(res.text)}</main>`), id).toEqual([]);
+      expect(scriptsOffProblems(res.text), id).toEqual([]);
+    }
+    expect(CASES_WORDS.contents.map((c) => [c.href, c.text])).toEqual(CONTENTS.map((href, i) => [href, CONTENTS_TEXT[i]]));
+  });
+
+  describe("CS26: each history check is red against the real page with one thing changed", () => {
+    it("CS26: the history's checks fail for a brief edit said as restorable, a label in other words, an empty table, a count, an id, a control", async () => {
+      const w = await world();
+      const real = (await getAs(w, pageOf("c-harbour"))).text;
+      const sent = sentHistory(harbour);
+      expect(historyProblems(real, sent)).toEqual([]);
+      const plants: [string, string, (html: string) => string[]][] = [
+        ["a brief edit said as restorable", real.replace(`<td>${CANNOT}</td>`, `<td>${CAN}</td>`), (h) => historyProblems(h, sent)],
+        ["a label in the page's own words", real.replace(">Changed<", ">Something changed<"), (h) => historyProblems(h, sent)],
+        ["the steps newest first", real.replace(/<tbody>([\s\S]*?)<\/tbody>/, (_m, rows: string) => `<tbody>${rows.split("\n").filter(Boolean).reverse().join("\n")}\n</tbody>`), (h) => historyProblems(h, sent)],
+        ["a step's time left out", real.replace(`<td>${utcStampOf(sent[0]?.created_at ?? "")}</td>`, "<td></td>"), (h) => historyProblems(h, sent)],
+        ["a step skipped", real.replace(/<tbody>([\s\S]*?)<\/tbody>/, (_m, rows: string) => `<tbody>${rows.split("\n").filter((_r, i) => i !== 2).join("\n")}</tbody>`), (h) => historyProblems(h, sent)],
+        ["a step added", real.replace(/<tbody>([\s\S]*?)<\/tbody>/, (_m, rows: string) => `<tbody>${rows}${/<tr>[\s\S]*?<\/tr>/.exec(rows)?.[0] ?? ""}\n</tbody>`), (h) => historyProblems(h, sent)],
+        ["the steps cut off at three", real.replace(/<tbody>([\s\S]*?)<\/tbody>/, (_m, rows: string) => `<tbody>${rows.split("\n").slice(0, 4).join("\n")}\n</tbody>`), (h) => historyProblems(h, sent)],
+        ["a restore button after the table", real.replace("</table>", '</table><button type="button">Restore the latest</button>'), (h) => historyProblems(h, sent)],
+        ["the History part's heading in other words", real.replace('<h2 id="history">History</h2>', '<h2 id="history">Steps</h2>'), (h) => historyProblems(h, sent)],
+        ["a count of a step's nodes from another read", real.replace(">Expanded<", ">Expanded (12 nodes)<"), (h) => countProblems(h, sent)],
+        ["a count of steps", real.replace(HISTORY_CAPTION, `${HISTORY_CAPTION} (5)`), (h) => countProblems(h, sent)],
+        ["a step's identifier printed", real.replace(`<td>${CANNOT}</td>`, `<td data-step="h-brief">${CANNOT}</td>`), idProblems],
+        ["a step's identifier in a comment", real.replace("</main>", "<!-- h-seed --></main>"), idProblems],
+        ["the History link taken out of the contents", real.replace(/<li><a href="#history">History<\/a><\/li>/, ""), contentsProblems],
+        ["the History part without its anchor", real.replace(/<h2 id="history">/, "<h2>"), contentsProblems],
+      ];
+      for (const [label, html, check] of plants) {
+        expect(html, label).not.toBe(real);
+        expect(check(html).length, label).toBeGreaterThan(0);
+      }
+      // Each of these fails for the reason it names, not by another path.
+      const only = (label: string, html: string, problem: RegExp): void => {
+        const found = historyProblems(html, sent);
+        expect(found.length, `${label}: ${JSON.stringify(found)}`).toBe(1);
+        expect(found[0], label).toMatch(problem);
+      };
+      only("a step cut off", real.replace(/<tbody>([\s\S]*?)<\/tbody>/, (_m, rows: string) => `<tbody>${rows.split("\n").slice(0, 5).join("\n")}\n</tbody>`), /4 rows were drawn for 5 steps sent/);
+      only("a control after the table", real.replace("</table>", '</table><button type="button">Restore the latest</button>'), /offers a control/);
+      only("the heading", real.replace('<h2 id="history">History</h2>', '<h2 id="history">Steps</h2>'), /heading is not a second-level History/);
+      const ferry = (await getAs(w, pageOf("c-ferry"))).text;
+      expect(emptyHistoryProblems(ferry)).toEqual([]);
+      // The empty-brief check reads the Brief part: from its own heading, holding the sentence, and not the contents' list before it.
+      expect(briefPartOf(ferry).startsWith('<h2 id="brief">')).toBe(true);
+      expect(briefPartOf(ferry)).toContain(CASES_WORDS.noBrief);
+      expect(briefPartOf(ferry)).not.toContain(CASES_WORDS.contentsTitle);
+      expect(mainOf(ferry)).toMatch(/<ul>/);
+      expect(emptyBriefProblems(ferry)).toEqual([]);
+      const listInBrief = emptyBriefProblems(ferry.replace(`<p>${CASES_WORDS.noBrief}</p>`, `<p>${CASES_WORDS.noBrief}</p><ul><li>A requirement</li></ul>`));
+      expect(listInBrief).toEqual(["the empty brief is drawn as a list"]);
+      const emptyTable = `<table class="table"><caption class="caption">${HISTORY_CAPTION}</caption><thead><tr><th scope="col">Step</th></tr></thead><tbody></tbody></table>`;
+      expect(emptyHistoryProblems(ferry.replace(`<p>${NO_HISTORY}</p>`, emptyTable))).not.toEqual([]);
+    });
+
+    it("CS26: the refusal, the calls, the reader and the failure checks fail for a 403 passed through, a second read, a default, an empty history", async () => {
+      const w = await world({ history_answer: { status: 403, body: rightRefusal("investigate") } });
+      const unknown = await getAs(w, NOWHERE);
+      const refused = await getAs(w, pageOf("c-harbour"));
+      expect(refusalProblems(refused, unknown)).toEqual([]);
+      expect(refusalProblems({ status: 403, text: refused.text }, unknown)).not.toEqual([]);
+      const history = caseCalls("c-harbour")[2] as string;
+      expect(callProblems([...caseCalls("c-harbour").slice(0, 3), history, "GET /v1/investigations"], caseCalls("c-harbour"))).not.toEqual([]);
+      // A reader that took a missing `restorable` as the model's default: the real view refuses, the lenient one draws.
+      const b = withField("HistoryStepSummary", "restorable", undefined);
+      const lenient = (h: unknown): unknown => caseView("c-harbour", b.case, b.brief, (h as Record<string, unknown>[]).map((s) => ({ restorable: true, ...s })), b.list);
+      expect(caseView("c-harbour", b.case, b.brief, b.history, b.list)).toBeUndefined();
+      expect(lenient(b.history)).toBeDefined();
+      // A reader that took a label the route cannot send as `Changed`: the real view refuses it, the lenient one draws.
+      const odd = withField("HistoryStepSummary", "label", "Removed 3 nodes");
+      const relabel = (h: unknown): unknown => caseView("c-harbour", odd.case, odd.brief, (h as Record<string, unknown>[]).map((s) => ({ ...s, label: SHOWN_LABELS.includes(s["label"] as string) ? s["label"] : "Changed" })), odd.list);
+      expect(caseView("c-harbour", odd.case, odd.brief, odd.history, odd.list)).toBeUndefined();
+      expect(relabel(odd.history)).toBeDefined();
+      // A failed read drawn as an empty history: the real empty history's page, given as the failure.
+      const w2 = await world({ history_answer: { status: 500, body: {} } });
+      const failed = (await getAs(w2, pageOf("c-harbour"))).text;
+      expect(failedHistoryProblems(failed)).toEqual([]);
+      const ferry = (await getAs(await world(), pageOf("c-ferry"))).text;
+      expect(emptyHistoryProblems(ferry)).toEqual([]);
+      expect(failedHistoryProblems(ferry)).not.toEqual([]);
+      expect(failedHistoryProblems(failed.replace('<p role="alert">', "<p>"))).not.toEqual([]);
+    });
+
+    it("CS26: the fixture Conduit refuses what the real history routes refuse, in their order, and sends what they send", async () => {
+      const w = await world({ rights: [] });
+      const ask = async (url: string, path: string, init: RequestInit = {}): Promise<{ status: number; body: unknown }> => {
+        const res = await fetch(`${url}${path}`, init);
+        return { status: res.status, body: await res.json() };
+      };
+      const as = { headers: { Authorization: `Bearer ${w.reader.token}` } };
+      const H = "/v1/investigations/c-harbour/history";
+      expect(await ask(w.conduit.url, H)).toEqual({ status: 401, body: { detail: "Not authenticated" } });
+      expect(await ask(w.conduit.url, H, { method: "POST", ...as })).toEqual({ status: 405, body: { detail: "Method Not Allowed" } });
+      expect(await ask(w.conduit.url, `${H}/h-seed`, as)).toEqual({ status: 405, body: { detail: "Method Not Allowed" } });
+      // The right to investigate is the route's, before the case's gate, for the read and the restore.
+      expect(await ask(w.conduit.url, "/v1/investigations/c-no-such-case/history", as)).toEqual({ status: 403, body: rightRefusal("investigate") });
+      expect(await ask(w.conduit.url, `${H}/h-seed`, { method: "POST", ...as })).toEqual({ status: 403, body: rightRefusal("investigate") });
+      const w2 = await world();
+      const as2 = { headers: { Authorization: `Bearer ${w2.reader.token}` } };
+      for (const id of ["c-unshared", "c-elsewhere", "c-no-such-case"]) expect(await ask(w2.conduit.url, `/v1/investigations/${id}/history`, as2), id).toEqual({ status: 404, body: NOT_FOUND_CASE });
+      expect((await ask(w2.conduit.url, "/v1/investigations/c-ferry/history/h-x", { method: "POST", ...as2 })).status).toBe(403); // a Viewer: a restore needs Editor
+      expect((await ask(w2.conduit.url, "/v1/investigations/c-toll/history/h-toll", { method: "POST", ...as2 })).status).toBe(500); // an Editor: not modelled
+      const sent = (await ask(w2.conduit.url, H, as2)).body as Record<string, unknown>[];
+      expect(sent.map((s) => [s["label"], s["restorable"]])).toEqual([["Seeded", true], ["Expanded", true], ["Edited the brief", false], ["Changed", true], ["Showed links among the view", true]]);
+      expect(sent.map((s) => Object.keys(s).sort())).toEqual(sent.map(() => ["created_at", "id", "label", "restorable"]));
+      expect((await ask(w2.conduit.url, "/v1/investigations/c-ferry/history", as2)).body).toEqual([]);
     });
   });
 });

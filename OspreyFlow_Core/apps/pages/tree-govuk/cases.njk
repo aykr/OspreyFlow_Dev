@@ -1,7 +1,9 @@
-{#- The reader's cases and one case's page with its brief (slice GR1a; scenario CS), read-only, drawn on the server and complete without a
-    script. The list is a table with a caption, column headers (th, scope col) and a row header for each case holding its name as a link;
-    a case's page is its facts as a description list and its brief as headings and an ordered list. Nothing here is a form, a button or a
-    control, and nothing counts: the page draws what it is given, in the order given. The words are `server/views/casesWords.ts`'s. -#}
+{#- The reader's cases and one case's page with its brief and its history (slices GR1a and GR1e; scenario CS), read-only, drawn on the
+    server and complete without a script. The list is a table with a caption, column headers (th, scope col) and a row header for each
+    case holding its name as a link; a case's page is its contents (links to its parts), its facts as a description list with the link to
+    its drawing boards after them (slice GG4a; the History part holds no link: CS25), its brief as headings and an ordered list, and its
+    history as a table whose row header is each step's label. Nothing here is a form, a button or a control, and nothing counts: the page
+    draws what it is given, in the order given. The words are `server/views/casesWords.ts`'s. -#}
 {% extends "layout.njk" %}
 {% block content %}
 {% if view.kind == "table" %}
@@ -24,14 +26,19 @@
 <p><a href="/">{{ words.back }}</a></p>
 {% elif view.kind == "case" %}
 <h1>{{ view.name }}</h1>
-<h2>{{ words.about }}</h2>
+<nav aria-labelledby="contents-title">
+<h2 id="contents-title">{{ words.contentsTitle }}</h2>
+<ul>{% for part in words.contents %}<li><a href="{{ part.href }}">{{ part.text }}</a></li>{% endfor %}</ul>
+</nav>
+<h2 id="about">{{ words.about }}</h2>
 <dl>
 <dt>{{ words.level }}</dt><dd>{{ view.level }}</dd>
 <dt>{{ words.domains }}</dt><dd>{{ view.domains }}</dd>
 <dt>{{ words.datasets }}</dt><dd>{% if view.datasets.length %}{% for dataset in view.datasets %}{{ dataset }}{% if not loop.last %}, {% endif %}{% endfor %}{% else %}{{ words.noDatasets }}{% endif %}</dd>
 <dt>{{ words.made }}</dt><dd>{{ view.made }}</dd>
 </dl>
-<h2>{{ words.brief }}</h2>
+<p><a href="{{ view.boards }}">{{ words.boards }}</a></p>
+<h2 id="brief">{{ words.brief }}</h2>
 {% if view.brief.kind == "none" %}
 <p>{{ words.noBrief }}</p>
 {% else %}
@@ -46,7 +53,22 @@
 <p>{{ words.noRequirements }}</p>
 {% endif %}
 {% endif %}
-<p><a href="{{ view.boards }}">{{ words.boards }}</a></p>
+<h2 id="history">{{ words.history }}</h2>
+{% if view.history.kind == "none" %}
+<p>{{ words.noHistory }}</p>
+{% else %}
+<p>{{ words.historyLede }}</p>
+<table class="table">
+<caption class="caption">{{ words.historyCaption }}</caption>
+<thead>
+<tr>{% for column in words.historyColumns %}<th scope="col">{{ column }}</th>{% endfor %}
+</tr>
+</thead>
+<tbody>
+{% for step in view.history.rows %}<tr><th scope="row">{{ step.label }}</th><td>{{ step.when }}</td><td>{{ step.restore }}</td></tr>
+{% endfor %}</tbody>
+</table>
+{% endif %}
 <p><a href="/cases">{{ words.toCases }}</a></p>
 <p><a href="/">{{ words.back }}</a></p>
 {% elif view.kind == "ended" %}
