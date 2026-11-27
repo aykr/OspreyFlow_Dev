@@ -26,6 +26,7 @@
  *  - a form, a control, a skipped heading, a stop out of order, a script                                                     -> DR16
  *  - a field neither drawn nor named as left out, a left-out field that changes the page                                    -> DR17
  *  - the page in the Default tree, left out of the route list, its code choosing what is drawn, American spelling            -> DR18
+ *  - a PDF drawn in the page (an img, iframe, object or embed), its link gone, or the download's header lost on the way      -> DR20
  * Every planted fault is the real page (or the real view, or the real file) with one thing changed, run through the same function that
  * finds nothing in the real one (DR19, rule 15).
  */
@@ -47,7 +48,7 @@ import { testClock } from "../support/clock.js";
 import { cookieFrom, csrfFromPage, request } from "../support/http.js";
 import { generateSecret } from "../support/secret.js";
 import { bearer, providerFor } from "../support/studioWorld.js";
-import { NOT_FOUND_CASE, NOT_FOUND_DOCUMENT, PNG, RIGHT_REFUSAL, UNKNOWN_BEARER, documentConduit, readerViewOf } from "./documentConduit.js";
+import { NOT_FOUND_CASE, NOT_FOUND_DOCUMENT, PDF_DISPOSITION, PNG, RIGHT_REFUSAL, UNKNOWN_BEARER, documentConduit, readerViewOf } from "./documentConduit.js";
 import type { Case, Doc, DocumentConduit, DocumentConduitOptions, Reader, Span } from "./documentConduit.js";
 
 const PAGES_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -145,6 +146,12 @@ const NO_FILE: Doc = base({ id: "d-photo-gone", title: "A picture never kept", m
 const FILM: Doc = base({ id: "d-film", title: "Quay camera", media_kind: "video", has_file: true, file: { bytes: Buffer.from("synthetic film"), type: "video/webm" } });
 const KEPT: Doc = base({ id: "d-kept", title: "Kept text", text: "A kept note.", media_kind: "text", has_file: true, file: { bytes: Buffer.from("A kept note."), type: "text/plain" } });
 const ODD: Doc = base({ id: "d-odd", title: "A sound", media_kind: "audio", has_file: true, file: { bytes: Buffer.from("noise"), type: "application/octet-stream" } });
+// A PDF as held content, whatever its Document says its kind is short of a picture or a film: no writer stores one today. Its title is a
+// name a loader could have given, which must never name the download.
+const PDF_BYTES = Buffer.from("%PDF-1.7\n% synthetic\n%%EOF\n");
+const pdf = (id: string, media_kind: string | null): Doc =>
+  base({ id, title: "Statement of Ada Quill.html", media_kind, has_file: true, file: { bytes: PDF_BYTES, type: "application/pdf" } });
+const PDFS: Doc[] = [pdf("d-pdf-bare", null), pdf("d-pdf-named", "pdf"), pdf("d-pdf-document", "document")];
 const UNTITLED: Doc = base({ id: "d-untitled-77", title: null, text: "Nothing to name it by." });
 const MARKUP: Doc = base({
   id: "d-markup",
@@ -166,7 +173,7 @@ const ELSEWHERE: Doc = base({ id: "d-elsewhere", case_id: "c-ferry", title: "In 
 const UNSHARED: Doc = base({ id: "d-unshared", case_id: "c-unshared", title: "In an unshared case" });
 const AWAY: Doc = base({ id: "d-away", case_id: "c-away", title: "In another unit's case" });
 
-const DOCS: Doc[] = [LEDGER, OVERLAP, EMAIL, PHOTO, NO_FILE, FILM, KEPT, ODD, UNTITLED, MARKUP, STALE, SECRET, PERSON, ELSEWHERE, UNSHARED, AWAY];
+const DOCS: Doc[] = [LEDGER, OVERLAP, EMAIL, PHOTO, NO_FILE, FILM, KEPT, ODD, UNTITLED, MARKUP, STALE, SECRET, PERSON, ELSEWHERE, UNSHARED, AWAY, ...PDFS];
 
 interface World {
   app: Express;
@@ -348,6 +355,30 @@ const GRAPH_IDS = DOCS.flatMap((d) => [...d.spans.map((s) => s.node_id), d.sende
 // (The hidden span's words, "Brook Vale", are in the text the reader may read: only its mark is withheld, which DR1 checks.)
 const NEVER = [...GRAPH_IDS, "document_not_found", "investigation_not_found", "right_required", "investigate", "data-node", UNIT, "not have access"];
 const neverProblems = (html: string): string[] => NEVER.filter((word) => strip(html).includes(word)).map((word) => `the page shows ${JSON.stringify(word)}`);
+
+/** Every way a page could show a PDF or lose its download (DR20): an element that would show a file, or the file's address anywhere
+ * but as the one link's. */
+function pdfProblems(html: string, d: Doc): string[] {
+  const found: string[] = [];
+  const src = fileOf(CASE, d.id);
+  for (const tag of ["img", "iframe", "frame", "object", "embed", "video", "audio", "source"]) {
+    if (new RegExp(`<${tag}\\b`, "i").test(mainOf(html))) found.push(`the page draws <${tag}> for a PDF`);
+  }
+  const links = focusable(mainOf(html)).filter((stop) => stop.tag === "a" && stop.href === src);
+  if (links.length !== 1) found.push(`the page links the download ${links.length} times, not once`);
+  const uses = [...strip(html).matchAll(/\s[\w-]+="([^"]*)"/g)].filter((m) => unescape(m[1] as string) === src);
+  if (uses.length !== links.length) found.push("the file's address is used by something other than the link");
+  return found;
+}
+
+/** What the forwarder's answer for a PDF must carry: the Conduit's download, whole, with its type and the service's nosniff. */
+function downloadProblems(headers: Record<string, string | undefined>): string[] {
+  const found: string[] = [];
+  if (headers["content-disposition"] !== PDF_DISPOSITION) found.push(`the answer's Content-Disposition is ${JSON.stringify(headers["content-disposition"])}, not the download`);
+  if (headers["content-type"] !== "application/pdf") found.push(`the answer's type is ${JSON.stringify(headers["content-type"])}`);
+  if (headers["x-content-type-options"] !== "nosniff") found.push("the answer has no nosniff");
+  return found;
+}
 
 // ------------------------------------------------------------------------------------------------ what the page should draw
 
@@ -890,6 +921,41 @@ describe("one document of a case in the reader, on the GOV.UK tree (scenario DR)
     const sources = sourcesOfThePage();
     for (const s of sources) expect([...withoutComments(s.text).matchAll(new RegExp(AMERICAN.source, "gi"))].map((m) => m[0]), s.name).toEqual([]);
     expect(choosingProblems(sources)).toEqual([]);
+  });
+
+  it("DR20: a PDF is never shown in the page: only the link, whose answer through the forwarder is a download under the Conduit's own name", async () => {
+    const w = await world();
+    // The header itself, not only the fixture's copy of it.
+    expect(PDF_DISPOSITION).toBe('attachment; filename="document.pdf"');
+    for (const d of PDFS) {
+      const res = await getAs(w, pageOf(CASE, d.id));
+      expect(res.status, d.id).toBe(200);
+      expect(pdfProblems(res.text, d), d.id).toEqual([]);
+      const file = await getAs(w, fileOf(CASE, d.id)).buffer(true);
+      expect(file.status, d.id).toBe(200);
+      expect(downloadProblems(file.headers as Record<string, string | undefined>), d.id).toEqual([]);
+    }
+
+    // Each check, red against the real page and answer with one thing changed (rule 15).
+    const d = PDFS[0] as Doc;
+    const real = (await getAs(w, pageOf(CASE, d.id))).text;
+    const src = fileOf(CASE, d.id);
+    const link = /<p><a href="\/v1\/[^"]*">[^<]*<\/a><\/p>/;
+    expect(real).toMatch(link);
+    for (const [label, shown] of [
+      ["an img", `<img src="${src}" alt="x">`],
+      ["an iframe", `<iframe src="${src}"></iframe>`],
+      ["an object", `<object data="${src}" type="application/pdf"></object>`],
+      ["an embed", `<embed src="${src}">`],
+    ] as const) {
+      expect(pdfProblems(real.replace(link, shown), d), label).not.toEqual([]);
+      expect(pdfProblems(real.replace("</main>", `${shown}</main>`), d), `${label} beside the link`).not.toEqual([]);
+    }
+    expect(pdfProblems(real.replace(link, ""), d)).not.toEqual([]);
+    const headers = (await getAs(w, src).buffer(true)).headers as Record<string, string | undefined>;
+    expect(downloadProblems({ ...headers, "content-disposition": undefined })).not.toEqual([]);
+    expect(downloadProblems({ ...headers, "content-disposition": "inline" })).not.toEqual([]);
+    expect(downloadProblems({ ...headers, "content-disposition": `attachment; filename="${d.title as string}"` })).not.toEqual([]);
   });
 
   describe("DR19: each check is red against the real page with one thing changed", () => {

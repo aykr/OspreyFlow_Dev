@@ -6,13 +6,27 @@ and the case that catches it:
 - an image's entities would be extracted from nothing, not from its description and visible text
   (`test_an_image_is_described_and_its_text_read_then_extracted_from`);
 - a video's from nothing, not its transcript (`test_a_video_is_transcribed_then_extracted_from`);
-- a finding would land in the graph as fact (`test_a_finding_is_inferred_until_accepted`)."""
+- a finding would land in the graph as fact (`test_a_finding_is_inferred_until_accepted`);
+- a PDF would be shown in the page at this origin, or the download named as a loader named it
+  (`test_a_pdf_is_served_as_a_download_under_the_routes_own_name`; slice GG3b, the owner's ruling
+  of 26 November 2026);
+- another held file would become a download, so the reader's picture or film stopped showing
+  (`test_no_other_held_file_is_a_download`)."""
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from datetime import UTC, datetime
 
 import pytest
+from fastapi.testclient import TestClient
+from services.api.app import (
+    app,
+    get_audit,
+    get_document_content,
+    get_investigations,
+    get_principal,
+)
 from services.api.document_content import DocumentContentService
 from services.api.review import DocumentNotFoundError
 from services.api.working_set.service import WorkingSetService
@@ -27,6 +41,7 @@ from schemas.model import (
     VisionRequest,
 )
 
+from .test_document_upload_route import ANALYST as ROUTE_ANALYST
 from .test_email_extraction import (
     ANALYST,
     HANDLING,
@@ -35,6 +50,7 @@ from .test_email_extraction import (
     InMemoryCandidates,
     WritingGraph,
 )
+from .test_link_events import _Cases
 from .working_set.fakes import FakeWorkingSetStore
 from .working_set.test_visible_link import SCHEME, node
 
@@ -135,6 +151,90 @@ async def test_a_documents_file_comes_back_with_its_type() -> None:
     service, _, _, _, _, _ = await _service()
     data, content_type = await service.file("inv-1", "image-1", ANALYST)
     assert (data, content_type) == (PNG, "image/png")
+
+
+# --- the file's route (GG3b): a PDF is a download, never shown in a page -----------------------
+
+PDF = b"%PDF-1.7\n% synthetic\n%%EOF\n"
+#: A title a loader gave, shaped to show in a header if the route ever named the download by it.
+LOADERS_NAME = 'Statement of Ada Quill.html"; x="'
+
+
+class _Audit:
+    def __init__(self) -> None:
+        self.actions: list[str] = []
+
+    async def record(self, **kwargs: object) -> None:
+        self.actions.append(str(kwargs["action"]))
+
+
+@pytest.fixture
+async def served() -> Iterator[tuple[TestClient, _Audit]]:
+    """The real route over the real service, so the content type is the store's own mapping of the
+    reference's extension, never one a test hands the route."""
+    service, media, _, _, _, working = await _service()
+    pdf_ref = await media.put(PDF, "application/pdf")
+    pdfs = [
+        # No writer stores a PDF today: whatever kind the Document says it is, the file's own type
+        # decides.
+        _document("pdf-none", "none", pdf_ref),
+        _document("pdf-image", "image", pdf_ref),
+        _document("pdf-text", "text", pdf_ref),
+        _document("pdf-secret", "none", pdf_ref, "SECRET"),
+    ]
+    for document in pdfs:
+        document.properties["title"] = LOADERS_NAME
+    await working.add_nodes("inv-1", pdfs)
+    audit = _Audit()
+    app.dependency_overrides[get_principal] = lambda: ROUTE_ANALYST
+    app.dependency_overrides[get_document_content] = lambda: service
+    app.dependency_overrides[get_audit] = lambda: audit
+    app.dependency_overrides[get_investigations] = lambda: _Cases({"inv-1"})
+    yield TestClient(app), audit
+    app.dependency_overrides.clear()
+
+
+def _file_url(document_id: str) -> str:
+    return f"/v1/investigations/inv-1/documents/{document_id}/file"
+
+
+@pytest.mark.parametrize("document_id", ["pdf-none", "pdf-image", "pdf-text"])
+async def test_a_pdf_is_served_as_a_download_under_the_routes_own_name(
+    served: tuple[TestClient, _Audit], document_id: str
+) -> None:
+    client, audit = served
+    response = client.get(_file_url(document_id))
+    assert (response.status_code, response.content) == (200, PDF)
+    assert response.headers["content-type"] == "application/pdf"
+    # The whole header, so nothing of the Document's (its title, its id, its file's reference) is
+    # in the name.
+    assert response.headers.get("content-disposition") == 'attachment; filename="document.pdf"'
+    assert audit.actions == ["read_document_file"]
+
+
+@pytest.mark.parametrize(
+    ("document_id", "content_type"),
+    [("image-1", "image/png"), ("video-1", "video/mp4"), ("text-1", "text/plain; charset=utf-8")],
+)
+async def test_no_other_held_file_is_a_download(
+    served: tuple[TestClient, _Audit], document_id: str, content_type: str
+) -> None:
+    client, _ = served
+    response = client.get(_file_url(document_id))
+    assert response.status_code == 200, response.text
+    assert response.headers["content-type"] == content_type
+    assert "content-disposition" not in response.headers
+
+
+@pytest.mark.parametrize("document_id", ["pdf-secret", "no-such"])
+async def test_a_pdf_above_the_reader_answers_as_one_that_is_not_there(
+    served: tuple[TestClient, _Audit], document_id: str
+) -> None:
+    client, audit = served
+    response = client.get(_file_url(document_id))
+    assert (response.status_code, response.json()) == (404, {"error": "document_not_found"})
+    assert "content-disposition" not in response.headers
+    assert audit.actions == []
 
 
 @pytest.mark.parametrize("document_id", ["secret-1", "no-such", "phone"])

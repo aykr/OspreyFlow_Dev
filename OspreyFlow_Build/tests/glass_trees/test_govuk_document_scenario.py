@@ -79,7 +79,7 @@ ID = re.compile(r"^DR\d+$")
 TITLE = re.compile(r"""\b(?:it|test)\(\s*(?:"|')(DR\d+): """)
 PAGE_TEST_NAME = "document.test.ts"
 PATH = "/cases/document"
-EXPECTED_IDS = [f"DR{n}" for n in range(1, 20)]
+EXPECTED_IDS = [f"DR{n}" for n in range(1, 21)]
 JOURNEYS = ["A6", "B6"]
 ROW = "documents"
 ROW_NAME = "Documents: reader, a node's Messages, adding files"
@@ -114,6 +114,7 @@ BRIEF: dict[str, tuple[str, ...]] = {
     "the field census": ("DR17",),
     "the trees, the lists and the words": ("DR18",),
     "each check red against the real page with one thing changed": ("DR19",),
+    "a PDF a download, never shown in the page": ("DR20",),
 }
 
 

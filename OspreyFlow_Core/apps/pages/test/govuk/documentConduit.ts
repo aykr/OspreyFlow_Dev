@@ -17,7 +17,8 @@
  *    clearance, a node that is not a Document, and for the file one with no file held, are the same 404 `{"error": "document_not_found"}`.
  * What it sends, as the route's model does: `DocumentReaderView` with every field (FastAPI sends a field's default too), its spans
  * **with each span whose node the reader may not see left out** (`dossier.get_document_view`'s `narrow_to_visible`, rule 3), in the
- * order of their start (`spans.sort(key=lambda span: span.start)`); the file as its bytes with its own content type, no other header.
+ * order of their start (`spans.sort(key=lambda span: span.start)`); the file as its bytes with its own content type, and no other header
+ * but a PDF's, which the route sends as a download under its own name (`PDF_DISPOSITION`), never a name a loader gave.
  * A test can make the reader's route fail (`reader_answer`, `reader_no_answer`).
  */
 import { createServer } from "node:http";
@@ -101,6 +102,8 @@ export interface DocumentConduit {
 /** A 1x1 PNG: a real picture, so a browser can be seen to load it (synthetic: one grey pixel). */
 export const PNG = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==", "base64");
 
+/** The header the route sends with a PDF, and with no other type (`document_file_route`; its own test holds the route to it). */
+export const PDF_DISPOSITION = 'attachment; filename="document.pdf"';
 export const NOT_FOUND_CASE = { error: "investigation_not_found" };
 export const NOT_FOUND_DOCUMENT = { error: "document_not_found" };
 /** The resolver's reason for a bearer it does not know: one of its own sentences (`packages/principal_auth`), standing for all. */
@@ -175,6 +178,7 @@ export async function documentConduit(options: DocumentConduitOptions): Promise<
       if (!doc.has_file || doc.file === undefined) return send(404, NOT_FOUND_DOCUMENT);
       res.statusCode = 200;
       res.setHeader("Content-Type", doc.file.type);
+      if (doc.file.type === "application/pdf") res.setHeader("Content-Disposition", PDF_DISPOSITION);
       res.end(doc.file.bytes);
       return;
     }
