@@ -12,7 +12,7 @@
  * **The strict reader.** A body is read field by field against the routes' models: `Board` and `BoardOpened`
  * (`packages/schemas/boards.py`), `Node`, `Edge`, `Provenance`, `DrawnAssertion`, `Grading` and `Handling` (`packages/schemas/domain.py`),
  * and the cap's `LimitExceeded` (`services/api/working_set/models.py`). Every field the route sends (`REQUIRED`) must be there, of its type
- * and within the model's own limits (a time written as the Conduit writes one, a grade's parts not empty, a drawn item with a source); a
+ * and within the model's own limits (a time written as the Conduit writes one, a grade's parts not empty); a
  * field a model leaves out when unset (`MAY_BE_ABSENT`) may be absent, and is read as strictly when it is there. A body missing one, or
  * with one of another shape, is not a view (`undefined`), said as "could not be read", never as a zero, an empty table or an empty board
  * (rule 2). So is a body that is not the one asked for (a board of another case, or another board), one that names an element twice, one
@@ -24,10 +24,9 @@
  * field name" and "Checked, not drawn" sentences name the same, and `tests/glass_trees/test_govuk_boards_scenario.py` holds them to the
  * models' own fields.
  *
- * **No source is said until GG4b** (the owner's ruling of 26 November 2026, rule 3). The route sends a drawn item's `source_document` to
- * every reader of the board, whether or not they may read the document, and a drawn item needs a note or a document: saying a note, or
- * that there is none, would tell a reader a document is there. The reader still refuses a drawn item with neither, and keeps neither: no
- * view holds a note or a document, and no table has a column for one.
+ * **No source is said** (the owner's ruling of 26 November 2026, rule 3). Since GG4b the route sends a drawn item's `source_document`
+ * only to a reader who may read the document (ADR-143 Amendment 8), and the source column returns to the page in a later page part. The
+ * reader keeps neither a note nor a document: no view holds one, and no table has a column for one.
  *
  * The views keep every board, item and link the Conduit sent, in the order it sent them: nothing here removes, cuts, sorts or counts
  * (decision 5; rule 3 stays with the Conduit and its adapters, which send only what the reader may see). The one split is of what was sent
@@ -187,8 +186,8 @@ function assertionOf(body: unknown): Assertion | undefined {
   const grade = gradingOf(grading);
   if (!isFilled(label) || grade === undefined || !(original_grading === null || gradingOf(original_grading) !== undefined)) return undefined;
   if (!isTextOrNull(source_note) || !isTextOrNull(source_document) || !isTextOrNull(icon)) return undefined;
-  // A drawn item has a source note, a document of the case, or both; never neither (`DrawnAssertion._has_a_source`).
-  if (!(isText(source_note) && source_note.trim() !== "") && !isFilled(source_document)) return undefined;
+  // Either may be empty, or both: the Conduit sends a drawn item without a cited document to a reader who may not read it, and an item
+  // drawn with a document and no note then has neither (ADR-143 Amendment 8 item 8).
   return { label, grading: grade };
 }
 
