@@ -138,6 +138,15 @@ class WorkingSetStorage(Protocol):
         (does each end of the link stand in the working set?)."""
         ...
 
+    async def get_members(
+        self, investigation_id: str, node_ids: Sequence[NodeId], edge_ids: Sequence[EdgeId]
+    ) -> tuple[dict[NodeId, Node], dict[EdgeId, Edge]]:
+        """The named nodes and links, source fidelity, in one read; an id this investigation's
+        working set does not hold is absent from the result. At least one id of each kind. The read
+        asked is the same whatever is stored, so a caller that judges the result in memory takes the
+        same trips for an element the reader may not see as for one that is not there."""
+        ...
+
     async def case_ids(self) -> list[str]:
         """Every case that has a working set stored, whoever opened it: for the one caller that
         must reach them all, a revert removing a load's elements from every canvas."""
@@ -796,6 +805,27 @@ class ValkeyWorkingSetStore:
         if blob is None:
             return None
         return Node.model_validate(msgpack.unpackb(blob, raw=False))
+
+    async def get_members(
+        self, investigation_id: str, node_ids: Sequence[NodeId], edge_ids: Sequence[EdgeId]
+    ) -> tuple[dict[NodeId, Node], dict[EdgeId, Edge]]:
+        """Both hashes in one transaction: one trip, and one moment's bodies."""
+        pipe = self._client.pipeline(transaction=True)
+        pipe.hmget(_node_key(investigation_id), list(node_ids))
+        pipe.hmget(_edge_key(investigation_id), list(edge_ids))
+        node_blobs, edge_blobs = await _reply(pipe.execute())
+        return (
+            {
+                node_id: Node.model_validate(msgpack.unpackb(blob, raw=False))
+                for node_id, blob in zip(node_ids, node_blobs, strict=True)
+                if blob is not None
+            },
+            {
+                edge_id: Edge.model_validate(msgpack.unpackb(blob, raw=False))
+                for edge_id, blob in zip(edge_ids, edge_blobs, strict=True)
+                if blob is not None
+            },
+        )
 
     async def add_nodes(self, investigation_id: str, nodes: Sequence[Node]) -> None:
         for chunk in _chunks(nodes):

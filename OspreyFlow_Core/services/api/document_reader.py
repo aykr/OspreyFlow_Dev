@@ -10,6 +10,11 @@ an email, the event it was made from, read through the analytics port under the 
 in the case, and a node that is not a Document all answer `DocumentNotFoundError`, one refusal for
 all three (rules 3 and 4).
 
+**What it names of an email: only what the caller can see in the case.** The sender's and
+recipient's ids are sent where `visible_node` would give that node, and the link's id and the
+event's where `visible_edge` would give the link; otherwise each is `None`, with nothing to say one
+was withheld (rule 3).
+
 **Marking an entity by hand (ADR-098 decision 5).** Words selected in the text the reader shows can
 be marked as a Person, an Organisation, a Location or an Endpoint: written as a node of that type,
 asserted (a person made it) and attributed to them, its source the Document with the selection's
@@ -142,13 +147,20 @@ class DocumentReaderService:
                 view.text = excerpt if isinstance(excerpt, str) else ""
                 view.truncated = event.properties.get("truncated") is True
                 view.sent_at = event.occurred_at
+                # An event is read on its own handling, and its link or an end of it may be
+                # marked above the reader: each id is sent only where they may see what it names
+                # (rule 3), and is otherwise as for an end that is not in the case.
+                ends = (event.source_id, event.target_id)
+                seen, link_seen = await self._working_set.visible_ends_and_link(
+                    investigation_id, ends, event.edge_id, principal
+                )
                 # By the email's direction, as the Inspector's From and To read it: an inbound
                 # email on an a→b link was sent by b.
-                ends = (event.source_id, event.target_id)
-                view.sender_id, view.recipient_id = (
-                    ends[::-1] if event.direction == "inbound" else ends
-                )
-                view.edge_id, view.event_id = event.edge_id, event.event_id
+                sender, recipient = ends[::-1] if event.direction == "inbound" else ends
+                view.sender_id = sender if sender in seen else None
+                view.recipient_id = recipient if recipient in seen else None
+                if link_seen:
+                    view.edge_id, view.event_id = event.edge_id, event.event_id
 
         try:
             stored = await get_document_view(self._candidates, self._graph, node.id, principal)
