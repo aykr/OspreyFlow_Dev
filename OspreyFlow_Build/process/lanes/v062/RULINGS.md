@@ -3,6 +3,117 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 27 November 2026, after 09:40 UTC: the overnight drafts' owner questions answered (the owner, in chat, all as the build adviser recommended)
+
+1. **GR1f1 Q8 (a)** for the page. **Cut a Conduit security part before RL2** that audits the access and datasets reads (SE9h).
+2. **GG3e Q3 (a):** the file is streamed through the forwarder's own translation, in one shared function. The anti-forgery and forwarder tests stay unchanged, and stay green with plants.
+3. **GG3e Q5b (a)** for the page. **Cut a Conduit part before RL2** that stores the legal basis on the Document, with its amendment as a diff (SE9i).
+4. **GG4f2 Q3b (a): a Conduit security part first** (SE9g). `choose_picture` refuses, and `picture_file` answers as none, any Document whose reference is not one of the four image types. Red first. **GG4f2 waits for it.**
+5. **GG4f3 Q8b:** the page never names the deployment's highest marking. It says "above the highest marking this deployment holds", permanently.
+6. **GG5c Q2 (a):** the conformance case comes first, on both adapters. **If it is red, stop:** the fix is a Vault security part, never a page filter.
+7. **GG5e1:**
+   - **Q1 (a):** its own page route, with the right checked before any byte and the page service's cap. No forwarder widening.
+   - **Q2 (a):** `GET /v1/investigations/{id}/sites` comes as an amendment diff for the owner's approval, with the access case first.
+   - **Q3 (a):** built as the routes are. **Cut a Conduit security part before RL2** giving a site a marking (SE9j).
+8. **GG5e2 Q1 (a):** turn to the plan, north up, turn by 15 degrees, tilt 0, 30, 60 and flat. Written into `spec/02` §3.5 first.
+9. **GG2g Q8 (a):** drawn items are read-only on the canvas, and *Edit on board* is offered only to the item's author. The ADR-143 C15 amendment comes as a diff.
+10. **Everything else in those drafts stays standing (a).**
+
+## 27 November 2026, about 09:40 UTC: WS4b's order and its two speed items (the owner, in chat)
+
+The plan and order are agreed: **the GG2c, WS4a, SE8g train, then WS4b.** Two speed items are planned inside WS4b, **never accepted narrower:**
+
+1. **The sweep** (3.5 to 3.8 s against 3 s on the server):
+   - Round 1 measures it again with picking ratio 4.
+   - The budget is judged on CI's runner (three runs) and on the owner's Mac once (D280 Q6).
+   - After round 1, the conductor gives the owner CI's figures, and the owner runs the Mac measurement.
+2. **`community-links.spec.ts` is still red:** if it is still red after round 1, **round 2 takes it** (WS4b-perf Q8).
+3. **If the sweep still misses on CI after ratio 4, stop** and bring the owner the figures, with WS4c (ADR-119's lever) as the option. **No gate changes.**
+
+## 27 November 2026, after 09:17 UTC: WS4b's look accepted (D286; the owner, in chat)
+
+1. **The look is accepted as now drawn on `away/WS4b-look`:** the export carries every link; link labels are written beside the line as Sigma 3 did; everything else is Sigma 4's own drawing.
+2. **WS4b comes into the line when WS4b-speed's report has its Q6 figures.** Its round 1 merges `away/WS4b`, `away/WS4b-perf`, `away/WS4b-look` and `away/WS4b-speed`.
+3. **In that slice:**
+   - **The canvas-look references** are remade on this look with WS4a's command, under the reason "Sigma 4's look, accepted by the owner on 27 November 2026".
+   - **The ADR-152 decision 9 amendment and the WebGL 2 requirement (D280 Q2)** are written as diffs for the owner's approval **before it merges.**
+4. **Q3:** `pickingDownSizingRatio` is set to **4**. WS4b-speed's measurement found it better at pointing than 2, and faster. It needs a test on the smallest node at its edge.
+
+## 27 November 2026, after 09:15 UTC: server done (the owner, in chat)
+
+1. **The server's early warning now runs hand-back 64** (`bafa9544`: timing budgets are left to the Mac).
+   - It runs with `capacity.json` option D: 4 jobs, 300%, 10G, 3 workers, and two stacks within 4 jobs.
+   - The slice cap is 1200% and 40G.
+   - The build account's runner is `6bec54ee`, the seat-start fix.
+2. **The 09:01 stack (GG5a, GG4c, SE9d) was stopped by the owner** with no verdict, and is sent again.
+3. **From now on:**
+   - Send stacks that merge cleanly together.
+   - Land each server-green stack as one train.
+   - Run a second stack beside the first when the parts fit within 4 jobs.
+4. **Report:** parts landed per gate, and any server run ended for memory.
+
+## 27 November 2026, about 09:20 UTC: GR1b's numbers, GG4b may merge, the server (the owner, in chat)
+
+1. **GR1b: (a).**
+   - Its scenario rows CS16 to CS33 become CS27 to CS44; main keeps CS16 to CS26.
+   - The owner's refreeze line is in, for `cases-new.test.ts`'s renumbering alone, with a second send-back line.
+   - The line fault (a builder ending on a question was read as green) goes to line-fix.
+2. **GG4b:** the builder's three spec edits stay, since they restate what the owner approved:
+   - `01_DOMAIN_MODEL.md` §2.2d;
+   - `03_CONDUIT_MIDDLEWARE.md`, the PATCH 422 `no_source` and the withholding rule;
+   - `08_ACCEPTANCE_SCENARIOS.md` BD3 and BD11.
+   - **GG4b may merge. "Never accepted narrower" still holds.**
+3. **The server:** the owner reinstalls its early warning for 64 as soon as it is free. When the stack now running ends, **no new server stack is sent until the owner says "server done"** (about 15 minutes). Single merges on the Mac go on meanwhile. The conductor tells the owner when the server is free.
+
+## 27 November 2026, after 06:40 UTC: GR1b; rule 5 widened to any file (the owner, in chat)
+
+1. **GR1b:** the owner's send-back line is in. It is used **only after GR1e lands**, for GR1b to take main in (the case page's own code). One round; its verifier then checks it again.
+2. **Rule 5, widened from now until RL2:** a verified part that conflicts with main **only because another part merged first** may go back to take main in **on the conductor's own word**.
+   - One round, any file.
+   - No round is counted against it, if it is under its limit.
+   - Its verifier checks it again, and the full gate runs.
+   - **If that round's verifier finds anything beyond taking main in, or the part is at its round limit, it goes to the owner.**
+   - Each use is listed in the report.
+
+## 27 November 2026, about 06:35 UTC: stacks that merge together, and trains (the owner, in chat)
+
+Since the train was switched on (26 November, 17:06), every merge has been single, and 12 verified parts are queued. From now:
+
+1. **Before sending a server stack,** check with `git merge-tree` that its parts merge cleanly together onto main. Send only such stacks.
+2. **Land every server-green stack as one train** (`merge_slice.py train A B C`).
+3. **Where shared-list conflicts block that,** send those parts back to take main in together, then stack them.
+4. **Report how many parts each gate landed.**
+5. SE9d's merge is run again, and GR1e's rerun goes ahead as planned.
+
+## 27 November 2026, about 06:05 UTC: the overnight drafts; GG5a's two diffs (the owner, in chat)
+
+1. **The overnight drafts** (`drafts/2026-11-27` on server-backup) are taken in under the owner's standing (a) (D274). The drafts are GR1f1-3, GG3c, GG3d1-2, GG3e, GG2f1-2, GG2g, GG4f1-3, GG4g, GG4h, GG4i1-4, GG5c, GG5d, GG5e1-2, GG5f and GA1e.
+   - They are copied into `slices/` and queued in the chain plan's order, behind what is already queued.
+   - Every question marked as the owner's goes in the next report, for the build adviser.
+   - **A slice whose own question is the owner's does not start until the owner answers it.**
+2. **GG5a: both diffs approved.**
+   - The ADR-152 decision 8 diff (`GG5a_ADR152_DECISION8_RUN.diff`: the run's facts, no decision changed).
+   - The CI patch (`apps/pages/test/csp/ci-wiring.patch`, the `pages-csp` job), on the owner's standing word for technical changes.
+   - Both are prepared as diffs for the owner to apply.
+
+## 27 November 2026, after 05:50 UTC: WS4b's speed (D282; the owner, in chat, as the build adviser recommended)
+
+1. **Q1:** the label-side fix stays.
+2. **Q2:** a slice stops Sigma 4's full reducer re-run at each change of graph state, with a refresh when the camera stops. It includes a test that fails if Sigma's private field changes.
+3. **Q3:** measure hover and click on the smallest node at picking ratios 4 and 8 before choosing.
+4. **Q4:** link picking comes only from the neighbourhood band in. Keyboard link selection is unchanged.
+5. **Q5:** a chunked texture refresh for `@sigma/node-image` 4.
+6. **Q6:** after Q5, measure the first-frame gate again, three runs. The gate itself does not change.
+7. **Q7:** the Conduit's expansion figure stands; no new gate.
+8. **Q8:** community links are judged again after Q2 and Q4.
+9. **Where it is built:** away on the server as `away/WS4b-speed`, beside the look round (`away/WS4b-look`). When both report, WS4b's round 1 in the line merges both branches. **WS4b does not start in the line before then.**
+
+## 27 November 2026, about 05:50 UTC: rule 5 widened; GR1e (the owner, in chat)
+
+1. **Rule 5 widened, (a).** Two more files count as shared, append-only lists: `apps/pages/scripts/build.mjs`'s entry list of page word files, and the test pins of a page's tab order (such as `test/govuk/casesServer.ts`). GG3a and GR1b go back to take main in on the conductor's word, no round spent.
+2. **GR1e:** its 03:40 refusal was the merge tree's `.venv` losing pydantic partway through the gate. Its merge is run again as planned. **If it happens again, stop and tell the owner**; line-fix is asked to look for the cause.
+3. WS4b's speed rulings follow from the owner separately; the look round runs away on the server (`away/WS4b-look`).
+
 ## 27 November 2026, after 03:21 UTC: WS4b's look (D281; the owner, in chat)
 
 The owner viewed the comparison.

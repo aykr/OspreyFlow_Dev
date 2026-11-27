@@ -1,0 +1,8 @@
+/* The test page's stylesheet (slice GG5a): MapLibre's own, and a fixed size for the map, so no style attribute is needed. */
+@import "maplibre-gl/dist/maplibre-gl.css";
+
+#map {
+  position: relative;
+  width: 800px;
+  height: 600px;
+}

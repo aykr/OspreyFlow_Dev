@@ -1,10 +1,10 @@
-// The GOV.UK tree's cases page by keyboard alone, with scripts on (slice GR1a; `CLAUDE.md` rule 13; ADR-152 decision 6 and I4; scenario
-// CS12). The page is read-only and its only actions are links, so the cases that prove it are the tab order through each page (every
+// The GOV.UK tree's cases page by keyboard alone, with scripts on (slices GR1a and GR1e; `CLAUDE.md` rule 13; ADR-152 decision 6 and I4;
+// scenario CS12 and CS25). The list and a case's page are read-only and their only actions are links, so the cases that prove it are the tab order through each page (every
 // stop a native one, in the page's own order, the skip link first, the table with no stop of its own) and that each link does what it
 // says when activated by Enter: a case's name opens its page, the way back returns to the list, Home is Home. No `page.mouse`, no
 // `.click()`. The service is started in the case for the `govuk` tree against a fixture Conduit that refuses what the real routes refuse.
-// **New case** (slice GR1b; scenario CS40) is the page's one write: CK4 walks the form's stops, chooses an existing dataset by the
-// arrow keys, ticks a box by Space and makes the case by Enter; CK5 makes one with a new dataset, from a refused name to the banner.
+// **New case** (slice GR1b; scenario CS40) is the page's one write: CK5 walks the form's stops, chooses an existing dataset by the
+// arrow keys, ticks a box by Space and makes the case by Enter; CK6 makes one with a new dataset, from a refused name to the banner.
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
@@ -60,6 +60,30 @@ test.describe("the cases page with scripts", () => {
     });
   });
 
+  test("CK4: Enter on each of the contents' links takes the reader to its part; the history is a table of the steps with no stop of its own", async ({ page }) => {
+    await withCases(assets, async (base) => {
+      await openCases(page, base, "/cases?case=k-harbour");
+      for (const [name, part] of [["About this case", "about"], ["Brief", "brief"]] as const) {
+        await page.getByRole("link", { name, exact: true }).focus();
+        await page.keyboard.press("Enter");
+        await expect(page).toHaveURL(new RegExp(`^${base}/cases\\?case=k-harbour#${part}$`));
+        await expect(page.locator(":target")).toHaveText(name);
+      }
+      await page.getByRole("link", { name: "History" }).focus();
+      await page.keyboard.press("Enter");
+      await expect(page).toHaveURL(new RegExp(`^${base}/cases\\?case=k-harbour#history$`));
+      await expect(page.locator(":target")).toHaveText("History");
+      // `:target` is the proof the link was followed; the page is short, so being in view would prove nothing.
+      const table = page.getByRole("table", { name: "Changes to this case, in the order the case records them" });
+      await expect(table.getByRole("columnheader")).toHaveText(["Step", "When", "Restore"]);
+      await expect(table.getByRole("rowheader")).toHaveText(["Seeded", "Edited the brief"]);
+      await expect(table.getByRole("row").last()).toContainText("Cannot be restored");
+      // The next stop is the way back: the History part holds no stop of its own (this says nothing of where the link went: `:target` does).
+      await page.keyboard.press("Tab");
+      await expect(page.getByRole("link", { name: "Back to your cases" })).toBeFocused();
+    });
+  });
+
   test("CK3: the landmarks are there, and the cases are a table a reader can move through by its headers", async ({ page }) => {
     await withCases(assets, async (base) => {
       await openCases(page, base);
@@ -82,7 +106,7 @@ async function tabTo(page: Page, name: string): Promise<void> {
 }
 
 test.describe("New case by keyboard", () => {
-  test("CK4 (CS40): New case is a stop on the list; the form's stops come in order; the arrow keys choose in both radio groups, Space ticks a box and Enter makes the case", async ({ page }) => {
+  test("CK5 (CS40): New case is a stop on the list; the form's stops come in order; the arrow keys choose in both radio groups, Space ticks a box and Enter makes the case", async ({ page }) => {
     await withCases(
       assets,
       async (base) => {
@@ -131,7 +155,7 @@ test.describe("New case by keyboard", () => {
     );
   });
 
-  test("CK5 (CS40): a new dataset by keyboard; a refused name is reached from the error summary's link; the banner's link to the Studio is a stop", async ({ page }) => {
+  test("CK6 (CS40): a new dataset by keyboard; a refused name is reached from the error summary's link; the banner's link to the Studio is a stop", async ({ page }) => {
     await withCases(
       assets,
       async (base) => {
@@ -152,6 +176,9 @@ test.describe("New case by keyboard", () => {
         await tabTo(page, "a: Skip to main content");
         await tabTo(page, "button: Sign out");
         await tabTo(page, "a: Open the Ingest Studio");
+        await tabTo(page, "a: About this case");
+        await tabTo(page, "a: Brief");
+        await tabTo(page, "a: History");
         await tabTo(page, "a: Drawing boards in this case");
         await tabTo(page, "a: Back to your cases");
       },

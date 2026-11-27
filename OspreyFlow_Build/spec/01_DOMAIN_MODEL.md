@@ -878,8 +878,14 @@ The invariants, each with the test that fails if it is broken (rule 12):
     `test_regrade_drawn_changes_the_grade_and_original_alone`; live, through the command,
     `test_the_command_changes_every_drawn_grade_in_the_real_stores`.
 - **Within the case's ceiling** (Amendment 2 decision 3): nothing drawn above the strictest highest
-  marking its datasets set, nor above the drawer's clearance, refused in words naming it.
+  marking its datasets set, nor above the drawer's clearance, refused in words naming it as the
+  drawer may be told it.
   - `test_an_item_above_the_ceiling_is_refused_in_words`, red with the ceiling bypassed.
+- **The ceiling is never told to a reader below it** (rule 3; GG4j): such a reader is told the
+  highest marking within both it and their clearance, in every field and refusal that carries it
+  (spec 03, *A ceiling is told only as the reader may know it*).
+  - `test_row_3_bs_answer_is_the_same_whatever_the_ceiling_above_b_is`,
+    `test_row_5b_bs_refusal_names_only_the_ceiling_the_board_sent_b`.
 - **A drawing with no case** (Amendment 2 decision 5) makes a drawn dataset, its home case and its
   board in one step; what is drawn there is written to the drawn dataset and to no layer.
   - `test_a_drawing_with_no_case_makes_its_dataset_case_and_board`, red with the writer aimed at a layer.

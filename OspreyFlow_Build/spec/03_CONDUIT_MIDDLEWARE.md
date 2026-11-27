@@ -161,7 +161,7 @@ the same* is registered on its board (`board_items` kind `match`), so it goes wi
 ```
 GET    /v1/investigations/{id}/boards                         the case's boards the caller may see (`Board`: name, creator, shared, how many drawn nodes the caller may see; `start` is `selection` when the caller may see one of the nodes it started from, `blank` otherwise, a view's start reading as `selection` since the store keeps only the nodes)
 POST   /v1/investigations/{id}/boards                         a board (`BoardInput`: blank, from a view, or from a selection; only the loaded nodes the caller may see are kept, as live references)
-GET    /v1/investigations/{id}/boards/{board}                 open it now (`BoardOpened`): its drawn items and references the caller may see, `drawn` naming which are drawn, `missing` the count of the board's own references whose drawn item has been withdrawn since, given to the board's creator alone and never counting what the caller was never allowed to see (rule 3; `test_missing_counts_what_was_lost_and_never_what_was_never_allowed`), the case's node and link types, the markings up to the case's ceiling and the caller's clearance, the grading scheme, `may_promote` (one who may draw on it, at the case's Author level, holding `promote_to_dataset` and `investigate`, as the promotion routes ask: the board offers *Promote…* to them alone, and the routes still refuse anyone else; `test_an_opened_board_offers_promote_only_to_one_the_promotion_routes_admit`), `may_draw`
+GET    /v1/investigations/{id}/boards/{board}                 open it now (`BoardOpened`): its drawn items and references the caller may see, `drawn` naming which are drawn, `missing` the count of the board's own references whose drawn item has been withdrawn since, given to the board's creator alone and never counting what the caller was never allowed to see (rule 3; `test_missing_counts_what_was_lost_and_never_what_was_never_allowed`), the case's node and link types, the markings up to the case's ceiling and the caller's clearance, `ceiling` (the case's own to a caller cleared for it; to anyone else the highest marking within both it and their clearance: see *A ceiling is told only as the reader may know it*, below), the grading scheme, `may_promote` (one who may draw on it, at the case's Author level, holding `promote_to_dataset` and `investigate`, as the promotion routes ask: the board offers *Promote…* to them alone, and the routes still refuse anyone else; `test_an_opened_board_offers_promote_only_to_one_the_promotion_routes_admit`), `may_draw`
 POST   /v1/investigations/{id}/boards/{board}/share           share it with the case (its creator only)
 DELETE /v1/investigations/{id}/boards/{board}                 delete it; what was drawn on it stays in the layer, with its watches
 POST   /v1/investigations/{id}/boards/{board}/items           declare a node (`DrawnItemInput`), with its watch; audited as draw_item
@@ -182,8 +182,9 @@ POST   /v1/drawings                                           *New drawing board
 Someone else's private board, another case's board and no board at all answer alike: 404
 `board_not_found`; an item of another case, one the caller may not see and none answer 404
 `item_not_found`. Each refusal of a drawing is said in words before anything is written:
-`above_the_ceiling` (409, naming the case's highest allowed marking: the strictest its datasets
-set, a composite's members' among them, the deployment's highest where none is set; Amendment 2
+`above_the_ceiling` (409, judged against the case's highest allowed marking: the strictest its datasets
+set, a composite's members' among them, the deployment's highest where none is set; its words name
+that ceiling only as the caller may be told it, below; Amendment 2
 decision 3; `test_the_ceiling_of_a_case_reading_a_composite_is_its_members`),
 `above_the_deployments_highest_marking` (422, the documents' own refusal: a drawn item, link, edit,
 match decision or picture, uploaded or chosen, marked above the deployment's highest marking is
@@ -209,6 +210,26 @@ touch, and every refusal is judged before the layer is made. A withdrawal is `wi
 in the store. A drawn item is changed only on its board: the canvas routes that would change one
 (ADR-105's entity picture, a link's change, a retract) answer 409 `drawn_on_its_board` in words
 (`test_a_drawn_nodes_picture_is_refused_on_the_canvas_route`, `test_a_drawn_link_is_not_changed_from_the_canvas`).
+
+**A ceiling is told only as the reader may know it** (rule 3; GG4j; the owner's rulings of 26
+November 2026). A case's ceiling is sent as it is only to a caller cleared for it; to anyone else
+it is the highest marking both under it and within their clearance, and no marking where there is
+none (a clearance the scheme does not know). One function says it (`Boards.ceiling_told`). It
+binds the opened board's `ceiling`; the words of `above_the_ceiling`, which name what the opened
+board sent that caller; the words of the board's own `above_the_deployments_highest_marking`, for
+the deployment's highest; the `highest_marking` of the promotion sheet, the layer merge sheet,
+the drawn merge sheet and each merge target (a dataset's highest allowed marking is the ceiling of
+every case reading it); and those sheets' marking check in words. **Every write is still judged
+against the real ceiling.** A sheet's words about one item name the real one: they are said only
+of an item the caller sees that is above it, so it is within their clearance.
+(`test_board_ceiling_for_the_reader.py`: `test_row_1_a_reader_below_the_ceiling_is_told_their_own_highest`,
+`test_row_3_bs_answer_is_the_same_whatever_the_ceiling_above_b_is`,
+`test_row_5_a_drawing_above_the_cases_real_ceiling_is_refused_as_before`,
+`test_row_5b_bs_refusal_names_only_the_ceiling_the_board_sent_b`,
+`test_the_boards_deployment_refusal_names_no_marking_above_the_reader`,
+`test_row_6_the_promotion_sheet_tells_a_reader_below_the_ceiling_only_their_own`,
+`test_row_6_the_layer_merge_sheet_opened_and_read_again`,
+`test_row_6_the_merge_targets_and_the_drawn_merge_sheet`.)
 
 **Promotion** (ADR-143 decisions 8 and 10; Amendment 2 decision 1; ADR-145 decision 8; L3.4):
 

@@ -1,5 +1,5 @@
-// The GOV.UK tree's cases page with scripts switched off (slice GR1a; ADR-152 decision 6 and invariant I4; `CLAUDE.md` rule 13; scenario
-// CS13): the same pages, the same stops in the same order, and each link still does what it says, because the page needs no script.
+// The GOV.UK tree's cases page with scripts switched off (slices GR1a and GR1e; ADR-152 decision 6 and invariant I4; `CLAUDE.md` rule 13;
+// scenario CS13 and CS25): the same pages, the same stops in the same order, and each link still does what it says, because the page needs no script.
 // `../keyboard/cases.spec.ts` is the same walk with scripts on. New case (slice GR1b; scenario CS41): every field is shown and the form
 // posts with no script.
 import { expect, test } from "@playwright/test";
@@ -43,7 +43,27 @@ test.describe("the cases page with scripts switched off", () => {
     });
   });
 
-  test("CO3 (CS41): with no script every field of New case is shown, and a case is made", async ({ page }) => {
+  test("CO3: each of the contents' links works by Enter with no script, and a case with no step says so", async ({ page }) => {
+    await withCases(assets, async (base) => {
+      await openCases(page, base, "/cases?case=k-harbour");
+      for (const [name, part] of [["About this case", "about"], ["Brief", "brief"]] as const) {
+        await page.getByRole("link", { name, exact: true }).focus();
+        await page.keyboard.press("Enter");
+        await expect(page).toHaveURL(new RegExp(`^${base}/cases\\?case=k-harbour#${part}$`));
+        await expect(page.locator(":target")).toHaveText(name);
+      }
+      await page.getByRole("link", { name: "History" }).focus();
+      await page.keyboard.press("Enter");
+      await expect(page).toHaveURL(new RegExp(`^${base}/cases\\?case=k-harbour#history$`));
+      await expect(page.locator(":target")).toHaveText("History");
+      await expect(page.getByRole("table", { name: "Changes to this case, in the order the case records them" }).getByRole("rowheader")).toHaveText(["Seeded", "Edited the brief"]);
+      await openCases(page, base, "/cases?case=k-ferry");
+      await expect(page.getByText("Nothing has changed in this case yet.")).toBeVisible();
+      expect(await tabOrder(page)).toEqual(CASE_TAB_ORDER);
+    });
+  });
+
+  test("CO4 (CS41): with no script every field of New case is shown, and a case is made", async ({ page }) => {
     await withCases(
       assets,
       async (base) => {

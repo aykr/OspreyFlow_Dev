@@ -13,5 +13,5 @@
     "isolatedModules": true
   },
   "include": ["server/**/*.ts", "test/**/*.ts"],
-  "exclude": ["test/fixtures/modules"]
+  "exclude": ["test/fixtures/modules", "test/csp/page"]
 }

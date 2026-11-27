@@ -1,5 +1,6 @@
-"""Scenario CS: the reader's cases and one case's page with its brief, read-only, on the GOV.UK tree (slice GR1a; ADR-152 decisions 1,
-4, 5, 6, 7 and 12; the owner's rulings of 25 November 2026 on GR1a's draft: every proposal (a), and GR1a started before GG2b).
+"""Scenario CS: the reader's cases and one case's page with its brief and its history, read-only, on the GOV.UK tree (slices GR1a and
+GR1e; ADR-152 decisions 1, 4, 5, 6, 7 and 12; the owner's rulings of 25 November 2026 on GR1a's draft: every proposal (a), and GR1a
+started before GG2b; and of 26 November 2026 on GR1e's draft: every proposal (a), the history a part of the case's page).
 
 **There is no React-first proof** (decision 12 asks for one only "where one exists"): the React case list and brief are a menu and an
 editor, and none of the `cases-and-views` row's journeys (A7, B14, B21) is about them. The scenario is written first, from those
@@ -24,6 +25,8 @@ This file holds the document, the page test, the `cases-and-views` row, the rout
 * a field of the route's models neither drawn by the page nor named
   as left out, a name for no field, or the page's required list not
   the fields the route sends                                         -> `test_the_field_census_is_the_models_fields`
+* a history label the route can send that the page or the fixture
+  does not allow, or one they allow that the route cannot send       -> `test_the_page_and_the_fixture_allow_exactly_the_routes_labels`
 * a field of `Dataset` neither drawn on the new case form nor named
   as left out, or a field of `CreateInvestigationInput` the page
   does not send, or one it sends that the route has not              -> `test_the_new_case_census_is_the_models_fields`
@@ -40,8 +43,9 @@ in-memory copy of what it read; it never writes into the repository. The files, 
 `apps/pages/test/govuk/cases-new.test.ts`, `services/api/datasets.py`, `packages/schemas/rights.py`,
 `apps/pages/test/govuk/keyboard/cases.spec.ts`, `apps/pages/test/govuk/scripts-off/cases.spec.ts`,
 `apps/pages/server/{cases,pageList,pages,conduit}.ts`, `apps/pages/server/views/{casesWords,notFoundWords}.ts`,
-`services/api/{app,investigations,case_brief}.py`, `packages/glass-shared/src/investigation/cases.ts`,
-`packages/glass-shared/src/help/roles.ts`, `apps/workspace/src/investigation/CaseBrief.tsx`.
+`apps/pages/test/govuk/casesConduit.ts`, `services/api/{app,investigations,case_brief,history,history_labels}.py`,
+`packages/glass-shared/src/investigation/cases.ts`, `packages/glass-shared/src/help/roles.ts`,
+`apps/workspace/src/investigation/CaseBrief.tsx`, `apps/workspace/src/history/HistoryPanel.tsx`.
 
 Every planted fault is the real inputs with one thing changed (rule 15), run through the same `problems` the real inputs go through,
 which finds nothing in them.
@@ -80,6 +84,9 @@ PAGE_LIST = PAGES / "server" / "pageList.ts"
 APP = CORE / "services" / "api" / "app.py"
 INVESTIGATIONS = CORE / "services" / "api" / "investigations.py"
 CASE_BRIEF = CORE / "services" / "api" / "case_brief.py"
+HISTORY = CORE / "services" / "api" / "history.py"
+HISTORY_LABELS = CORE / "services" / "api" / "history_labels.py"
+FIXTURE = PAGES / "test" / "govuk" / "casesConduit.ts"
 DOMAIN = CORE / "packages" / "schemas" / "domain.py"
 
 #: Each closed field's allowed values: the page's list (in `casesWords.ts`) and where the model's own are defined (an enum's members'
@@ -98,7 +105,7 @@ TITLE = re.compile(r"""\b(?:it|test)\(\s*(?:"|')(CS\d+): """)
 PAGE_TEST_NAME = "cases.test.ts"
 NEW_PAGE_TEST_NAME = "cases-new.test.ts"
 PATH = "/cases"
-READ_IDS = [f"CS{n}" for n in range(1, 16)]
+READ_IDS = [f"CS{n}" for n in range(1, 27)]
 NEW_IDS = [f"CS{n}" for n in range(27, 45)]
 EXPECTED_IDS = READ_IDS + NEW_IDS
 LEFT_OUT = "**Left out, by field name.**"
@@ -115,6 +122,7 @@ MODELS: dict[str, Path] = {
     "CaseBrief": CASE_BRIEF,
     "BriefRequirement": CASE_BRIEF,
     "BriefAttachment": CASE_BRIEF,
+    "HistoryStepSummary": HISTORY,
 }
 
 #: What each behaviour of the page is, by id: a behaviour with no scenario is one nobody will build or test.
@@ -134,6 +142,17 @@ BRIEF: dict[str, tuple[str, ...]] = {
     "scripts off": ("CS13",),
     "the trees, the lists and the words": ("CS14",),
     "each check red against the real page with one thing changed": ("CS15",),
+    "the history: each step's label, time and restorability, in the route's order": ("CS16",),
+    "a label as sent, never the page's own words": ("CS17",),
+    "no step: a sentence, never an empty table": ("CS18",),
+    "no size, no count": ("CS19",),
+    "no step identifier": ("CS20",),
+    "the history's refusal: the same 404": ("CS21",),
+    "one read of the history per render": ("CS22",),
+    "the history's strict reader and census": ("CS23",),
+    "a failed history read, an ended session": ("CS24",),
+    "the history part by keyboard and scripts off": ("CS25",),
+    "each history check red with one thing changed": ("CS26",),
     "a new dataset: one POST, a 303, the banner and the Studio's link": ("CS27",),
     "an existing dataset: its id, no new name, no Studio link": ("CS28",),
     "an empty dataset name takes the case's": ("CS29",),
@@ -272,6 +291,9 @@ def inputs() -> dict[str, Any]:
         "words": read(WORDS),
         "models": {name: read(path) for name, path in MODELS.items()},
         "value_sources": {path: read(path) for _, path, _ in VALUES.values()},
+        "history": read(HISTORY),
+        "history_labels": read(HISTORY_LABELS),
+        "fixture": read(FIXTURE),
     }
 
 
@@ -334,6 +356,10 @@ def prose_problems(data: dict[str, Any]) -> list[str]:
         ("the Default tree", "answers `/cases` as a path nothing serves"),
         ("the filtering rule", "filters nothing after the answer comes"),
         ("attachments by kind", "an attachment said by its kind alone"),
+        ("the history", "**its history**"),
+        ("no restore", "It restores nothing"),
+        ("the history's refusal", "and so does a refusal of the history's read"),
+        ("no size or count", "The history says no size and no count of anything"),
         ("what New case is", "**New case (slice GR1b).**"),
         ("who is offered it", "**when `GET /v1/me/rights` holds `create_case`**"),
         ("one of the two data fields", "**exactly one of `new_dataset_name` and `dataset_ids`**"),
@@ -477,6 +503,67 @@ def values_problems(data: dict[str, Any]) -> list[str]:
     return found
 
 
+def shown_labels(source: str) -> list[str] | None:
+    """The labels `GET /history` can send, from `history_labels.py`: the strings the names in `FIXED_LABELS` stand for, and `CHANGED`."""
+    tree = ast.parse(source)
+    strings: dict[str, str] = {}
+    fixed: list[str] | None = None
+    for node in tree.body:
+        if not (isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name)):
+            continue
+        name, value = node.targets[0].id, node.value
+        if isinstance(value, ast.Constant) and isinstance(value.value, str):
+            strings[name] = value.value
+        if name == "FIXED_LABELS" and isinstance(value, ast.Call) and value.args and isinstance(value.args[0], ast.Set):
+            fixed = [e.id for e in value.args[0].elts if isinstance(e, ast.Name)]
+    if fixed is None or "CHANGED" not in strings or any(n not in strings for n in fixed):
+        return None
+    return [strings[n] for n in fixed] + [strings["CHANGED"]]
+
+
+def not_restorable(source: str) -> list[str] | None:
+    """The labels whose steps the route sends as `restorable: false` (`history_labels.py`'s `NOT_RESTORABLE`)."""
+    strings: dict[str, str] = {}
+    for node in ast.parse(source).body:
+        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+            name, value = node.targets[0].id, node.value
+            if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                strings[name] = value.value
+            if name == "NOT_RESTORABLE" and isinstance(value, ast.Call) and value.args and isinstance(value.args[0], ast.Set):
+                names_ = [e.id for e in value.args[0].elts if isinstance(e, ast.Name)]
+                return [strings[n] for n in names_ if n in strings] if all(n in strings for n in names_) else None
+    return None
+
+
+SHOWN = "_SHOWN_LABELS = FIXED_LABELS | {CHANGED}"
+
+
+def labels_problems(data: dict[str, Any]) -> list[str]:
+    """The page (`HISTORY_LABELS`) and the fixture (`SHOWN_LABELS`) allow exactly the labels the route can send, and the fixture's
+    `NOT_RESTORABLE` is the route's (the page reads `restorable` itself and holds no such list)."""
+    found: list[str] = []
+    route = shown_labels(data["history_labels"])
+    if route is None:
+        return ["history_labels.py has no FIXED_LABELS of named strings, or no CHANGED"]
+    if SHOWN not in data["history"]:
+        found.append(f"history.py no longer shows {SHOWN!r}: the labels the route can send are not read from here")
+    for key, listed, where in (("words", "HISTORY_LABELS", "casesWords.ts"), ("fixture", "SHOWN_LABELS", "casesConduit.ts")):
+        page = re.search(rf"export const {listed}(?::[^=]*)? = \[([^\]]*)\]", data[key])
+        if page is None:
+            found.append(f"{where} declares no {listed} list")
+        elif sorted(names(page.group(1))) != sorted(route):
+            found.append(f"{where}'s {listed} are {sorted(names(page.group(1)))}, but the route can send {sorted(route)}")
+    route_fixed = not_restorable(data["history_labels"])
+    fixture_fixed = re.search(r"export const NOT_RESTORABLE(?::[^=]*)? = \[([^\]]*)\]", data["fixture"])
+    if route_fixed is None:
+        found.append("history_labels.py has no NOT_RESTORABLE of named strings")
+    elif fixture_fixed is None:
+        found.append("casesConduit.ts declares no NOT_RESTORABLE list")
+    elif sorted(names(fixture_fixed.group(1))) != sorted(route_fixed):
+        found.append(f"casesConduit.ts's NOT_RESTORABLE is {sorted(names(fixture_fixed.group(1)))}, but the route's is {sorted(route_fixed)}")
+    return found
+
+
 def new_case_census_problems(data: dict[str, Any]) -> list[str]:
     """The new case form's census: `Dataset` drawn or left out as the scenario says, and the page sending exactly the fields of
     `CreateInvestigationInput`."""
@@ -548,6 +635,7 @@ CHECKS = (
     module_problems,
     census_problems,
     values_problems,
+    labels_problems,
     new_case_census_problems,
     route_word_problems,
 )
@@ -597,6 +685,10 @@ def test_the_field_census_is_the_models_fields() -> None:
 
 def test_the_page_allows_exactly_the_models_values() -> None:
     assert values_problems(inputs()) == []
+
+
+def test_the_page_and_the_fixture_allow_exactly_the_routes_labels() -> None:
+    assert labels_problems(inputs()) == []
 
 
 def test_the_new_case_census_is_the_models_fields() -> None:
@@ -860,6 +952,27 @@ PLANTS += [
         _replace("words", 'export const STATUSES = ["open", "answered"] as const;', 'export const STATUSES = ["open"] as const;'),
         values_problems,
         "the page's STATUSES",
+    ),
+    (
+        "a label added to the route's fixed labels",
+        lambda d: d.update(history_labels=d["history_labels"].replace("        BRIEF_EDITED,\n    }", "        BRIEF_EDITED,\n        BRANCHED,\n    }").replace('CHANGED = "Changed"', 'CHANGED = "Changed"\nBRANCHED = "Branched"')),
+        labels_problems,
+        "casesWords.ts's HISTORY_LABELS",
+    ),
+    ("a label dropped from the page", _replace("words", '"Edited the brief", ', ""), labels_problems, "casesWords.ts's HISTORY_LABELS"),
+    ("a label dropped from the fixture", _replace("fixture", '"Edited the brief", ', ""), labels_problems, "casesConduit.ts's SHOWN_LABELS"),
+    (
+        "a label added to the route's not-restorable set",
+        _replace("history_labels", "NOT_RESTORABLE = frozenset({BRIEF_EDITED})", "NOT_RESTORABLE = frozenset({BRIEF_EDITED, REMOVED})"),
+        labels_problems,
+        "casesConduit.ts's NOT_RESTORABLE",
+    ),
+    ("the route showing labels by another rule", _replace("history", SHOWN, "_SHOWN_LABELS = FIXED_LABELS"), labels_problems, "no longer shows"),
+    (
+        "a field added to a history step",
+        _model("HistoryStepSummary", "    restorable: bool = True\n", "    restorable: bool = True\n    size: int = 0\n"),
+        census_problems,
+        "HistoryStepSummary.size is neither drawn",
     ),
 ]
 
