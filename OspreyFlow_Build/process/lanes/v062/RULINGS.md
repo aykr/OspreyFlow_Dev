@@ -3,6 +3,24 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 27 November 2026, about 19:40 UTC: tonight's plan (the owner, in chat; tonight only where it says so)
+
+1. **Conformance: `8e01ceb`'s conformance job is D44's one rerun.** If `test_schedule_executor` is red again, it waits for the owner in the morning. The morning report says what cancelled 11ca672's rerun job at 18:42, if that can be found.
+2. **Merges:** SE9d, GR1b, GG4b, then trains of the clean parts in the planned order. The server stacks stay within 3 jobs, and `git merge-tree` runs before each merge.
+3. **No merge starts after 21:00 UTC that could still be running at 22:00.** At about 22:00 the owner applies 66b and then 65, in one command on the Mac, and is offline until about 06:00.
+   - While they run, no merge starts, and no seat starts that their install would stop on (`run_seat.py`).
+4. **The owner's word for tonight only:**
+   - **When the Mac's `/tmp/apply65.out` shows "done: … committed on main",** 66b and 65 count as applied. The conductor pushes them with its next records commit and resumes the overnight plan.
+   - **If either apply stops ("stopped at …"),** it has taken itself back. The overnight plan resumes without them, and the owner hears in the morning.
+5. **Overnight, no merge starts between 03:00 and 03:50 UTC** unless 65 is applied.
+6. **All 4 builder slots stay busy** on parts whose briefs are on main and that are not blocked. GA1a, GG3a and GG3b take main in after 66b, and GG2a after WS4a.
+7. **Anything that needs the owner's word stops and waits for the morning.**
+8. **At 06:00 the conductor has ready:**
+   - what merged;
+   - what waits for the owner;
+   - GitHub's state on main.
+9. **CO3c is briefed** (`slices/CO3c.md` and its row) under the 11:15 ruling. It goes in the next records commit, so a slot has work overnight.
+
 ## 27 November 2026, about 18:20 UTC: 66s first, for speed (the owner, in chat)
 
 1. **66s comes first:** a one-row hand-back from line-fix, carrying `scan_map.tsv`'s row for `tests/glass_trees/test_route_pins.py`. It applies in minutes. After it, the owner says "applied" and merges restart in this order:
