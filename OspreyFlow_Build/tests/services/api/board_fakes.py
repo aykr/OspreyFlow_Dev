@@ -150,6 +150,28 @@ class BoardGraph(FakeGraphPort):
                 found.append(node)
         return await self._sent(sorted(found, key=lambda n: n.id)[:limit], principal)
 
+    async def find_node(
+        self,
+        entity_type: str,
+        identifier_field: str,
+        value: str,
+        principal: Principal,
+        *,
+        also: dict[str, str] | None = None,
+    ) -> Node | None:
+        """As the adapter's: the live node of that type holding that identifier, filtered like
+        every read; a node the principal may not read is not found."""
+        wanted = {identifier_field: value, **(also or {})}
+        for node in sorted(self._graph_nodes.values(), key=lambda n: n.id):
+            if (
+                node.type == entity_type
+                and all(node.properties.get(k) == v for k, v in wanted.items())
+                and self._node_readable(principal, node)
+            ):
+                (sent,) = await self._sent([node], principal)
+                return sent
+        return None
+
     async def suggest_nodes(
         self,
         prefix: str,
