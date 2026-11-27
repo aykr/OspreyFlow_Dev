@@ -462,6 +462,11 @@ for (const [caseName, style, path, where] of [
     record(`${style}`, run);
     expect(failures(run)).toContainEqual(expect.stringMatching(refusedElsewhere("connect-src", path, where)));
     expect(run.reachedElsewhere, "a refused request reached the other origin").toEqual([]);
+    // A second witness to a worker's refusal, where the browser has one: WebKit writes it on the worker's console. Chromium
+    // writes no console line for it (measured), so in Chromium the worker's own record is the only witness.
+    if (where === "worker" && browserName === "webkit") {
+      expect(failures(run)).toContainEqual(expect.stringMatching(/^refused, on the console: \[load, worker\] .*connect-src/));
+    }
   });
 }
 
@@ -571,6 +576,29 @@ test("planted: a request refused while the picture is being read: its violation 
   expect(failures(run)).toContain(`policy violation: connect-src refused ${late} in the document`);
   expect(run.reachedElsewhere).toEqual([]);
 });
+
+test("planted: a worker that asks another origin as it starts: refused in the worker, and named", async ({ page, browserName }) => {
+  // (a) is every event in a worker, its first among them. A refusal raised before anything outside the worker has reached it
+  // must be named like any other: the console cannot stand in for it, because Chromium writes none for a worker's refusal.
+  const run = await openMap(page, browserName, { ...FULL, workerFile: "asks-at-start" });
+  record("worker asks at start", run);
+  expect(failures(run)).toContain(`policy violation: connect-src refused ${THIRD_ORIGIN}/at-start in the worker`);
+  expect(run.reachedElsewhere).toEqual([]);
+});
+
+// A worker with no record must never read as a worker with nothing refused.
+for (const [workerFile, caseName, why] of [
+  ["unrecorded", "a worker that runs with no violation recorder", /it ran without the recorder/],
+  ["closes-at-start", "a worker that is gone before its record is read", /it could not be read/],
+] as const) {
+  test(`planted: ${caseName}: named, not read as no violation`, async ({ page, browserName }) => {
+    const run = await openMap(page, browserName, { ...FULL, workerFile });
+    record(`worker ${workerFile}`, run);
+    const named = failures(run).filter((f) => f.startsWith("a worker's violations are not known: "));
+    expect(named.length).toBeGreaterThan(0);
+    for (const f of named) expect(f).toMatch(why);
+  });
+}
 
 // --------------------------------------------------------------------------------------------- the directive table
 // Each of the builder's directives set to 'none' in turn: which ones the map needs. A directive the map needs is refused by

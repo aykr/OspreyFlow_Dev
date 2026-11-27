@@ -24,7 +24,7 @@
 // worker address points at it, and it records every request that reaches it: a request it records is one that left the page's
 // origin, whatever the browser's own events said.
 import { createHash } from "node:crypto";
-import { copyFileSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -61,6 +61,10 @@ export type StyleCase = "full" | "tile-elsewhere" | "tile-third" | "glyphs-elsew
 export const THIRD_ORIGIN = "http://third-origin.test";
 /** Where the page's worker is: the page's own origin (as `maplibreWorker.ts` does), or another origin (a planted fault). */
 export type WorkerCase = "self" | "elsewhere";
+/** A planted worker file in place of the one the page names (rule 15), each MapLibre's own bytes with at most one line ahead of
+ * them. `asks-at-start`: it asks a third origin as it starts, before anything outside the worker can have reached it.
+ * `unrecorded`: it runs with no violation recorder. `closes-at-start`: it is gone before its record is read. */
+export type WorkerFileCase = "asks-at-start" | "unrecorded" | "closes-at-start";
 /** How the archive is answered: by range (as the Conduit's ranged route answers it), or whole, ignoring `Range`. */
 export type ArchiveCase = "ranged" | "whole";
 
@@ -72,6 +76,8 @@ export interface PageRequest {
   style: StyleCase;
   worker: WorkerCase;
   archive: ArchiveCase;
+  /** A planted worker file, if any (rule 15). */
+  workerFile?: WorkerFileCase;
   /** A planted change to the policy, if any (rule 15). */
   plant?: PolicyPlant;
   /** Where the plant applies: every response while the page is open (the default), or the page's own response alone. */
@@ -232,7 +238,16 @@ interface Assets {
   stylesheet: string;
   worker: string;
   workerBytes: Buffer;
+  /** The planted worker files, by case. */
+  plantedWorkers: Record<WorkerFileCase, string>;
 }
+
+/** Each planted worker file's first line, ahead of MapLibre's own bytes. */
+const WORKER_PLANTS: Record<WorkerFileCase, string> = {
+  "asks-at-start": `fetch("${THIRD_ORIGIN}/at-start").catch(() => {});\n`,
+  unrecorded: "/* planted: no violation recorder */\n",
+  "closes-at-start": "self.close();\n",
+};
 
 /** The page's module and stylesheet, bundled by this test's own esbuild call with the options `apps/pages/scripts/assets.mjs` gives a
  * module (one ES module, ES2018, browser, minified, no splitting, no source map), and MapLibre's worker file copied beside them. */
@@ -264,7 +279,15 @@ async function buildAssets(): Promise<Assets> {
   const workerBytes = readFileSync(join(distDir, "maplibre-gl-worker.mjs"));
   const worker = hashedName("maplibre-gl-worker", workerBytes, ".js");
   copyFileSync(join(distDir, "maplibre-gl-worker.mjs"), join(dir, worker));
-  return { dir, module, stylesheet, worker, workerBytes };
+  const plantedWorkers = Object.fromEntries(
+    Object.entries(WORKER_PLANTS).map(([name, line]) => {
+      const bytes = Buffer.concat([Buffer.from(line, "utf8"), workerBytes]);
+      const file = hashedName("maplibre-gl-worker", bytes, ".js");
+      writeFileSync(join(dir, file), bytes);
+      return [name, file];
+    }),
+  ) as Record<WorkerFileCase, string>;
+  return { dir, module, stylesheet, worker, workerBytes, plantedWorkers };
 }
 
 /** A request for MapLibre's worker file, under its content-hashed name. */
@@ -369,7 +392,8 @@ export async function startMapServer(): Promise<MapServer> {
     }
     archiveCase = pageRequest.archive;
     const nonce = String(res.locals["cspNonce"]);
-    const worker = pageRequest.worker === "self" ? `${ASSETS_PREFIX}/${assets.worker}` : `${origins.elsewhere}/assets/${assets.worker}`;
+    const file = pageRequest.workerFile ? assets.plantedWorkers[pageRequest.workerFile] : assets.worker;
+    const worker = pageRequest.worker === "self" ? `${ASSETS_PREFIX}/${file}` : `${origins.elsewhere}/assets/${file}`;
     const style = `/fixture/style.json?page=${encodeURIComponent(key)}`;
     const escape = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
     res.type("html").send(`<!doctype html>
