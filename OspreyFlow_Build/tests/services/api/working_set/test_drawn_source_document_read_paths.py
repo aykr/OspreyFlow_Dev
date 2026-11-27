@@ -211,25 +211,79 @@ def _assert_with(delta: Any) -> None:
 # --- rows 4, 5 and 7 --------------------------------------------------------------------------
 
 
+async def _delivered(world: _World, delivery: str, reader: Principal) -> Any:
+    """What `reader` is sent of the items C added: the snapshot on connect, the delta replayed on
+    a reconnect, or the delta pushed live."""
+    if delivery == "snapshot":
+        (snapshot,) = await world.service.sync(CASE, reader, last_acknowledged_seq=None)
+        assert isinstance(snapshot, DeltaSnapshot)
+        return snapshot
+    if delivery == "replayed":
+        (replayed,) = await world.service.sync(CASE, reader, last_acknowledged_seq=0)
+        assert isinstance(replayed, DeltaAdd)
+        return replayed
+    (stored,) = await world.store.deltas_after(CASE, 0) or []
+    return await world.service.project_live(CASE, stored, reader)
+
+
+def _one(delta: Any, kind: str) -> Any:
+    """The delta's drawn node, or its drawn link to the loaded node, alone."""
+    return SimpleNamespace(
+        nodes=[n for n in delta.nodes if n.provenance.drawn is not None] if kind == "node" else [],
+        edges=list(delta.edges) if kind == "link" else [],
+    )
+
+
+def _sent_without(element: Node | Edge) -> bool:
+    drawn = element.provenance.drawn
+    assert drawn is not None
+    return (
+        D not in element.model_dump_json()
+        and drawn.source_document is None
+        and [s.document_id for s in element.provenance.sources] == [f"drawn:{drawn.item_id}"]
+    )
+
+
+DELIVERIES = ["snapshot", "replayed", "pushed"]
+
+
+@pytest.mark.parametrize("delivery", DELIVERIES)
 async def test_the_working_set_never_sends_a_drawn_items_source_document_its_reader_may_not_read(
+    delivery: str,
 ) -> None:
+    """Rows 4 (the snapshot) and 5 (a delta, replayed and pushed)."""
     world = _World()
     await world.seed(C)
 
-    # Row 4: the snapshot on connect. The link from the item to a loaded node is row 7.
-    (snapshot,) = await world.service.sync(CASE, B, last_acknowledged_seq=None)
-    assert isinstance(snapshot, DeltaSnapshot)
-    _assert_without(snapshot)
-    (for_c,) = await world.service.sync(CASE, C, last_acknowledged_seq=None)
-    _assert_with(for_c)
+    (for_b,) = _one(await _delivered(world, delivery, B), "node").nodes
+    (for_c,) = _one(await _delivered(world, delivery, C), "node").nodes
 
-    # Row 5: a delta, replayed on a reconnect and pushed live.
-    (replayed,) = await world.service.sync(CASE, B, last_acknowledged_seq=0)
-    assert isinstance(replayed, DeltaAdd)
-    _assert_without(replayed)
-    (stored,) = await world.store.deltas_after(CASE, 0)
-    _assert_without(await world.service.project_live(CASE, stored, B))
-    _assert_with(await world.service.project_live(CASE, stored, C))
+    assert _sent_without(for_b)
+    assert for_c.provenance.drawn.source_document == D
+    assert [s.document_id for s in for_c.provenance.sources] == [D]
+
+
+@pytest.mark.parametrize("delivery", DELIVERIES)
+async def test_a_link_from_the_item_to_a_loaded_node_comes_without_the_document(
+    delivery: str,
+) -> None:
+    """Row 7: a drawn link carries the same provenance."""
+    world = _World()
+    await world.seed(C)
+
+    (for_b,) = _one(await _delivered(world, delivery, B), "link").edges
+    (for_c,) = _one(await _delivered(world, delivery, C), "link").edges
+
+    assert (for_b.source, for_b.target) == ("n-0000", "p-hub")
+    assert _sent_without(for_b)
+    assert for_c.provenance.drawn.source_document == D
+    assert [s.document_id for s in for_c.provenance.sources] == [D]
+
+
+async def test_a_view_of_the_case_and_a_check_read_withhold_alike() -> None:
+    world = _World()
+    await world.seed(C)
+    (stored,) = await world.store.deltas_after(CASE, 0) or []
     # A caller that projects with no read withholds it from everyone.
     assert D not in _text(world.service.project_delta(stored, C))
 
