@@ -268,7 +268,7 @@ def function_problems(data: dict[str, Any]) -> list[str]:
     if help_row is None or help_row["route"] != "/help":
         found.append("the help row's route is not /help")
     routed = sorted(row["route"] for row in data["functions"] if row.get("route"))
-    # slice GR3a's page (`reports-figures`, `/reports`) is the one other row with a route
+    # slice GR3a's page (`reports-figures`, `/reports`) is the other row with a route; slice RM1a's `/alert-queue` is in the list and no row carries it
     if routed != ["/help", "/reports"]:
         found.append(f"the rows that have a route are {routed!r}, not just /help and /reports")
     return found
@@ -276,11 +276,11 @@ def function_problems(data: dict[str, Any]) -> list[str]:
 
 def route_problems(data: dict[str, Any]) -> list[str]:
     # Slice GR3a added the alert monitoring page (`/reports`), slice GR4a trends shown together (`/packs/trends`) after it, slice
-    # GR1a the cases page (`/cases`; `test_govuk_cases_scenario.py` holds its own), and slice GG4a a case's drawing boards
-    # (`/cases/boards`; `test_govuk_boards_scenario.py` holds its own).
-    if data["routes"] != ["/help", PATH, "/reports", "/packs/trends", "/cases", "/cases/boards"]:
+    # GR1a the cases page (`/cases`; `test_govuk_cases_scenario.py` holds its own), slice GG4a a case's drawing boards
+    # (`/cases/boards`; `test_govuk_boards_scenario.py` holds its own) and slice RM1a the alert queue (`/alert-queue`).
+    if data["routes"] != ["/help", PATH, "/reports", "/packs/trends", "/cases", "/cases/boards", "/alert-queue"]:
         return [
-            f"the route list is {data['routes']!r}: the tree has six pages, /help, {PATH}, /reports, /packs/trends, /cases and /cases/boards"
+            f"the route list is {data['routes']!r}: the tree has seven pages, /help, {PATH}, /reports, /packs/trends, /cases, /cases/boards and /alert-queue"
         ]
     return []
 
@@ -517,13 +517,13 @@ PLANTS: list[
         "a route in the list the code has no page for",
         lambda d: d["routes"].append("/welcome"),
         route_problems,
-        "six pages",
+        "seven pages",
     ),
     (
         "the People path left out of the list",
         lambda d: d["routes"].remove(PATH),
         route_problems,
-        "six pages",
+        "seven pages",
     ),
     (
         "the page at another path",
