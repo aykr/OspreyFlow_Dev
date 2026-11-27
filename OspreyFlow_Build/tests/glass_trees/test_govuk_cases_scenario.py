@@ -324,9 +324,11 @@ def function_problems(data: dict[str, Any]) -> list[str]:
 
 
 def route_problems(data: dict[str, Any]) -> list[str]:
-    expected = ["/help", "/admin/people", "/reports", "/packs/trends", PATH, "/alert-queue"]
+    # A case's drawing boards (slice GG4a) sit under the cases page and are listed after it (`test_govuk_boards_scenario.py`), and
+    # the alert queue (slice RM1a) after those.
+    expected = ["/help", "/admin/people", "/reports", "/packs/trends", PATH, "/cases/boards", "/alert-queue"]
     if data["routes"] != expected:
-        return [f"the route list is {data['routes']!r}: the tree has six pages, {expected}"]
+        return [f"the route list is {data['routes']!r}: the tree has seven pages, {expected}"]
     return []
 
 

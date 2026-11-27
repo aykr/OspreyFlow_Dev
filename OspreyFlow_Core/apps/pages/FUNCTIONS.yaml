@@ -261,7 +261,7 @@ functions:
     name: "Drawing boards (and a watch or alert drawn from them)"
     where: "apps/workspace/src/boards/"
     slice: "GG4"
-    scenario: ""
+    scenario: "BD1, BD2, BD3, BD4, BD5, BD6, BD7, BD8, BD9, BD10, BD11, BD12, BD13, BD14, BD15, BD16, BD17"
     route: ""
     status: "planned"
   # The plan has not yet named a build for this row. C5 (spec/08) is proposed, not owner-ruled; the Matrix has none.

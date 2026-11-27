@@ -9,13 +9,15 @@
  * (`OSPREY_PAGES_TREE`). Help (slice GR2a) is the first page of the GOV.UK tree, and has no Default twin yet; the Admin People list
  * (slice AD3a) is the second, the first section of the `admin` row; the alert monitoring figures (slice GR3a) are its third; trends shown
  * together (slice GR4a) is the fourth, the page of its own row, `reports-trends-shown-together`; the reader's cases and one case's page
- * (slice GR1a) are the fifth, the first part of the `cases-and-views` row; the alert queue (slice RM1a) is the sixth, and also has no
- * Default twin. `tree-govuk/routes.yaml` lists the paths of the pages that name `govuk`, and `test/govuk/help.test.ts` and
+ * (slice GR1a) are the fifth, the first part of the `cases-and-views` row; a case's drawing boards (slice GG4a) are the sixth, the first
+ * part of the `drawing-boards` row; the alert queue (slice RM1a) is the seventh, and also has no Default twin.
+ * `tree-govuk/routes.yaml` lists the paths of the pages that name `govuk`, and `test/govuk/help.test.ts` and
  * `test/govuk/alert-queue.test.ts` hold the two in step.
  */
 import type { PageModule } from "./pages.js";
 import { adminPeople } from "./adminPeople.js";
 import { alertMonitoring } from "./alertMonitoring.js";
+import { boardsPage } from "./boards.js";
 import { casesPage } from "./cases.js";
 import { studioDatasetMap } from "./datasetMap.js";
 import { alertQueue } from "./alertQueue.js";
@@ -24,4 +26,4 @@ import { studioModel } from "./model.js";
 import { packTrends } from "./packTrends.js";
 import { studioFrame, studioReleases } from "./studio.js";
 
-export const PAGES: readonly PageModule[] = [studioFrame, studioReleases, studioDatasetMap, studioModel, help, adminPeople, alertMonitoring, packTrends, casesPage, alertQueue];
+export const PAGES: readonly PageModule[] = [studioFrame, studioReleases, studioDatasetMap, studioModel, help, adminPeople, alertMonitoring, packTrends, casesPage, boardsPage, alertQueue];

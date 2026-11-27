@@ -84,8 +84,9 @@ GR3A_ROW = "reports-figures"
 EXPECTED_IDS = [f"TS{n}" for n in range(1, 16)]
 #: 49 until this slice, which added the page's own row (the conductor's round-3 table, 25 November 2026).
 EXPECTED_FUNCTIONS = 50
-#: Slice GR1a added the cases page (`/cases`) after this page, and slice RM1a the alert queue (`/alert-queue`) after that.
-EXPECTED_ROUTES = ["/help", "/admin/people", "/reports", PATH, "/cases", "/alert-queue"]
+#: The sixth, a case's drawing boards (slice GG4a, `test_govuk_boards_scenario.py`), is listed after the cases page, and slice RM1a's
+#: alert queue (`/alert-queue`) after that.
+EXPECTED_ROUTES = ["/help", "/admin/people", "/reports", PATH, "/cases", "/cases/boards", "/alert-queue"]
 
 #: The owner's table of cases for GR4a (`process/lanes/v062/slices/GR4a.md`), by number, and the rows that carry each.
 CASES: dict[str, tuple[str, ...]] = {
@@ -560,7 +561,7 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
     ("the word board in the page's code", _replace("page_module", "export const packTrends", "const boardName = 1;\nexport const packTrends"), module_problems, "says board"),
     (
         "a cited route line that drifted (the add-item route as it was before main moved)",
-        _replace("citation_diff", "services/api/app.py:19895", "services/api/app.py:19861"),
+        _replace("citation_diff", "services/api/app.py:19905", "services/api/app.py:19861"),
         citation_diff_problems,
         "services/api/app.py:19861 does not hold",
     ),

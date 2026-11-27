@@ -6,6 +6,8 @@ get-and-delete, the TTL, the principal round-trip — behave the way `_authentic
 
 from __future__ import annotations
 
+import os
+
 import pytest
 from services.api.ws_ticket import mint_ws_ticket, redeem_ws_ticket
 from valkey.asyncio import Valkey
@@ -23,7 +25,10 @@ _PRINCIPAL = Principal(
 
 @pytest.fixture
 async def valkey() -> Valkey:
-    client = Valkey(host="localhost", port=6379, db=0)
+    # At `VALKEY_PORT` (6379 when unset), as `test_valkey_store.py` and every neighbour read it:
+    # a fixed 6379 is stack a's port, which the port guard refuses from any other stack (b to g
+    # hold 6380 to 6385) or from a pinned run.
+    client = Valkey(host="localhost", port=int(os.environ.get("VALKEY_PORT", "6379")), db=0)
     yield client  # type: ignore[misc]
     await client.aclose()
 

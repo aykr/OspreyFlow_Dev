@@ -271,12 +271,13 @@ def route_problems(data: dict[str, Any]) -> list[str]:
     # Slice GR3a added the alert monitoring page (`/reports`): its row, `reports-figures`, carries the route.
     # Slice GR4a's trends shown together (`/packs/trends`) is the fourth; its row, `reports-trends-shown-together`, keeps an empty route
     # while the function is incomplete (`test_govuk_pack_trends_scenario.py`). The fifth, the cases page (slice GR1a), is the first part
-    # of the `cases-and-views` row, whose route stays empty likewise (`test_govuk_cases_scenario.py`).
-    # Slice RM1a added the alert queue (`/alert-queue`), the sixth: its row, `alerts-rules-watches`, keeps an empty route while the function
+    # of the `cases-and-views` row, whose route stays empty likewise (`test_govuk_cases_scenario.py`), and the sixth, a case's drawing
+    # boards (slice GG4a), the first part of the `drawing-boards` row (`test_govuk_boards_scenario.py`).
+    # Slice RM1a added the alert queue (`/alert-queue`), the seventh: its row, `alerts-rules-watches`, keeps an empty route while the function
     # is incomplete (`test_govuk_alert_queue_scenario.py`).
-    if data["routes"] != ["/help", "/admin/people", "/reports", "/packs/trends", "/cases", "/alert-queue"]:
+    if data["routes"] != ["/help", "/admin/people", "/reports", "/packs/trends", "/cases", "/cases/boards", "/alert-queue"]:
         return [
-            f"the route list is {data['routes']!r}: the tree has six pages, /help, /admin/people, /reports, /packs/trends, /cases and /alert-queue"
+            f"the route list is {data['routes']!r}: the tree has seven pages, /help, /admin/people, /reports, /packs/trends, /cases, /cases/boards and /alert-queue"
         ]
     if routed != ["/help", "/reports"]:
         return [f"the rows that have a route are {routed!r}, not just /help and /reports"]
