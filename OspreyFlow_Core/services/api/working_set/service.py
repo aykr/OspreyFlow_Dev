@@ -1540,8 +1540,10 @@ class WorkingSetService:
                 await self._store.clear(investigation_id)
             raise
 
-        # What is answered is the writer's own view of what was stored (ADR-143 Amendment 8).
-        delta = await self._writers_view(stored, {e.id for e in returning}, principal)
+        # What is answered is the writer's own view of what was stored, which holds the stored add
+        # for `publish_delta` alone (ADR-143 Amendment 8).
+        theirs = await self._writers_view(stored, {e.id for e in returning}, principal)
+        delta = theirs.holding(stored)
 
         # Step 3h: the reader's own clusters as nodes, or a resolution link, enter their view.
         clusters: DeltaReproject | None = None
@@ -1554,7 +1556,7 @@ class WorkingSetService:
                 clusters = DeltaReproject(
                     seq=delta.seq, reason=REASON_ENTRY, affected_cluster_ids=ids
                 )
-        return ExpansionOutcome(delta=delta.holding(stored), clusters=clusters)
+        return ExpansionOutcome(delta=delta, clusters=clusters)
 
     async def current_membership(self, investigation_id: str) -> tuple[list[Node], list[Edge]]:
         """The full source-fidelity (unfiltered) membership — `app.py`'s
