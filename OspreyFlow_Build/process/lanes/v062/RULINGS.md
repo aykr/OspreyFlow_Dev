@@ -3,6 +3,50 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 27 November 2026, about 18:20 UTC: 66s first, for speed (the owner, in chat)
+
+1. **66s comes first:** a one-row hand-back from line-fix, carrying `scan_map.tsv`'s row for `tests/glass_trees/test_route_pins.py`. It applies in minutes. After it, the owner says "applied" and merges restart in this order:
+   - SE9d;
+   - GR1b;
+   - GG4b;
+   - then trains of the clean parts.
+2. **66b and 65 go in together, in one later gap this evening.** The conductor gives the owner that gap when they are ready. 66b still carries the `shared-entries.test.ts` change, and GA1a, GG3a and GG3b wait for it.
+3. **From 28 November, line fixes go in as one batch, in one overnight window.** The only exception is a fix that unblocks merging.
+
+## 27 November 2026, about 18:05 UTC: the gap for 65, and the scan-map row (the owner, in chat)
+
+1. **65 is applied in the gap.** Then 66b straight after it, from line-fix and shown red first. 66b carries:
+   - the `scan_map.tsv` row for `tests/glass_trees/test_route_pins.py`, which 66 left out. That is why SE9d was refused at 17:59, by `slice-line-check`'s `test_the_real_scan_map_names_every_pure_walker_and_nothing_stale`;
+   - the `shared-entries.test.ts` change.
+2. **The owner says "applied" after both.** Only then is SE9d's merge rerun.
+3. **GR1b merges on its current row, with no refreeze.** Its unused line (`GR1b refreeze 2026-11-27`) lapses tonight.
+4. **`test_route_pins.py` and `test_page_lists_merge.py` join the rows only of parts that still have rounds** (GA1a, GG3a and GG3b), at their refreeze.
+5. **CO3e's brief goes in the conductor's next records commit.**
+
+## 27 November 2026, about 17:12 UTC: the page parts after 66, GA1a's question (the owner, in chat)
+
+1. **GA1a: option (b). 66b comes first, as line-fix's hand-back before 67.**
+   - Line-fix changes `shared-entries.test.ts` so that no new page edits it. The test checks that every server file importing the shared package is bundled, with no fixed list or count. It is shown red first.
+   - The owner applies 66b in tonight's gap, after 65.
+2. **After 66b, GA1a is refrozen with the builder's two changes:**
+   - AC17 (`ask.test.ts:790`) checks that `sharedPackageEntries(server)` includes `views/askWords.ts`.
+   - The ask scenario (`test_govuk_ask_scenario.py`) checks its own path appears once. Line 1022 says "not once", and a case lists the path twice.
+   - Then one round takes main in, with the builder's trial resolution: main's side in `build.mjs` and the test files, and `askPage` last in `pageList.ts`.
+3. **Every page part, at its refreeze, adds `test_route_pins.py` and `test_page_lists_merge.py` to its checks.**
+4. **Who asked each question: there is no exception.** The page leaves it out as ruled, and the route is not changed.
+5. **GG3a and GG3b take the same answer.**
+
+## 27 November 2026, about 17:00 UTC: 11ca672's two GitHub reds, and CO3e (the owner, in chat)
+
+1. **These two reds are not covered by the 11:15 rulings.** Those rulings cover CO3c (`rule-standards.spec.ts:21`) and the conformance jobs, and nothing else.
+2. **Keyboard (job `glass-perf-a11y-keyboard`, run 46012575717):**
+   - `admin.spec.ts:982` is a focus timing fault. It was green on `9e91748`, and `11ca672` is records-only.
+   - The list at `:1040` lost its proved set when Playwright replaced the worker.
+   - **CO3e, test-only, standing (a)** (`slices/CO3e.md`): line 982 waits for the field's focus before ArrowUp, and the list's proved set survives a worker restart, kept outside the worker's memory. Each is shown red first.
+3. **Conformance (`test_schedule_executor.py::test_run_now_is_refused_while_a_run_of_the_recipe_is_going`, TimeoutError):** its job is rerun once (D44), after `ab0fe78`'s run completes. A second failure goes to the owner.
+4. **GG3b** takes the same rule 5 round when a builder's slot frees.
+5. **The gap for 65:** when SE9d lands, the conductor says "gap for 65". The builders already running keep going. No new seat, merge or stack starts until the owner says "applied".
+
 ## 27 November 2026, about 16:40 UTC: 66 applied, and the order after it (the owner, in chat)
 
 1. **66 is on main as `22d967f`** (two pages built side by side merge cleanly: a union merge for the two page lists, the build finds its bundles, and no test pins the route list). The hold is over. `22d967f` is pushed with the conductor's next records commit.
