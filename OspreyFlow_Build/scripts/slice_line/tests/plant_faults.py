@@ -953,6 +953,27 @@ M = [
  ('merge_slice.py', 'c.write_json(c.DATA / RUNNING, {"slice": "+".join(ids), "train": ids,', 'c.write_json(c.DATA / RUNNING, {"slice": ids[0], "train": ids,', 'test_merge_train and (running_record)'),
  ('merge_slice.py', '        if TRAIN is None:\n            (c.DATA / RUNNING).unlink(missing_ok=True)\n        if fh:', '        (c.DATA / RUNNING).unlink(missing_ok=True)\n        if fh:', 'test_merge_train and (running_record)'),
  ('resume.py', '        elif busy == "?" or slice_id in busy.split("+"):', '        elif busy in (slice_id, "?"):', 'test_merge_train and (against_resume)'),
+ # 65 (27 November 2026): the gate's trees under the line's tmp; a builder's READY; midnight-safe tests; a stack on the train
+ ('merge_slice.py', '    d = c.gate_dir(f"slice-{name}-")', '    d = Path(tempfile.mkdtemp(prefix=f"slice-{name}-"))', 'test_gate_tmp'),
+ ('merge_slice.py', '        envs = c.gate_dir(f"slice-{slice_id}-envs-")', '        envs = Path(tempfile.mkdtemp(prefix=f"slice-{slice_id}-envs-"))', 'test_gate_tmp'),
+ ('dry_run.py', '    d = c.gate_dir("slice-dryrun-")', '    d = Path(tempfile.mkdtemp(prefix="slice-dryrun-"))', 'test_gate_tmp'),
+ ('dry_run.py', '    venv = c.gate_dir("slice-dryrun-venv-")', '    venv = Path(tempfile.mkdtemp(prefix="slice-dryrun-venv-"))', 'test_gate_tmp'),
+ ('common.py', '    return Path(tempfile.mkdtemp(prefix=prefix, dir=str(GATE_TMP)))', '    return Path(tempfile.mkdtemp(prefix=prefix))', 'test_gate_tmp'),
+ ('run_seat.py', '    if tests and tests.get("green") and how == "question":', '    if tests and tests.get("green") and how == "question" and False:', 'test_builder_ending'),
+ ('run_seat.py', '    if tests and tests.get("green") and how == "unsaid":', '    if tests and tests.get("green") and how == "unsaid" and False:', 'test_builder_ending'),
+ ('run_seat.py', '    if lines and lines[-1] == "READY":', '    if "READY" in lines:', 'test_builder_ending'),
+ ('run_seat.py', '    if asked:\n        return "question"', '    if asked and False:\n        return "question"', 'test_builder_ending'),
+ ('run_seat.py', '    prompt += BUILDER_ENDING\n', '', 'test_builder_ending'),
+ ('board.py', 'and st.get("phase") == "building" and st.get("builder_ending") == "unsaid":', 'and st.get("phase") == "building" and st.get("builder_ending") == "unsaid" and False:', 'test_builder_ending'),
+ ('tests/test_owner_line_waiting.py', '    return (datetime.date.fromisoformat(TODAY) + datetime.timedelta(days=offset)).isoformat()', '    import time\n    return time.strftime("%Y-%m-%d", time.gmtime(time.time() + offset * 86400))', 'test_midnight'),
+ ('tests/test_round_after_refusal.py', '    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())', '    return f"{TODAY}T00:00:01Z"', 'test_midnight'),
+ ('merge_slice.py', '            c.write_json(d / INFLIGHT, {"train": tid, "parts": ids, "base": base0, "gated": cand, "at": c.now()})\n', '', 'test_stack_on_train'),
+ ('merge_slice.py', '        (d / INFLIGHT).unlink(missing_ok=True)\n', '', 'test_stack_on_train'),
+ ('early_warning.py', '        c.git(["update-ref", "refs/heads/main", base], d)', '        c.git(["update-ref", "refs/heads/main", c.git(["rev-parse", "refs/heads/main"], c.REPO)], d)', 'test_stack_on_train'),
+ ('early_warning.py', '    if inside:\n        raise Refused', '    if inside and False:\n        raise Refused', 'test_stack_on_train'),
+ ('early_warning.py', '    if not re.fullmatch(r"[0-9a-f]{40}", gated):\n        raise Refused("no train', '    if False:\n        raise Refused("no train', 'test_stack_on_train'),
+ ('server_gate.py', '        since, words = t["landed"], f"{words}; it ran', '        since, words = smain, f"{words}; it ran', 'test_stack_on_train'),
+ ('server_gate.py', '        if not t or not git_ok(["merge-base", "--is-ancestor", t["landed"], base])[0]:', '        if False:', 'test_stack_on_train'),
 ]
 #: Files outside the line's folder that a planted fault may change (1d: the release paths), copied fresh from the
 #: checkout for every fault, so one fault never stays behind for the next.

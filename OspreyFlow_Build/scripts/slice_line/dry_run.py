@@ -200,7 +200,7 @@ def tail(out: str, n: int = 12) -> str:
 
 
 def scratch_tree(ref: str = "main") -> Path:
-    d = Path(tempfile.mkdtemp(prefix="slice-dryrun-"))
+    d = c.gate_dir("slice-dryrun-")  # 65: the line's own tmp, never the system's
     shutil.rmtree(d)
     c.git(["worktree", "add", "--detach", str(d), ref], c.REPO)
     return d
@@ -229,7 +229,7 @@ def prove(spec: dict, slot: int | str | None = None, tip: str | None = None, log
 
 def _prove(spec: dict, slot, tip, log, checks: bool, problems: list[str]) -> list[str]:
     tree = scratch_tree("main")
-    venv = Path(tempfile.mkdtemp(prefix="slice-dryrun-venv-"))
+    venv = c.gate_dir("slice-dryrun-venv-")
     if log is None:
         fd, name = tempfile.mkstemp(prefix="slice-dryrun-", suffix=".log")
         os.close(fd)

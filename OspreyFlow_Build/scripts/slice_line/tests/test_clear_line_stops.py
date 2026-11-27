@@ -18,6 +18,7 @@ import json
 import pytest
 
 from test_gates import TODAY, sh, stop_gate, world  # noqa: F401  (world is a fixture)
+from test_round_after_refusal import line_now
 from test_resume import V062, changes, resume, said_refused, snapshot, state
 from test_self_clear import (MAIN_ID, PERMISSION, a_slice_red_on_its_own, permission, clears, commit_main, layout_slice,
                              red_on_mains_check, red_six_times, red_stop, unchanged)
@@ -76,7 +77,7 @@ def test_clear_line_stops_at_its_budget_clears_no_more_today_and_the_board_says_
     wt = red_on_mains_check(w)
     standing(w, f"clear-line-stops\tper-day\t1\t{TODAY}\n")
     logged(w, "2020-01-01T00:00:00Z", "S8", "self-clear", "standing.tsv clear-line-stops: an old day's use")
-    logged(w, f"{TODAY}T00:00:01Z", "S9", "self-clear", "standing.tsv clear-line-stops: today's one use")
+    logged(w, line_now(), "S9", "self-clear", "standing.tsv clear-line-stops: today's one use")
     before, at = snapshot(w), heads(w, wt)
     p = resume(w, "S1", "self-clear")
     assert said_refused(p, "budget"), p.stdout + p.stderr

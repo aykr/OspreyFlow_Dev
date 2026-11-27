@@ -399,6 +399,11 @@ def one_slice(s: dict, ids: set, rows: list[dict], builds: dict, problems: list[
         note = ("verifier passed; waiting for the merge script" if not accepted else
                 "verified, accepted narrower" + (" on the standing line" if accepted.get("by") == "standing" else "")
                 + "; waiting for the merge script")
+    elif tip and tests and tests.get("green") and st.get("phase") == "building" and st.get("builder_ending") == "unsaid":
+        # 65: a builder that ended without READY has not said the part is ready, whatever its checks say
+        state, source = "building", "the builder's last words"
+        note = (f"checks green, but its builder has not said it is ready (no READY line): "
+                f"{str(st.get('builder_said') or '')[-160:]}")
     elif tip and tests and tests.get("green"):
         state, note, source = "verifying", "checks green; verifier pending", "test record"
     elif branch_exists(branch) and (st or not frozen):

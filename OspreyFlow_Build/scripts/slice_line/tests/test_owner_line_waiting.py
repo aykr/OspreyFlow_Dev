@@ -85,8 +85,10 @@ def test_a_slice_not_stopped_never_shows_it(world):
 
 
 def day(offset):
-    import time
-    return time.strftime("%Y-%m-%d", time.gmtime(time.time() + offset * 86400))
+    """A day `offset` days from the run's one date (TODAY), never from the clock (65: after midnight the clock's
+    yesterday was the run's own day, in CO3b's gate of 27 November 2026)."""
+    import datetime
+    return (datetime.date.fromisoformat(TODAY) + datetime.timedelta(days=offset)).isoformat()
 
 
 @pytest.mark.parametrize("offset", [-1, -30])

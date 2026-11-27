@@ -50,6 +50,14 @@ def changes(w):
     return [ln.split("\t") for ln in f.read_text().splitlines()[1:]] if f.exists() else []
 
 
+def line_now() -> str:
+    """A use stamped as the line stamps it (common.now(): the clock), never with the run's date: the line counts a
+    standing permission's uses by the clock's day, so a run collected before midnight and run after it must stamp its
+    stand-in uses the same way (65, CO3b's gate of 27 November 2026)."""
+    import time
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
 def logged(w, at, slice_id, action, detail):
     f = w["data"] / "owner-changes.tsv"
     if not f.exists():
@@ -193,7 +201,7 @@ def test_round_after_refusal_at_its_budget_gives_no_more_today_and_the_board_say
     w = world
     tip, lim = past_the_limit(w, f"round-after-refusal\tper-day\t1\t{TODAY}\n")
     logged(w, "2020-01-01T00:00:00Z", "S8", "send-back", "standing.tsv round-after-refusal: an old day's use")
-    logged(w, f"{TODAY}T00:00:01Z", "S9", "send-back", "standing.tsv round-after-refusal: today's one use")
+    logged(w, line_now(), "S9", "send-back", "standing.tsv round-after-refusal: today's one use")
     before = (w["data"] / "records/S1/state.json").read_bytes()
     p = resume(w, "send-back")
     out = p.stdout + p.stderr
