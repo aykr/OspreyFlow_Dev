@@ -23,8 +23,9 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from adapters.media_objectstore import reference_for
 from services.api.entity_pictures import PICTURE_TYPES
+
+from adapters.media_objectstore import reference_for
 
 from .test_boards import K, _as, _board, _item, _loaded, world  # noqa: F401  (the fixture)
 
@@ -54,9 +55,7 @@ def _hold(world: SimpleNamespace, ref: str | None, title: str) -> None:  # noqa:
     if ref is not None:
         properties["object_ref"] = ref
         world.media.files[ref] = DATA
-    held = _loaded(DOCUMENT_ID).model_copy(
-        update={"type": "Document", "properties": properties}
-    )
+    held = _loaded(DOCUMENT_ID).model_copy(update={"type": "Document", "properties": properties})
     world.graph._graph_nodes[DOCUMENT_ID] = held
 
 
@@ -91,7 +90,8 @@ def test_the_picture_types_are_the_four() -> None:
 
 @pytest.mark.parametrize("content_type", PICTURES)
 def test_each_picture_type_is_chosen_and_served(
-    world: SimpleNamespace, content_type: str  # noqa: F811
+    world: SimpleNamespace,  # noqa: F811
+    content_type: str,
 ) -> None:
     # Its name says it is no picture: the reference decides.
     _hold(world, reference_for(DATA, content_type), title="report.pdf")
@@ -105,7 +105,8 @@ def test_each_picture_type_is_chosen_and_served(
 
 @pytest.mark.parametrize("kind", NOT_PICTURES)
 def test_choose_picture_refuses_what_is_no_picture(
-    world: SimpleNamespace, kind: str  # noqa: F811
+    world: SimpleNamespace,  # noqa: F811
+    kind: str,
 ) -> None:
     # Its name says it is a picture: the reference decides.
     _hold(world, NOT_PICTURES[kind], title="photo.png")
@@ -129,7 +130,8 @@ def test_choose_picture_refuses_what_is_no_picture(
 
 @pytest.mark.parametrize("kind", NOT_PICTURES)
 def test_picture_file_answers_as_none_for_one_already_chosen(
-    world: SimpleNamespace, kind: str  # noqa: F811
+    world: SimpleNamespace,  # noqa: F811
+    kind: str,
 ) -> None:
     _hold(world, reference_for(DATA, "image/png"), title="photo.png")
     board = _board()
