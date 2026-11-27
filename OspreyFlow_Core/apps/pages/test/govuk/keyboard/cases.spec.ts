@@ -152,6 +152,7 @@ test.describe("New case by keyboard", () => {
         await tabTo(page, "a: Skip to main content");
         await tabTo(page, "button: Sign out");
         await tabTo(page, "a: Open the Ingest Studio");
+        await tabTo(page, "a: Drawing boards in this case");
         await tabTo(page, "a: Back to your cases");
       },
       "creator",
