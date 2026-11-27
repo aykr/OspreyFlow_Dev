@@ -348,7 +348,7 @@ def function_problems(data: dict[str, Any]) -> list[str]:
 
 def route_problems(data: dict[str, Any]) -> list[str]:
     if data["routes"] != EXPECTED_ROUTES:
-        return [f"the route list is {data['routes']!r}: the tree has six pages, {EXPECTED_ROUTES}"]
+        return [f"the route list is {data['routes']!r}: the tree has seven pages, {EXPECTED_ROUTES}"]
     return []
 
 
@@ -551,8 +551,8 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
         "its id",
     ),
     ("the dashboards row given a scenario", _row("reports-dashboards", scenario="TS1"), function_problems, "reports-dashboards"),
-    ("a route in the list the code has no page for", lambda d: d["routes"].append("/welcome"), route_problems, "six pages"),
-    ("the path left out of the list", lambda d: d["routes"].remove(PATH), route_problems, "six pages"),
+    ("a route in the list the code has no page for", lambda d: d["routes"].append("/welcome"), route_problems, "seven pages"),
+    ("the path left out of the list", lambda d: d["routes"].remove(PATH), route_problems, "seven pages"),
     ("the page at another path", _replace("page_module", f'path: "{PATH}"', 'path: "/packs/board"'), module_problems, "its path"),
     ("the page for both trees", _replace("page_module", 'trees: ["govuk"]', 'trees: ["default", "govuk"]'), module_problems, "GOV.UK tree alone"),
     ("the page answering POST", _replace("page_module", 'methods: ["GET"]', 'methods: ["GET", "POST"]'), module_problems, "GET alone"),
