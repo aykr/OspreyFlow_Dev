@@ -1015,7 +1015,9 @@ describe("New case on the GOV.UK tree (scenario CS)", () => {
       expect(offeredProblems(list.replace(`href="${FORM}"`, 'href="/cases/new"'), true)).not.toEqual([]);
       const bare = (await getAs(await world({ datasets: [] }), FORM)).text;
       expect(noDatasetProblems(bare)).toEqual([]);
-      expect(noDatasetProblems(bare.replace("</form>", `<fieldset><legend>${SAID.useExisting}</legend></fieldset></form>`))).not.toEqual([]);
+      // Into the New case form, before its button: the page's first `</form>` is the sign-out's, in the header, which the check never reads.
+      const emptyGroup = bare.replace('<button type="submit" class="btn btn--primary">', `<fieldset><legend>Datasets</legend></fieldset><button type="submit" class="btn btn--primary">`);
+      expect(noDatasetProblems(emptyGroup)).toEqual(["a group has nothing in it"]);
       expect(noDatasetProblems(form)).not.toEqual([]);
       expect(idProblems(form)).toEqual([]);
       expect(idProblems(form.replace(">Quay ledger<", `>Quay ledger (${QUAY})<`))).not.toEqual([]);
