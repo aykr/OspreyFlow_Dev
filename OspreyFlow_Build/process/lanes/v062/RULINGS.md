@@ -3,6 +3,11 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 27 November 2026, 22:24 UTC: 66b and 65 applied (on the owner's word of about 19:40, tonight only)
+
+1. `/tmp/apply65.out` read "done: 087c0d7 committed on main (not pushed); suite: 1075 passed; early warning: 301 passed; citations: clean; install.sh not needed". So 66b (`8fbbeb4`) and 65 (`087c0d7`) count as applied. They are pushed with this records commit, and the overnight plan resumes.
+2. **CO3e's item 1 waits for the morning** (the owner, about 21:30). Options (A), (B) and (C) go in full in the 06:00 report, with what each changes for a user. CO3e's builder slot goes to the next part that is not blocked.
+
 ## 27 November 2026, about 19:40 UTC: tonight's plan (the owner, in chat; tonight only where it says so)
 
 1. **Conformance: `8e01ceb`'s conformance job is D44's one rerun.** If `test_schedule_executor` is red again, it waits for the owner in the morning. The morning report says what cancelled 11ca672's rerun job at 18:42, if that can be found.
