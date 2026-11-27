@@ -88,8 +88,18 @@ const boards: HeldBoard[] = [
   },
   { id: "b-night", name: "Night shift", created_by: "alice", shared: false, nodes: [], edges: [], items: {}, layout: {} },
 ];
+// `?before=1`: Tall as an item drawn before ADR-143 Amendment 8, with the photo on the board as its document and no note.
+if (params.get("before")) {
+  const tall = boards[0]!.nodes.find((n) => n.id === "d-tall")!;
+  const drawn = (tall.provenance as Json).drawn as Json;
+  delete drawn.source_note;
+  drawn.source_document = "doc-photo";
+}
 let decided = false;
 let made = 0;
+/** As the Conduit's bodies refuse one (ADR-143 Amendment 8 item 7): no source note, a blank one counting as none. */
+const noted = (note: unknown) => typeof note === "string" && note.trim() !== "";
+const unnoted = () => json(422, { detail: [{ loc: ["body"], msg: "Value error, give a source note; a document of the case may be added to it" }] });
 // L3.4: what was promoted from a board here, and the promotions themselves.
 const promotedHere = new Set<string>();
 const promotions: Json[] = [];
@@ -181,8 +191,11 @@ window.fetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
     const node = b.nodes.find((n) => n.id === element)!;
     const drawn = (node.provenance as Json).drawn as Json;
     const change = body as Json;
+    // As the Conduit's edit: one that would leave the item with no note is refused, in words.
+    if (!noted(change.source_note ?? drawn.source_note)) return json(422, { error: "no_source", detail: "a drawn item needs a source note; a document of the case may be added to it" });
     if (change.label) drawn.label = change.label;
     if (change.grading) drawn.grading = change.grading;
+    if (change.source_note) drawn.source_note = change.source_note;
     return json(200, { element_id: element, item_id: item[1] });
   }
   const one = /^boards\/([^/]+)(?:\/(.+))?$/.exec(rest);
@@ -258,6 +271,7 @@ window.fetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
   }
   if (tail === "items") {
     const given = body as Json;
+    if (!noted(given.source_note)) return unnoted();
     if (given.marking === "OFFICIAL-SENSITIVE" && given.label === "Too high") {
       return json(409, { error: "above_the_ceiling", detail: "SECRET is above this case's ceiling, OFFICIAL-SENSITIVE" });
     }
@@ -270,6 +284,7 @@ window.fetch = async (input: RequestInfo | URL, init: RequestInit = {}) => {
   }
   if (tail === "links") {
     const given = body as Json;
+    if (!noted(given.source_note)) return unnoted();
     made += 1;
     b.edges.push({
       id: `e-made-${made}`,
