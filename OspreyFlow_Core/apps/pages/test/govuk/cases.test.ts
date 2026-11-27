@@ -1153,7 +1153,7 @@ describe("the history part of a case's page (scenario CS, slice GR1e)", () => {
     expect(calls(w.conduit)).toEqual(["GET /v1/investigations", "GET /v1/me/rights"]);
   });
 
-  it("CS23:a history that is not a list, or a step missing or misshaping any field, is the case's could-not-be-read page, never a default", async () => {
+  it("CS23: a history that is not a list, or a step missing or misshaping any field, is the case's could-not-be-read page, never a default", async () => {
     expect(REQUIRED.HistoryStepSummary.sort()).toEqual(["created_at", "id", "label", "restorable"]);
     for (const field of REQUIRED.HistoryStepSummary) {
       const b = withField("HistoryStepSummary", field, undefined);
