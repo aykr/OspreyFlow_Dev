@@ -1,8 +1,8 @@
 /**
  * The pages server started for the GOV.UK tree against the boards page's fixture Conduit (`boardsConduit.ts`), for the boards page's
- * keyboard and scripts-off specs (slice GG4a; scenario BD14 and BD15). One synthetic case with two boards: one with a drawn item, a loaded
+ * keyboard and scripts-off specs (slices GG4a and GG4c; scenario BD14, BD15, BD28 and BD29). One synthetic case with two boards: one with a drawn item, a loaded
  * one and a drawn link between them, and one with nothing on it. The signed-in person made both, holds a level on the case and the right
- * to investigate. The case's own routes are the cases page's fixture's (`casesConduit.ts`), so the way back to the case lands on its real
+ * to investigate, and the right to draw only in a spec that asks for it (`DRAWS`: slice GG4c's writes). The case's own routes are the cases page's fixture's (`casesConduit.ts`), so the way back to the case lands on its real
  * page: one address in front of both fixtures sends each request to the one that models its route, unchanged.
  */
 import { request as forward, createServer } from "node:http";
@@ -49,10 +49,19 @@ export const LIST_TAB_ORDER = ["a: Skip to main content", "button: Sign out", "a
 /** The stops of a board: the skip link, the sign-out, the way back to the case's boards, the way back to Home; the tables add none. */
 export const BOARD_TAB_ORDER = ["a: Skip to main content", "button: Sign out", "a: Back to this case's boards", "a: Back to Home"];
 
-export async function withBoards(assets: Assets, run: (base: string) => Promise<void>): Promise<void> {
+/** The stops of the list and of the board not yet shared, for a person who may draw: the writes' controls in their places. */
+// The helper names a stop by its own text, and a text field has none: its label is checked by name where it is typed into (BK4).
+export const DRAW_LIST_TAB_ORDER = ["a: Skip to main content", "button: Sign out", "a: Quay sketch", "a: Empty start", "input: ", "button: Make a blank board", "a: Back to this case", "a: Back to Home"];
+export const DRAW_BOARD_TAB_ORDER = ["a: Skip to main content", "button: Sign out", "button: Share with the case", "a: Delete this board", "a: Back to this case's boards", "a: Back to Home"];
+export const CONFIRM_TAB_ORDER = ["a: Skip to main content", "button: Sign out", "button: Delete board", "a: Cancel and go back to the board", "a: Back to Home"];
+export const EMPTY_PATH = `/cases/boards?case=${CASE}&board=k-empty`;
+/** The rights of a person who may make, share and delete boards. */
+export const DRAWS = ["investigate", "draw_on_boards"];
+
+export async function withBoards(assets: Assets, run: (base: string) => Promise<void>, rights: string[] = ["investigate"]): Promise<void> {
   const token = bearer();
   const conduit = await boardsConduit({
-    readers: [{ token, id: ME, unit: UNIT, rights: ["investigate"], cases: [CASE], clearance: "OFFICIAL" }],
+    readers: [{ token, id: ME, unit: UNIT, rights, cases: [CASE], clearance: "OFFICIAL" }],
     cases: [{ id: CASE, owning_unit: UNIT }],
     boards: BOARDS,
     items: ITEMS,
@@ -64,7 +73,7 @@ export async function withBoards(assets: Assets, run: (base: string) => Promise<
   });
   // Each request to whichever fixture models its route: the boards' routes to the boards fixture, every other to the cases fixture.
   const front = createServer((req, res) => {
-    const target = new URL(/^\/v1\/investigations\/[^/]+\/boards(?:\/|$|\?)/.test(req.url ?? "") ? conduit.url : cases.url);
+    const target = new URL(/^\/v1\/(?:investigations\/[^/]+\/boards(?:\/|$|\?)|me\/rights$)/.test(req.url ?? "") ? conduit.url : cases.url);
     const onward = forward({ host: target.hostname, port: target.port, path: req.url, method: req.method, headers: req.headers }, (answer) => {
       res.writeHead(answer.statusCode ?? 502, answer.headers);
       answer.pipe(res);

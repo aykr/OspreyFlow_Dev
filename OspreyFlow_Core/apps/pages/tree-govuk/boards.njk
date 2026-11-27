@@ -1,10 +1,32 @@
-{#- A case's drawing boards and one board's drawn items and links (slice GG4a; scenario BD), read-only, drawn on the server and complete
-    without a script. Each list is a table with a caption, column headers (th, scope col) and a row header for each row: the list's holds
-    each board's name as a link; a board's three tables hold its drawn items, its loaded items and its links, in the order sent. Nothing
-    here is a form, a button or a control, and nothing counts: the page draws what it is given, in the order given (the drawn items'
-    count is the route's own). The words are `server/views/boardsWords.ts`'s. -#}
+{#- A case's drawing boards and one board's drawn items and links (slice GG4a), and making, sharing and deleting a board as plain forms
+    (slice GG4c; scenario BD), drawn on the server and complete without a script. Each list is a table with a caption, column headers
+    (th, scope col) and a row header for each row: the list's holds each board's name as a link; a board's three tables hold its drawn
+    items, its loaded items and its links, in the order sent. The tables count nothing: the page draws what it is given, in the order
+    given (the drawn items' count is the route's own). A form is drawn only where the handler offers its write, each a POST with this
+    session's anti-forgery token. The error summary and the notification banner are marked up as the GOV.UK Design System marks them
+    up. The words are `server/views/boardsWords.ts`'s. -#}
 {% extends "layout.njk" %}
+{#- The new board's field and button: on the list when offered, and again, with the words typed, under the error summary. -#}
+{% macro newBoardForm(action, csrf, words, kept, wrong) %}
+<form method="post" action="{{ action }}" novalidate>
+<input type="hidden" name="_csrf" value="{{ csrf }}">
+<input type="hidden" name="action" value="make">
+<div class="govuk-form-group{% if wrong %} govuk-form-group--error{% endif %}">
+<label class="govuk-label" for="board-name">{{ words.nameLabel }}</label>
+<p id="board-name-hint" class="govuk-hint">{{ words.nameHint }}</p>
+{% if wrong %}<p id="board-name-error" class="govuk-error-message">{{ words.errorPrefix }} {{ words.nameError }}</p>
+{% endif %}<input class="input govuk-input{% if wrong %} govuk-input--error{% endif %}" id="board-name" name="name" type="text" value="{{ kept }}" aria-describedby="board-name-hint{% if wrong %} board-name-error{% endif %}">
+</div>
+<button type="submit" class="btn btn--primary">{{ words.makeButton }}</button>
+</form>
+{% endmacro %}
 {% block content %}
+{% if deleted %}
+<div class="govuk-notification-banner govuk-notification-banner--success" role="alert" aria-labelledby="boards-banner-title">
+<div class="govuk-notification-banner__header"><h2 class="govuk-notification-banner__title" id="boards-banner-title">{{ words.bannerTitle }}</h2></div>
+<div class="govuk-notification-banner__content"><p class="govuk-notification-banner__heading">{{ words.deleted }}</p></div>
+</div>
+{% endif %}
 {% if view.kind == "table" %}
 <h1>{{ words.listTitle }}</h1>
 <p>{{ words.lede }}</p>
@@ -18,11 +40,23 @@
 {% for row in view.rows %}<tr><th scope="row"><a href="{{ row.href }}">{{ row.name }}</a></th><td>{{ row.shared }}</td><td>{{ row.drawn }}</td><td>{{ row.made }}</td></tr>
 {% endfor %}</tbody>
 </table>
+{% if make %}
+<h2>{{ words.newTitle }}</h2>
+{{ newBoardForm(make.action, csrfToken, words, "", false) }}
+{% elif rightsUnread %}
+<p>{{ words.rightsUnread }}</p>
+{% endif %}
 <p><a href="{{ view.toCase }}">{{ words.toCase }}</a></p>
 <p><a href="/">{{ words.back }}</a></p>
 {% elif view.kind == "empty" %}
 <h1>{{ words.listTitle }}</h1>
 <p>{{ words.noBoards }}</p>
+{% if make %}
+<h2>{{ words.newTitle }}</h2>
+{{ newBoardForm(make.action, csrfToken, words, "", false) }}
+{% elif rightsUnread %}
+<p>{{ words.rightsUnread }}</p>
+{% endif %}
 <p><a href="{{ view.toCase }}">{{ words.toCase }}</a></p>
 <p><a href="/">{{ words.back }}</a></p>
 {% elif view.kind == "board" %}
@@ -82,6 +116,46 @@
 <p>{{ words.noLinks }}</p>
 {% endif %}
 {% endif %}
+{% if view.own %}
+{% if view.own.share %}
+<h2>{{ words.shareTitle }}</h2>
+<p>{{ words.shareSentence }}</p>
+<form method="post" action="{{ view.own.here }}">
+<input type="hidden" name="_csrf" value="{{ csrfToken }}">
+<input type="hidden" name="action" value="share">
+<button type="submit" class="btn">{{ words.shareButton }}</button>
+</form>
+{% endif %}
+<p><a href="{{ view.own.confirm }}">{{ words.deleteLink }}</a></p>
+{% endif %}
+<p><a href="{{ view.toBoards }}">{{ words.toBoards }}</a></p>
+<p><a href="/">{{ words.back }}</a></p>
+{% elif view.kind == "confirm-delete" %}
+<h1>{{ words.confirmTitle }}</h1>
+<p>{{ words.confirmNamed(view.name) }}</p>
+<p>{{ words.confirmStays }}</p>
+<form method="post" action="{{ view.here }}">
+<input type="hidden" name="_csrf" value="{{ csrfToken }}">
+<input type="hidden" name="action" value="delete">
+<button type="submit" class="btn">{{ words.confirmButton }}</button>
+</form>
+<p><a href="{{ view.here }}">{{ words.cancel }}</a></p>
+<p><a href="/">{{ words.back }}</a></p>
+{% elif view.kind == "name-error" %}
+<div class="govuk-error-summary">
+<div role="alert">
+<h2 class="govuk-error-summary__title">{{ words.errorTitle }}</h2>
+<div class="govuk-error-summary__body">
+<ul class="govuk-list govuk-error-summary__list"><li><a href="#board-name">{{ words.nameError }}</a></li></ul>
+</div>
+</div>
+</div>
+<h1>{{ words.newTitle }}</h1>
+{{ newBoardForm(view.action, csrfToken, words, view.kept, true) }}
+<p><a href="{{ view.toBoards }}">{{ words.toBoards }}</a></p>
+<p><a href="/">{{ words.back }}</a></p>
+{% elif view.kind == "cannot" %}
+<h1>{{ words.cannot }}</h1>
 <p><a href="{{ view.toBoards }}">{{ words.toBoards }}</a></p>
 <p><a href="/">{{ words.back }}</a></p>
 {% elif view.kind == "too-large" %}

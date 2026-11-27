@@ -565,7 +565,7 @@ describe("the route list", () => {
       ["reports-figures", "/reports", ["GET"]],
       ["reports-trends-shown-together", "/packs/trends", ["GET"]],
       ["cases-and-views", "/cases", ["GET"]],
-      ["drawing-boards", "/cases/boards", ["GET"]],
+      ["drawing-boards", "/cases/boards", ["GET", "POST"]],
       ["alerts-rules-watches", "/alert-queue", ["GET"]], // the alert queue (slice RM1a), the seventh page of the tree
     ]);
   });

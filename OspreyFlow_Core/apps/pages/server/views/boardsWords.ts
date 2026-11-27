@@ -1,7 +1,8 @@
 /**
- * The boards page's words and the views it is drawn from (slice GG4a; ADR-143 decisions 3 to 5; ADR-152 decisions 5, 6 and 12; FUNCTIONS
- * row `drawing-boards`; scenario BD). Nothing here is a call or a right: a word, or a function from what the Conduit answered to what the
- * template draws.
+ * The boards page's words and the views it is drawn from (slices GG4a and GG4c; ADR-143 decisions 3 to 5; ADR-152 decisions 5, 6 and 12;
+ * FUNCTIONS row `drawing-boards`; scenario BD). Nothing here is a call or a right: a word, or a function from what the Conduit answered
+ * (or what the person typed) to what the template draws. Which writes are offered is read from what the Conduit says (`may_draw` of an
+ * opened board, the rights of `GET /v1/me/rights`); the route still decides every write.
  *
  * What the page says of a moment is the shared package's (`utcStampOf`, the case picker's way of writing one), imported and never written
  * again here. What it calls an item and a link is the React board's rule (`apps/workspace/src/boards/boardModel.ts`, `itemLabel` and
@@ -40,7 +41,7 @@ import { caseBoardsHref, caseHref } from "./casesWords.js";
 
 export const BOARDS_WORDS = {
   listTitle: "Drawing boards in this case",
-  lede: "The drawing boards of this case you may see: your own, and those shared with the case. This page only shows them.",
+  lede: "The drawing boards of this case you may see: your own, and those shared with the case. Nothing is drawn on this page.",
   caption: "Drawing boards in this case",
   columns: ["Board", "Shared", "Drawn items", "Made"],
   // The React board's words for whether a board is shared (`apps/workspace/src/boards/BoardEditor.tsx`).
@@ -84,6 +85,28 @@ export const BOARDS_WORDS = {
   noPageYet: "None of these has a page in this service yet, and none of them opens this board.",
   unreadableList: "The boards of this case could not be read just now. Nothing is shown, and nothing has changed. Try again in a few minutes.",
   unreadableBoard: "This board could not be read just now. Nothing is shown, and nothing has changed. Try again in a few minutes.",
+  // Making, sharing and deleting a board (slice GG4c; the owner's rulings of 26 November 2026). The field's label is the React place's.
+  newTitle: "New drawing board",
+  nameLabel: "Board name",
+  nameHint: "A new board starts blank.",
+  makeButton: "Make a blank board",
+  errorTitle: "There is a problem",
+  errorPrefix: "Error:",
+  nameError: "Enter a board name of 1 to 200 characters",
+  rightsUnread: "Whether you can make a board here could not be checked just now.",
+  cannot: "You cannot make boards in this case",
+  shareTitle: "Share this board",
+  // What the route says of a share (`share_board`); there is no unshare route, so the page says it cannot be undone.
+  shareSentence: "Everyone on the case can then see this board, and what is on it at their own level. Sharing cannot be undone.",
+  shareButton: "Share with the case",
+  deleteLink: "Delete this board",
+  confirmTitle: "Delete this board?",
+  confirmNamed: (name: string): string => `The board: ${name}`,
+  confirmStays: "What was drawn on it stays in the case.",
+  confirmButton: "Delete board",
+  cancel: "Cancel and go back to the board",
+  bannerTitle: "Success",
+  deleted: "The board was deleted. What was drawn on it stays in the case.",
   toCase: "Back to this case",
   toBoards: "Back to this case's boards",
   back: "Back to Home",
@@ -92,7 +115,7 @@ export const BOARDS_WORDS = {
 /** Each model the page reads: the fields it draws, the fields it only checks, and the fields it leaves out (Scenario BD names the same). */
 export const CENSUS = {
   Board: { drawn: ["id", "name", "created_at", "shared", "drawn"], checked: ["case_id"], left: ["created_by", "start"] },
-  BoardOpened: { drawn: ["board", "nodes", "edges", "missing"], checked: ["drawn"], left: ["items", "layout", "node_types", "link_types", "markings", "ceiling", "grading_scheme", "grading_grades", "may_draw", "may_promote"] },
+  BoardOpened: { drawn: ["board", "nodes", "edges", "missing", "may_draw"], checked: ["drawn"], left: ["items", "layout", "node_types", "link_types", "markings", "ceiling", "grading_scheme", "grading_grades", "may_promote"] },
   Node: { drawn: ["type", "properties", "provenance", "handling"], checked: ["id"], left: ["resolution", "audit", "datasets"] },
   Edge: { drawn: ["type", "source", "target", "provenance", "handling"], checked: ["id"], left: ["properties", "interval", "occurrences", "weight", "weight_components", "basis", "audit", "datasets"] },
   Provenance: { drawn: ["drawn"], checked: [], left: ["state", "sources", "sources_withheld", "extracted_by", "extraction_confidence", "first_seen", "last_confirmed", "confirmed_by", "gazetteer"] },
@@ -157,6 +180,8 @@ const distinct = (ids: readonly string[]): boolean => new Set(ids).size === ids.
 /** The address of a case's boards, and of one board: one page with the case and the board in its query (`pages.ts`: a plain path). */
 export const boardsHref = caseBoardsHref;
 export const boardHref = (caseId: string, boardId: string): string => `${caseBoardsHref(caseId)}&board=${encodeURIComponent(boardId)}`;
+/** The page that asks before a board is deleted: the board's address and one value more. */
+export const confirmHref = (caseId: string, boardId: string): string => `${boardHref(caseId, boardId)}&delete=confirm`;
 
 // ------------------------------------------------------------------------------------------------ the models, read strictly
 
@@ -368,6 +393,9 @@ export interface BoardView {
   drawn: DrawnRow[];
   loaded: LoadedRow[];
   links: LinkRow[];
+  /** What the reader may do to the board, when the route says they may draw on it (`may_draw`); otherwise `undefined`, and the page
+   * draws no control. `share` only while it is not shared: there is no unshare route. */
+  own: { here: string; confirm: string; share: boolean } | undefined;
 }
 
 /** One board as the page draws it, or `undefined` when the body is not the route's for this case and board, names an element twice, its
@@ -420,7 +448,35 @@ export function boardView(caseId: string, boardId: string, body: unknown): Board
       }),
     loaded: nodesRead.filter((node) => !drawnIds.has(node.id)).map((node) => ({ label: itemLabel(node), type: node.type, marking: node.marking })),
     links,
+    own: may_draw ? { here: boardHref(caseId, boardId), confirm: confirmHref(caseId, boardId), share: !read.shared } : undefined,
   };
+}
+
+// ------------------------------------------------------------------------------------------------ the writes
+
+/** Whether the signed-in person's rights (`GET /v1/me/rights`) hold both rights a new board needs (the owner's question 2 (a)), or
+ * `undefined` when the body is not the route's. The case's level is not asked here: the route asks it, and its refusal is said. */
+export function mayMakeBoards(body: unknown): boolean | undefined {
+  if (!isObject(body) || !isTexts(body["rights"])) return undefined;
+  const rights: string[] = body["rights"];
+  return rights.includes("draw_on_boards") && rights.includes("investigate");
+}
+
+/** A name the route takes (`BoardInput.name`: 1 to 200 characters, counted as the route counts them, by code point). */
+export function nameFits(name: string): boolean {
+  const length = [...name].length;
+  return length >= 1 && length <= 200;
+}
+
+/** Whether a 422 (FastAPI's shape) is about the name, which the page says in its own words and never in the route's. */
+export function refusesTheName(body: unknown): boolean {
+  if (!isObject(body) || !Array.isArray(body["detail"])) return false;
+  return (body["detail"] as unknown[]).some((problem) => isObject(problem) && JSON.stringify(problem["loc"]) === JSON.stringify(["body", "name"]));
+}
+
+/** The id of the board a `201` says was made, read as strictly as any board of this case; `undefined` when it cannot be read. */
+export function madeBoardId(caseId: string, body: unknown): string | undefined {
+  return boardOf(body, caseId)?.id;
 }
 
 export interface LimitView {
