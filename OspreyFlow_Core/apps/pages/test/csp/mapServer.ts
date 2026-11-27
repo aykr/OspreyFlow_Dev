@@ -3,8 +3,9 @@
 // `map.spec.ts` on a free port of the test's own loopback.
 //
 // What is the real thing, called rather than copied:
-//   * the policy: `securityHeaders()` from `server/headers.ts`, mounted with `app.use` first, as `server/app.ts:223` mounts it,
-//     so every response here (the page, the assets, the worker, the style, the tiles) carries the builder's own policy;
+//   * the policy: `securityHeaders()` from `server/headers.ts`, mounted with `app.use` ahead of the routes, as `server/app.ts:223`
+//     mounts it, so every response here (the page, the assets, the worker, the style, the tiles) carries the builder's own policy
+//     (except under the planted fault that mounts the page's or the worker's route ahead of it);
 //   * the assets: `assetsHandler()` from `server/assets.ts` at `ASSETS_PREFIX`, after the headers, as `server/app.ts:227` mounts
 //     it, so the page's module, its stylesheet and MapLibre's worker are served with the types, names and refusals a deployed
 //     page service gives them (a content-hashed name, and `.js`, because the handler has no type for `.mjs`);
@@ -397,7 +398,7 @@ export async function startMapServer(): Promise<MapServer> {
   app.get("/map", (req, res, next) => (current?.unheaded === "page" ? mapPage(req, res, next) : next()));
   app.use(ASSETS_PREFIX, (req, res, next) => (current?.unheaded === "worker" && WORKER_FILE.test(req.path) ? assetsRoute(req, res, next) : next()));
 
-  // The real policy, ahead of every other route, as `server/app.ts:223` mounts it.
+  // The real policy, ahead of every real route, as `server/app.ts:223` mounts it.
   app.use(securityHeaders());
   // A plant, if the page open now names one: applied to the builder's own output, after the builder, before anything is sent,
   // on every response while that page is open (the spec runs one page at a time). Every response, not only the page's: a

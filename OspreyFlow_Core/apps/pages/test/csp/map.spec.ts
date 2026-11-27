@@ -9,6 +9,7 @@
 //       anything bound for a third origin), and, independently, every request that reached the other origin's own server;
 //   (c) the map reaching `load` and `idle`, a tile block read from the archive, and the canvas showing the water and land cover
 //       drawn from it and the raster tile drawn under them, each in its own token colour.
+// No refusal is excused: nothing the test does may be refused by the policy, so every one it records is the page's.
 // `failures()` turns a record into the list of what is wrong. The page under the real policy must have none. Every planted fault
 // below (rule 15: each the shape the page really sends or receives at its own call site) runs through the same `failures()`
 // and must be named by it: a check is not believed until it has been shown red.
@@ -73,12 +74,11 @@ test.afterAll(async () => {
 interface InBrowser {
   __CSP__?: unknown[];
   __MAP_STATE__?: { version: string; loaded: boolean; idle: boolean; errors: string[] };
-  __MAP__?: { once(event: "render", listener: () => void): unknown; triggerRepaint(): void };
+  __MAP__?: { once(event: "render", listener: () => void): unknown; triggerRepaint(): void; getCanvas(): { toDataURL(type: "image/png"): string } };
   addEventListener(
     type: "securitypolicyviolation",
     listener: (e: { effectiveDirective: string; violatedDirective: string; blockedURI: string; sourceFile: string; lineNumber: number }) => void,
   ): void;
-  requestAnimationFrame(callback: () => void): number;
 }
 
 /** Installed in the document before any of its own script runs, and in each worker as soon as it is seen. */
@@ -158,42 +158,29 @@ async function openMap(page: Page, browser: string, request: PageRequest, whileD
       loaded: scope.__MAP_STATE__?.loaded ?? false,
       idle: scope.__MAP_STATE__?.idle ?? false,
       errors: scope.__MAP_STATE__?.errors ?? [],
-      csp: (scope.__CSP__ ?? []) as Violation[],
     };
   });
-  const violations: Violation[] = [...state.csp];
-  for (const worker of workers) {
-    const inWorker = await worker
-      .evaluate(() => (globalThis as unknown as InBrowser).__CSP__ ?? [])
-      .catch(() => [] as unknown[]);
-    violations.push(...(inWorker as Violation[]));
-  }
   // The picture, read until every layer shows or the time is up, as GG6's spec also polls.
-  phase = "screenshot";
+  phase = "drawing";
   await whileDrawing?.();
   let drawn = { water: 0, landcover: 0, raster: 0 };
   if (state.idle) {
     const until = Date.now() + DRAWN_MS;
     do {
-      // One more frame first: headless WebKit can leave the frame it presented at `idle` short of tiles the map holds
-      // (measured: the same partial picture for six seconds), until the map is asked to draw again.
-      await page.evaluate(
-        () =>
-          new Promise<void>((done) => {
-            const scope = globalThis as unknown as InBrowser;
-            const map = scope.__MAP__!;
-            map.once("render", () => scope.requestAnimationFrame(() => done()));
-            map.triggerRepaint();
-          }),
-      );
       drawn = await coloursDrawn(page);
       if (drawn.water >= DRAWN && drawn.landcover >= DRAWN && drawn.raster >= DRAWN) break;
       await page.waitForTimeout(250);
     } while (Date.now() < until);
   }
   await page.waitForTimeout(250);
-  // The exception for Playwright's own screenshot style ends with the screenshots.
-  phase = "after";
+  // (a), read last: every event up to here, those fired while the picture was read among them.
+  const violations = (await page.evaluate(() => (globalThis as unknown as InBrowser).__CSP__ ?? [])) as Violation[];
+  for (const worker of workers) {
+    const inWorker = await worker
+      .evaluate(() => (globalThis as unknown as InBrowser).__CSP__ ?? [])
+      .catch(() => [] as unknown[]);
+    violations.push(...(inWorker as Violation[]));
+  }
   const policy = server.policies[policiesBefore] ?? { builder: "", sent: "" };
   return {
     browser,
@@ -224,7 +211,7 @@ function rgb(hex: string): [number, number, number] {
   return [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)) as [number, number, number];
 }
 
-/** An 8-bit RGB or RGBA PNG, as Playwright's screenshots are, decoded to RGBA (no interlacing; filters 0 to 4). */
+/** An 8-bit RGB or RGBA PNG, as a canvas writes one, decoded to RGBA (no interlacing; filters 0 to 4). */
 function decodePng(png: Buffer): { width: number; height: number; rgba: Uint8Array } {
   let at = 8;
   let width = 0;
@@ -277,11 +264,20 @@ function decodePng(png: Buffer): { width: number; height: number; rgba: Uint8Arr
 
 /** How many of the canvas's pixels are each layer's own colour: the water and the land cover (opaque fills from the archive's
  * tiles), and the raster tile at its opacity over the background (a blend no other layer makes). A mounted map that drew no
- * tile is the background alone. Read from a screenshot: a WebGL canvas's drawing buffer is cleared once presented. */
+ * tile is the background alone. The map is asked for one more frame and its canvas is read inside that frame's `render`
+ * event, because a WebGL canvas's drawing buffer is cleared once presented. Not a screenshot: in WebKit, Playwright's adds a
+ * `<style>` element to the page, which the page's policy refuses (measured: a `style-src-elem` event and a console line), and a
+ * test the policy refuses would have to excuse a refusal. */
 async function coloursDrawn(page: Page): Promise<{ water: number; landcover: number; raster: number }> {
-  // `caret: "initial"`: Playwright otherwise hides the caret by adding a `<style>` element to the page, which the page's own
-  // policy refuses (WebKit reports it on the console); the test must not be the thing the policy refuses.
-  const shot = decodePng(await page.locator("canvas.maplibregl-canvas").screenshot({ caret: "initial" }));
+  const url = await page.evaluate(
+    () =>
+      new Promise<string>((done) => {
+        const map = (globalThis as unknown as InBrowser).__MAP__!;
+        map.once("render", () => done(map.getCanvas().toDataURL("image/png")));
+        map.triggerRepaint();
+      }),
+  );
+  const shot = decodePng(Buffer.from(url.slice(url.indexOf(",") + 1), "base64"));
   const background = rgb(COLOURS.background);
   const rasterColour = rgb(COLOURS.raster);
   const targets = {
@@ -303,24 +299,15 @@ async function coloursDrawn(page: Page): Promise<{ water: number; landcover: num
 /** Enough pixels of a colour to be a drawn tile and not an edge's antialiasing. */
 const DRAWN = 200;
 
-/** The one refusal that is the test's own, not the page's: taking a screenshot in WebKit, Playwright adds a `<style>` element to
- * the page (even with `caret: "initial"`), and the page's policy rightly refuses it. Measured: it appears only while the
- * screenshot is taken, in WebKit only, and with no `securitypolicyviolation` event. Only that text, only in that phase, is let
- * past; any other refusal while the screenshot is taken still counts. */
-function isPlaywrightsOwn(text: string): boolean {
-  return (
-    text.startsWith("[screenshot, document] ") &&
-    text.endsWith("Refused to apply a stylesheet because its hash, its nonce, or 'unsafe-inline' does not appear in the style-src directive of the Content Security Policy.")
-  );
-}
-
 /** Everything wrong with a run, in words. Empty for a map that drew under the policy and asked nothing of another origin. */
 function failures(run: Run): string[] {
   const out: string[] = [];
   for (const v of run.violations) out.push(`policy violation: ${v.directive} refused ${v.blocked || "(no address)"} in the ${v.where}`);
-  for (const text of run.consoleRefusals) if (!isPlaywrightsOwn(text)) out.push(`refused, on the console: ${text}`);
+  for (const text of run.consoleRefusals) out.push(`refused, on the console: ${text}`);
   for (const url of new Set([...run.outside, ...run.reachedElsewhere])) out.push(`request to another origin: ${url}`);
-  if (run.policy.received !== run.policy.builder) out.push(`the policy sent is not the builder's own: ${run.policy.received}`);
+  // None sent and none made are equal, so a page that never passed the headers is named for itself.
+  if (!run.policy.builder) out.push("the page was served with no policy");
+  else if (run.policy.received !== run.policy.builder) out.push(`the policy sent is not the builder's own: ${run.policy.received}`);
   // A dedicated worker obeys the policy on its own script's response, not its page's (measured: the "page alone" case below).
   for (const w of run.workerPolicies) {
     if (!w.builder) out.push("the worker's script was served with no policy");
@@ -537,7 +524,7 @@ test("planted: a browser without createImageBitmap: the image fallback asks for 
   expect(directivesRefused(run)).toEqual(["img-src"]);
 });
 
-test("planted: a page that adds a <style> element while it loads: refused and counted (the screenshot's own exception is that narrow)", async ({ page, browserName }) => {
+test("planted: a page that adds a <style> element while it loads: refused, and named by both witnesses", async ({ page, browserName }) => {
   await page.addInitScript(() => {
     interface Element {
       textContent: string;
@@ -552,12 +539,9 @@ test("planted: a page that adds a <style> element while it loads: refused and co
   });
   const run = await openMap(page, browserName, FULL);
   record("page adds a <style>", run);
-  // The violation event, in both browsers; and in WebKit the console line too, word for word the text the screenshot's
-  // exception lets past, counted here because it arrives while the page loads.
+  // The violation event and the console line, in both browsers.
   expect(failures(run)).toContain("policy violation: style-src-elem refused inline in the document");
-  if (browserName === "webkit") {
-    expect(failures(run)).toContainEqual(expect.stringMatching(/^refused, on the console: \[load, document\] Refused to apply a stylesheet because its hash, its nonce, or 'unsafe-inline'/));
-  }
+  expect(failures(run)).toContainEqual(expect.stringMatching(/^refused, on the console: \[load, document\] .*style-src/));
 });
 
 for (const [unheaded, caseName, named] of [
