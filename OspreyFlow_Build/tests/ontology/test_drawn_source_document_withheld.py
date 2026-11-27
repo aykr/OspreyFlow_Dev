@@ -425,7 +425,7 @@ async def test_only_a_document_is_kept() -> None:
 THROUGH = "doc-through-the-boards"
 
 
-def _document_node(marking: str) -> Node:
+def _document_node(marking: str, code: str = "P") -> Node:
     return Node(
         id=THROUGH,
         type="Document",
@@ -434,7 +434,7 @@ def _document_node(marking: str) -> Node:
             **_common(_written("i-doc", NOTE, None), (SOURCE_DATASET,)),
             "handling": Handling(
                 classification=marking,
-                handling_code="P",
+                handling_code=code,
                 originator="unit-1",
                 owning_unit="unit-1",
             ),
@@ -495,6 +495,7 @@ def test_through_the_boards_service_the_document_reaches_only_a_reader_who_may_r
         for element_id in (node_id, link_id):
             assert _cited(body, element_id) == (THROUGH, [THROUGH]), who
     # Re-marked after drawing, by any path: the next send catches it, for the author too.
-    world.graph._graph_nodes[THROUGH] = _document_node("TOP SECRET")
+    # Restricted to named recipients, which neither of them is: SECRET is the scheme's top.
+    world.graph._graph_nodes[THROUGH] = _document_node("SECRET", "R")
     for who in ("cleo", "alice"):
         assert THROUGH not in opened(who).text, who

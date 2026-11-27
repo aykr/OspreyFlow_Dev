@@ -35,7 +35,7 @@ D, D2 = "doc-sealed-statement", "doc-second-statement"
 NO_NOTE = "It has no source note."
 
 
-def _document(graph: Any, document_id: str, marking: str) -> None:
+def _document(graph: Any, document_id: str, marking: str, code: str = "P") -> None:
     when = datetime(2026, 11, 1, tzinfo=UTC)
     graph._graph_nodes[document_id] = Node(
         id=document_id,
@@ -47,7 +47,7 @@ def _document(graph: Any, document_id: str, marking: str) -> None:
             first_seen=when,
         ),
         handling=Handling(
-            classification=marking, handling_code="P", originator="unit-1", owning_unit="unit-1"
+            classification=marking, handling_code=code, originator="unit-1", owning_unit="unit-1"
         ),
         audit=AuditStub(created_at=when, created_by="eng"),
         datasets=["src"],
@@ -163,7 +163,8 @@ def test_an_author_who_may_no_longer_read_the_document_does_not_erase_it_by_edit
     _document(world.graph, D, "OFFICIAL")
     board = _board()
     made = _item(board, source_document=D)
-    _document(world.graph, D, "TOP SECRET")
+    # Re-marked above her: restricted to named recipients (SECRET is the scheme's top).
+    _document(world.graph, D, "SECRET", "R")
     assert D not in _as("alice").get(f"/v1/investigations/{K}/boards/{board}").text
 
     edited = _edit(made["item_id"], label="Tall man")
@@ -211,7 +212,7 @@ def test_promotion_asks_for_a_note_whoever_asks(pw: SimpleNamespace) -> None:  #
         return list(item["problems"])
 
     assert problems() == []
-    _document(pw.graph, D, "TOP SECRET")  # now above the one asking
+    _document(pw.graph, D, "SECRET", "R")  # now above the one asking
     assert problems() == []
 
     _drawn_before(pw.graph, made["element_id"], D)

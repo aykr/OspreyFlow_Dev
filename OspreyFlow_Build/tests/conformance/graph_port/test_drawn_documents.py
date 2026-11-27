@@ -72,9 +72,9 @@ B = _reader("analyst-b", "OFFICIAL")
 C = _reader("analyst-c", "SECRET")
 
 
-def _handling(classification: str) -> Handling:
+def _handling(classification: str, code: str = "P") -> Handling:
     return Handling(
-        classification=classification, handling_code="P", originator="unit-1", owning_unit="unit-1"
+        classification=classification, handling_code=code, originator="unit-1", owning_unit="unit-1"
     )
 
 
@@ -253,7 +253,8 @@ async def test_a_document_re_marked_after_drawing_is_caught_by_the_next_read(
         held = await _world(graph)
         (before,) = await graph.get_nodes([held.c], A)
         assert _with_the_document(before, held.d)
-        raised = held.document.model_copy(update={"handling": _handling("TOP SECRET")})
+        # Restricted to named recipients, which neither A nor C is: SECRET is the scheme's top.
+        raised = held.document.model_copy(update={"handling": _handling("SECRET", "R")})
         await _write(graph, [raised], [])
 
         for reader in (A, C):
@@ -299,13 +300,16 @@ async def test_b_s_answers_have_the_same_shape_whether_the_document_exists_or_no
     def shape(elements: list[Node | Edge]) -> list[tuple[Any, ...]]:
         return sorted(
             (
-                e.type,
-                e.provenance.drawn.source_document if e.provenance.drawn else "loaded",
-                e.provenance.drawn.source_note if e.provenance.drawn else "loaded",
-                tuple(s.document_id for s in e.provenance.sources),
-                e.provenance.sources_withheld,
-            )
-            for e in elements
+                (
+                    e.type,
+                    e.provenance.drawn.source_document if e.provenance.drawn else "loaded",
+                    e.provenance.drawn.source_note if e.provenance.drawn else "loaded",
+                    tuple(s.document_id for s in e.provenance.sources),
+                    e.provenance.sources_withheld,
+                )
+                for e in elements
+            ),
+            key=repr,
         )
 
     seen: list[dict[str, list[tuple[Any, ...]]]] = []
