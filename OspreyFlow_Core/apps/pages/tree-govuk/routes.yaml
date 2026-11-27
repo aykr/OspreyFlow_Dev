@@ -13,3 +13,4 @@ routes:
   - /cases
   - /cases/boards
   - /alert-queue
+  - /cases/document

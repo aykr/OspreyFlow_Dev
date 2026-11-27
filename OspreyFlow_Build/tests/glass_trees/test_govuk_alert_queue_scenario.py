@@ -292,9 +292,9 @@ def route_claim_problems(data: dict[str, Any]) -> list[str]:
 
 
 def route_problems(data: dict[str, Any]) -> list[str]:
-    # The tree's pages on the line: Help (GR2a), the Admin People list (AD3a), the alert monitoring page (GR3a), trends shown together (GR4a), the cases page (GR1a), a case's drawing boards (GG4a) and this one.
-    if sorted(data["routes"]) != sorted(["/help", "/admin/people", "/reports", "/packs/trends", "/cases", "/cases/boards", ROUTE]):
-        return [f"the route list is {data['routes']!r}: the tree has seven pages, /help, /admin/people, /reports, /packs/trends, /cases, /cases/boards and {ROUTE}"]
+    # The tree's pages on the line: Help (GR2a), the Admin People list (AD3a), the alert monitoring page (GR3a), trends shown together (GR4a), the cases page (GR1a), a case's drawing boards (GG4a), this one and one document in the reader (GG3b).
+    if sorted(data["routes"]) != sorted(["/help", "/admin/people", "/reports", "/packs/trends", "/cases", "/cases/boards", ROUTE, "/cases/document"]):
+        return [f"the route list is {data['routes']!r}: the tree has eight pages, /help, /admin/people, /reports, /packs/trends, /cases, /cases/boards, {ROUTE} and /cases/document"]
     return []
 
 
@@ -530,8 +530,8 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
     ("the row that does not name the page", _row(ROW, where="apps/workspace/src/alerts/"), function_problems, "does not name the page"),
     ("a row marked built while its halves are not", _row(ROW, status="built"), function_problems, "status"),
     ("a second row given a route", _row("admin", route="/admin"), function_problems, "not Help's and the alert"),
-    ("the route left out of the list", lambda d: d["routes"].remove(ROUTE), route_problems, "seven pages"),
-    ("a route in the list the code has no page for", lambda d: d["routes"].append("/rules"), route_problems, "seven pages"),
+    ("the route left out of the list", lambda d: d["routes"].remove(ROUTE), route_problems, "eight pages"),
+    ("a route in the list the code has no page for", lambda d: d["routes"].append("/rules"), route_problems, "eight pages"),
     ("the harness test not told", _in("pins", "tests/harness/test_pages_setting.py", ROUTE, "/elsewhere"), pin_problems, "test_pages_setting"),
     ("the tree parity test not told", _in("pins", "tests/glass_trees/test_tree_parity.py", ROUTE, "/elsewhere"), pin_problems, "test_tree_parity"),
     ("the help scenario's route list not told", _in("pins", "tests/glass_trees/test_govuk_help_scenario.py", ROUTE, "/elsewhere"), pin_problems, "test_govuk_help_scenario"),

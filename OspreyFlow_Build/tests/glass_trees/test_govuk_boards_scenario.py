@@ -427,9 +427,9 @@ def function_problems(data: dict[str, Any]) -> list[str]:
 
 
 def route_problems(data: dict[str, Any]) -> list[str]:
-    expected = ["/help", "/admin/people", "/reports", "/packs/trends", "/cases", PATH, "/alert-queue"]
+    expected = ["/help", "/admin/people", "/reports", "/packs/trends", "/cases", PATH, "/alert-queue", "/cases/document"]
     if data["routes"] != expected:
-        return [f"the route list is {data['routes']!r}: the tree has seven pages, {expected}"]
+        return [f"the route list is {data['routes']!r}: the tree has eight pages, {expected}"]
     return []
 
 
@@ -822,8 +822,8 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
     ("the row with one id short", _row(ROW, scenario=", ".join(EXPECTED_IDS[:-1])), function_problems, "scenario"),
     ("the row routed while incomplete", _row(ROW, route=PATH), function_problems, "stays empty"),
     ("the row's slice moved", _row(ROW, slice="GG4a"), function_problems, "has moved"),
-    ("a route in the list the code has no page for", lambda d: d["routes"].append("/welcome"), route_problems, "seven pages"),
-    ("the boards path left out of the list", lambda d: d["routes"].remove(PATH), route_problems, "seven pages"),
+    ("a route in the list the code has no page for", lambda d: d["routes"].append("/welcome"), route_problems, "eight pages"),
+    ("the boards path left out of the list", lambda d: d["routes"].remove(PATH), route_problems, "eight pages"),
     ("the page at another path", _replace("page_module", f'path: "{PATH}"', 'path: "/boards"'), module_problems, "its path"),
     ("the page for both trees", _replace("page_module", 'trees: ["govuk"]', 'trees: ["default", "govuk"]'), module_problems, "GOV.UK tree alone"),
     (

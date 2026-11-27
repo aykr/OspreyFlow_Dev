@@ -2342,12 +2342,12 @@ def test_the_real_govuk_tree_routes_help_to_pages_and_not_the_home_page(shape: s
     page's (`/reports`, slice GR3a), the trends shown together (`/packs/trends`, slice GR4a), the
     cases page's (`/cases`, slice GR1a), a case's drawing boards' (`/cases/boards`, slice GG4a) and the alert queue's (`/alert-queue`,
     slice RM1a: not `/alerts`, which is an alert's own address and stays with the workspace)
-    go to `pages` beside the service's own, `/` is not routed (the tree switch decides which tree
+    and the reader's (`/cases/document`, slice GG3b) go to `pages` beside the service's own, `/` is not routed (the tree switch decides which tree
     draws it, not the front proxy: ADR-152 decision 7), and the workspace stays. The Caddyfile's
     matcher (`_caddy_pages_paths`) is what `pages_paths` reads for both shapes this case runs on."""
     files = _render(shape, "govuk", **_on(shape))
     routed = pages_paths(shape, files)
-    assert routed == OWN_PATHS | {"/help", "/admin/people", "/reports", "/packs/trends", "/cases", "/cases/boards", "/alert-queue"}, routed
+    assert routed == OWN_PATHS | {"/help", "/admin/people", "/reports", "/packs/trends", "/cases", "/cases/boards", "/alert-queue", "/cases/document"}, routed
     assert "/" not in routed and has_a_workspace(shape, files)
     assert on_findings(shape, "govuk", files) == []
 

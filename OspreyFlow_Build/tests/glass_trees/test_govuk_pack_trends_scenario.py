@@ -85,8 +85,8 @@ EXPECTED_IDS = [f"TS{n}" for n in range(1, 16)]
 #: 49 until this slice, which added the page's own row (the conductor's round-3 table, 25 November 2026).
 EXPECTED_FUNCTIONS = 50
 #: The sixth, a case's drawing boards (slice GG4a, `test_govuk_boards_scenario.py`), is listed after the cases page, and slice RM1a's
-#: alert queue (`/alert-queue`) after that.
-EXPECTED_ROUTES = ["/help", "/admin/people", "/reports", PATH, "/cases", "/cases/boards", "/alert-queue"]
+#: alert queue (`/alert-queue`) after that, then slice GG3b's one document in the reader (`/cases/document`).
+EXPECTED_ROUTES = ["/help", "/admin/people", "/reports", PATH, "/cases", "/cases/boards", "/alert-queue", "/cases/document"]
 
 #: The owner's table of cases for GR4a (`process/lanes/v062/slices/GR4a.md`), by number, and the rows that carry each.
 CASES: dict[str, tuple[str, ...]] = {
@@ -348,7 +348,7 @@ def function_problems(data: dict[str, Any]) -> list[str]:
 
 def route_problems(data: dict[str, Any]) -> list[str]:
     if data["routes"] != EXPECTED_ROUTES:
-        return [f"the route list is {data['routes']!r}: the tree has seven pages, {EXPECTED_ROUTES}"]
+        return [f"the route list is {data['routes']!r}: the tree has eight pages, {EXPECTED_ROUTES}"]
     return []
 
 
@@ -551,8 +551,8 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
         "its id",
     ),
     ("the dashboards row given a scenario", _row("reports-dashboards", scenario="TS1"), function_problems, "reports-dashboards"),
-    ("a route in the list the code has no page for", lambda d: d["routes"].append("/welcome"), route_problems, "seven pages"),
-    ("the path left out of the list", lambda d: d["routes"].remove(PATH), route_problems, "seven pages"),
+    ("a route in the list the code has no page for", lambda d: d["routes"].append("/welcome"), route_problems, "eight pages"),
+    ("the path left out of the list", lambda d: d["routes"].remove(PATH), route_problems, "eight pages"),
     ("the page at another path", _replace("page_module", f'path: "{PATH}"', 'path: "/packs/board"'), module_problems, "its path"),
     ("the page for both trees", _replace("page_module", 'trees: ["govuk"]', 'trees: ["default", "govuk"]'), module_problems, "GOV.UK tree alone"),
     ("the page answering POST", _replace("page_module", 'methods: ["GET"]', 'methods: ["GET", "POST"]'), module_problems, "GET alone"),

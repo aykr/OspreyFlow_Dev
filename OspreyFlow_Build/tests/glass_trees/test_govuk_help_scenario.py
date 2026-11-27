@@ -275,9 +275,10 @@ def route_problems(data: dict[str, Any]) -> list[str]:
     # boards (slice GG4a), the first part of the `drawing-boards` row (`test_govuk_boards_scenario.py`).
     # Slice RM1a added the alert queue (`/alert-queue`), the seventh: its row, `alerts-rules-watches`, keeps an empty route while the function
     # is incomplete (`test_govuk_alert_queue_scenario.py`).
-    if data["routes"] != ["/help", "/admin/people", "/reports", "/packs/trends", "/cases", "/cases/boards", "/alert-queue"]:
+    # The eighth, one document of a case in the reader (slice GG3b), is the first part of the `documents` row, likewise.
+    if data["routes"] != ["/help", "/admin/people", "/reports", "/packs/trends", "/cases", "/cases/boards", "/alert-queue", "/cases/document"]:
         return [
-            f"the route list is {data['routes']!r}: the tree has seven pages, /help, /admin/people, /reports, /packs/trends, /cases, /cases/boards and /alert-queue"
+            f"the route list is {data['routes']!r}: the tree has eight pages, /help, /admin/people, /reports, /packs/trends, /cases, /cases/boards, /alert-queue and /cases/document"
         ]
     if routed != ["/help", "/reports"]:
         return [f"the rows that have a route are {routed!r}, not just /help and /reports"]
@@ -412,7 +413,7 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
     ("the old combined top bar row back", _row("functions", "top-bar-home", id="top-bar-home-help"), function_problems, "owner ruled it split"),
     ("reports not split", _row("functions", "reports-figures", id="reports"), function_problems, "owner ruled it split"),
     ("the dashboards row given a slice", _row("functions", "reports-dashboards", slice="GR3"), function_problems, "must be later"),
-    ("a route in the list the code has no page for", lambda d: d["routes"].append("/welcome"), route_problems, "seven pages"),
+    ("a route in the list the code has no page for", lambda d: d["routes"].append("/welcome"), route_problems, "eight pages"),
     ("a row routed with the list left short", _row("functions", "top-bar-home", route="/"), route_problems, "not just /help"),
     ("no register row", _drop("register", "govuk-frontend"), register_problems, "not one"),
     ("a licence that is not MIT", _register_row(licence="GPL-3.0-only"), register_problems, "not MIT"),

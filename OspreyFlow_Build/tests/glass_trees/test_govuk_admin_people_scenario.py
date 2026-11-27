@@ -278,9 +278,10 @@ def route_problems(data: dict[str, Any]) -> list[str]:
     # Slice GR3a added the alert monitoring page (`/reports`), slice GR4a trends shown together (`/packs/trends`) after it, slice
     # GR1a the cases page (`/cases`; `test_govuk_cases_scenario.py` holds its own), slice GG4a a case's drawing boards
     # (`/cases/boards`; `test_govuk_boards_scenario.py` holds its own) and slice RM1a the alert queue (`/alert-queue`).
-    if data["routes"] != ["/help", PATH, "/reports", "/packs/trends", "/cases", "/cases/boards", "/alert-queue"]:
+    # Slice GG3b's one document in the reader (`/cases/document`) is the eighth (`test_govuk_document_scenario.py` holds its own).
+    if data["routes"] != ["/help", PATH, "/reports", "/packs/trends", "/cases", "/cases/boards", "/alert-queue", "/cases/document"]:
         return [
-            f"the route list is {data['routes']!r}: the tree has seven pages, /help, {PATH}, /reports, /packs/trends, /cases, /cases/boards and /alert-queue"
+            f"the route list is {data['routes']!r}: the tree has eight pages, /help, {PATH}, /reports, /packs/trends, /cases, /cases/boards, /alert-queue and /cases/document"
         ]
     return []
 
@@ -517,13 +518,13 @@ PLANTS: list[
         "a route in the list the code has no page for",
         lambda d: d["routes"].append("/welcome"),
         route_problems,
-        "seven pages",
+        "eight pages",
     ),
     (
         "the People path left out of the list",
         lambda d: d["routes"].remove(PATH),
         route_problems,
-        "seven pages",
+        "eight pages",
     ),
     (
         "the page at another path",
