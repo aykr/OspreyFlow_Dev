@@ -3,6 +3,30 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 27 November 2026, after 03:21 UTC: WS4b's look (D281; the owner, in chat)
+
+The owner viewed the comparison.
+
+1. **Export: not accepted.** The link lines are missing from the export, which is a fault.
+2. **Hover and selected link: not accepted.** Link labels must be written beside the line as Sigma 3 wrote them, through a local 2D edge-label layer on Sigma 4.
+3. **Every other scene keeps Sigma 4's drawing.**
+4. **WS4b's look round is building away on the server** (`away/WS4b-look`). **WS4b does not start in the line** until that round reports and the owner has seen the three scenes again.
+5. WS4b's speed questions go to the owner separately; they are not the conductor's.
+
+## 27 November 2026, 03:21 UTC: the morning answers (the owner, in chat)
+
+1. **GG4b (security):** its ADR-143 amendment (`lane/slice-GG4b`, `92605bf`) is **approved with (a) on all five**:
+   - **Q1:** neither note nor document goes to a reader who cannot read the document. The three small front-end changes are included: the GOV.UK board page accepts such an item; the React inspector's sentence; the React drawing form.
+   - **Q2:** editing an old item must add a note.
+   - **Q3:** promotion requires a note, whoever asks.
+   - **Q4:** at most one batched document read per answer.
+   - **Q5:** document reads do not grow with the number of items, and the live step meets `spec/02` §5.
+   - The owner's clear-stop line is in (`resume.tsv`, 27 November).
+2. **SE9d:** the refreeze line is in, for its corrected `schemas-check` command (`PY=` its acceptance environment, as GG4b's and GG4j's).
+3. **GG5a:** WebKit is installed in the shared cache; the clear-stop line is in.
+4. **RM1a:** the send-back line is in, for one more take-main-in. **It merges straight after, before any other page part.**
+5. **Standing, from now until RL2:** a verified part that conflicts with main **only** in the shared GOV.UK lists may go back to take main in on the conductor's own word, with no round spent. The shared lists are `spec/08`, the scenario tests, `pageList`, routes and pins. Anything else still goes to the owner.
+
 ## 26 November 2026, 20:24 UTC: overnight, 26 to 27 November (the owner, in chat; away 21:30 to about 07:30)
 
 1. Keep the line moving: starts, verifiers on the Mac, merges, and trains of up to three where the server has tested a stack. Records commits only straight after a merge or train.
