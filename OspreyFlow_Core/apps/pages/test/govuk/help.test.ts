@@ -461,19 +461,15 @@ describe("OSPREY_PAGES_TREE decides which tree serves every route, `/` included"
     expect(readers).toEqual(["config.ts"]);
     expect(loadConfig({ OSPREY_PAGES_SESSION_SECRET: generateSecret(48) }).tree).toBe("default");
     expect(loadConfig({ OSPREY_PAGES_SESSION_SECRET: generateSecret(48), OSPREY_PAGES_TREE: "govuk" }).tree).toBe("govuk");
-    // The table: Help (and the Admin People list, slice AD3a, and trends shown together, slice GR4a) are the govuk tree's alone, and every page that was there before them is the Default tree's alone.
+    // The table: Help and every page in the GOV.UK tree's route list are that tree's alone (none has a Default twin yet), and every
+    // other page is the Default tree's alone. The pages are read from the list, not named here, so a page added to the tree edits
+    // nothing in this file; HP9 holds the list to the pages that name the tree.
     expect(help.trees).toEqual(["govuk"]);
     expect(PAGES).toContain(help);
-    // Slice GR3a's alert monitoring page is the tree's third, and the Default tree's twin of it is not built; slice GR1a's cases page
-    // is its fifth and slice GG4a's boards page its sixth, likewise.
     expect(alertMonitoring.trees).toEqual(["govuk"]);
     expect(PAGES).toContain(alertMonitoring);
-    const govukOnly = ["/admin/people", "/packs/trends", "/cases", "/cases/boards"];
-    // Slice RM1a's alert queue is the tree's seventh, and the Default tree has no twin of it either.
-    for (const page of PAGES) {
-      if (page.id === "alerts-rules-watches") expect(page.trees, page.id).toEqual(["govuk"]);
-      else if (page !== help && page !== alertMonitoring && !govukOnly.includes(page.path)) expect(page.trees ?? ["default"], page.id).toEqual(["default"]);
-    }
+    const listed = listedRoutes(read(PAGES_DIR, "tree-govuk", "routes.yaml"));
+    for (const page of PAGES) expect(page.trees ?? ["default"], page.id).toEqual(listed.includes(page.path) ? ["govuk"] : ["default"]);
   });
 
   it("HP7: what decides a route's tree is the module's own list: the same Help page, named for both, is served by both (rule 15)", async () => {
@@ -528,11 +524,6 @@ function listedRoutes(text: string): string[] {
   return lines.slice(1).map((l) => /^\s+-\s+"?(\/[^"\s]*)"?\s*$/.exec(l)?.[1] ?? `NOT A ROUTE: ${l}`);
 }
 
-/** A row whose function is not complete: its pages are in the list, and its own `route` stays empty until every section has one (slice AD3a: `admin`; slice GR4a:
- * `reports-trends-shown-together`, whose page is read-only until arranging is built; slice GR1a: `cases-and-views`; slice GG4a: `drawing-boards`;
- * slice RM1a: `alerts-rules-watches`, whose rules, watches and strength have no page yet). */
-const INCOMPLETE_ROWS: ReadonlySet<string> = new Set(["admin", "reports-trends-shown-together", "cases-and-views", "drawing-boards", "alerts-rules-watches"]);
-
 function routeListProblems(listText: string, pages: readonly PageModule[], functionsText: string): string[] {
   const found: string[] = [];
   const listed = listedRoutes(listText);
@@ -542,8 +533,9 @@ function routeListProblems(listText: string, pages: readonly PageModule[], funct
   if (new Set(listed).size !== listed.length) found.push("a route is listed twice");
   for (const page of pages.filter((p) => (p.trees ?? ["default"]).includes("govuk"))) {
     const row = new RegExp(`- id: ${page.id}\\n(?:    .*\\n)*?    route: "([^"]*)"`).exec(functionsText);
-    const wanted = INCOMPLETE_ROWS.has(page.id) ? "" : page.path;
-    if (row?.[1] !== wanted) found.push(`the row ${page.id} of FUNCTIONS.yaml has route ${JSON.stringify(row?.[1])}, not ${JSON.stringify(wanted)}`);
+    // A row carries its page's path once its function is complete, and an empty route until then (whether a function is complete
+    // is the page's own scenario test's to hold, against its row: `tests/glass_trees/test_govuk_*_scenario.py`).
+    if (row?.[1] !== "" && row?.[1] !== page.path) found.push(`the row ${page.id} of FUNCTIONS.yaml has route ${JSON.stringify(row?.[1])}, not "" or ${JSON.stringify(page.path)}`);
   }
   return found;
 }
@@ -554,20 +546,18 @@ describe("the route list", () => {
 
   it("HP9: is the paths the govuk tree has pages for, and the rows of FUNCTIONS.yaml that name them carry the same route", () => {
     expect(routeListProblems(listText, PAGES, functionsText)).toEqual([]);
-    expect(listedRoutes(listText)).toEqual(["/help", "/admin/people", "/reports", "/packs/trends", "/cases", "/cases/boards", "/alert-queue"]);
   });
 
   it("HP9: the route table registers each page under its own id and path, once: the list is one route a page", () => {
+    // Each page's own id, path and methods are its own tests' to pin (its scenario test's module check); here, that no two pages of
+    // the tree share an id or a path, and that the tree's pages are the list's, one route a page.
     const govukPages = PAGES.filter((p) => (p.trees ?? ["default"]).includes("govuk"));
-    expect(govukPages.map((p) => [p.id, p.path, [...p.methods]])).toEqual([
-      ["help", "/help", ["GET"]],
-      ["admin", "/admin/people", ["GET"]],
-      ["reports-figures", "/reports", ["GET"]],
-      ["reports-trends-shown-together", "/packs/trends", ["GET"]],
-      ["cases-and-views", "/cases", ["GET"]],
-      ["drawing-boards", "/cases/boards", ["GET", "POST"]],
-      ["alerts-rules-watches", "/alert-queue", ["GET"]], // the alert queue (slice RM1a), the seventh page of the tree
-    ]);
+    const ids = govukPages.map((p) => p.id);
+    const paths = govukPages.map((p) => p.path);
+    expect(new Set(ids).size, ids.join(", ")).toBe(ids.length);
+    expect(new Set(paths).size, paths.join(", ")).toBe(paths.length);
+    expect([...paths].sort()).toEqual([...listedRoutes(listText)].sort());
+    expect(help.methods).toEqual(["GET"]);
   });
 });
 
@@ -659,10 +649,10 @@ describe("each check above is red against the real page or file with one thing c
     const moved = functionsText.replace(/(- id: help\n(?:    .*\n)*?    route: )"\/help"/, '$1"/helps"');
     expect(moved).not.toBe(functionsText);
     expect(routeListProblems(listText, PAGES, moved).join("\n")).toMatch(/row help of FUNCTIONS.yaml has route "\/helps"/);
-    // The Admin People list's row is incomplete: a route given to it while its other sections have no page is a fault.
-    const routedEarly = functionsText.replace(/(- id: admin\n(?:    .*\n)*?    route: )""/, '$1"/admin/people"');
-    expect(routedEarly).not.toBe(functionsText);
-    expect(routeListProblems(listText, PAGES, routedEarly).join("\n")).toMatch(/row admin of FUNCTIONS.yaml has route "\/admin\/people", not ""/);
+    // A row given a route that is not its page's path (whether a row may carry its route yet is its page's own scenario test's).
+    const routedElsewhere = functionsText.replace(/(- id: admin\n(?:    .*\n)*?    route: )""/, '$1"/admin"');
+    expect(routedElsewhere).not.toBe(functionsText);
+    expect(routeListProblems(listText, PAGES, routedElsewhere).join("\n")).toMatch(/row admin of FUNCTIONS.yaml has route "\/admin", not "" or "\/admin\/people"/);
     const unclaimed: PageModule = { ...help, id: "welcome", path: "/welcome", trees: ["govuk"] };
     expect(routeListProblems(listText, [...PAGES, unclaimed], functionsText).join("\n")).toMatch(/\/welcome is served and not listed/);
   });

@@ -50,6 +50,7 @@ import { generateSecret } from "../support/secret.js";
 import { bearer, providerFor, textOf } from "../support/studioWorld.js";
 import { NOT_FOUND_BOARD, NOT_FOUND_CASE, UNKNOWN_BEARER, boardOf, boardsConduit, openedOf, rightRefusal } from "./boardsConduit.js";
 import type { Board, BoardsConduit, BoardsConduitOptions, Item, Link, Reader } from "./boardsConduit.js";
+import { sharedPackageEntries } from "../../scripts/sharedEntries.mjs";
 
 const PAGES_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const CORE = join(PAGES_DIR, "..", "..");
@@ -1180,7 +1181,8 @@ describe("the boards page on the GOV.UK tree (scenario BD)", () => {
     // A moment's words are the shared package's: the page writes none of its own.
     expect(read(PAGES_DIR, "server", "views", "boardsWords.ts")).toContain("utcStampOf");
     expect(read(PAGES_DIR, "server", "views", "boardsWords.ts")).not.toMatch(/toISOString|toLocaleDateString|toLocaleTimeString|toLocaleString\("en-GB", \{|getUTC/);
-    expect(read(PAGES_DIR, "scripts", "build.mjs")).toContain('join(root, "server", "views", "boardsWords.ts")');
+    // The build bundles the words with the shared package: it takes every server file that imports the package (`apps/pages/scripts/sharedEntries.mjs`).
+    expect(sharedPackageEntries(join(PAGES_DIR, "server"))).toContain(join(PAGES_DIR, "server", "views", "boardsWords.ts"));
   });
 
   describe("BD17: each check is red against the real page with one thing changed", () => {

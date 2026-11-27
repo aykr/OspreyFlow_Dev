@@ -14,7 +14,7 @@ This file holds the document, the page test, the `admin` function row, the route
   and that it works with scripts off                                 -> `test_the_scenario_says_what_it_shows_who_sees_it_and_scripts_off`
 * the `admin` row left without its scenario ids, given a route while
   the function is incomplete, or `needs-you` touched                 -> `test_the_admin_row_carries_the_scenario_and_no_route`
-* a route list that is not the paths the tree has pages for          -> `test_the_route_list_has_both_pages`
+* the page's path not in the route list, or listed twice             -> `test_the_route_list_holds_the_page_once`
 * the page module not the `admin` row's, at the path, for the GOV.UK
   tree alone, answering GET alone, or not in the one table of pages -> `test_the_page_module_is_the_admin_rows_at_its_path`
 * the old "no scenario" list still holding `admin`                   -> `test_the_known_without_scenario_list_no_longer_holds_admin`
@@ -275,14 +275,15 @@ def function_problems(data: dict[str, Any]) -> list[str]:
 
 
 def route_problems(data: dict[str, Any]) -> list[str]:
-    # Slice GR3a added the alert monitoring page (`/reports`), slice GR4a trends shown together (`/packs/trends`) after it, slice
-    # GR1a the cases page (`/cases`; `test_govuk_cases_scenario.py` holds its own), slice GG4a a case's drawing boards
-    # (`/cases/boards`; `test_govuk_boards_scenario.py` holds its own) and slice RM1a the alert queue (`/alert-queue`).
-    if data["routes"] != ["/help", PATH, "/reports", "/packs/trends", "/cases", "/cases/boards", "/alert-queue"]:
-        return [
-            f"the route list is {data['routes']!r}: the tree has seven pages, /help, {PATH}, /reports, /packs/trends, /cases, /cases/boards and /alert-queue"
-        ]
-    return []
+    # The page's own path is in the tree's route list, once. Whether the list and the pages that name the GOV.UK tree agree is
+    # checked in one place, `apps/pages/test/govuk/help.test.ts` (HP9), from the files themselves, so a page added to the tree
+    # edits no other page's test (`test_route_pins.py`).
+    found: list[str] = []
+    if data["routes"].count(PATH) != 1:
+        found.append(f"the route list {data['routes']!r} holds {PATH} {data['routes'].count(PATH)} times, not once")
+    if len(set(data["routes"])) != len(data["routes"]):
+        found.append("the route list names a path twice")
+    return found
 
 
 def module_problems(data: dict[str, Any]) -> list[str]:
@@ -358,7 +359,7 @@ def test_the_admin_row_carries_the_scenario_and_no_route() -> None:
     assert function_problems(inputs()) == []
 
 
-def test_the_route_list_has_both_pages() -> None:
+def test_the_route_list_holds_the_page_once() -> None:
     assert route_problems(inputs()) == []
 
 
@@ -514,16 +515,16 @@ PLANTS: list[
     ),
     ("the help row unrouted", _row("help", route=""), function_problems, "help row"),
     (
-        "a route in the list the code has no page for",
-        lambda d: d["routes"].append("/welcome"),
+        "the page's path listed twice",
+        lambda d: d["routes"].append(PATH),
         route_problems,
-        "seven pages",
+        "not once",
     ),
     (
         "the People path left out of the list",
         lambda d: d["routes"].remove(PATH),
         route_problems,
-        "seven pages",
+        "not once",
     ),
     (
         "the page at another path",
