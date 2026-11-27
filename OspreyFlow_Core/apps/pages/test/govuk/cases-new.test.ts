@@ -1,7 +1,7 @@
 /**
  * New case as a GOV.UK form, scripts off (slice GR1b; ADR-152 decisions 1, 4, 5, 6, 7 and 12; ADR-099 Amendment 12 item 6; ADR-126;
- * FUNCTIONS row `cases-and-views`; scenario CS of `spec/08_ACCEPTANCE_SCENARIOS.md`, rows CS16 to CS33, written first; the owner's
- * rulings of 26 November 2026 on GR1b's draft, every proposal (a)). Rows CS16 to CS31 are the draft's table of cases 1 to 16.
+ * FUNCTIONS row `cases-and-views`; scenario CS of `spec/08_ACCEPTANCE_SCENARIOS.md`, rows CS27 to CS44, written first; the owner's
+ * rulings of 26 November 2026 on GR1b's draft, every proposal (a)). Rows CS27 to CS42 are the draft's table of cases 1 to 16.
  * `tests/glass_trees/test_govuk_cases_scenario.py` holds the scenario and this file in step: each case's id is a row of the scenario.
  *
  * The proof is the real service started for the GOV.UK tree, the real page list and a fixture Conduit that refuses what the real routes
@@ -10,24 +10,24 @@
  * other way round, fails here. A post "by hand" is what a person could send without the form.
  *
  * Which test fails if the invariant is broken (rule 12):
- *  - `dataset_ids` sent with a new dataset, or the dataset chosen before the radio was changed back remembered   -> CS16
- *  - the new dataset's name sent with an existing dataset                                                         -> CS17
- *  - an empty dataset name sent in place of the case's                                                            -> CS18
- *  - both names empty refused, or sent as anything but `Untitled case`                                            -> CS19
- *  - a pack's label sent in place of its id                                                                       -> CS20
- *  - `domains` left out with none ticked ("never chosen"), or the core model not said                             -> CS21
- *  - a taken name not said against the name field, words lost, or a case made                                     -> CS22
- *  - an existing dataset's refusal said as a name taken                                                           -> CS23
- *  - *New case* offered by the case level, or without `create_case`                                               -> CS24
- *  - an empty radio group, or datasets that could not be read drawn as none                                       -> CS25
- *  - the post outside the anti-forgery check                                                                      -> CS26
- *  - a failure said as a success, an ended session not said                                                       -> CS27
- *  - a second post (no 303), a banner said twice, by another case or by an address                                -> CS28
- *  - a control with no label, out of the tab order, or not native                                                 -> CS29
- *  - a script, or a field hidden until a script shows it                                                          -> CS30
- *  - a dataset's id printed                                                                                       -> CS31
- *  - a field of `Dataset` neither drawn nor left out, another address answered                                    -> CS32
- *  - a check that cannot fail, a fixture that grants what the route refuses                                       -> CS33
+ *  - `dataset_ids` sent with a new dataset, or the dataset chosen before the radio was changed back remembered   -> CS27
+ *  - the new dataset's name sent with an existing dataset                                                         -> CS28
+ *  - an empty dataset name sent in place of the case's                                                            -> CS29
+ *  - both names empty refused, or sent as anything but `Untitled case`                                            -> CS30
+ *  - a pack's label sent in place of its id                                                                       -> CS31
+ *  - `domains` left out with none ticked ("never chosen"), or the core model not said                             -> CS32
+ *  - a taken name not said against the name field, words lost, or a case made                                     -> CS33
+ *  - an existing dataset's refusal said as a name taken                                                           -> CS34
+ *  - *New case* offered by the case level, or without `create_case`                                               -> CS35
+ *  - an empty radio group, or datasets that could not be read drawn as none                                       -> CS36
+ *  - the post outside the anti-forgery check                                                                      -> CS37
+ *  - a failure said as a success, an ended session not said                                                       -> CS38
+ *  - a second post (no 303), a banner said twice, by another case or by an address                                -> CS39
+ *  - a control with no label, out of the tab order, or not native                                                 -> CS40
+ *  - a script, or a field hidden until a script shows it                                                          -> CS41
+ *  - a dataset's id printed                                                                                       -> CS42
+ *  - a field of `Dataset` neither drawn nor left out, another address answered                                    -> CS43
+ *  - a check that cannot fail, a fixture that grants what the route refuses                                       -> CS44
  */
 import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
@@ -284,7 +284,7 @@ async function submit(w: World, edits: Edits = {}) {
   return { res, pairs, page: page.text };
 }
 
-// ------------------------------------------------------------------------------------------------ the checks, each shown red in CS33
+// ------------------------------------------------------------------------------------------------ the checks, each shown red in CS44
 
 /** The one create call's body is exactly this: the same fields, no other, the same values. */
 function bodyProblems(sent: Record<string, unknown>[], want: Record<string, unknown>): string[] {
@@ -474,7 +474,7 @@ const AMERICAN = /\b(?:color|colors|organization|organizations|center|centers|au
 // ------------------------------------------------------------------------------------------------ the cases
 
 describe("New case on the GOV.UK tree (scenario CS)", () => {
-  it("CS16: a new dataset is one POST with the case's name, the new dataset's name and the packs and nothing else, then a 303 to the case and the banner", async () => {
+  it("CS27: a new dataset is one POST with the case's name, the new dataset's name and the packs and nothing else, then a 303 to the case and the banner", async () => {
     const w = await world();
     const before = size(w.conduit);
     // A dataset chosen before the radio is back on "Make a new dataset" is forgotten: it is in the form and never sent.
@@ -500,7 +500,7 @@ describe("New case on the GOV.UK tree (scenario CS)", () => {
     expect(mainText(made.text)).not.toMatch(/made by|created by/i);
   });
 
-  it("CS17: an existing dataset is sent by its id with no new dataset's name, whatever was typed there, and the banner has no link to the Studio", async () => {
+  it("CS28: an existing dataset is sent by its id with no new dataset's name, whatever was typed there, and the banner has no link to the Studio", async () => {
     const w = await world();
     const before = size(w.conduit);
     const { res } = await submit(w, { type: { [SAID.caseName]: "Gate study", [SAID.datasetName]: "leftover words" }, choose: [SAID.useExisting, "Gate camera log"] });
@@ -513,7 +513,7 @@ describe("New case on the GOV.UK tree (scenario CS)", () => {
     expect(mainText(made.text)).toContain("Gate camera log");
   });
 
-  it("CS18: a new dataset's name left empty, or all spaces, takes the case's", async () => {
+  it("CS29: a new dataset's name left empty, or all spaces, takes the case's", async () => {
     for (const typed of ["", "   "]) {
       const w = await world();
       const { res } = await submit(w, { type: { [SAID.caseName]: "  Harbour thefts  ", [SAID.datasetName]: typed } });
@@ -522,7 +522,7 @@ describe("New case on the GOV.UK tree (scenario CS)", () => {
     }
   });
 
-  it("CS19: both names left empty are `Untitled case`, for the case and for its new dataset, and nothing of the person's is refused", async () => {
+  it("CS30: both names left empty are `Untitled case`, for the case and for its new dataset, and nothing of the person's is refused", async () => {
     const w = await world();
     const { res } = await submit(w, { type: { [SAID.caseName]: "  " } });
     expect(res.status).toBe(303);
@@ -543,7 +543,7 @@ describe("New case on the GOV.UK tree (scenario CS)", () => {
     expect(keptProblems(again.res.text, again.pairs)).toEqual([]);
   });
 
-  it("CS20: three boxes labelled as the shared package labels the packs; those ticked are sent by id, one as a list of one", async () => {
+  it("CS31: three boxes labelled as the shared package labels the packs; those ticked are sent by id, one as a list of one", async () => {
     const w = await world();
     const form = formOf((await getAs(w, FORM)).text);
     const boxes = (form?.controls ?? []).filter((c) => c.type === "checkbox");
@@ -565,7 +565,7 @@ describe("New case on the GOV.UK tree (scenario CS)", () => {
     expect(madeNothingProblems(w.conduit, before)).toEqual([]);
   });
 
-  it("CS21: none ticked sends `domains: []`, a choice, and the form drawn so says the core model beside the boxes", async () => {
+  it("CS32: none ticked sends `domains: []`, a choice, and the form drawn so says the core model beside the boxes", async () => {
     const w = await world();
     const domainsGroup = (html: string): string => {
       const first = formOf(html)?.controls.find((c) => c.type === "checkbox")?.id ?? "none";
@@ -595,7 +595,7 @@ describe("New case on the GOV.UK tree (scenario CS)", () => {
     expect(shown).not.toContain(DOMAIN_PACKS[0]?.label ?? "none");
   });
 
-  it("CS22: a new dataset's name already taken is said against the name field, every word kept, and no case is made", async () => {
+  it("CS33: a new dataset's name already taken is said against the name field, every word kept, and no case is made", async () => {
     const w = await world();
     const before = size(w.conduit);
     const { res, pairs } = await submit(w, {
@@ -619,7 +619,7 @@ describe("New case on the GOV.UK tree (scenario CS)", () => {
     expect(keptProblems(byCaseName.res.text, byCaseName.pairs)).toEqual([]);
   });
 
-  it("CS23: a dataset that is not the unit's, or none chosen, is said against the choice and never as a name taken, and nothing is made", async () => {
+  it("CS34: a dataset that is not the unit's, or none chosen, is said against the choice and never as a name taken, and nothing is made", async () => {
     const w = await world();
     const before = size(w.conduit);
     for (const id of [ELSEWHERE, DRAWN, "no-such-dataset"]) {
@@ -652,7 +652,7 @@ describe("New case on the GOV.UK tree (scenario CS)", () => {
     expect(errorProblems(byHand.text, SAID.datasetRefused, "choice")).toEqual([]);
   });
 
-  it("CS24: New case is offered by `create_case` alone; without it there is no button, and the form and a post by hand say you cannot make cases", async () => {
+  it("CS35: New case is offered by `create_case` alone; without it there is no button, and the form and a post by hand say you cannot make cases", async () => {
     for (const levels of [LEVELS, {}]) {
       const creator = await world({ levels });
       const list = await getAs(creator, LIST);
@@ -716,7 +716,7 @@ describe("New case on the GOV.UK tree (scenario CS)", () => {
     expect(calls(failed.conduit)).toEqual(["GET /v1/investigations"]);
   });
 
-  it("CS25: with no dataset sent only a new one is offered, with no empty group; datasets that cannot be read draw no form", async () => {
+  it("CS36: with no dataset sent only a new one is offered, with no empty group; datasets that cannot be read draw no form", async () => {
     const w = await world({ datasets: [] });
     const page = await getAs(w, FORM);
     expect(page.status).toBe(200);
@@ -756,7 +756,7 @@ describe("New case on the GOV.UK tree (scenario CS)", () => {
     expect(notMadeProblems(await postAs(refused, FORM, [["name", "x"], ["data", "new"]]))).toEqual([]);
   });
 
-  it("CS26: a post with no anti-forgery token, an empty one or another session's is refused and nothing is sent", async () => {
+  it("CS37: a post with no anti-forgery token, an empty one or another session's is refused and nothing is sent", async () => {
     const w = await world();
     const page = await getAs(w, FORM);
     expect(formOf(page.text)?.controls.filter((c) => c.name === "_csrf").map((c) => [c.type, c.value])).toEqual([["hidden", w.csrf]]);
@@ -775,7 +775,7 @@ describe("New case on the GOV.UK tree (scenario CS)", () => {
     expect((await postAs(w, FORM, fields)).status).toBe(303);
   });
 
-  it("CS27: no answer or a failing Conduit is a 502 saying nothing was made, with no banner; a 401 says to sign in again", async () => {
+  it("CS38: no answer or a failing Conduit is a 502 saying nothing was made, with no banner; a 401 says to sign in again", async () => {
     const failures: [string, WorldOptions][] = [
       ["a 500", { create_answer: { status: 500, body: { detail: "boom" } } }],
       ["a 503", { create_answer: { status: 503, body: "down" } }],
@@ -811,7 +811,7 @@ describe("New case on the GOV.UK tree (scenario CS)", () => {
     }
   });
 
-  it("CS28: one case made is one POST and a 303; following and reloading send nothing again, and the banner is said once, by that case alone", async () => {
+  it("CS39: one case made is one POST and a 303; following and reloading send nothing again, and the banner is said once, by that case alone", async () => {
     const w = await world();
     const { res } = await submit(w, { type: { [SAID.caseName]: "Once" } });
     expect(res.status).toBe(303);
@@ -837,7 +837,7 @@ describe("New case on the GOV.UK tree (scenario CS)", () => {
     expect(noBannerProblems(theirs.text)).toEqual([]);
   });
 
-  it("CS29: the form's controls are native and labelled, in the page's order, the two radio groups and the boxes each a group with a legend", async () => {
+  it("CS40: the form's controls are native and labelled, in the page's order, the two radio groups and the boxes each a group with a legend", async () => {
     const w = await world();
     const page = await getAs(w, FORM);
     expect(stopProblems(page.text)).toEqual([]);
@@ -851,7 +851,7 @@ describe("New case on the GOV.UK tree (scenario CS)", () => {
     expect(mainOf(list.text)).toMatch(/<a class="btn btn--primary" href="\/cases\?new=1">New case<\/a>/);
   });
 
-  it("CS30: with scripts off the form is whole, nothing waits to be shown, and it posts a case", async () => {
+  it("CS41: with scripts off the form is whole, nothing waits to be shown, and it posts a case", async () => {
     const w = await world();
     const page = await getAs(w, FORM);
     expect(scriptsOffProblems(page.text)).toEqual([]);
@@ -862,7 +862,7 @@ describe("New case on the GOV.UK tree (scenario CS)", () => {
     expect(res.status).toBe(303);
   });
 
-  it("CS31: no dataset's id is on the page outside a form value, drawn first or again; each is named by its name alone, a composite saying how many it joins", async () => {
+  it("CS42: no dataset's id is on the page outside a form value, drawn first or again; each is named by its name alone, a composite saying how many it joins", async () => {
     const w = await world();
     const page = await getAs(w, FORM);
     const datasets = (formOf(page.text)?.controls ?? []).filter((c) => c.name === "dataset_id");
@@ -876,7 +876,7 @@ describe("New case on the GOV.UK tree (scenario CS)", () => {
     expect(mainText(page.text)).not.toContain("Another unit's extract");
   });
 
-  it("CS32: every field of Dataset changes the form or is named as left out; the page sends the create's fields; no other address or method answers", async () => {
+  it("CS43: every field of Dataset changes the form or is named as left out; the page sends the create's fields; no other address or method answers", async () => {
     const base = { ...datasetOf(DATASETS[1] as UnitDataset) };
     const other: Record<string, unknown> = {
       id: "ds-changed",
@@ -959,8 +959,8 @@ describe("New case on the GOV.UK tree (scenario CS)", () => {
     }
   });
 
-  describe("CS33: each check is red against the real page or call with one thing changed", () => {
-    it("CS33: the call's check, for each thing the fixture or the route would take differently", async () => {
+  describe("CS44: each check is red against the real page or call with one thing changed", () => {
+    it("CS44: the call's check, for each thing the fixture or the route would take differently", async () => {
       const w = await world();
       await submit(w, { type: { [SAID.caseName]: "Harbour thefts", [SAID.datasetName]: "Harbour 2026" } });
       const real = posts(w.conduit)[0] as Record<string, unknown>;
@@ -976,7 +976,7 @@ describe("New case on the GOV.UK tree (scenario CS)", () => {
       expect(onePostProblems(["GET /v1/investigations"])).not.toEqual([]);
     });
 
-    it("CS33: the refused form's checks, for a sentence against the other thing, words lost, no summary, a case made", async () => {
+    it("CS44: the refused form's checks, for a sentence against the other thing, words lost, no summary, a case made", async () => {
       const w = await world();
       const before = size(w.conduit);
       const taken = await submit(w, { type: { [SAID.caseName]: "Harbour thefts", [SAID.datasetName]: "Quay ledger" } });
@@ -1000,7 +1000,7 @@ describe("New case on the GOV.UK tree (scenario CS)", () => {
       expect(madeNothingProblems(w.conduit, before)).not.toEqual([]);
     });
 
-    it("CS33: the page's checks, for a banner, a button, an empty group, an id, a failure said as success, a stop, a script", async () => {
+    it("CS44: the page's checks, for a banner, a button, an empty group, an id, a failure said as success, a stop, a script", async () => {
       const w = await world();
       const form = (await getAs(w, FORM)).text;
       const list = (await getAs(w, LIST)).text;
@@ -1036,7 +1036,7 @@ describe("New case on the GOV.UK tree (scenario CS)", () => {
       expect(scriptsOffProblems(form.replace("<fieldset", "<fieldset hidden"))).not.toEqual([]);
     });
 
-    it("CS33: the fixture Conduit refuses a new case as the route does, in its order, and makes the dataset before the case", async () => {
+    it("CS44: the fixture Conduit refuses a new case as the route does, in its order, and makes the dataset before the case", async () => {
       const w = await world();
       const poor = await world({ rights: ["investigate"] });
       const ask = async (at: World, body: unknown, bearerToken: string | null = at.reader.token): Promise<{ status: number; body: unknown }> => {

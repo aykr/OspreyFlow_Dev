@@ -1,7 +1,7 @@
 /**
  * The pages server started for the GOV.UK tree against the cases page's fixture Conduit (`casesConduit.ts`), for the cases page's
  * keyboard and scripts-off specs (slice GR1a; scenario CS12 and CS13). Two synthetic cases of one unit, one of them with a brief; the
- * signed-in person holds a level on both and the right to investigate. For New case (slice GR1b; scenario CS29 and CS30) a creator
+ * signed-in person holds a level on both and the right to investigate. For New case (slice GR1b; scenario CS40 and CS41) a creator
  * holds the right to make a case too, and the unit has two datasets.
  */
 import type { Page } from "@playwright/test";

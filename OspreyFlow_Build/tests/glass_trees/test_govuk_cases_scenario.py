@@ -5,7 +5,7 @@
 editor, and none of the `cases-and-views` row's journeys (A7, B14, B21) is about them. The scenario is written first, from those
 screens, the Conduit's own routes and the ADR's text, and the page test (`apps/pages/test/govuk/cases.test.ts`) is the proof.
 
-**Slice GR1b, New case** (the owner's rulings of 26 November 2026 on GR1b's draft: every proposal (a)): rows CS16 to CS33, whose
+**Slice GR1b, New case** (the owner's rulings of 26 November 2026 on GR1b's draft: every proposal (a)): rows CS27 to CS44, whose
 page test is `apps/pages/test/govuk/cases-new.test.ts`.
 
 This file holds the document, the page test, the `cases-and-views` row, the route list, the page module and the field census in step:
@@ -99,7 +99,7 @@ PAGE_TEST_NAME = "cases.test.ts"
 NEW_PAGE_TEST_NAME = "cases-new.test.ts"
 PATH = "/cases"
 READ_IDS = [f"CS{n}" for n in range(1, 16)]
-NEW_IDS = [f"CS{n}" for n in range(16, 34)]
+NEW_IDS = [f"CS{n}" for n in range(27, 45)]
 EXPECTED_IDS = READ_IDS + NEW_IDS
 LEFT_OUT = "**Left out, by field name.**"
 NEW_LEFT_OUT = "**Left out of the new case form, by field name.**"
@@ -134,24 +134,24 @@ BRIEF: dict[str, tuple[str, ...]] = {
     "scripts off": ("CS13",),
     "the trees, the lists and the words": ("CS14",),
     "each check red against the real page with one thing changed": ("CS15",),
-    "a new dataset: one POST, a 303, the banner and the Studio's link": ("CS16",),
-    "an existing dataset: its id, no new name, no Studio link": ("CS17",),
-    "an empty dataset name takes the case's": ("CS18",),
-    "both names empty are Untitled case": ("CS19",),
-    "the packs sent as ticked, by id": ("CS20",),
-    "none ticked: an empty list sent and the core model said": ("CS21",),
-    "a taken name said against the name field": ("CS22",),
-    "another dataset's refusal said against the choice": ("CS23",),
-    "offered by create_case alone": ("CS24",),
-    "no dataset: no empty group; unreadable: no form": ("CS25",),
-    "no anti-forgery token: nothing sent": ("CS26",),
-    "no answer, a failure, an ended session": ("CS27",),
-    "one case, one POST, one banner": ("CS28",),
-    "the form by keyboard": ("CS29",),
-    "the form with scripts off": ("CS30",),
-    "no dataset id outside a value": ("CS31",),
-    "the new case's census, addresses and trees": ("CS32",),
-    "New case's checks red, and the fixture refusing as the route does": ("CS33",),
+    "a new dataset: one POST, a 303, the banner and the Studio's link": ("CS27",),
+    "an existing dataset: its id, no new name, no Studio link": ("CS28",),
+    "an empty dataset name takes the case's": ("CS29",),
+    "both names empty are Untitled case": ("CS30",),
+    "the packs sent as ticked, by id": ("CS31",),
+    "none ticked: an empty list sent and the core model said": ("CS32",),
+    "a taken name said against the name field": ("CS33",),
+    "another dataset's refusal said against the choice": ("CS34",),
+    "offered by create_case alone": ("CS35",),
+    "no dataset: no empty group; unreadable: no form": ("CS36",),
+    "no anti-forgery token: nothing sent": ("CS37",),
+    "no answer, a failure, an ended session": ("CS38",),
+    "one case, one POST, one banner": ("CS39",),
+    "the form by keyboard": ("CS40",),
+    "the form with scripts off": ("CS41",),
+    "no dataset id outside a value": ("CS42",),
+    "the new case's census, addresses and trees": ("CS43",),
+    "New case's checks red, and the fixture refusing as the route does": ("CS44",),
 }
 
 
@@ -312,7 +312,7 @@ def scenario_problems(data: dict[str, Any]) -> list[str]:
         for row_id in sorted(named_in_test - (set(rows) & set(ids))):
             found.append(f"{file} has a case titled {row_id}, which is no scenario of its own")
     # New case's walk by keyboard and with scripts off, each in a case that names its scenario (rule 13).
-    for key, row_id, file in (("keyboard", "CS29", "keyboard/cases.spec.ts"), ("scripts_off", "CS30", "scripts-off/cases.spec.ts")):
+    for key, row_id, file in (("keyboard", "CS40", "keyboard/cases.spec.ts"), ("scripts_off", "CS41", "scripts-off/cases.spec.ts")):
         if not re.search(rf'\btest\("[^"\n]*\b{row_id}\b', data[key]):
             found.append(f"{file} has no case naming {row_id}")
     return found
@@ -665,25 +665,25 @@ def _row(row_id: str, **changes: Any) -> Callable[[dict[str, Any]], None]:
 PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, Any]], list[str]], str]] = [
     ("a scenario row removed", _without_row("CS6"), scenario_problems, "no scenario CS6"),
     ("a page test case with no scenario row", _without_row("CS15"), scenario_problems, "titled CS15"),
-    ("a New case row removed", _without_row("CS22"), scenario_problems, "no scenario CS22"),
-    ("a New case test case with no scenario row", _without_row("CS33"), scenario_problems, "titled CS33"),
+    ("a New case row removed", _without_row("CS33"), scenario_problems, "no scenario CS33"),
+    ("a New case test case with no scenario row", _without_row("CS44"), scenario_problems, "titled CS44"),
     (
-        "a New case retitled so its page test names no CS16",
-        _replace("new_page_test", 'it("CS16: ', 'it("CS99: '),
+        "a New case retitled so its page test names no CS27",
+        _replace("new_page_test", 'it("CS27: ', 'it("CS99: '),
         scenario_problems,
-        "titled CS16",
+        "titled CS27",
     ),
     (
         "the keyboard walk naming no scenario",
-        lambda d: d.update(keyboard=d["keyboard"].replace("CS29", "CS12")),
+        lambda d: d.update(keyboard=d["keyboard"].replace("CS40", "CS12")),
         scenario_problems,
-        "no case naming CS29",
+        "no case naming CS40",
     ),
     (
         "the scripts-off walk naming no scenario",
-        lambda d: d.update(scripts_off=d["scripts_off"].replace("CS30", "CS13")),
+        lambda d: d.update(scripts_off=d["scripts_off"].replace("CS41", "CS13")),
         scenario_problems,
-        "no case naming CS30",
+        "no case naming CS41",
     ),
     (
         "the boxes' rule left out",

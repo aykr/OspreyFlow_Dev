@@ -3,7 +3,7 @@
 // stop a native one, in the page's own order, the skip link first, the table with no stop of its own) and that each link does what it
 // says when activated by Enter: a case's name opens its page, the way back returns to the list, Home is Home. No `page.mouse`, no
 // `.click()`. The service is started in the case for the `govuk` tree against a fixture Conduit that refuses what the real routes refuse.
-// **New case** (slice GR1b; scenario CS29) is the page's one write: CK4 walks the form's stops, chooses an existing dataset by the
+// **New case** (slice GR1b; scenario CS40) is the page's one write: CK4 walks the form's stops, chooses an existing dataset by the
 // arrow keys, ticks a box by Space and makes the case by Enter; CK5 makes one with a new dataset, from a refused name to the banner.
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
@@ -82,7 +82,7 @@ async function tabTo(page: Page, name: string): Promise<void> {
 }
 
 test.describe("New case by keyboard", () => {
-  test("CK4 (CS29): New case is a stop on the list; the form's stops come in order; the arrow keys choose in both radio groups, Space ticks a box and Enter makes the case", async ({ page }) => {
+  test("CK4 (CS40): New case is a stop on the list; the form's stops come in order; the arrow keys choose in both radio groups, Space ticks a box and Enter makes the case", async ({ page }) => {
     await withCases(
       assets,
       async (base) => {
@@ -131,7 +131,7 @@ test.describe("New case by keyboard", () => {
     );
   });
 
-  test("CK5 (CS29): a new dataset by keyboard; a refused name is reached from the error summary's link; the banner's link to the Studio is a stop", async ({ page }) => {
+  test("CK5 (CS40): a new dataset by keyboard; a refused name is reached from the error summary's link; the banner's link to the Studio is a stop", async ({ page }) => {
     await withCases(
       assets,
       async (base) => {

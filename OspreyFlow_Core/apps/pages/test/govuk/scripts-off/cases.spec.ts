@@ -1,6 +1,6 @@
 // The GOV.UK tree's cases page with scripts switched off (slice GR1a; ADR-152 decision 6 and invariant I4; `CLAUDE.md` rule 13; scenario
 // CS13): the same pages, the same stops in the same order, and each link still does what it says, because the page needs no script.
-// `../keyboard/cases.spec.ts` is the same walk with scripts on. New case (slice GR1b; scenario CS30): every field is shown and the form
+// `../keyboard/cases.spec.ts` is the same walk with scripts on. New case (slice GR1b; scenario CS41): every field is shown and the form
 // posts with no script.
 import { expect, test } from "@playwright/test";
 
@@ -43,7 +43,7 @@ test.describe("the cases page with scripts switched off", () => {
     });
   });
 
-  test("CO3 (CS30): with no script every field of New case is shown, and a case is made", async ({ page }) => {
+  test("CO3 (CS41): with no script every field of New case is shown, and a case is made", async ({ page }) => {
     await withCases(
       assets,
       async (base) => {
