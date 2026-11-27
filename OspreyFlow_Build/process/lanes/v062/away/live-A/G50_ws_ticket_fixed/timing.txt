@@ -1,0 +1,3 @@
+stores [valkey] up in 0 s
+pytest exit 0 in 1 s
+stores removed in 1 s (containers left with this run's label: 0); total 2 s

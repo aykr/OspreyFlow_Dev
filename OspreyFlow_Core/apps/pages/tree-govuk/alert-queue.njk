@@ -1,0 +1,33 @@
+{#- The alert queue, read-only: one case's queue as a captioned table (a column header is a th with scope col, the first cell of a row a th
+    with scope row), or the cases to choose from as a list of links, with the empty and unreadable cases in words (slice RM1a; scenario AQ).
+    Every word is `server/views/alertQueueWords.ts`'s, and every row is one the Conduit sent: there is no count, no filter and no control
+    here, and no field of an alert beyond the five the view model carries. The only form is the layout's sign-out. -#}
+{% extends "layout.njk" %}
+{% block content %}
+<h1>{{ words.title }}</h1>
+{% if q.kind == "table" %}
+<p>{{ words.queueLede }}</p>
+<table class="table">
+<caption class="caption">{{ q.caption }}</caption>
+<thead>
+<tr>{% for column in words.columns %}<th scope="col">{{ column }}</th>{% endfor %}
+</tr>
+</thead>
+<tbody>
+{% for row in q.rows %}<tr><th scope="row">{{ row.alert }}</th><td>{{ row.kind }}</td><td>{{ row.state }}</td><td><time datetime="{{ row.whenIso }}">{{ row.when }}</time></td><td>{{ q.caseName }}</td>
+</tr>
+{% endfor %}</tbody>
+</table>
+{% elif q.kind == "cases" %}
+<p>{{ words.casesLede }}</p>
+<ul>
+{% for item in q.cases %}<li><a href="{{ item.href }}">{{ item.name }}</a></li>
+{% endfor %}</ul>
+{% else %}
+<p>{{ q.message }}</p>
+{% endif %}
+{% if q.kind == "table" or q.kind == "empty" or q.kind == "unreadable" %}
+<p><a href="/alert-queue">{{ words.allCases }}</a></p>
+{% endif %}
+<p><a href="/">{{ words.back }}</a></p>
+{% endblock %}

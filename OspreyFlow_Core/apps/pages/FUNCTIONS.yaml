@@ -317,12 +317,17 @@ functions:
     scenario: ""
     route: ""
     status: "planned"
-  # The plan has not yet named a build for this row; the inventory's own slice is kept.
+  # RM1 is alerts, rules and watches (the owner, 24 November 2026). Its first slice, RM1a, is the alert queue, read-only, at `/alert-queue`, which
+  # is in `tree-govuk/routes.yaml` as the first page of the function. The row's route stays empty and the row "planned": the function is not
+  # complete, because the rules, watches, closing and assigning, an alert's own page and connection strength are later slices, and a row with a
+  # route is read as a function whose GOV.UK page exists (`scripts/tree_parity.py`). None of B12, B13, B14 and B20 says what a person who only
+  # reads the queue is shown, so scenario AQ of spec/08 was written first and `apps/pages/test/govuk/alert-queue.test.ts` is the proof. No
+  # Default twin yet (the owner, 24 November 2026).
   - id: alerts-rules-watches
     name: "Alerts, rules, watches, connection strength"
-    where: "apps/workspace/src/alerts/, apps/workspace/src/watches/, apps/workspace/src/strength/"
-    slice: "R7"
-    scenario: "B12, B13, B14, B20"
+    where: "apps/workspace/src/alerts/, apps/workspace/src/watches/, apps/workspace/src/strength/; GOV.UK page apps/pages/server/alertQueue.ts (the queue)"
+    slice: "RM1"
+    scenario: "B12, B13, B14, B20, AQ1, AQ2, AQ3, AQ4, AQ5, AQ6, AQ7, AQ8, AQ9, AQ10, AQ11"
     route: ""
     status: "planned"
   # The plan has not yet named a build for this row. C9 and C11 (spec/08) are proposed, not owner-ruled.

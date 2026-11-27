@@ -52,3 +52,5 @@ only when no store load is running on the server.
    not the scripts.
 6. **`pgrep -f 'merge_slice.py merg[e]'` matches the shell running the check itself** when it sits in the same command
    line (already line fault 4 of 21 November; still bites).
+7. **`server-rerun` cuts a parametrised test id at its first space** (SE9f, 26 November): `…::test_the_check_fails_for_each_planted_fault[a cited route line …]` ran as `…[a`, pytest said "not found … no tests ran", and that was recorded as "red on the Mac too (7 s)". The whole file, run by hand, gave the real result (1 failed, 51 passed).
+8. **The slice line's own suite fails when it runs across midnight UTC** (CO3b's merge, 27 November 00:01-00:04 UTC): `test_owner_line_waiting.py` (two cases) and `test_round_after_refusal.py::test_round_after_refusal_at_its_budget_gives_no_more_today_and_the_board_says_so` hold `TODAY` from when the module was imported, while the code reads the clock again. The gate was refused for this alone (3 failed, 1025 passed), and the merge was run again. Fix: the tests should freeze the clock the code reads, or work out `TODAY` inside each test.

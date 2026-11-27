@@ -369,6 +369,33 @@ def matches(e: dict | None, base: str, tip: str, tree: str) -> str | None:
     return None
 
 
+#: D255 (the owner's ruling of 25 November 2026): the server does not judge the timing-budget tests; the Mac runs them.
+#: A budget test as the server's runner names one, and the workspace's own script that runs them alone.
+BUDGET_TEST = re.compile(r"\A\S+\.budget\.test\.[cm]?[jt]sx?(?: >|\Z)")
+BUDGET_WORKSPACE = "apps/workspace"
+BUDGET_SCRIPT = "test:budget"
+
+
+def budget_left(e: dict) -> list[str]:
+    """The budget tests the server left to the Mac with make test (its left_to_mac: rerun test-js, each name a budget
+    test, at least one), or [] when the result says no such thing in exactly that shape."""
+    left = e.get("left_to_mac")
+    if not isinstance(left, dict) or left.get("rerun") != "test-js":
+        return []
+    names = left.get("failed")
+    if not isinstance(names, list) or not names or not all(isinstance(n, str) and BUDGET_TEST.match(n) for n in names):
+        return []
+    return names
+
+
+def has_budget_script(tree: Path) -> bool:
+    try:
+        pkg = json.loads((tree / "OspreyFlow_Core" / BUDGET_WORKSPACE / "package.json").read_text())
+    except (OSError, ValueError):
+        return False
+    return isinstance(pkg, dict) and isinstance(pkg.get("scripts"), dict) and BUDGET_SCRIPT in pkg["scripts"]
+
+
 def remainder(e: dict, tree: Path, mk: Path, records: list[str] | tuple = ()) -> dict:
     """What the Mac still runs of today's full gate when the server's green counts, and what is taken from the server:
     each `ci` prerequisite the server does not name as run and passed (core-check by Core's own `check` targets, each
@@ -396,18 +423,29 @@ def remainder(e: dict, tree: Path, mk: Path, records: list[str] | tuple = ()) ->
     names = [x.get("name") if isinstance(x, dict) else x for x in (nr.get("test_files") or [])]
     names += [x for x in (nr.get("docker_skipped") or [])]
     files = [TEST_FILE.match(str(n)) for n in names]
-    if "test" in passed and all(files):
-        taken.append("test")
+    left = [] if "test" in passed else budget_left(e)
+    rules = []
+    if ("test" in passed or left) and all(files):
+        taken.append("test" if "test" in passed else "test (all but test-js)")
         files = sorted({"../" + m.group(1) for m in files})
         if records:
             files = sorted(set(files) | {f"../OspreyFlow_Build/{t}" for t in records_tests(tree)})
             targets.append(["make", "live-collect"])
             mac.append("live-collect (the records folder moved)")
+        if left:  # D255: only budget tests failed, last in test-js; the rest of make test passed on the server
+            targets.append(["make", "-C", "../OspreyFlow_Core", "test-js"])
+            mac.append("test-js whole: the server left its timing-budget tests to the Mac (D255): " + ", ".join(left))
         if files:
-            mk.write_text("server-test-files:\n\t$(IN_CORE) $(PYTEST) $(SERVER_TEST_FILES)\n")
+            rules.append("server-test-files:\n\t$(IN_CORE) $(PYTEST) $(SERVER_TEST_FILES)\n")
             targets.append(["make", "-f", "Makefile", "-f", str(mk), "server-test-files",
                             "SERVER_TEST_FILES=" + " ".join(files)])
             mac.append("test files the server did not run: " + ", ".join(f[len("../"):] for f in files))
+        if not left and has_budget_script(tree):  # D255: a server green never stands for them
+            rules.append(f"server-budget:\n\t$(IN_CORE) npm run {BUDGET_SCRIPT} --workspace {BUDGET_WORKSPACE}\n")
+            targets.append(["make", "-f", "Makefile", "-f", str(mk), "server-budget"])
+            mac.append("the timing-budget tests, which the server does not judge (D255)")
+        if rules:
+            mk.write_text("".join(rules))
     else:
         targets.append(["make", "test"])
         mac.append("test")

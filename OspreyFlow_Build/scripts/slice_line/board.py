@@ -113,6 +113,14 @@ def server_view(sid: str, st: dict, rec: Path, merged: dict | None) -> dict | No
             if out["state"] == "red" and spatial and not spatial.group(1).startswith("installed"):
                 out["state"], out["words"] = "no verdict", f"the server's DuckDB extension failed: {spatial.group(1)}"
                 out.pop("test", None)
+            if out["state"] == "red" and out["run_id"] and server_gate.newer_runs(sid, tip, out["run_id"]):
+                # D268: a newer green of the part at this tip supersedes the red, as the merge reads it (58); the
+                # server is asked only when the early warning's log records a newer run of it at this tip
+                rid, e = server_gate.server_result(sid, tip)
+                if e and e.get("superseded_red") == out["run_id"] and e.get("verdict") == "pass":
+                    out.update(state="green", superseded_red=out["run_id"], run_id=rid, main=e.get("main") or "")
+                    for k in ("test", "words", "written"):
+                        out.pop(k, None)
             if out.get("main"):
                 out["on_main"] = c.git(["rev-parse", "main"], c.REPO).startswith(out["main"])
     again = c.read_json(rec / "server-again.json") or {}
@@ -126,6 +134,8 @@ def server_view(sid: str, st: dict, rec: Path, merged: dict | None) -> dict | No
         if out["state"] == "no verdict" and out.get("words") else "") + (
         f" on {out['main'][:10]}, main has moved: not counted" if out["state"] == "green" and out.get("on_main") is False
         else "")
+    if out.get("superseded_red"):
+        out["said"] += f" (run {out['run_id']} supersedes the red of run {out['superseded_red']})"
     if out.get("rerun"):
         out["said"] += f"; rerun on the Mac: {out['rerun']}"
     elif out["state"] == "red":

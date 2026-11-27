@@ -82,6 +82,20 @@ OFFLINE_PORTS = {"ARCADEDB_HTTP_PORT": "59991", "POSTGRES_PORT": "59992", "VALKE
 #: gate's own first; the others are lanes that never run on this machine (lane_ports.tsv keeps every slot's block clear
 #: of the stacks' ports and of the owner's deployment's).
 GATE_LANES = ("merger", "platform-b", "rules-b")
+#: Two stacks side by side (the owner's word of 26 November 2026): how many jobs at once, their lanes and their caps
+#: are demo-server's to set, in this file beside the runner (root's, as the code is; install.sh never writes it).
+#: Without it, or with one not taken whole, everything is today's: protocol's MAX_JOBS, GATE_LANES and caps.
+CAPACITY = HERE / "capacity.json"
+#: Two stacks of MAX_STACK at most; the demo's own slot is never a job's.
+MOST_JOBS = 2 * p.MAX_STACK
+NOT_A_JOB_LANE = ("demo",)
+LANE_NAME = re.compile(r"\A[a-z][a-z0-9-]{0,30}\Z")
+CPU_QUOTA_SHAPE = re.compile(r"\A([1-9][0-9]{1,2})%\Z")  # 10% to 999%: at most 16 processors' worth below
+MEMORY_SHAPE = re.compile(r"\A([1-9][0-9]?)G\Z")  # 1G to 99G, at most MOST_MEMORY_GIB below
+MOST_MEMORY_GIB = 16
+#: Past today's MAX_JOBS, a stack starts only when the machine has room for it now: MemAvailable here at least its
+#: jobs' MemoryMax together.
+MEMINFO = Path("/proc/meminfo")
 SLICE_REF = re.compile(r"\Arefs/heads/lane/slice-([A-Za-z0-9]+)\Z")
 SHA = re.compile(r"\A[0-9a-f]{40}\Z")
 #: merge_slice.py's own patterns for a failing test and a failed make target.
@@ -92,6 +106,18 @@ ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 #: A test file named in a line: what a Playwright ✘ line has and vitest's own × line for one case does not.
 TEST_FILE = re.compile(r"\S+\.(?:test|spec)\.[cm]?[jt]sx?\b")
 MAKE_ERROR = p.MAKE_ERROR
+#: D255 (the owner's ruling of 25 November 2026): the timing-budget tests are not judged here; the Mac's remainder runs
+#: them. A budget test as failing_test names it (apps/workspace's vitest.budget.config.ts runs them, last in test-js).
+BUDGET_TEST = re.compile(r"\A\S+\.budget\.test\.[cm]?[jt]sx?(?: >|\Z)")
+#: A pytest run's last line, as make test's -q runs print it: "2419 passed, 16 skipped, 6 warnings in 538.15s".
+PYTEST_SUMMARY = re.compile(r"\A=*\s*\d+ (?:passed|failed|errors?|skipped|deselected|xfailed|xpassed|warnings?)\b.* in "
+                            r"[\d.]+s\b")
+PYTEST_RED = re.compile(r"\b\d+ (?:failed|errors?)\b")
+#: make test's two pytest runs (the route-rights test, then the suite): each must say it passed with nothing failed
+#: before a budget failure after them is left to the Mac.
+PYTEST_RUNS = 2
+BUDGET_WORDS = ("the timing-budget tests (*.budget.test.*) are not judged here: the Mac's remainder runs them "
+                "(D255, 25 November 2026)")
 #: tests/local_docker_guard.py's skip, as pytest -rs prints it.
 DOCKER_SKIP = re.compile(r"^SKIPPED \[\d+\] ([^:\s]+):\d+: a server-only test: it calls the docker CLI")
 
@@ -182,13 +208,55 @@ def running_jobs() -> list:
                   if (d / "job.json").exists() and not (d / "result.json").exists() and job_alive(d))
 
 
-def lanes_in_use(jobs: list) -> set:
+def capacity() -> dict:
+    """{"max_jobs", "lanes", "cpu_quota", "memory_max", "test_workers"}, from demo-server's CAPACITY when it is there
+    and taken whole; today's otherwise, with "refused" saying why when the file is there and not taken."""
+    today = {"max_jobs": p.MAX_JOBS, "lanes": list(GATE_LANES), "cpu_quota": p.CPU_QUOTA, "memory_max": p.MEMORY_MAX,
+             "test_workers": p.TEST_WORKERS}
+    if not CAPACITY.exists():
+        return today
+    try:
+        c = json.loads(CAPACITY.read_text())
+    except (OSError, ValueError):
+        return {**today, "refused": "capacity.json is not readable JSON: today's limits"}
+    got = {**today, **c} if isinstance(c, dict) else {}
+    lanes = got.get("lanes")
+    why = None
+    if not isinstance(c, dict) or set(c) - set(today):
+        why = "names something it does not take"
+    elif not isinstance(got["max_jobs"], int) or not 1 <= got["max_jobs"] <= MOST_JOBS:
+        why = "max_jobs is not 1 to %d" % MOST_JOBS
+    elif not isinstance(lanes, list) or len(set(lanes)) != len(lanes) or len(lanes) < got["max_jobs"] \
+            or not all(isinstance(x, str) and LANE_NAME.match(x) and x not in NOT_A_JOB_LANE for x in lanes):
+        why = "lanes are not max_jobs different lanes, the demo's never among them"
+    elif not CPU_QUOTA_SHAPE.match(str(got["cpu_quota"])) or int(str(got["cpu_quota"])[:-1]) > 1600:
+        why = "cpu_quota is not a percentage like 250%"
+    elif not MEMORY_SHAPE.match(str(got["memory_max"])) or int(str(got["memory_max"])[:-1]) > MOST_MEMORY_GIB:
+        why = "memory_max is not 1G to %dG" % MOST_MEMORY_GIB
+    elif not isinstance(got["test_workers"], int) or not 1 <= got["test_workers"] <= 16:
+        why = "test_workers is not 1 to 16"
+    if why:
+        return {**today, "refused": "capacity.json not taken (%s): today's limits" % why}
+    return got
+
+
+def available_bytes() -> int | None:
+    try:
+        for ln in MEMINFO.read_text().splitlines():
+            if ln.startswith("MemAvailable:"):
+                return int(ln.split()[1]) * 1024
+    except (OSError, ValueError, IndexError):
+        return None
+    return None
+
+
+def lanes_in_use(jobs: list, lanes: list | tuple = GATE_LANES) -> set:
     used = set()
     for jid in jobs:
         try:
             used.add(json.loads((JOBS / jid / "job.json").read_text()).get("lane", GATE_LANES[0]))
         except (OSError, ValueError):
-            used.update(GATE_LANES)  # unreadable: assume the worst, so no slot is shared
+            used.update(lanes)  # unreadable: assume the worst, so no slot is shared
     return used
 
 
@@ -208,15 +276,16 @@ def receive(dest: Path) -> int:
             fh.write(chunk)
 
 
-def launch_capped(jid: str) -> bool:
+def launch_capped(jid: str, cap: dict | None = None) -> bool:
     """Start the job detached, under the caps. Never uncapped: no systemd-run, no job. The job's python runs isolated
     (-I: no PYTHONPATH, no user site, nothing from the environment), as the forced command's own does."""
     me = [sys.executable, "-I", str(Path(__file__).resolve()), "_job", jid]
     run = shutil.which("systemd-run")
     if not run:
         return False
+    cap = cap or capacity()
     cmd = [run, "--user", "--quiet", "--collect", "--unit", p.PREFIX + "job-" + jid,
-           "--property", "CPUQuota=" + p.CPU_QUOTA, "--property", "MemoryMax=" + p.MEMORY_MAX,
+           "--property", "CPUQuota=" + cap["cpu_quota"], "--property", "MemoryMax=" + cap["memory_max"],
            "--property", "MemorySwapMax=0", "--property", "RuntimeMaxSec=%d" % (p.MAX_RUN_SECONDS + 600),
            "--property", "IOSchedulingClass=best-effort", "--property", "IOSchedulingPriority=7",
            "--nice", str(p.NICE), "--", *me]
@@ -237,11 +306,19 @@ def do_run(received: str, order: list | None = None) -> int:
         return refuse("busy", received)
     running = running_jobs()
     want = len(order) if order else 1
-    if len(running) + want > p.MAX_JOBS:
-        return refuse("busy", received, running=running, free=max(0, p.MAX_JOBS - len(running)))
+    cap = capacity()
+    said = {"capacity": cap["refused"]} if cap.get("refused") else {}
+    if len(running) + want > cap["max_jobs"]:
+        return refuse("busy", received, running=running, free=max(0, cap["max_jobs"] - len(running)), **said)
+    if len(running) + want > p.MAX_JOBS:  # past today's jobs: only with room for these ones now
+        room, need = available_bytes(), want * int(cap["memory_max"][:-1]) * 1024 ** 3
+        if room is None or room < need:
+            return refuse("busy", received, running=running, words="no room for %d more job(s) now: %s GB available, "
+                          "%d GB needed" % (want, "unknown" if room is None else "%d" % (room // 1024 ** 3),
+                                            need // 1024 ** 3))
     if shutil.disk_usage(str(WORK)).free < p.MIN_FREE_BYTES:
         return refuse("disk-floor", received, words="under %d GB free" % (p.MIN_FREE_BYTES // 1024 ** 3))
-    lanes = [ln for ln in GATE_LANES if ln not in lanes_in_use(running)][:want]
+    lanes = [ln for ln in cap["lanes"] if ln not in lanes_in_use(running, cap["lanes"])][:want]
     if len(lanes) < want:
         return refuse("busy", received, running=running, words="no free port slot")
     ids = []
@@ -754,7 +831,7 @@ def build_env(tree: Path, job: Path, lane: str = GATE_LANES[0]) -> dict:
            "UV_PYTHON": py, "UV_CACHE_DIR": str(CACHE / "uv"), "UV_PYTHON_INSTALL_DIR": str(TOOLS / "python"),
            "npm_config_cache": str(CACHE / "npm"), "PLAYWRIGHT_BROWSERS_PATH": str(TOOLS / "playwright"),
            "OSPREY_PORTS_SLOT": lane_slot(tree, lane), "PYTEST_DEBUG_TEMPROOT": str(job / "pytest"),
-           "OSPREY_LEASE_DIR": str(lease), "TEST_WORKERS": str(p.TEST_WORKERS), "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull,
+           "OSPREY_LEASE_DIR": str(lease), "TEST_WORKERS": str(capacity()["test_workers"]), "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull,
            **OFFLINE_PORTS}
     for d in ("tmp", "pytest"):
         (job / d).mkdir()
@@ -909,6 +986,17 @@ def mac_only_owners(tree: Path, specs: list) -> set:
     return owners
 
 
+def budget_only(lines: list, tests: list, targets: list) -> bool:
+    """make test failed only on timing-budget tests (D255): every failing test it named a budget test (at least one),
+    the failed targets only test-js and make test itself, and both its pytest runs reporting no failure."""
+    if not tests or not all(BUDGET_TEST.match(n) for n in tests):
+        return False
+    if "test-js" not in targets or not set(targets) <= {"test-js", "test"}:
+        return False
+    runs = [s for s in (ANSI.sub("", ln).strip() for ln in lines) if PYTEST_SUMMARY.match(s)]
+    return len(runs) >= PYTEST_RUNS and all(" passed" in s and not PYTEST_RED.search(s) for s in runs)
+
+
 def read_since(log: Path, start: int) -> list:
     with log.open("rb") as fh:
         fh.seek(start)
@@ -954,6 +1042,7 @@ def gate(tree: Path, job: Path, log: Path, deadline: float, result: dict) -> lis
     not_run["mac_only"] = [{"name": r["name"], "why": "not run on this machine: its snapshots are another platform's (%s)"
                             % r["evidence"]} for r in mac]
     not_run["live_step"] = "not run: the live step needs the test stacks (stack_lease.sh), which this machine does not hold"
+    left = result["left_to_mac"] = {"budget": BUDGET_WORDS, "failed": [], "rerun": None}
     env = build_env(tree, job, result.get("lane", GATE_LANES[0]))
     core = tree / "OspreyFlow_Core"
     build = tree / "OspreyFlow_Build"
@@ -990,6 +1079,7 @@ def gate(tree: Path, job: Path, log: Path, deadline: float, result: dict) -> lis
         seconds = int(time.monotonic() - t0)
         codes.append({"step": name, "exit": code, "seconds": seconds})
         seen = len(result["failing"]["tests"])
+        targets_seen = len(result["failing"]["targets"])
         server_skips = 0  # docker calls the repository's guard skipped inside this target (the Mac reruns only make test's)
         pending = []  # failing tests seen since the last failed target: make -k runs the targets one after another
         by_target = result["failing"].setdefault("by_target", {})
@@ -1020,6 +1110,18 @@ def gate(tree: Path, job: Path, log: Path, deadline: float, result: dict) -> lis
             names += [n for n in pending if n not in names]
         ok = code == 0 and len(result["failing"]["tests"]) == seen and not any(
             MAKE_ERROR.match(ln) for ln in lines)
+        named, failed = result["failing"]["tests"][seen:], result["failing"]["targets"][targets_seen:]
+        if target == "test" and code != 0 and budget_only(lines, named, failed):  # D255: left to the Mac, not red
+            left.update(failed=list(named), rerun="test-js")
+            del result["failing"]["tests"][seen:], result["failing"]["targets"][targets_seen:]
+            for k in [k for k, v in by_target.items() if k in ("test-js", "test", "(make test)")]:
+                by_target[k] = [n for n in by_target[k] if n not in named]
+                if not by_target[k]:
+                    del by_target[k]
+            codes[-1]["left_to_mac"] = True
+            checks.append({"name": target, "kind": kind, "status": "left to the Mac", "exit": code, "seconds": seconds,
+                           "why": "only timing-budget tests failed (D255): the Mac runs test-js whole"})
+            continue
         checks.append({"name": target, "kind": kind, "status": "passed" if ok else "failed", "exit": code,
                        "seconds": seconds})
         # 012 b: named passed only when it ran to completion and passed with nothing skipped inside it but what the
@@ -1079,7 +1181,8 @@ def run_job(jid: str) -> int:
         result["merge"] = result["merges"][-1]
         result["tree"] = git(["rev-parse", "HEAD^{tree}"], cwd=tree)
         result["steps"] = GATE(tree, job, log, deadline, result)
-        red = any(s["exit"] != 0 for s in result["steps"]) or result["failing"]["targets"] or result["failing"]["tests"]
+        red = any(s["exit"] != 0 and not s.get("left_to_mac") for s in result["steps"]) or \
+            result["failing"]["targets"] or result["failing"]["tests"]
         result["verdict"] = "fail" if red else "pass"
     except Stop as e:
         result.update(verdict=e.verdict, words=e.words, **e.extra)

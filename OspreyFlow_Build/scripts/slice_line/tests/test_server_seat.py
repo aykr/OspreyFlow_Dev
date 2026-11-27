@@ -203,7 +203,9 @@ def test_a_server_seat_that_ends_without_a_session_is_the_servers_fault_never_th
     at_round(w, 2)
     where(w, "builder", "server")
     h = json.loads((w["tmp"] / "build_harness.json").read_text())
-    (w["tmp"] / "build_harness.json").write_text(json.dumps({**h, "seat_run": ["sh", "-c", "exit 4"]}))
+    # it committed before it ended, so it did work there and is not run on the Mac (test_server_seat_fallback.py)
+    (w["tmp"] / "build_harness.json").write_text(json.dumps({**h, "seat_run": [
+        "sh", "-c", "echo half > half.txt && git add half.txt && git commit -qm 'S1: half' && exit 4"]}))
     st0 = state(w)
     p = run_seat(w, "builder")
     assert p.returncode == 2 and "without a session's result" in p.stdout and "exit 4" in p.stdout, p.stdout + p.stderr

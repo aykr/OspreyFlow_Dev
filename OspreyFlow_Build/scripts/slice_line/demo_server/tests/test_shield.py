@@ -121,9 +121,11 @@ def test_spans_are_said_in_plain_words():
 
 def test_nothing_of_any_process_is_read_only_the_kernels_socket_lists():
     """The uid comes from /proc/net/tcp's own column; the runner opens no other process's /proc/<pid> (only its own
-    /proc/self/cgroup, and the system's port range under /proc/sys) and names no process."""
+    /proc/self/cgroup, the system's port range under /proc/sys, and the machine's free memory in /proc/meminfo, which
+    names no process: two stacks side by side start only with room for them) and names no process."""
     src = (DEMO / "runner.py").read_text()
-    assert set(re.findall(r"/proc/[a-z0-9%{]+", src)) == {"/proc/net", "/proc/self", "/proc/sys"}, re.findall(r"/proc/[a-z0-9%{]+", src)
+    assert set(re.findall(r"/proc/[a-z0-9%{]+", src)) == {"/proc/net", "/proc/self", "/proc/sys", "/proc/meminfo"}, \
+        re.findall(r"/proc/[a-z0-9%{]+", src)
     assert not re.search(r"cmdline|/comm\b|psutil|getpwuid|pwd\.", src)
 
 
