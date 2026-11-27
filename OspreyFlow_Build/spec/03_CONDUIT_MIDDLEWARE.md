@@ -143,8 +143,8 @@ A board is a view with `drawing` on, kept by the views store and never listed am
 views. What is drawn on it is written into the graph: into the case's analyst layer, or, in the home
 case of a drawn dataset, into that dataset (Amendment 3 decision 1); never into a source. Each drawn
 node and link carries `provenance.drawn` (`DrawnAssertion`: its board's item id, who asserted it, the
-board and the case, the analyst's label, a grading in the deployment's scheme, a source note, a
-document of the case, or both). The board's registry (`board_items`) holds ids and a link's ends
+board and the case, the analyst's label, a grading in the deployment's scheme, a source note, to
+which a document of the case may be added, never in its place: ADR-143 Amendment 8). The board's registry (`board_items`) holds ids and a link's ends
 only; every element is read through the caller's principal, scoped to the case's read set and
 filtered in the adapter (rule 3). Every route stands behind the case's level check first. Reading
 needs `investigate`; drawing needs Editor, `draw_on_boards` and `investigate` too (a role with
@@ -155,7 +155,14 @@ else reads (rule 3): a drawn element's source locator names no board, and every 
 adapter's serialisation and the working set's projection, through `withhold_sources`) gives its
 `provenance.drawn.board_id` empty to anyone but its author, who made the board. A shared board is
 found by the board routes, not by its items
-(`test_a_private_boards_id_is_on_no_other_members_canvas`, through the canvas's own `sync`). A *Same* or *Not
+(`test_a_private_boards_id_is_on_no_other_members_canvas`, through the canvas's own `sync`). By the
+same function, a drawn element's cited document is sent only to a reader who may read it when it is
+sent (ADR-143 Amendment 8; `01_DOMAIN_MODEL.md` §2.2d): the adapter makes one batched read for each
+read it answers, and the working set one for each frame, delta, catch-up, view and writer's answer,
+with the reader's own principal; given no result, every cited document is withheld. The working set
+stores and publishes the cited documents as stored, and each socket's projection decides for its own
+reader. Declaring and linking refuse a body with no source note (422); the check at promotion asks for
+a note, whoever asks. A *Same* or *Not
 the same* is registered on its board (`board_items` kind `match`), so it goes with its drawn node.
 
 ```
@@ -167,7 +174,7 @@ DELETE /v1/investigations/{id}/boards/{board}                 delete it; what wa
 POST   /v1/investigations/{id}/boards/{board}/items           declare a node (`DrawnItemInput`), with its watch; audited as draw_item
 POST   /v1/investigations/{id}/boards/{board}/links           draw a link between two items on the board, drawn or loaded (`DrawnLinkInput`); a loaded end is untouched; audited as draw_link
 PUT    /v1/investigations/{id}/boards/{board}/layout          move items (`BoardMove`): the board's own layout, not data
-PATCH  /v1/investigations/{id}/board-items/{item}             the author edits their own item (`DrawnItemEdit`), in place; a marking is never lowered (409 `marking_never_lowered`)
+PATCH  /v1/investigations/{id}/board-items/{item}             the author edits their own item (`DrawnItemEdit`), in place; a marking is never lowered (409 `marking_never_lowered`), and an edit that would leave the item with no source note is refused (422 `no_source`)
 POST   /v1/investigations/{id}/board-items/{item}/withdraw    the author withdraws their own item (`Withdrawn`): out of every read, never deleted; each drawn link and picture resting on it goes with it, those the caller may see named (`links`, `pictures`), one they may not see named only in the audit and counted nowhere, not even in `watches_ended`; audited before it is written
 GET    /v1/investigations/{id}/boards/{board}/matches         *Looks like a loaded item* (`MatchSuggestions`): `inferred`, acting on nothing
 POST   /v1/investigations/{id}/boards/{board}/matches         *Same* (one `SAME_AS`, score 1.0) or *Not the same* (one `NOT_SAME_AS`) in the layer (`MatchDecision`); no node is written

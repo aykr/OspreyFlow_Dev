@@ -1530,8 +1530,8 @@ class WorkingSetService:
             )
 
             seq = await self._store.next_seq(investigation_id)
-            delta = DeltaAdd(seq=seq, nodes=list(nodes), edges=[*edges, *returning])
-            await self._store.append_delta(investigation_id, delta)
+            stored = DeltaAdd(seq=seq, nodes=list(nodes), edges=[*edges, *returning])
+            await self._store.append_delta(investigation_id, stored)
         except BaseException:
             if empty_on_failure:
                 # A write of several chunks that stopped part-way: the case it was filling is
@@ -1539,6 +1539,9 @@ class WorkingSetService:
                 # a complete copy.
                 await self._store.clear(investigation_id)
             raise
+
+        # What is answered is the writer's own view of what was stored (ADR-143 Amendment 8).
+        delta = await self._writers_view(stored, {e.id for e in returning}, principal)
 
         # Step 3h: the reader's own clusters as nodes, or a resolution link, enter their view.
         clusters: DeltaReproject | None = None
@@ -1551,8 +1554,7 @@ class WorkingSetService:
                 clusters = DeltaReproject(
                     seq=delta.seq, reason=REASON_ENTRY, affected_cluster_ids=ids
                 )
-        answered = await self._writers_view(delta, {e.id for e in returning}, principal)
-        return ExpansionOutcome(delta=answered, clusters=clusters).holding(delta)
+        return ExpansionOutcome(delta=delta, clusters=clusters).holding(stored)
 
     async def current_membership(self, investigation_id: str) -> tuple[list[Node], list[Edge]]:
         """The full source-fidelity (unfiltered) membership — `app.py`'s
