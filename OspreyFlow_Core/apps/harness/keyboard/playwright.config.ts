@@ -74,6 +74,8 @@ const STUB_PYTHON = '#!/bin/sh\necho "stub $*"\n';
 export default defineConfig({
   testDir: ".",
   testMatch: /.*\.spec\.ts$/,
+  // A new folder for this run's keyboard proofs, shared by its workers (`apps/provedActions.ts`).
+  globalSetup: "../../provedActions.ts",
   timeout: 60_000,
   webServer: [
     {

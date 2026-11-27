@@ -6,7 +6,8 @@
 // SQL source sent with a file instead of its read.
 import { expect, test, type Page, type Route } from "@playwright/test";
 
-import { SOURCES_CONNECTORS_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
+import { SOURCES_CONNECTORS_ACTIONS } from "@ospreyflow/glass-shared";
+import { assertAllCovered, registerCovered } from "../../provedActions";
 
 const REGISTRY = "SOURCES_CONNECTORS_ACTIONS";
 const HARNESS = "/keyboard/sources-connectors-harness.html";

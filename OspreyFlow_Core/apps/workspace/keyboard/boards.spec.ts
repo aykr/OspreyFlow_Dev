@@ -11,7 +11,8 @@
 // 13 asks for, and they are tested so a gesture cannot silently stop working.
 import { expect, test, type Page } from "@playwright/test";
 
-import { BOARD_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
+import { BOARD_ACTIONS } from "@ospreyflow/glass-shared";
+import { assertAllCovered, registerCovered } from "../../provedActions";
 
 async function open(page: Page, query = ""): Promise<void> {
   await page.goto(`/keyboard/boards-harness.html${query}`);

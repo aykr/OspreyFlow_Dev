@@ -4,7 +4,8 @@
 // reminder above the other tabs opening *1 Model · n proposed*. No `page.mouse`, no `.click()`.
 import { expect, test, type Page } from "@playwright/test";
 
-import { NEEDS_YOU_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
+import { NEEDS_YOU_ACTIONS } from "@ospreyflow/glass-shared";
+import { assertAllCovered, registerCovered } from "../../provedActions";
 
 const REGISTRY = "NEEDS_YOU_ACTIONS";
 const HARNESS = "/keyboard/needs-you-harness.html";

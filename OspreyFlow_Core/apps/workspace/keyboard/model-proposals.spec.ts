@@ -5,7 +5,8 @@
 // No `page.mouse`, no `.click()`.
 import { expect, test, type Page } from "@playwright/test";
 
-import { MODEL_PROPOSALS_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
+import { MODEL_PROPOSALS_ACTIONS } from "@ospreyflow/glass-shared";
+import { assertAllCovered, registerCovered } from "../../provedActions";
 
 const REGISTRY = "MODEL_PROPOSALS_ACTIONS";
 

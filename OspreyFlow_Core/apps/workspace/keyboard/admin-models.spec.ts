@@ -5,7 +5,8 @@ import { randomBytes } from "node:crypto";
 
 import { expect, test, type Page } from "@playwright/test";
 
-import { MODELS_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
+import { MODELS_ACTIONS } from "@ospreyflow/glass-shared";
+import { assertAllCovered, registerCovered } from "../../provedActions";
 
 const REGISTRY = "MODELS_ACTIONS";
 // The owner's rules for keys: synthetic, and made at run time, never written in a file. The harness

@@ -14,7 +14,8 @@
 import { expect, test } from "@playwright/test";
 
 import { layoutSettled } from "./layoutSettled";
-import { assertAllCovered, METRICS_PANEL_ACTIONS, registerCovered } from "@ospreyflow/glass-shared";
+import { METRICS_PANEL_ACTIONS } from "@ospreyflow/glass-shared";
+import { assertAllCovered, registerCovered } from "../../provedActions";
 
 declare global {
   interface Window {

@@ -5,7 +5,8 @@
 // `.click()`. Each action proves its effect reached the server. Synthetic data only (rule 9).
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
-import { CHECKS_ON_LOAD_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
+import { CHECKS_ON_LOAD_ACTIONS } from "@ospreyflow/glass-shared";
+import { assertAllCovered, registerCovered } from "../../provedActions";
 
 const REGISTRY = "CHECKS_ON_LOAD_ACTIONS";
 
