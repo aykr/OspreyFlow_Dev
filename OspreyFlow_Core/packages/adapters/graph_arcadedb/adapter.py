@@ -1259,9 +1259,7 @@ class GraphArcadeDBAdapter:
         edge_records = await self._client.gremlin(
             builder.render_edges_gremlin(self._access, principal)
         )
-        documents = await self._cited_for(
-            [*seed_records, *node_records, *edge_records], principal
-        )
+        documents = await self._cited_for([*seed_records, *node_records, *edge_records], principal)
         nodes_by_id = {
             r["id"]: node_from_element_map(r, principal, documents)
             for r in (*seed_records, *node_records)
@@ -1295,9 +1293,7 @@ class GraphArcadeDBAdapter:
         for chunk in _id_chunks(sorted(wanted)):
             rids = await self._record_ids(types, chunk)
             query = render_edges_among_gremlin(rids, self._access, principal, edge_types)
-            records += [
-                row["e"] for row in await self._client.gremlin(query) if row["t"] in wanted
-            ]
+            records += [row["e"] for row in await self._client.gremlin(query) if row["t"] in wanted]
         documents = await self._cited_for(records, principal)
         return [edge_from_element_map(record, principal, documents) for record in records]
 
