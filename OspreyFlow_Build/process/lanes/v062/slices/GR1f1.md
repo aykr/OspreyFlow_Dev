@@ -129,3 +129,10 @@ GR1a's list, with the workspace's `CaseDomains` test for the moved sentence.
 Any change (GR1f2, GR1f3); the access history (question 7); the administrator's safety net (an administrator holding no
 level cannot open the case's page, since `GET /v1/investigations/{id}` is Viewer-gated: the Admin area's); any Conduit
 change; the Default tree's twin.
+
+
+## The owner's answers (the owner's answers of 27 November 2026, after 09:40 UTC; RULINGS.md)
+
+1. **Q8 (a) for the page.** The two Author-only reads stay as the Conduit serves them today. A separate Conduit security part, **SE9h**, audits them before RL2. This page does not wait for it.
+
+Every other question in this draft stays (a) on the owner's standing word.

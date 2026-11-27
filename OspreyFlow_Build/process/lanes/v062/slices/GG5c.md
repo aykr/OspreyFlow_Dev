@@ -133,3 +133,12 @@ GG5b's list, with the analytics conformance suite on both adapters (question 2's
 
 The cross-filter across panels (GG4i); the timeline (GG3c); the boundary filter (GG5d); the site plan's own image and
 grid (GG5e1); the graph drawn over the map (GG5f); any Conduit change (question 3 (b) would be an amendment).
+
+
+## The owner's answers (the owner's answers of 27 November 2026, after 09:40 UTC; RULINGS.md)
+
+1. **Q2 (a): the conformance case comes first, on both analytics adapters** (DuckDB and ClickHouse): a visible event whose end the reader may not read. Write it before any page code.
+   - **If it is red on either adapter, stop the slice and say so.** The fix is a Vault security part, **never a page filter.**
+   - If it is green on both, build the page.
+
+Every other question in this draft stays (a) on the owner's standing word.

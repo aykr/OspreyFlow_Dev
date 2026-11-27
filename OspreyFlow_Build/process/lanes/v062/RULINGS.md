@@ -3,6 +3,22 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 27 November 2026, after 09:40 UTC: the overnight drafts' owner questions answered (the owner, in chat, all as the build adviser recommended)
+
+1. **GR1f1 Q8 (a)** for the page. **Cut a Conduit security part before RL2** that audits the access and datasets reads (SE9h).
+2. **GG3e Q3 (a):** the file is streamed through the forwarder's own translation, in one shared function. The anti-forgery and forwarder tests stay unchanged, and stay green with plants.
+3. **GG3e Q5b (a)** for the page. **Cut a Conduit part before RL2** that stores the legal basis on the Document, with its amendment as a diff (SE9i).
+4. **GG4f2 Q3b (a): a Conduit security part first** (SE9g). `choose_picture` refuses, and `picture_file` answers as none, any Document whose reference is not one of the four image types. Red first. **GG4f2 waits for it.**
+5. **GG4f3 Q8b:** the page never names the deployment's highest marking. It says "above the highest marking this deployment holds", permanently.
+6. **GG5c Q2 (a):** the conformance case comes first, on both adapters. **If it is red, stop:** the fix is a Vault security part, never a page filter.
+7. **GG5e1:**
+   - **Q1 (a):** its own page route, with the right checked before any byte and the page service's cap. No forwarder widening.
+   - **Q2 (a):** `GET /v1/investigations/{id}/sites` comes as an amendment diff for the owner's approval, with the access case first.
+   - **Q3 (a):** built as the routes are. **Cut a Conduit security part before RL2** giving a site a marking (SE9j).
+8. **GG5e2 Q1 (a):** turn to the plan, north up, turn by 15 degrees, tilt 0, 30, 60 and flat. Written into `spec/02` §3.5 first.
+9. **GG2g Q8 (a):** drawn items are read-only on the canvas, and *Edit on board* is offered only to the item's author. The ADR-143 C15 amendment comes as a diff.
+10. **Everything else in those drafts stays standing (a).**
+
 ## 27 November 2026, about 09:40 UTC: WS4b's order and its two speed items (the owner, in chat)
 
 The plan and order are agreed: **the GG2c, WS4a, SE8g train, then WS4b.** Two speed items are planned inside WS4b, **never accepted narrower:**

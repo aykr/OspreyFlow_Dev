@@ -144,3 +144,11 @@ GG3b's list, with `apps/pages/test/server/forward.test.ts` and the anti-forgery 
 A holder (GG3d1's node, later); several files at once; designations and extraction; a list of the case's documents (no
 route: an amendment); where the legal basis is kept (a Conduit question for the owner); any Conduit change;
 `apps/workspace`.
+
+
+## The owner's answers (the owner's answers of 27 November 2026, after 09:40 UTC; RULINGS.md)
+
+1. **Q3 (a):** the file is streamed through the forwarder's own translation, in **one shared function**. The anti-forgery tests and the forwarder's tests stay **unchanged**, and stay green with their plants. Name each test you run in your report.
+2. **Q5b (a) for the page:** the legal basis is sent as the route takes it today. A separate Conduit part, **SE9i**, stores it on the Document before RL2. This page does not wait for it.
+
+Every other question in this draft stays (a) on the owner's standing word.

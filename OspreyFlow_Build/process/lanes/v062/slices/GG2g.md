@@ -179,3 +179,10 @@ GG2e's list; for GG2g3 also the React workspace's whole suite and its budget (I1
 
 The ids of question 6; a marker drawn on a marked node; storing positions; the inspector (GG3d); any Conduit change;
 `apps/workspace` beyond GG2g3's move.
+
+
+## The owner's answers (the owner's answers of 27 November 2026, after 09:40 UTC; RULINGS.md)
+
+1. **Q8 (a) (GG2g4):** drawn items are read-only on the canvas. *Edit on board* is offered only to the item's author. **The ADR-143 C15 amendment is written as a diff for the owner's approval** (`process/lanes/v062/GG2G4_ADR143_C15.diff`). **GG2g4 does not merge before that approval.**
+
+Every other question in this draft stays (a) on the owner's standing word.

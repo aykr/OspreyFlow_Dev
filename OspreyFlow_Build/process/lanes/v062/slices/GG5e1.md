@@ -141,3 +141,12 @@ functions checks, and, for question 2 (a), the Conduit's access tests for sites.
 
 Rotation and pitch (GG5e2); the heat and hotspot cells over a plan (GG5c reads them); deleting or re-calibrating a site
 (no route); a site's marking (question 3); the workspace's missing keyboard route for its wizard.
+
+
+## The owner's answers (the owner's answers of 27 November 2026, after 09:40 UTC; RULINGS.md)
+
+1. **Q1 (a):** the upload goes through the page's own route. The right is checked **before any byte is read**, under the page service's own size cap. **No forwarder widening.**
+2. **Q2 (a):** `GET /v1/investigations/{id}/sites` is written **as an amendment diff for the owner's approval**, with its access-control case first. **Round 1 writes the diff `process/lanes/v062/GG5E1_SITES_ROUTE.diff` and that access case, then stops: "STOP: GG5e1's sites route amendment waits for the owner's approval."** The route and the page follow in round 2.
+3. **Q3 (a):** sites are built as the routes are today. A separate Conduit security part, **SE9j**, gives a site a marking before RL2.
+
+Every other question in this draft stays (a) on the owner's standing word.

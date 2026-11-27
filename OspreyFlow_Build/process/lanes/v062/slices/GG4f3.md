@@ -132,3 +132,10 @@ GG4c's list.
 
 Review, approval, rejection and revert (the Studio's *Analyst promotions*, `studio-runs-promotions`); a drawn dataset's
 merge (`studio-runs-drawn-merge`); any Conduit change; `apps/workspace`.
+
+
+## The owner's answers (the owner's answers of 27 November 2026, after 09:40 UTC; RULINGS.md)
+
+1. **Q8b:** the page **never names the deployment's highest marking.** Wherever the ceiling's refusal is said, the page says **"above the highest marking this deployment holds"**, permanently. A test shows that no marking's name appears in that sentence; plant the name to show it red.
+
+Every other question in this draft stays (a) on the owner's standing word.

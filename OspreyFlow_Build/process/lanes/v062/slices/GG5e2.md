@@ -96,3 +96,10 @@ GG5e1's list.
 
 Rotation in the React workspace (no row asks for it there); turning the graph layer (it cannot: GG5f); a stored bearing
 for a site (the view's, never the site's); any Conduit change.
+
+
+## The owner's answers (the owner's answers of 27 November 2026, after 09:40 UTC; RULINGS.md)
+
+1. **Q1 (a):** the controls are: turn to the plan, north up, turn by 15 degrees, and tilt at 0, 30, 60 and flat. **Write them into `spec/02` §3.5 first**, as their own commit, then build them.
+
+Every other question in this draft stays (a) on the owner's standing word.

@@ -137,3 +137,10 @@ GG4c's list, and the page service's own `test/server` suite (`conduit.ts` change
 
 Icons (C17 c, with GG4e's module); a picture of a loaded node (ADR-105's own route, `app.py:7970`); face matching (never:
 rule 5); any Conduit change; `apps/workspace`.
+
+
+## The owner's answers (the owner's answers of 27 November 2026, after 09:40 UTC; RULINGS.md)
+
+1. **Q3b (a): this slice waits for SE9g.** That is a Conduit security part, red first: `choose_picture` refuses, and `picture_file` answers as none, any Document whose reference is not one of the four image types. Build on SE9g's merged behaviour. Do not repeat its check in the page.
+
+Every other question in this draft stays (a) on the owner's standing word.
