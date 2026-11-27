@@ -3,6 +3,62 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 27 November 2026, about 09:40 UTC: WS4b's order and its two speed items (the owner, in chat)
+
+The plan and order are agreed: **the GG2c, WS4a, SE8g train, then WS4b.** Two speed items are planned inside WS4b, **never accepted narrower:**
+
+1. **The sweep** (3.5 to 3.8 s against 3 s on the server):
+   - Round 1 measures it again with picking ratio 4.
+   - The budget is judged on CI's runner (three runs) and on the owner's Mac once (D280 Q6).
+   - After round 1, the conductor gives the owner CI's figures, and the owner runs the Mac measurement.
+2. **`community-links.spec.ts` is still red:** if it is still red after round 1, **round 2 takes it** (WS4b-perf Q8).
+3. **If the sweep still misses on CI after ratio 4, stop** and bring the owner the figures, with WS4c (ADR-119's lever) as the option. **No gate changes.**
+
+## 27 November 2026, after 09:17 UTC: WS4b's look accepted (D286; the owner, in chat)
+
+1. **The look is accepted as now drawn on `away/WS4b-look`:** the export carries every link; link labels are written beside the line as Sigma 3 did; everything else is Sigma 4's own drawing.
+2. **WS4b comes into the line when WS4b-speed's report has its Q6 figures.** Its round 1 merges `away/WS4b`, `away/WS4b-perf`, `away/WS4b-look` and `away/WS4b-speed`.
+3. **In that slice:**
+   - **The canvas-look references** are remade on this look with WS4a's command, under the reason "Sigma 4's look, accepted by the owner on 27 November 2026".
+   - **The ADR-152 decision 9 amendment and the WebGL 2 requirement (D280 Q2)** are written as diffs for the owner's approval **before it merges.**
+4. **Q3:** `pickingDownSizingRatio` is set to **4**. WS4b-speed's measurement found it better at pointing than 2, and faster. It needs a test on the smallest node at its edge.
+
+## 27 November 2026, after 09:15 UTC: server done (the owner, in chat)
+
+1. **The server's early warning now runs hand-back 64** (`bafa9544`: timing budgets are left to the Mac).
+   - It runs with `capacity.json` option D: 4 jobs, 300%, 10G, 3 workers, and two stacks within 4 jobs.
+   - The slice cap is 1200% and 40G.
+   - The build account's runner is `6bec54ee`, the seat-start fix.
+2. **The 09:01 stack (GG5a, GG4c, SE9d) was stopped by the owner** with no verdict, and is sent again.
+3. **From now on:**
+   - Send stacks that merge cleanly together.
+   - Land each server-green stack as one train.
+   - Run a second stack beside the first when the parts fit within 4 jobs.
+4. **Report:** parts landed per gate, and any server run ended for memory.
+
+## 27 November 2026, about 09:20 UTC: GR1b's numbers, GG4b may merge, the server (the owner, in chat)
+
+1. **GR1b: (a).**
+   - Its scenario rows CS16 to CS33 become CS27 to CS44; main keeps CS16 to CS26.
+   - The owner's refreeze line is in, for `cases-new.test.ts`'s renumbering alone, with a second send-back line.
+   - The line fault (a builder ending on a question was read as green) goes to line-fix.
+2. **GG4b:** the builder's three spec edits stay, since they restate what the owner approved:
+   - `01_DOMAIN_MODEL.md` §2.2d;
+   - `03_CONDUIT_MIDDLEWARE.md`, the PATCH 422 `no_source` and the withholding rule;
+   - `08_ACCEPTANCE_SCENARIOS.md` BD3 and BD11.
+   - **GG4b may merge. "Never accepted narrower" still holds.**
+3. **The server:** the owner reinstalls its early warning for 64 as soon as it is free. When the stack now running ends, **no new server stack is sent until the owner says "server done"** (about 15 minutes). Single merges on the Mac go on meanwhile. The conductor tells the owner when the server is free.
+
+## 27 November 2026, after 06:40 UTC: GR1b; rule 5 widened to any file (the owner, in chat)
+
+1. **GR1b:** the owner's send-back line is in. It is used **only after GR1e lands**, for GR1b to take main in (the case page's own code). One round; its verifier then checks it again.
+2. **Rule 5, widened from now until RL2:** a verified part that conflicts with main **only because another part merged first** may go back to take main in **on the conductor's own word**.
+   - One round, any file.
+   - No round is counted against it, if it is under its limit.
+   - Its verifier checks it again, and the full gate runs.
+   - **If that round's verifier finds anything beyond taking main in, or the part is at its round limit, it goes to the owner.**
+   - Each use is listed in the report.
+
 ## 27 November 2026, about 06:35 UTC: stacks that merge together, and trains (the owner, in chat)
 
 Since the train was switched on (26 November, 17:06), every merge has been single, and 12 verified parts are queued. From now:
