@@ -521,7 +521,6 @@ export function BoardEditor({ apiBaseUrl, bearerToken, caseId, boardId, entityTy
               onSave={async (form) => {
                 const itemId = opened.items?.[panel.id];
                 if (!itemId) return "This item cannot be edited here.";
-                // A note left empty is not sent: an item sourced by a document alone keeps no "" note.
                 // A grade left as it was is not sent (ADR-143 Amendment 6): an item graded before a
                 // change of scheme stays editable, and keeps its grade, until the change reaches it.
                 const was = byId.get(panel.id)?.provenance.drawn?.grading;
@@ -529,7 +528,7 @@ export function BoardEditor({ apiBaseUrl, bearerToken, caseId, boardId, entityTy
                 const answer = await editItem(apiBaseUrl, bearerToken, caseId, itemId, {
                   ...form,
                   grading: sameGrade ? undefined : form.grading,
-                  sourceNote: form.sourceNote.trim() ? form.sourceNote : undefined,
+                  sourceNote: form.sourceNote,
                   icon: form.icon || undefined,
                 });
                 if (!answer.ok) return answer.message;
@@ -827,8 +826,9 @@ interface AssertedForm {
   icon: string;
 }
 
-const NO_SOURCE = "Give a source note or choose a document of the case: where this comes from.";
-const hasSource = (form: AssertedForm) => Boolean(form.sourceNote.trim() || form.sourceDocument);
+// ADR-143 Amendment 8 item 7: a source note, to which a document of the case may be added, never in its place.
+const NO_SOURCE_NOTE = "Give a source note: where this comes from. A document of the case may be added to it.";
+const hasSourceNote = (form: AssertedForm) => Boolean(form.sourceNote.trim());
 
 function GradingFields({ grading, scheme, govuk, onChange, idPrefix }: { grading: Grading; scheme: string; govuk: boolean; onChange: (g: Grading) => void; idPrefix: string }) {
   const parts = gradesOf(scheme) ?? NO_GRADES;
@@ -1064,7 +1064,7 @@ function ItemForm({
       onCancel={onCancel}
       onSubmit={() => {
         if (!form.label.trim()) return setProblem("Say what you call it.");
-        if (!hasSource(form)) return setProblem(NO_SOURCE);
+        if (!hasSourceNote(form)) return setProblem(NO_SOURCE_NOTE);
         const missing = required.filter((p) => !form.properties[p.name]?.trim());
         if (missing.length) return setProblem(`A ${type} needs its ${missing.map((p) => p.name.replaceAll("_", " ")).join(" and ")}.`);
         void onSave(form).then((refused) => setProblem(refused));
@@ -1158,7 +1158,7 @@ function LinkForm({
       onSubmit={() => {
         if (!target) return setProblem("Choose the item it links to.");
         if (!type) return setProblem("Choose what links them.");
-        if (!hasSource(form)) return setProblem(NO_SOURCE);
+        if (!hasSourceNote(form)) return setProblem(NO_SOURCE_NOTE);
         const label = form.label.trim() || type.toLowerCase().replaceAll("_", " ");
         void onSave({ ...form, label, type, target }).then((refused) => setProblem(refused));
       }}
@@ -1238,7 +1238,9 @@ function Inspector({
         ["Drawn by", assertion.asserted_by],
         ["Grading", `${assertion.grading.source}${assertion.grading.intelligence}${assertion.grading.handling} (${assertion.grading.scheme ?? "5x5x5"})`],
         ["Marking", node.handling.classification],
-        ["Source note", assertion.source_note ?? "None: a document of the case"],
+        // An empty note is said in these words for every drawn item. It says nothing of a document: a reader who may not read one is
+        // sent the item without it (ADR-143 Amendment 8 item 8).
+        ["Source note", assertion.source_note?.trim() ? assertion.source_note : "No source note was given"],
         ...(assertion.source_document
           ? ([["Source document", sourceDocument ? itemLabel(sourceDocument) : "A document of the case"]] as [string, string][])
           : []),
