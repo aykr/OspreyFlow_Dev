@@ -328,3 +328,26 @@ ADR diff's). The slice's brief lets it merge without them.
 **Unchanged:** `server/headers.ts` (answer 3 (a)). Not in this slice: rotation and pitch (GG5b's own decision). A GG5b that
 draws graph layers through Sigma waits for the Sigma 4 proof (ADR-152 decision 9; the workspace still pins `sigma ^3.0.0`).
 
+### A red from this Mac's ports, not from the slice (27 November 2026, UTC)
+
+The Stop hook's checks went red once: 5 failures in `npm test --workspace apps/pages`, all `EADDRNOTAVAIL` on
+`127.0.0.1` (`connect` and `listen`). The same suite had passed 1,086 of 1,086 twice earlier in the session.
+
+**Reproduced by running the suite three times back to back (from 03:56:34):**
+
+| Run | `TIME_WAIT` sockets before | Result | `TIME_WAIT` sockets after |
+| --- | --- | --- | --- |
+| 1 | 22 (counted 6 s before) | 1,086 passed | 9,897 |
+| 2 | run 1's | 21 failed, `EADDRNOTAVAIL` | 19,416 |
+| 3 | runs 1 and 2's | 83 failed, `EADDRNOTAVAIL` | 8,374 |
+
+The Mac has 16,384 ephemeral ports (49152 to 65535) and `net.inet.tcp.msl` is 15,000 ms, so a closed connection holds
+its port for about 30 s. One run leaves nearly 10,000. A second run, or another job that opens many connections, within
+that time can use them up; the tests that fail change from run to run. What else was using ports when the Stop hook ran
+was not seen. At 03:57:57, from 1,395 `TIME_WAIT` sockets, every frozen check passed in order (1,086 of 1,086;
+`licence-check` clean).
+
+The slice changes no server code and no test that Vitest runs. Nothing was retried, skipped or loosened. **For the
+conductor:** two runs of the pages' server tests close together on one Mac (two seats, or a seat beside a merge's gate)
+can go red like this. Whether that gets a backlog row is the conductor's call.
+
