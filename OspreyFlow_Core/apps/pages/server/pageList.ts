@@ -9,7 +9,7 @@
  * (`OSPREY_PAGES_TREE`). Help (slice GR2a) is the first page of the GOV.UK tree, and has no Default twin yet; the Admin People list
  * (slice AD3a) is the second, the first section of the `admin` row; the alert monitoring figures (slice GR3a) are its third; trends shown
  * together (slice GR4a) is the fourth, the page of its own row, `reports-trends-shown-together`; the reader's cases and one case's page
- * (slice GR1a) are the fifth, the first part of the `cases-and-views` row.
+ * (slice GR1a) are the fifth, the first part of the `cases-and-views` row; New case (slice GR1b) is a form on that page.
  * `tree-govuk/routes.yaml` lists the paths of the pages that name `govuk`, and `test/govuk/help.test.ts` holds the two in step.
  */
 import type { PageModule } from "./pages.js";

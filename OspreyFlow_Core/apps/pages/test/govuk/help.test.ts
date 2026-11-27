@@ -558,7 +558,7 @@ describe("the route list", () => {
       ["admin", "/admin/people", ["GET"]],
       ["reports-figures", "/reports", ["GET"]],
       ["reports-trends-shown-together", "/packs/trends", ["GET"]],
-      ["cases-and-views", "/cases", ["GET"]],
+      ["cases-and-views", "/cases", ["GET", "POST"]],
     ]);
   });
 });

@@ -1,12 +1,29 @@
-{#- The reader's cases and one case's page with its brief (slice GR1a; scenario CS), read-only, drawn on the server and complete without a
-    script. The list is a table with a caption, column headers (th, scope col) and a row header for each case holding its name as a link;
-    a case's page is its facts as a description list and its brief as headings and an ordered list. Nothing here is a form, a button or a
-    control, and nothing counts: the page draws what it is given, in the order given. The words are `server/views/casesWords.ts`'s. -#}
+{#- The reader's cases and one case's page with its brief (slice GR1a), and New case (slice GR1b; scenario CS), drawn on the server and
+    complete without a script. The list is a table with a caption, column headers (th, scope col) and a row header for each case holding
+    its name as a link; a case's page is its facts as a description list and its brief as headings and an ordered list. Neither holds a
+    form or a control: *New case* is a link drawn as a button, offered where the handler says so, and its form is `new-case.njk`. A case
+    just made says so in a notification banner, marked up as the GOV.UK Design System marks it up. Nothing counts: the page draws what
+    it is given, in the order given. The words are `server/views/casesWords.ts`'s. -#}
 {% extends "layout.njk" %}
+{#- *New case* on the list, or why it is not offered when that could not be read. -#}
+{% macro newCaseOffer(offered, unread, href, words) %}
+{% if offered %}
+<p><a class="btn btn--primary" href="{{ href }}">{{ words.newCase }}</a></p>
+{% elif unread %}
+<p>{{ words.rightsUnread }}</p>
+{% endif %}
+{% endmacro %}
 {% block content %}
+{% if made %}
+<div class="govuk-notification-banner govuk-notification-banner--success" role="alert" aria-labelledby="cases-banner-title">
+<div class="govuk-notification-banner__header"><h2 class="govuk-notification-banner__title" id="cases-banner-title">{{ words.bannerTitle }}</h2></div>
+<div class="govuk-notification-banner__content"><p class="govuk-notification-banner__heading">{{ words.caseMade }}</p>{% if made.studio %}<p><a href="{{ made.studio }}">{{ words.openStudio }}</a></p>{% endif %}</div>
+</div>
+{% endif %}
 {% if view.kind == "table" %}
 <h1>{{ words.listTitle }}</h1>
 <p>{{ words.lede }}</p>
+{{ newCaseOffer(offerNewCase, rightsUnread, newCaseHref, words) }}
 <table class="table">
 <caption class="caption">{{ words.caption }}</caption>
 <thead>
@@ -21,6 +38,7 @@
 {% elif view.kind == "empty" %}
 <h1>{{ words.listTitle }}</h1>
 <p>{{ words.noCases }}</p>
+{{ newCaseOffer(offerNewCase, rightsUnread, newCaseHref, words) }}
 <p><a href="/">{{ words.back }}</a></p>
 {% elif view.kind == "case" %}
 <h1>{{ view.name }}</h1>
@@ -46,6 +64,22 @@
 <p>{{ words.noRequirements }}</p>
 {% endif %}
 {% endif %}
+<p><a href="/cases">{{ words.toCases }}</a></p>
+<p><a href="/">{{ words.back }}</a></p>
+{% elif view.kind == "new" %}
+{% include "new-case.njk" %}
+{% elif view.kind == "cannot" %}
+<h1>{{ words.cannot }}</h1>
+<p><a href="/cases">{{ words.toCases }}</a></p>
+<p><a href="/">{{ words.back }}</a></p>
+{% elif view.kind == "not-made" %}
+<h1>{{ title }}</h1>
+<p role="alert">{{ words.notMade }}</p>
+<p><a href="/cases">{{ words.toCases }}</a></p>
+<p><a href="/">{{ words.back }}</a></p>
+{% elif view.kind == "unreadable-form" %}
+<h1>{{ title }}</h1>
+<p role="alert">{{ words.formUnreadable }}</p>
 <p><a href="/cases">{{ words.toCases }}</a></p>
 <p><a href="/">{{ words.back }}</a></p>
 {% elif view.kind == "ended" %}
