@@ -283,7 +283,8 @@ NOT_EXPORTS: dict[str, str] = {
     # Images and held files shown in the Glass, read by someone who can read the case.
     "document_file_route": "a held document's file shown in the document reader to someone who "
     "can see the document in the case: an access, audited per read (`read_document_file`), not "
-    "an artefact with a mark leaving through the export gate. Weighed in the owner's report",
+    "an artefact with a mark leaving through the export gate. A PDF's attachment header keeps it "
+    "out of the page (GG3b): the same bytes, the same access. Weighed in the owner's report",
     "entity_picture_file_route": "a person's picture drawn on the canvas, an access audited per "
     "read (`read_entity_picture`); the picture is part of the case's own view",
     "board_picture_file": "a picture drawn on the analyst's own board, shown on it; part of the "
