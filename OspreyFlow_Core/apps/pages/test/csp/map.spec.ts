@@ -105,7 +105,8 @@ function isNetwork(url: string): boolean {
   return !url.startsWith("data:") && !url.startsWith("blob:") && !url.startsWith("about:");
 }
 
-async function openMap(page: Page, browser: string, request: PageRequest): Promise<Run> {
+/** `whileDrawing` is a plant's way to make the page do something while the picture is being read. */
+async function openMap(page: Page, browser: string, request: PageRequest, whileDrawing?: () => Promise<void>): Promise<Run> {
   const servedBefore = server.served.length;
   const elsewhereBefore = server.reachedElsewhere.length;
   const policiesBefore = server.policies.length;
@@ -169,6 +170,7 @@ async function openMap(page: Page, browser: string, request: PageRequest): Promi
   }
   // The picture, read until every layer shows or the time is up, as GG6's spec also polls.
   phase = "screenshot";
+  await whileDrawing?.();
   let drawn = { water: 0, landcover: 0, raster: 0 };
   if (state.idle) {
     const until = Date.now() + DRAWN_MS;
@@ -556,6 +558,34 @@ test("planted: a page that adds a <style> element while it loads: refused and co
   if (browserName === "webkit") {
     expect(failures(run)).toContainEqual(expect.stringMatching(/^refused, on the console: \[load, document\] Refused to apply a stylesheet because its hash, its nonce, or 'unsafe-inline'/));
   }
+});
+
+for (const [unheaded, caseName, named] of [
+  ["page", "the page's own route", "the page was served with no policy"],
+  ["worker", "the worker's asset route", "the worker's script was served with no policy"],
+] as const) {
+  test(`planted: ${caseName} mounted ahead of the security headers: the map draws with no policy there, and that is named`, async ({ page, browserName }) => {
+    // The map notices nothing, and a policy sent that equals the builder's own is also true of none and none.
+    const run = await openMap(page, browserName, { ...FULL, unheaded });
+    record(`${unheaded} unheaded`, run);
+    const missing = unheaded === "page" ? [run.policy] : run.workerPolicies;
+    expect(missing.length).toBeGreaterThan(0);
+    for (const m of missing) expect(m, "the plant reached the browser").toMatchObject({ builder: "", sent: "" });
+    expect([...new Set(failures(run))]).toEqual([named]);
+  });
+}
+
+test("planted: a request refused while the picture is being read: its violation event still counts", async ({ page, browserName }) => {
+  // The picture can take seconds to read, and a map goes on asking for things: (a) is every event, not those before it.
+  const late = `${server.elsewhere}/late`;
+  const run = await openMap(page, browserName, FULL, () =>
+    page.evaluate(async (url) => {
+      await fetch(url).catch(() => undefined);
+    }, late),
+  );
+  record("refused while drawing", run);
+  expect(failures(run)).toContain(`policy violation: connect-src refused ${late} in the document`);
+  expect(run.reachedElsewhere).toEqual([]);
 });
 
 // --------------------------------------------------------------------------------------------- the directive table

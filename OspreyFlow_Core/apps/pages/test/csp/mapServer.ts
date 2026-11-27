@@ -75,6 +75,8 @@ export interface PageRequest {
   plant?: PolicyPlant;
   /** Where the plant applies: every response while the page is open (the default), or the page's own response alone. */
   plantScope?: "all" | "page";
+  /** A planted fault (rule 15): the page's route, or the worker's asset route, mounted ahead of the security headers. */
+  unheaded?: "page" | "worker";
 }
 
 export interface Served {
@@ -93,7 +95,8 @@ export interface MapServer {
   served: Served[];
   /** Every request that reached the other origin, in order: each one left the page's own origin. */
   reachedElsewhere: Served[];
-  /** For each page served, the policy the builder made for it and the policy that went out (they differ only under a plant). */
+  /** For each page served, the policy the builder made for it and the policy that went out (they differ only under a plant; both
+   * are empty for a response that never passed the headers). */
   policies: { builder: string; sent: string }[];
   /** The same for every response that served MapLibre's worker file: a dedicated worker obeys its own script's policy. */
   workerPolicies: { builder: string; sent: string }[];
@@ -263,6 +266,9 @@ async function buildAssets(): Promise<Assets> {
   return { dir, module, stylesheet, worker, workerBytes };
 }
 
+/** A request for MapLibre's worker file, under its content-hashed name. */
+const WORKER_FILE = /\/maplibre-gl-worker-[A-Z0-9]{8}\.js$/;
+
 // -------------------------------------------------------------------------------------------------------------- the servers
 
 function listen(app: express.Express): Promise<{ server: Server; origin: string }> {
@@ -340,34 +346,20 @@ export async function startMapServer(): Promise<MapServer> {
   app.disable("x-powered-by");
   app.disable("etag");
   app.use((req, res, next) => {
-    res.on("finish", () =>
-      served.push({ method: req.method, path: req.originalUrl, ...(req.get("range") ? { range: req.get("range")! } : {}), status: res.statusCode }),
-    );
-    next();
-  });
-  // The real policy, first, as `server/app.ts:223` mounts it.
-  app.use(securityHeaders());
-  // A plant, if the page open now names one: applied to the builder's own output, after the builder, before anything is sent,
-  // on every response while that page is open (the spec runs one page at a time). Every response, not only the page's: a
-  // dedicated worker is governed by the policy on its own script's response, not by its page's (measured: with `connect-src`
-  // widened on the page alone, both browsers still refuse the worker's outside tile under the worker's own policy).
-  app.use((req, res, next) => {
     const key = typeof req.query["page"] === "string" ? req.query["page"] : undefined;
     if (req.path === "/map") current = key === undefined ? undefined : requests.get(key);
-    const pageRequest = current;
-    const builder = String(res.getHeader("Content-Security-Policy") ?? "");
-    if (pageRequest?.plant && (pageRequest.plantScope !== "page" || req.path === "/map")) {
-      res.setHeader("Content-Security-Policy", pageRequest.plant(builder, origins));
-    }
-    const sent = String(res.getHeader("Content-Security-Policy") ?? "");
-    if (req.path === "/map") policies.push({ builder, sent });
-    if (/\/maplibre-gl-worker-[A-Z0-9]{8}\.js$/.test(req.path)) workerPolicies.push({ builder, sent });
+    const path = req.path;
+    res.on("finish", () => {
+      served.push({ method: req.method, path: req.originalUrl, ...(req.get("range") ? { range: req.get("range")! } : {}), status: res.statusCode });
+      // The policy each response went out with, read from the response itself: one that never passed the headers has none.
+      const record = { builder: String(res.locals["builderPolicy"] ?? ""), sent: String(res.getHeader("Content-Security-Policy") ?? "") };
+      if (path === "/map") policies.push(record);
+      if (WORKER_FILE.test(path)) workerPolicies.push(record);
+    });
     next();
   });
-  // The real assets handler, after the headers, as `server/app.ts:227` mounts it.
-  app.use(ASSETS_PREFIX, assetsHandler(assets.dir));
 
-  app.get("/map", (req, res) => {
+  const mapPage: RequestHandler = (req, res) => {
     const key = String(req.query["page"] ?? "");
     const pageRequest = current;
     if (!pageRequest) {
@@ -397,7 +389,33 @@ export async function startMapServer(): Promise<MapServer> {
 </body>
 </html>
 `);
+  };
+  const assetsRoute = assetsHandler(assets.dir);
+
+  // Planted faults (rule 15), the shape a mis-ordered `app.use` in `server/app.ts` takes: a route mounted ahead of the security
+  // headers answers with no policy at all. Each passes straight on unless the page open now asks for it.
+  app.get("/map", (req, res, next) => (current?.unheaded === "page" ? mapPage(req, res, next) : next()));
+  app.use(ASSETS_PREFIX, (req, res, next) => (current?.unheaded === "worker" && WORKER_FILE.test(req.path) ? assetsRoute(req, res, next) : next()));
+
+  // The real policy, ahead of every other route, as `server/app.ts:223` mounts it.
+  app.use(securityHeaders());
+  // A plant, if the page open now names one: applied to the builder's own output, after the builder, before anything is sent,
+  // on every response while that page is open (the spec runs one page at a time). Every response, not only the page's: a
+  // dedicated worker is governed by the policy on its own script's response, not by its page's (measured: with `connect-src`
+  // widened on the page alone, both browsers still refuse the worker's outside tile under the worker's own policy).
+  app.use((req, res, next) => {
+    const pageRequest = current;
+    const builder = String(res.getHeader("Content-Security-Policy") ?? "");
+    res.locals["builderPolicy"] = builder;
+    if (pageRequest?.plant && (pageRequest.plantScope !== "page" || req.path === "/map")) {
+      res.setHeader("Content-Security-Policy", pageRequest.plant(builder, origins));
+    }
+    next();
   });
+  // The real assets handler, after the headers, as `server/app.ts:227` mounts it.
+  app.use(ASSETS_PREFIX, assetsRoute);
+
+  app.get("/map", mapPage);
   app.get("/fixture/style.json", (req, res) => {
     const pageRequest = requests.get(String(req.query["page"] ?? ""));
     if (!pageRequest) {
