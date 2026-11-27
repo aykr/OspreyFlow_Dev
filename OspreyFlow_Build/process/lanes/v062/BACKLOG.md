@@ -594,3 +594,7 @@ Accepted on the owner's standing line (gaps in a test only, from round 3) or his
 ### New row 48 (26 November 2026, the owner's ruling at 12:15 UTC: GR1e question 2, a Conduit part after RL2)
 
 **A case's history has no paging.** The history route sends every step, and GR1e's page shows them all (no page-side cut: rule 2). A real case's history can grow without bound. A later Conduit part adds paging to the route, and the page follows it with a link to the next page (GR1e's away report, question 2 (b)).
+
+### New row 49 (27 November 2026, the owner's ruling at about 13:45 UTC: SE9j question 4 (b), a Vault part after 0.7.0)
+
+**Lower incidents placed in a marked grid again.** With SE9j (question 4 (a)), an incident marked below its grid cell is not geocoded into it, and scenario A1 is narrowed to say so. After 0.7.0, a Vault security part gives `site_cell` its own marking in both analytics adapters (`analytics_duckdb` and `analytics_clickhouse`), so an incident below its cell can be placed again without telling its reader the cell is there. Its conformance case is written first (rule 1). A1's narrowing is then taken back.

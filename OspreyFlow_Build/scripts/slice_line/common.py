@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 import re
+import tempfile
 import subprocess
 import time
 from datetime import datetime
@@ -24,6 +25,18 @@ HERE = Path(__file__).resolve().parent
 BIN = Path.home() / ".ospreyflow" / "slice-line"
 DATA = Path(os.environ.get("OSPREY_SLICE_HOME") or str(BIN))
 RECORDS = DATA / "records"
+#: The gate's and the dry run's trees and environments (65, the owner's word of 27 November 2026): here, never the
+#: system's temporary folder, which macOS's dirhelper empties at 03:35 of files older than three days. uv installs a
+#: venv by cloning its cache's files, which keep the cache's dates, so a venv made minutes before looks months old
+#: there (GR1e's merge gate, 27 November 2026, 03:35: pydantic and yaml emptied under the running suite). Each is
+#: removed when its run ends, as before.
+GATE_TMP = DATA / "tmp"
+
+
+def gate_dir(prefix: str) -> Path:
+    """A new folder of the gate's own under GATE_TMP (made with its parents), named `prefix` and a random tail."""
+    GATE_TMP.mkdir(parents=True, exist_ok=True)
+    return Path(tempfile.mkdtemp(prefix=prefix, dir=str(GATE_TMP)))
 
 
 def git(args: list[str], cwd: Path | str, check: bool = True) -> str:

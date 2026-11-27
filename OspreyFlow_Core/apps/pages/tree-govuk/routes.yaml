@@ -5,6 +5,8 @@
 # A path enters this list with its page, and a row's `route` in FUNCTIONS.yaml is the same path. `server/pageList.ts` is the one
 # table of both trees' pages; `test/govuk/help.test.ts` (HP9) fails if this list and the pages that name `govuk` differ.
 # `/` is not here: it is the service's own route, and the tree switch (`OSPREY_PAGES_TREE`) decides which tree draws it.
+# Git merges this list with its union merge (the repository's `.gitattributes`), so two pages built side by side both stay: a page
+# adds its path at the end, on a line of its own, and edits no other line. Nothing here counts the pages.
 routes:
   - /help
   - /admin/people

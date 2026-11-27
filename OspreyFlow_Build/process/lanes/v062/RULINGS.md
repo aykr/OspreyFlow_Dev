@@ -3,6 +3,138 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 27 November 2026, 22:24 UTC: 66b and 65 applied (on the owner's word of about 19:40, tonight only)
+
+1. `/tmp/apply65.out` read "done: 087c0d7 committed on main (not pushed); suite: 1075 passed; early warning: 301 passed; citations: clean; install.sh not needed". So 66b (`8fbbeb4`) and 65 (`087c0d7`) count as applied. They are pushed with this records commit, and the overnight plan resumes.
+2. **CO3e's item 1 waits for the morning** (the owner, about 21:30). Options (A), (B) and (C) go in full in the 06:00 report, with what each changes for a user. CO3e's builder slot goes to the next part that is not blocked.
+
+## 27 November 2026, about 19:40 UTC: tonight's plan (the owner, in chat; tonight only where it says so)
+
+1. **Conformance: `8e01ceb`'s conformance job is D44's one rerun.** If `test_schedule_executor` is red again, it waits for the owner in the morning. The morning report says what cancelled 11ca672's rerun job at 18:42, if that can be found.
+2. **Merges:** SE9d, GR1b, GG4b, then trains of the clean parts in the planned order. The server stacks stay within 3 jobs, and `git merge-tree` runs before each merge.
+3. **No merge starts after 21:00 UTC that could still be running at 22:00.** At about 22:00 the owner applies 66b and then 65, in one command on the Mac, and is offline until about 06:00.
+   - While they run, no merge starts, and no seat starts that their install would stop on (`run_seat.py`).
+4. **The owner's word for tonight only:**
+   - **When the Mac's `/tmp/apply65.out` shows "done: … committed on main",** 66b and 65 count as applied. The conductor pushes them with its next records commit and resumes the overnight plan.
+   - **If either apply stops ("stopped at …"),** it has taken itself back. The overnight plan resumes without them, and the owner hears in the morning.
+5. **Overnight, no merge starts between 03:00 and 03:50 UTC** unless 65 is applied.
+6. **All 4 builder slots stay busy** on parts whose briefs are on main and that are not blocked. GA1a, GG3a and GG3b take main in after 66b, and GG2a after WS4a.
+7. **Anything that needs the owner's word stops and waits for the morning.**
+8. **At 06:00 the conductor has ready:**
+   - what merged;
+   - what waits for the owner;
+   - GitHub's state on main.
+9. **CO3c is briefed** (`slices/CO3c.md` and its row) under the 11:15 ruling. It goes in the next records commit, so a slot has work overnight.
+
+## 27 November 2026, about 18:20 UTC: 66s first, for speed (the owner, in chat)
+
+1. **66s comes first:** a one-row hand-back from line-fix, carrying `scan_map.tsv`'s row for `tests/glass_trees/test_route_pins.py`. It applies in minutes. After it, the owner says "applied" and merges restart in this order:
+   - SE9d;
+   - GR1b;
+   - GG4b;
+   - then trains of the clean parts.
+2. **66b and 65 go in together, in one later gap this evening.** The conductor gives the owner that gap when they are ready. 66b still carries the `shared-entries.test.ts` change, and GA1a, GG3a and GG3b wait for it.
+3. **From 28 November, line fixes go in as one batch, in one overnight window.** The only exception is a fix that unblocks merging.
+
+## 27 November 2026, about 18:05 UTC: the gap for 65, and the scan-map row (the owner, in chat)
+
+1. **65 is applied in the gap.** Then 66b straight after it, from line-fix and shown red first. 66b carries:
+   - the `scan_map.tsv` row for `tests/glass_trees/test_route_pins.py`, which 66 left out. That is why SE9d was refused at 17:59, by `slice-line-check`'s `test_the_real_scan_map_names_every_pure_walker_and_nothing_stale`;
+   - the `shared-entries.test.ts` change.
+2. **The owner says "applied" after both.** Only then is SE9d's merge rerun.
+3. **GR1b merges on its current row, with no refreeze.** Its unused line (`GR1b refreeze 2026-11-27`) lapses tonight.
+4. **`test_route_pins.py` and `test_page_lists_merge.py` join the rows only of parts that still have rounds** (GA1a, GG3a and GG3b), at their refreeze.
+5. **CO3e's brief goes in the conductor's next records commit.**
+
+## 27 November 2026, about 17:12 UTC: the page parts after 66, GA1a's question (the owner, in chat)
+
+1. **GA1a: option (b). 66b comes first, as line-fix's hand-back before 67.**
+   - Line-fix changes `shared-entries.test.ts` so that no new page edits it. The test checks that every server file importing the shared package is bundled, with no fixed list or count. It is shown red first.
+   - The owner applies 66b in tonight's gap, after 65.
+2. **After 66b, GA1a is refrozen with the builder's two changes:**
+   - AC17 (`ask.test.ts:790`) checks that `sharedPackageEntries(server)` includes `views/askWords.ts`.
+   - The ask scenario (`test_govuk_ask_scenario.py`) checks its own path appears once. Line 1022 says "not once", and a case lists the path twice.
+   - Then one round takes main in, with the builder's trial resolution: main's side in `build.mjs` and the test files, and `askPage` last in `pageList.ts`.
+3. **Every page part, at its refreeze, adds `test_route_pins.py` and `test_page_lists_merge.py` to its checks.**
+4. **Who asked each question: there is no exception.** The page leaves it out as ruled, and the route is not changed.
+5. **GG3a and GG3b take the same answer.**
+
+## 27 November 2026, about 17:00 UTC: 11ca672's two GitHub reds, and CO3e (the owner, in chat)
+
+1. **These two reds are not covered by the 11:15 rulings.** Those rulings cover CO3c (`rule-standards.spec.ts:21`) and the conformance jobs, and nothing else.
+2. **Keyboard (job `glass-perf-a11y-keyboard`, run 46012575717):**
+   - `admin.spec.ts:982` is a focus timing fault. It was green on `9e91748`, and `11ca672` is records-only.
+   - The list at `:1040` lost its proved set when Playwright replaced the worker.
+   - **CO3e, test-only, standing (a)** (`slices/CO3e.md`): line 982 waits for the field's focus before ArrowUp, and the list's proved set survives a worker restart, kept outside the worker's memory. Each is shown red first.
+3. **Conformance (`test_schedule_executor.py::test_run_now_is_refused_while_a_run_of_the_recipe_is_going`, TimeoutError):** its job is rerun once (D44), after `ab0fe78`'s run completes. A second failure goes to the owner.
+4. **GG3b** takes the same rule 5 round when a builder's slot frees.
+5. **The gap for 65:** when SE9d lands, the conductor says "gap for 65". The builders already running keep going. No new seat, merge or stack starts until the owner says "applied".
+
+## 27 November 2026, about 16:40 UTC: 66 applied, and the order after it (the owner, in chat)
+
+1. **66 is on main as `22d967f`** (two pages built side by side merge cleanly: a union merge for the two page lists, the build finds its bundles, and no test pins the route list). The hold is over. `22d967f` is pushed with the conductor's next records commit.
+2. **Rule 5, by `git merge-tree` against `22d967f`:** only a part that still conflicts gets a round, and its verifier then runs again. Against `22d967f`:
+   - These still conflict: GR1b, GG4b, GA1a and GG3a. They go back to take main in now, with no round spent.
+   - GG3b conflicts too, newly, in the glass-trees scenario tests and the pages tests that 66 changed. It takes the same round when a builder's slot frees.
+   - GG2a conflicts in `apps/pages/package.json` and the lockfile. Its round 5 (`slices/GG2a_ROUND5_TABLE.md`) starts only after WS4a merges.
+   - These apply cleanly and go to their turn as they are: SE9d, SE9g, SE9h, SE9i, SE9j, SE9k, SE8g, GG2c, WS4a and AD1c.
+3. **The order:** SE9d's merge again, then GR1b. Then the server stacks and trains as planned, with SE9g and SE9h in the queue.
+4. **The conductor's note to a builder taking main in after 66** (this item is not the owner's ruling): keep both sides. Where 66 made a test read the page list rather than pin a route list, the branch's new page joins the list main now reads, and no pinned list comes back.
+5. **65 is still to apply.** This evening, before the overnight gates, the owner gets a gap in which no merge is running.
+
+## 27 November 2026, about 13:45 UTC: SE9i, SE9j, SE9k, and builders during the hold (the owner, in chat)
+
+1. **The hold for 66 is on merges only.** While main is held, the builders are kept busy (up to the dial's 4): the next unbuilt parts whose briefs are on main and that wait on no unmerged part start on their own lane branches, and verifiers run too. **Nothing merges until the owner says "applied".**
+2. **SE9i: the amendment is approved as written** (`SE9I_LEGAL_BASIS_AMENDMENT.diff`, ADR-094 Amendment 2). **Round 2 now:** apply the diff on the branch exactly as approved, then write the acceptance test red first and build it as the amendment says.
+3. **SE9j: approved with (a) on all five** (`SE9J_SITE_MARKING_AMENDMENT.diff`, ADR-010 Amendment 2):
+   - Q1: ADR-010.
+   - Q2: the marking is required at upload.
+   - Q3: sites stored before read as OFFICIAL, with no re-mark route.
+   - Q4: an incident marked below its cell is not placed, and A1 is narrowed to say so.
+   - Q5: the case's ceiling applies.
+
+   **Round 2 now:** apply the diff exactly as approved, then build it red first, with the tests the amendment names.
+4. **Q4 (b) is a backlog part after 0.7.0** (BACKLOG.md row 49): `site_cell` gets its own marking in both analytics adapters, so lower incidents can be placed again.
+5. **The `unit-1` fault in `recipes/site_grid.yaml` is a security fault: new part SE9k** (a grid's cells take the site's owning unit and originator). It is built red first and cut before RL2 (`slices/SE9k.md`).
+6. **Line fault 11** (a planned stop is pushed six times and recorded red) goes to line-fix after its vitest change.
+7. SE9i and SE9j's round 2 runs on the owner's `clear-stop` lines in resume.tsv.
+
+## 27 November 2026, about 12:55 UTC: the server's reds since 10:14 (the owner, in chat)
+
+1. **The cause:** CPU starvation from capacity option D. Vitest ignores the job's CPU share.
+2. **The server is back on its earlier settings:** 3 jobs at 400% and 12G (lanes merger, platform-b and rules-b), which passed. Hand-back 64's fixes stay.
+3. **GG4c's and SE9d's reds from those runs are the server's, not theirs.** No round is counted against either part.
+4. **After hand-back 66 is applied,** server stacks may be sent again, and trains run as planned. A second stack goes beside the first only when both fit within the 3 jobs.
+5. **Both added lines are agreed** (the owner, about 13:00 UTC): no round is counted against GG4c or SE9d for the server's reds, and a second stack goes beside the first only if both fit within the 3 jobs. There will be more room once line-fix's vitest change lets option D return.
+6. **Rule 5 after 66, tightened:** it applies only to a verified part that conflicts with main because another part merged first. That part gets one round, and its verifier runs again. **A part that applies cleanly goes to its turn without taking main in.** The rest of the plan after "applied" is agreed as written.
+
+## 27 November 2026, about 11:15 UTC: GitHub's reds and WS4b's CI measurement (the owner, in chat)
+
+1. **CO3c: yes** (test-only, standing (a)): `rule-standards.spec.ts:21` waits for the button before pressing Tab.
+2. **conformance-model: (a).** CI's job alone runs a small pinned model, so CI checks the pipeline. The deployment model's golden-set recall is measured on the server's GPU as release evidence. One small part each. The CI change is a diff, technical, approved on the owner's standing word.
+3. **conformance: CO3d yes.** Each named test runs 20 times on the server, and real causes are fixed red first. The job is split in two (a CI diff, technical, on the owner's standing word).
+4. **WS4b's CI measurement: (d), not a push.** After round 1, its perf suite is measured on the server under GitHub's runner shape (4 CPUs, the same commands, software rendering), three runs. The owner runs the Mac once. Main's CI confirms after the merge. ADR-142 decision 6 stands: no lane branch is pushed.
+
+## 27 November 2026, about 09:55 UTC: GG2a's last round (the owner, in chat)
+
+GG2a conflicts with main in `apps/pages/package.json` and `package-lock.json`, after GG5a. Rule 5 covers it, on the conductor's word. **It is not sent back now.**
+
+**After WS4a merges, GG2a gets one round that does both:**
+- **It takes main in.** Both sides' dependencies are kept, and the lockfile is regenerated with npm, never hand-merged.
+- **It writes the version-window entry and I20's third test** (D272, D286).
+
+Then its verifier, the server and the full gate run as usual (`slices/GG2a_ROUND5_TABLE.md`).
+
+## 27 November 2026, about 09:50 UTC: the way to hand-back 66 (the owner, in chat)
+
+1. **No hold for 66 now.**
+2. **If the stack GG5a, GG4c, SE9d comes back green:**
+   - Run the GG4c and SE9d train first.
+   - Straight after it lands, before any other merge, train, records commit or new server stack, tell the owner **"ready for 66"**.
+   - Hold until the owner says "applied".
+3. **If the stack comes back red:** tell the owner **"ready for 66"** at once, and hold.
+4. **After 66:** each verified page part takes main in once (rule 5, on the conductor's word).
+
 ## 27 November 2026, after 09:40 UTC: the overnight drafts' owner questions answered (the owner, in chat, all as the build adviser recommended)
 
 1. **GR1f1 Q8 (a)** for the page. **Cut a Conduit security part before RL2** that audits the access and datasets reads (SE9h).

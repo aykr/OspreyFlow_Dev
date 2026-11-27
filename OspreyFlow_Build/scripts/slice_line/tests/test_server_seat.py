@@ -60,7 +60,7 @@ if o["seat"] == "builder":
     subprocess.run(["git", "commit", "-qm", "S1: built on the server"], check=True)
     tip = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
     json.dump({"green": True, "commit": tip, "tip": tip}, open(os.path.join(rec, "tests-%s.json" % tip), "w"))
-    session = {"type": "result", "subtype": "success", "is_error": False, "session_id": "server-b", "result": "done",
+    session = {"type": "result", "subtype": "success", "is_error": False, "session_id": "server-b", "result": "done\n\nREADY",
                "usage": {}, "total_cost_usd": 1.0}
 else:
     tip = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()

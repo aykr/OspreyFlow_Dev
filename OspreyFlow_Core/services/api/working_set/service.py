@@ -1513,6 +1513,24 @@ class WorkingSetService:
         _, visible, _ = self._project(ends, [edge], principal)
         return visible[0] if visible else None
 
+    async def visible_ends_and_link(
+        self,
+        investigation_id: str,
+        end_ids: Sequence[NodeId],
+        edge_id: EdgeId,
+        principal: Principal,
+    ) -> tuple[set[NodeId], bool]:
+        """For an answer that names a link and its ends (ADR-092's reader): which of `end_ids`
+        `visible_node` would give `principal`, and whether `visible_edge` would give the link,
+        from one read and one `_project`.
+
+        The read is made once and in full whatever it finds, so nothing in the trips taken follows
+        what is hidden. The link is judged against `end_ids` alone: one whose own ends are not
+        among them is not given."""
+        nodes, edges = await self._store.get_members(investigation_id, end_ids, [edge_id])
+        seen, links, _ = self._project(list(nodes.values()), list(edges.values()), principal)
+        return {n.id for n in seen}, bool(links)
+
     async def end_types(self, investigation_id: str, edge: Edge) -> tuple[str, str] | None:
         """The entity types at the two ends of `edge`, from the working set, or `None` if either end
         has left it. A change of a link's type has to be checked against them."""

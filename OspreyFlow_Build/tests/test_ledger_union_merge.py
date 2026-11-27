@@ -166,12 +166,14 @@ def _appends(n: int, title: str, *, block: bool) -> dict[str, Callable[[str], st
 # --- the attributes themselves ------------------------------------------------
 
 
-def test_the_root_gitattributes_lists_the_reservations_table_alone() -> None:
+def test_the_root_gitattributes_lists_the_reservations_table_and_not_the_decision_log() -> None:
+    """The GOV.UK tree's two page lists are listed beside it (`glass_trees/test_page_lists_merge.py` holds them)."""
     text = _real_attributes()
     entries = [
         line.split() for line in text.splitlines() if line.strip() and not line.startswith("#")
     ]
-    assert entries == [[LEDGER, "merge=union"]]
+    assert [LEDGER, "merge=union"] in entries
+    assert not [e for e in entries if e[0] == LOG], entries
     comment = " ".join(line for line in text.splitlines() if line.startswith("#"))
     assert "06_DECISIONS.md" in comment, "the comment must say why the decision log is not listed"
 

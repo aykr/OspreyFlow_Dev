@@ -7,18 +7,17 @@ opens one alert at its own address and B20 saves a pattern as a monitor: none sa
 scenario is new (`spec/08`, "Scenario AQ"), written first, and `apps/pages/test/govuk/alert-queue.test.ts` is the proof; the `alerts-rules-
 watches` row of `FUNCTIONS.yaml` names its rows beside B12, B13, B14 and B20.
 
-This file holds the document, the page test, the function row, the route list, the four tests that pin a route, and the page's own
+This file holds the document, the page test, the function row, the route list (this page's path in it, once), and the page's own
 source in step (items 1 and 2 of the slice's brief; the access rules are the vitest file's, and this file holds the source to the one
 thing a source can be held to: nothing in it filters, counts or draws what an alert rests on):
 
 * a scenario with no page test, or a page test with no scenario     -> `test_every_scenario_has_a_page_test_and_back`
 * a row whose cited words are not in the file it cites               -> `test_every_row_cites_words_that_are_in_the_source`
 * the `alerts-rules-watches` row given a route (the function is not complete, so its route stays empty and the tree's state does not
-  count it as covered), or without its scenarios or slice, or the route list not the tree's pages
+  count it as covered), or without its scenarios or slice, or its path not in the route list once
                                                                      -> `test_the_function_row_and_the_route_list_are_in_step`,
                                                                         `test_the_trees_state_does_not_count_the_row_as_covered`
 * what the scenario says of the row's route disagreeing with the row -> `test_the_scenario_says_what_the_row_has_for_a_route`
-* a route pinned in three of the four places and not the fourth      -> `test_every_place_that_pins_the_routes_names_the_queue`
 * a page source that filters or counts rows after the Conduit sent
   them, or names what an alert rests on                              -> `test_the_page_source_filters_nothing_and_draws_no_evidence`
 
@@ -61,13 +60,6 @@ TEMPLATE = PAGES / "tree-govuk" / "alert-queue.njk"
 PAGE_SOURCES = {
     "server/alertQueue.ts": PAGES / "server" / "alertQueue.ts",
     "server/views/alertQueueWords.ts": PAGES / "server" / "views" / "alertQueueWords.ts",
-}
-#: The four places that name the tree's routes, and each must name this one (the conductor's note of 25 November 2026).
-PINS = {
-    "tests/glass_trees/test_tree_parity.py": BUILD / "tests" / "glass_trees" / "test_tree_parity.py",
-    "tests/glass_trees/test_govuk_help_scenario.py": BUILD / "tests" / "glass_trees" / "test_govuk_help_scenario.py",
-    "tests/harness/test_pages_setting.py": BUILD / "tests" / "harness" / "test_pages_setting.py",
-    "apps/pages/test/govuk/help.test.ts": PAGES / "test" / "govuk" / "help.test.ts",
 }
 
 SECTION = "## Scenario AQ"
@@ -161,7 +153,6 @@ def inputs() -> dict[str, Any]:
         "page_test": read(PAGE_TEST),
         "template": read(TEMPLATE),
         "sources": {name: read(path) for name, path in PAGE_SOURCES.items()},
-        "pins": {name: read(path) for name, path in PINS.items()},
         "keyboard_test": read(KEYBOARD_TEST),
     }
 
@@ -292,18 +283,15 @@ def route_claim_problems(data: dict[str, Any]) -> list[str]:
 
 
 def route_problems(data: dict[str, Any]) -> list[str]:
-    # The tree's pages on the line: Help (GR2a), the Admin People list (AD3a), the alert monitoring page (GR3a), trends shown together (GR4a), the cases page (GR1a), a case's drawing boards (GG4a), this one and one document in the reader (GG3b).
-    if sorted(data["routes"]) != sorted(["/help", "/admin/people", "/reports", "/packs/trends", "/cases", "/cases/boards", ROUTE, "/cases/document"]):
-        return [f"the route list is {data['routes']!r}: the tree has eight pages, /help, /admin/people, /reports, /packs/trends, /cases, /cases/boards, {ROUTE} and /cases/document"]
-    return []
-
-
-def pin_problems(data: dict[str, Any]) -> list[str]:
-    return [
-        f"{name} does not name {ROUTE}: a route in the tree's list is pinned there"
-        for name, text in data["pins"].items()
-        if ROUTE not in text
-    ]
+    # The page's own path is in the tree's route list, once. Whether the list and the pages that name the GOV.UK tree agree is
+    # checked in one place, `apps/pages/test/govuk/help.test.ts` (HP9), from the files themselves, so a page added to the tree
+    # edits no other page's test (`test_route_pins.py`).
+    found: list[str] = []
+    if data["routes"].count(ROUTE) != 1:
+        found.append(f"the route list {data['routes']!r} holds {ROUTE} {data['routes'].count(ROUTE)} times, not once")
+    if len(set(data["routes"])) != len(data["routes"]):
+        found.append("the route list names a path twice")
+    return found
 
 
 def source_problems(data: dict[str, Any]) -> list[str]:
@@ -354,7 +342,6 @@ CHECKS = (
     function_problems,
     route_claim_problems,
     route_problems,
-    pin_problems,
     source_problems,
     keyboard_problems,
 )
@@ -412,10 +399,6 @@ def test_the_trees_state_does_not_count_the_row_as_covered(tmp_path: Path) -> No
     assert state(ROUTE) == "complete", "with the route put back the tree reads complete: the plant would be caught"
 
 
-def test_every_place_that_pins_the_routes_names_the_queue() -> None:
-    assert pin_problems(inputs()) == []
-
-
 def test_the_page_source_filters_nothing_and_draws_no_evidence() -> None:
     assert source_problems(inputs()) == []
 
@@ -466,11 +449,11 @@ def _in_section_all(old: str, new: str) -> Callable[[dict[str, Any]], None]:
 
 
 def _in(key: str, name: str, old: str, new: str) -> Callable[[dict[str, Any]], None]:
-    """A change inside one entry of a dict of texts (`sources` or `pins`)."""
+    """A change inside one entry of a dict of texts (`sources`)."""
 
     def plant(data: dict[str, Any]) -> None:
         assert old in data[key][name], f"the plant's anchor {old!r} is not in {name}"
-        # Every occurrence: a pin names the route more than once (a docstring, an assertion), and a plant that leaves one is no plant.
+        # Every occurrence: a text can name its anchor more than once (a docstring, an assertion), and a plant that leaves one is no plant.
         data[key][name] = data[key][name].replace(old, new)
 
     return plant
@@ -530,12 +513,8 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
     ("the row that does not name the page", _row(ROW, where="apps/workspace/src/alerts/"), function_problems, "does not name the page"),
     ("a row marked built while its halves are not", _row(ROW, status="built"), function_problems, "status"),
     ("a second row given a route", _row("admin", route="/admin"), function_problems, "not Help's and the alert"),
-    ("the route left out of the list", lambda d: d["routes"].remove(ROUTE), route_problems, "eight pages"),
-    ("a route in the list the code has no page for", lambda d: d["routes"].append("/rules"), route_problems, "eight pages"),
-    ("the harness test not told", _in("pins", "tests/harness/test_pages_setting.py", ROUTE, "/elsewhere"), pin_problems, "test_pages_setting"),
-    ("the tree parity test not told", _in("pins", "tests/glass_trees/test_tree_parity.py", ROUTE, "/elsewhere"), pin_problems, "test_tree_parity"),
-    ("the help scenario's route list not told", _in("pins", "tests/glass_trees/test_govuk_help_scenario.py", ROUTE, "/elsewhere"), pin_problems, "test_govuk_help_scenario"),
-    ("HP9 not told", _in("pins", "apps/pages/test/govuk/help.test.ts", ROUTE, "/elsewhere"), pin_problems, "help.test.ts"),
+    ("the route left out of the list", lambda d: d["routes"].remove(ROUTE), route_problems, "not once"),
+    ("the page's path listed twice", lambda d: d["routes"].append(ROUTE), route_problems, "not once"),
     ("rows filtered after retrieval", _append("sources", QUEUE, "const shown = rows.filter((row) => row.state !== 'closed');"), source_problems, "filter"),
     ("rows cut to a page", _append("sources", QUEUE, "const shown = rows.slice(0, 20);"), source_problems, "slice"),
     ("rows sorted by the page", _append("sources", WORDS, "const ordered = rows.sort((a, b) => a.when.localeCompare(b.when));"), source_problems, "sort"),

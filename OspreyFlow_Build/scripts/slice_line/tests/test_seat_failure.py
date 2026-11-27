@@ -40,7 +40,7 @@ def verdict(tip, findings=(), v=None, session="v-ok"):
 
 def builder_done(session="b-ok"):
     return {"type": "result", "subtype": "success", "is_error": False, "num_turns": 40, "session_id": session,
-            "result": "done", "usage": {}, "total_cost_usd": 1.0}
+            "result": "done\n\nREADY", "usage": {}, "total_cost_usd": 1.0}
 
 
 def pin_dial(w, setting="balanced"):

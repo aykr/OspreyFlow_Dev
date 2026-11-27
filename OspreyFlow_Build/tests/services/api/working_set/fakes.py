@@ -128,6 +128,19 @@ class FakeWorkingSetStore:
     async def get_node(self, investigation_id: str, node_id: NodeId) -> Node | None:
         return self._n(investigation_id).get(node_id)
 
+    async def get_members(
+        self, investigation_id: str, node_ids: Sequence[NodeId], edge_ids: Sequence[EdgeId]
+    ) -> tuple[dict[NodeId, Node], dict[EdgeId, Edge]]:
+        """Its own read of the bodies, not `get_node` and `get_edge` called in turn, so a test that
+        counts those sees one batched read as one. Refuses an empty list, as `HMGET` does."""
+        if not node_ids or not edge_ids:
+            raise ValueError("wrong number of arguments for 'hmget' command")
+        nodes, edges = self._n(investigation_id), self._e(investigation_id)
+        return (
+            {i: nodes[i] for i in node_ids if i in nodes},
+            {i: edges[i] for i in edge_ids if i in edges},
+        )
+
     def _state(self, investigation_id: str) -> IndexState:
         return self._index.setdefault(investigation_id, IndexState())
 
