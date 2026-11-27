@@ -984,6 +984,7 @@ from .review import (
     AcceptCandidateRequest,
     CandidateNotPendingError,
     DocumentNotFoundError,
+    EngineOnlyPropertyError,
     ExtractionCandidateNotFoundError,
     ExtractionCandidateRecord,
     ExtractionCandidateStore,
@@ -3920,6 +3921,15 @@ async def _candidate_not_pending_handler(
 ) -> JSONResponse:
     return JSONResponse(
         status_code=status.HTTP_409_CONFLICT, content={"error": "candidate_not_pending"}
+    )
+
+
+@app.exception_handler(EngineOnlyPropertyError)
+async def _engine_only_property_handler(
+    request: Request, exc: EngineOnlyPropertyError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=422, content={"error": "engine_only_property", "detail": str(exc)}
     )
 
 

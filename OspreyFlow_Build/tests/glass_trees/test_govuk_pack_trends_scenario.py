@@ -560,7 +560,7 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
     ("the word board in the page's code", _replace("page_module", "export const packTrends", "const boardName = 1;\nexport const packTrends"), module_problems, "says board"),
     (
         "a cited route line that drifted (the add-item route as it was before main moved)",
-        _replace("citation_diff", "services/api/app.py:19895", "services/api/app.py:19861"),
+        _replace("citation_diff", "services/api/app.py:19905", "services/api/app.py:19861"),
         citation_diff_problems,
         "services/api/app.py:19861 does not hold",
     ),
