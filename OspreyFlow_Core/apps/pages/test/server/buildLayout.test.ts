@@ -108,9 +108,10 @@ describe("the build's GOV.UK tree steps (slice GR2a)", () => {
     const words = readFileSync(join(out, "server", "views", "helpWords.js"), "utf8");
     expect(bareImports(words)).toEqual([]);
     // Every server file that imports the shared package is bundled the same way, at the path `tsc` wrote it to (the build finds them by
-    // reading them, `apps/pages/scripts/sharedEntries.mjs`; four today).
+    // reading them, `apps/pages/scripts/sharedEntries.mjs`; `test/shared-entries.test.ts` holds the finder to what the compiler
+    // reads). No list and no count: a page adding such a file edits nothing here (the owner's 66b, 27 November 2026).
     const shared = sharedPackageEntries(join(PAGES, "server"));
-    expect(shared.length).toBeGreaterThanOrEqual(4);
+    expect(shared.length, "the build found no file that imports the shared package").toBeGreaterThan(0);
     for (const file of shared) {
       const built = join(out, relative(PAGES, file)).replace(/\.ts$/, ".js");
       expect(bareImports(readFileSync(built, "utf8")), built).toEqual([]);

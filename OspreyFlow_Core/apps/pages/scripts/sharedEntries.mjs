@@ -1,13 +1,17 @@
 // The server files `build.mjs` bundles with the shared package: every `.ts` file under `server/` (not a `.d.ts`) that
-// imports a value from `@ospreyflow/glass-shared`, found by reading the files, so that a page adding such a file adds
-// no line to the build (the owner's word of 27 November 2026: page parts kept conflicting in the build's entry list).
+// imports or re-exports a value from `@ospreyflow/glass-shared`, or imports it for its effect, found by reading the
+// files, so that a page adding such a file adds no line to the build (the owner's word of 27 November 2026: page parts
+// kept conflicting in the build's entry list).
 // A file that names the package only in a comment, imports only its types (which `tsc` erases) or declares it
 // (`server/types/glassShared.d.ts`) is not bundled. Sorted, so the build is the same whatever order the disk lists.
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const COMMENTS = /\/\*[\s\S]*?\*\/|(^|[^:"'`])\/\/.*$/gm;
-const IMPORTS_THE_PACKAGE = /\bimport\s+(?!type\b)[^;]*?\bfrom\s*["']@ospreyflow\/glass-shared["']/;
+// An import or re-export of a value (`import { a } from`, `import * as s from`, `export { a } from`; never `import type` or
+// `export type`), or an import for its effect alone (`import "…"`): each leaves an import of the package in tsc's output.
+const IMPORTS_THE_PACKAGE =
+  /\b(?:import|export)\s+(?!type\b)[^;]*?\bfrom\s*["']@ospreyflow\/glass-shared["']|\bimport\s*["']@ospreyflow\/glass-shared["']/;
 
 /** @param {string} serverDir @returns {string[]} */
 export function sharedPackageEntries(serverDir) {

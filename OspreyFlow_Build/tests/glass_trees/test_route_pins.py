@@ -104,6 +104,25 @@ def test_no_shared_file_counts_the_tree_s_pages_or_names_its_place_in_order() ->
     assert found == []
 
 
+def _shared_package_files() -> list[str]:
+    """The server files that import the shared package, roughly (the test of the build's finder holds the exact rule):
+    their names, as a test that pinned them would write them."""
+    pattern = re.compile(r"""\bfrom\s*["']@ospreyflow/glass-shared["']""")
+    return sorted(f.stem for f in (PAGES / "server").rglob("*.ts")
+                  if not f.name.endswith(".d.ts") and pattern.search(f.read_text(encoding="utf-8")))
+
+
+def test_no_test_names_every_server_file_that_imports_the_shared_package() -> None:
+    """A test that names each such file pins the list, and every new page's words file would edit it (the owner's 66b,
+    27 November 2026: `shared-entries.test.ts` named the four words files)."""
+    names = _shared_package_files()
+    assert len(names) > 1, names
+    files = [*sorted((PAGES / "test").rglob("*.ts")), *sorted((BUILD / "tests").rglob("test_*.py"))]
+    pinned = [str(f.relative_to(ROOT)) for f in files
+              if f.name != Path(__file__).name and all(re.search(rf"\b{re.escape(n)}\b", f.read_text(encoding="utf-8")) for n in names)]
+    assert pinned == []
+
+
 def test_build_mjs_names_no_server_file_of_a_page() -> None:
     """It bundles the server files that import the shared package, found by reading them, not from a list."""
     text = (PAGES / "scripts" / "build.mjs").read_text(encoding="utf-8")
