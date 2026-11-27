@@ -1360,7 +1360,7 @@ class WorkingSetService:
         return LinksAmongOutcome(
             delta=outcome.delta, added=len(new), added_nodes=len(new_nodes), degree=degree,
             unconnected_pairs=unconnected, more_routes_pairs=more, connected_pairs=connected,
-        ).holding(outcome.to_publish())  # fmt: skip
+        )  # fmt: skip
 
     async def expand_preview(
         self, investigation_id: str, req: ExpandRequest, principal: Principal
@@ -1554,7 +1554,7 @@ class WorkingSetService:
                 clusters = DeltaReproject(
                     seq=delta.seq, reason=REASON_ENTRY, affected_cluster_ids=ids
                 )
-        return ExpansionOutcome(delta=delta, clusters=clusters).holding(stored)
+        return ExpansionOutcome(delta=delta.holding(stored), clusters=clusters)
 
     async def current_membership(self, investigation_id: str) -> tuple[list[Node], list[Edge]]:
         """The full source-fidelity (unfiltered) membership — `app.py`'s

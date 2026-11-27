@@ -120,7 +120,7 @@ async def test_the_working_set_never_sends_a_drawn_items_source_document_its_rea
             added = await service.seed(case, nodes, links, B)
 
             _assert_without(added.delta, held.d)
-            _assert_with(added.to_publish(), held.d)
+            _assert_with(added.delta.to_publish(), held.d)
             (snapshot,) = await service.sync(case, B, last_acknowledged_seq=None)
             assert isinstance(snapshot, DeltaSnapshot)
             assert [e.id for e in snapshot.edges] == [held.cb]

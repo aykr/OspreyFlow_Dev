@@ -114,10 +114,30 @@ class NarrowingFilter(BaseModel):
 
 
 class DeltaAdd(BaseModel):
+    """Nodes and links put into the view.
+
+    An add the working set answers its writer with is **the writer's own view** of it, and holds
+    privately the delta as the working set stores it, its cited documents kept (ADR-143 Amendment 8
+    item 5). `notify.publish_delta` publishes that stored form, which each recipient's socket
+    projects for its own reader: otherwise the writer's view would reach everyone as the item
+    itself. It is private, so no answer carries it, and it stays with this object wherever a
+    route's result holds it. A `DeltaAdd` rebuilt from another's fields holds none, so a route
+    publishes the add it was answered with, never one it rebuilds."""
+
     seq: int
     op: Literal["add"] = "add"
     nodes: list[Node] = Field(default_factory=list)
     edges: list[Edge] = Field(default_factory=list)
+    _stored: DeltaAdd | None = PrivateAttr(default=None)
+
+    def holding(self, stored: DeltaAdd) -> Self:
+        self._stored = stored
+        return self
+
+    def to_publish(self) -> DeltaAdd:
+        """The delta as stored, for `notify.publish_delta` and nothing sent to a person: this add
+        itself where it is nobody's view of a stored one."""
+        return self._stored if self._stored is not None else self
 
 
 def add_for_reader(
@@ -325,26 +345,7 @@ def lacks_record(delta: WorkingSetDelta) -> bool:
     return isinstance(delta, DeltaRemove | DeltaReplaceEdge) and delta.removed is None
 
 
-class _Published(BaseModel):
-    """An add's answer, whose `delta` is **the writer's own view** of it. What is stored and
-    published, which each recipient's socket projects for its own reader, is the delta as the
-    working set holds it, its cited documents kept (ADR-143 Amendment 8 item 5): otherwise the
-    writer's view would reach everyone as the item itself. It is private, so no answer carries
-    it."""
-
-    delta: DeltaAdd
-    _stored: DeltaAdd | None = PrivateAttr(default=None)
-
-    def holding(self, stored: DeltaAdd) -> Self:
-        self._stored = stored
-        return self
-
-    def to_publish(self) -> DeltaAdd:
-        """The delta as stored, for `notify.publish_delta` alone: never for a person."""
-        return self._stored if self._stored is not None else self.delta
-
-
-class ExpansionOutcome(_Published):
+class ExpansionOutcome(BaseModel):
     """What `WorkingSetService.expand` returns on success — the delta the client should apply. It
     carries no count of what was withheld (ADR-124 decision 1): a figure tied to a seed and a link
     type can be made to point at the one hidden link it counts."""
@@ -398,7 +399,7 @@ class LinksAmongRequest(BaseModel):
         return self
 
 
-class LinksAmongOutcome(_Published):
+class LinksAmongOutcome(BaseModel):
     """`POST .../links-among` (ADR-098): the delta that draws the new links, and how many — with,
     past one degree (Amendment 4), the nodes the routes brought, the pairs no route joins within
     the degree, and the pairs with more routes at their degree than were drawn (said, rule 2)."""

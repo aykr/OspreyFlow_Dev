@@ -44,7 +44,7 @@ over `ontology/test_drawn_source_document_withheld.py`, `services/api/working_se
 | item 5 | the restore's read not keeping documents | `restore` | 3 |
 | item 5 | a returning link stored as the writer saw it | `_links_returning_with` | 1 |
 | writer | the writer answered with the stored add | `_add` | 5 (re-planted after the line moved: the writer's three cases and the two read counts) |
-| publish | the writer's view published | `ExpansionOutcome.to_publish` | 3 |
+| publish | the writer's view published | `ExpansionOutcome.to_publish` (since moved to `notify.publish_delta`: see *What is published*, below) | 3 |
 | no read | the working set makes no read (C loses D) | `_readable_documents` | 6 |
 | adapter | asks with more clearance than the reader's | `_cited_for` | 1 |
 | adapter | asks every type, not the Document type | `_documents` | 1 |
@@ -77,6 +77,38 @@ The two store cases (`test_no_read_sends_the_document_to_a_reader_whose_case_no_
 adapter read; `test_the_working_sets_snapshot_follows_the_datasets_the_readers_case_reads`) were smoke-run over
 `BoardGraph` and the fake working-set store (the first over `get_nodes` and `get_edges` alone): green as written, red
 with the datasets dropped at `readable_cited_documents`' read. **Not yet seen against a store.**
+
+## What is published, route by route (the verifier's finding on the publishing call sites)
+
+No test drove a route and read what it published. `services/api/test_drawn_source_document_published.py` now does:
+through the real app, a writer who may not read D puts the drawn item on the canvas by each route (seed, add by ids,
+expand, links among, add by identifiers, a starter question, a shared pair, the ownership and alert canvases, a
+restore, an upload), and the message on the case's channel is decoded as a socket decodes it.
+
+**Written first, it found a defect:** the upload case was red on the code as it stood. A route that publishes an add
+the Conduit wrote itself (`add_written`: an upload, an accepted finding, an email made a Document, a picture)
+published `outcome.delta`, the writer's own view. A stored drawn link that came back with its Document was pushed
+without D to readers who may read it (a resync showed it again: what was stored was whole). The other ten routes
+were green as written. The nine cases over the routes' own result types were red because a `DeltaAdd` could hold no
+stored form.
+
+**The fix, in one place:** a writer's `DeltaAdd` holds the stored one privately (`DeltaAdd.holding`), and
+`notify.publish_delta` publishes that (`DeltaAdd.to_publish`). The nine `.to_publish()` call sites in `app.py` are
+`outcome.delta` again, as they were before this slice: no route chooses, so none can choose wrongly.
+
+Planted at each real call site, over that file and the working-set read paths (46 cases), each file's saved bytes
+written back into it and its hash checked:
+
+| The fault planted | Where | Red |
+| --- | --- | --- |
+| the writer's view published alone (the add rebuilt from its own fields, which holds nothing) | each of the ten add routes' own `publish_delta` line in `app.py`, one at a time | that route's case each time (the seed route's also the push to a reader who may read D: 2) |
+| the restorer's response published | `restore_history_step` | 1: the restore case |
+| what is given published | `notify.publish_delta` | 20: every route but the restore, the push, and all nine result types |
+| the writer's view holds nothing | `WorkingSetService._add` | 15: the same routes and push, and four working-set cases |
+| the add rebuilt | `WorkingSetService.links_among`; `add_written` | 1 each: the links-among case; the upload case |
+
+The eight other `add_written` routes are not each driven through the app: they publish through the same
+`publish_delta`, and a case over each route's own result type shows the stored add survives being held in it.
 
 ## Owed at merge: the two guides (their versions and PDFs are set at merge)
 

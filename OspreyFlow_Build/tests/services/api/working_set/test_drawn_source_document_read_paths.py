@@ -319,7 +319,7 @@ async def test_what_the_working_set_holds_and_publishes_keeps_the_document_whoev
     outcome = await world.seed(B)
 
     _assert_without(outcome.delta)
-    published = outcome.to_publish()
+    published = outcome.delta.to_publish()
     _assert_with(published)
     stored_nodes = await world.store.source_fidelity_nodes(CASE)
     held = stored_nodes["n-0000"].provenance
@@ -348,7 +348,7 @@ async def test_an_expansion_and_the_links_among_it_keep_and_withhold_alike() -> 
     outcome = await world.service.expand(CASE, ExpandRequest(node_ids=["p-hub"]), B)
 
     assert D not in outcome.model_dump_json()
-    _assert_with(outcome.to_publish())
+    _assert_with(outcome.delta.to_publish())
 
     among = await world.service.links_among(CASE, B)
     assert D not in among.model_dump_json()
@@ -377,7 +377,7 @@ async def test_a_link_that_comes_back_with_its_node_is_stored_with_the_document(
 
     assert [e.id for e in outcome.delta.edges] == ["e-0000"]
     _assert_without(outcome.delta)
-    _assert_with(outcome.to_publish())
+    _assert_with(outcome.delta.to_publish())
 
 
 # --- row 6 ------------------------------------------------------------------------------------
@@ -464,7 +464,7 @@ async def test_a_view_a_search_and_a_writers_answer_follow_the_cases_datasets_to
     # stored and published keeps it (item 5).
     outcome = await world.service.expand(CASE, ExpandRequest(node_ids=["p-hub"]), C)
     assert D not in outcome.model_dump_json()
-    _assert_with(outcome.to_publish())
+    _assert_with(outcome.delta.to_publish())
 
 
 # --- row 12: the leak test --------------------------------------------------------------------
