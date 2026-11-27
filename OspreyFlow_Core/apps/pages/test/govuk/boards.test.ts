@@ -50,6 +50,7 @@ import { generateSecret } from "../support/secret.js";
 import { bearer, providerFor, textOf } from "../support/studioWorld.js";
 import { NOT_FOUND_BOARD, NOT_FOUND_CASE, UNKNOWN_BEARER, boardOf, boardsConduit, openedOf, rightRefusal } from "./boardsConduit.js";
 import type { Board, BoardsConduit, BoardsConduitOptions, Item, Link, Reader } from "./boardsConduit.js";
+import { sharedPackageEntries } from "../../scripts/sharedEntries.mjs";
 
 const PAGES_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const CORE = join(PAGES_DIR, "..", "..");
@@ -145,6 +146,9 @@ interface WorldOptions extends Partial<Omit<BoardsConduitOptions, "readers">> {
   conduitUrl?: string;
   unknownBearer?: boolean;
 }
+
+/** A reader offered no write (slice GG4c): the right to investigate and not the right to draw, so each page is the read-only one. */
+const READER_ONLY: WorldOptions = { rights: ["investigate"] };
 
 async function world(options: WorldOptions = {}): Promise<World> {
   const token = bearer();
@@ -326,7 +330,10 @@ const NEVER = [
 /** Any sign of an item the reader may not see (BD7): a fourth drawn item counted, a word that something is withheld or unseen. */
 const hiddenProblems = (html: string): string[] =>
   [/\b4 drawn items\b/, /\b4\b/, /withheld|cannot see|may not see|not shown to you|hidden/i].filter((re) => re.test(mainText(html))).map((re) => `the page says ${re}`);
-const neverProblems = (html: string): string[] => NEVER.filter((word) => mainOf(html).includes(word)).map((word) => `the page shows ${JSON.stringify(word)}`);
+/** The two hidden fields a write's form holds (slice GG4c): the anti-forgery token and which write it is. Only these two, as written,
+ * are set aside: any other hidden field is read with the rest. */
+const FORM_FIELDS = /<input type="hidden" name="_csrf" value="[A-Za-z0-9_-]+">|<input type="hidden" name="action" value="(?:make|share|delete)">/g;
+const neverProblems = (html: string): string[] => NEVER.filter((word) => mainOf(html).replace(FORM_FIELDS, "").includes(word)).map((word) => `the page shows ${JSON.stringify(word)}`);
 
 // ------------------------------------------------------------------------------------------------ what the page should draw
 
@@ -564,7 +571,8 @@ const OTHER: Record<string, Record<string, unknown>> = {
     ceiling: null,
     grading_scheme: "3x5x2",
     grading_grades: null,
-    may_draw: false,
+    // The sample's reader may not draw (`sampleReader`): the other value is true, which draws the share and the delete.
+    may_draw: true,
     may_promote: true,
   },
   Node: {
@@ -755,7 +763,7 @@ describe("the boards page on the GOV.UK tree (scenario BD)", () => {
   });
 
   it("BD2: a case with no board the reader may see is told so in one sentence, with no table, and a way back to the case", async () => {
-    const w = await world({ boards: BOARDS.filter((b) => b.created_by === BLAKE && !b.shared) });
+    const w = await world({ ...READER_ONLY, boards: BOARDS.filter((b) => b.created_by === BLAKE && !b.shared) });
     const res = await getAs(w, listOf());
     expect(res.status).toBe(200);
     expect(emptyListProblems(res.text)).toEqual([]);
@@ -956,7 +964,7 @@ describe("the boards page on the GOV.UK tree (scenario BD)", () => {
   it("BD9: the Conduit is asked as the person, each route exactly once per render, nothing of the browser's, no write, nothing unsigned", async () => {
     const w = await world();
     await getAs(w, listOf()).set("Origin", "http://example.invalid").set("Referer", "http://example.invalid/x");
-    expect(callProblems(calls(w.conduit), [listCall()])).toEqual([]);
+    expect(callProblems(calls(w.conduit), [listCall(), "GET /v1/me/rights"])).toEqual([]);
     w.conduit.calls.splice(0);
     await getAs(w, boardOfPath("b-quay")).set("Origin", "http://example.invalid");
     expect(callProblems(calls(w.conduit), [boardCall("b-quay")])).toEqual([]);
@@ -1122,7 +1130,7 @@ describe("the boards page on the GOV.UK tree (scenario BD)", () => {
   });
 
   it("BD13: an empty board, and a board with an empty part, are said in words, never drawn as headings with no rows", async () => {
-    const w = await world();
+    const w = await world(READER_ONLY);
     const empty = await getAs(w, boardOfPath("b-empty"));
     expect(empty.status).toBe(200);
     expect(mainText(empty.text)).toContain("No items are shown on this board.");
@@ -1135,7 +1143,7 @@ describe("the boards page on the GOV.UK tree (scenario BD)", () => {
     expect(mainText(shift.text)).toContain("No links are shown on this board.");
     expect(tablesOf(shift.text).map((t) => t.caption)).toEqual([BOARDS_WORDS.drawnCaption]);
     // Loaded items and nothing drawn.
-    const onlyLoaded = await world({ boards: BOARDS.map((b) => (b.id === "b-quay" ? { ...b, drawn: [] } : b)) });
+    const onlyLoaded = await world({ ...READER_ONLY, boards: BOARDS.map((b) => (b.id === "b-quay" ? { ...b, drawn: [] } : b)) });
     const res = await getAs(onlyLoaded, boardOfPath("b-quay"));
     expect(mainText(res.text)).toContain("No drawn items are shown on this board.");
     expect(tablesOf(res.text).map((t) => t.caption)).toEqual([BOARDS_WORDS.loadedCaption, BOARDS_WORDS.linksCaption]);
@@ -1143,7 +1151,7 @@ describe("the boards page on the GOV.UK tree (scenario BD)", () => {
   });
 
   it("BD14: both pages are whole in structure, read-only, and their stops come in order", async () => {
-    const w = await world();
+    const w = await world(READER_ONLY);
     const list = await getAs(w, listOf());
     const one = await getAs(w, boardOfPath("b-quay"));
     expect(structureProblems(list.text)).toEqual([]);
@@ -1179,7 +1187,7 @@ describe("the boards page on the GOV.UK tree (scenario BD)", () => {
     const page = PAGES.find((p) => p.path === PATH);
     expect(page?.id).toBe("drawing-boards");
     expect(page?.trees).toEqual(["govuk"]);
-    expect(page?.methods).toEqual(["GET"]);
+    expect(page?.methods).toEqual(["GET", "POST"]);
     expect(read(PAGES_DIR, "tree-govuk", "routes.yaml")).toMatch(/^ {2}- \/cases\/boards$/m);
     expect(boardsHref(CASE)).toBe(listOf());
     expect(boardHref(CASE, "b-quay")).toBe(boardOfPath("b-quay"));
@@ -1192,14 +1200,16 @@ describe("the boards page on the GOV.UK tree (scenario BD)", () => {
     // A moment's words are the shared package's: the page writes none of its own.
     expect(read(PAGES_DIR, "server", "views", "boardsWords.ts")).toContain("utcStampOf");
     expect(read(PAGES_DIR, "server", "views", "boardsWords.ts")).not.toMatch(/toISOString|toLocaleDateString|toLocaleTimeString|toLocaleString\("en-GB", \{|getUTC/);
-    expect(read(PAGES_DIR, "scripts", "build.mjs")).toContain('join(root, "server", "views", "boardsWords.ts")');
+    // The build bundles the words with the shared package: it takes every server file that imports the package (`apps/pages/scripts/sharedEntries.mjs`).
+    expect(sharedPackageEntries(join(PAGES_DIR, "server"))).toContain(join(PAGES_DIR, "server", "views", "boardsWords.ts"));
   });
 
   describe("BD17: each check is red against the real page with one thing changed", () => {
     it("BD17: the list's check fails for the opened board's items counted, a board added, a row skipped or sorted, headings with no rows", async () => {
-      const w = await world();
+      const w = await world(READER_ONLY);
       const real = (await getAs(w, listOf())).text;
       expect(listProblems(real, w, ALEXS)).toEqual([]);
+      expect(structureProblems(real)).toEqual([]);
       const rowsOf = (html: string): string[] => [...(/<tbody>([\s\S]*?)<\/tbody>/.exec(html)?.[1] ?? "").matchAll(/<tr>[\s\S]*?<\/tr>/g)].map((m) => m[0]);
       const rows = rowsOf(real);
       expect(rows).toHaveLength(3);
@@ -1305,8 +1315,9 @@ describe("the boards page on the GOV.UK tree (scenario BD)", () => {
     });
 
     it("BD17: the census fails for a drawn field that changes nothing; the structure for a control or a link out of order; scripts off for a script", { timeout: 120_000 }, async () => {
-      const w = await world();
+      const w = await world(READER_ONLY);
       const real = (await getAs(w, boardOfPath("b-quay"))).text;
+      expect(structureProblems(real)).toEqual([]);
       expect(structureProblems(real.replace("</h1>", '</h1><form method="get" action="/cases/boards"><button>Draw</button></form>'))).not.toEqual([]);
       expect(structureProblems(real.replace(/<caption[^>]*>[^<]*<\/caption>/, ""))).not.toEqual([]);
       expect(structureProblems(real.replace('scope="row"', ""))).not.toEqual([]);
@@ -1378,8 +1389,9 @@ describe("the boards page on the GOV.UK tree (scenario BD)", () => {
         expect(await ask2(`/v1/investigations/${caseId}/boards/b-quay`, as2), caseId).toEqual({ status: 404, body: NOT_FOUND_CASE });
       }
       for (const id of ["b-blake", "b-elsewhere", "b-no-such-board"]) expect(await ask2(`${base}/${id}`, as2), id).toEqual({ status: 404, body: NOT_FOUND_BOARD });
-      expect((await ask2(base, { method: "POST", ...as2 })).status).toBe(500); // a write that would pass: not modelled
-      expect((await ask2(`${base}/b-quay`, { method: "DELETE", ...as2 })).status).toBe(500);
+      // A write past the rights and the gate: a new board with no body is refused, as is removing another's board (BD30 has the rest).
+      expect((await ask2(base, { method: "POST", ...as2 })).status).toBe(422);
+      expect((await ask2(`${base}/b-shift`, { method: "DELETE", ...as2 })).status).toBe(403);
       const listed = (await ask2(base, as2)).body as { id: string }[];
       expect(listed.map((b) => b.id)).toEqual(ALEXS);
       // Blake's own private board is his to open, and not Alex's.

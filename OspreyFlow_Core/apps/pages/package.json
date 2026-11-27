@@ -9,7 +9,8 @@
     "test": "vitest run",
     "test:keyboard": "playwright test --config keyboard/playwright.config.ts && playwright test --config test/govuk/playwright.config.ts keyboard/ scripts-off/",
     "test:keyboard:govuk": "playwright test --config test/govuk/playwright.config.ts keyboard/ scripts-off/",
-    "test:govuk": "playwright test --config test/govuk/playwright.config.ts"
+    "test:govuk": "playwright test --config test/govuk/playwright.config.ts",
+    "test:csp": "playwright test --config test/csp/playwright.config.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
@@ -22,6 +23,8 @@
     "@types/supertest": "^7.2.1",
     "@types/ws": "^8.5.13",
     "esbuild": "^0.28.2",
+    "maplibre-gl": "6.19.0",
+    "pmtiles": "4.5.0",
     "supertest": "^7.3.2",
     "typescript": "^5.7.2",
     "vitest": "^5.0.0"

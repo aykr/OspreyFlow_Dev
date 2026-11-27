@@ -1,7 +1,7 @@
 /**
  * The pages server started for the GOV.UK tree against the cases page's fixture Conduit (`casesConduit.ts`), for the cases page's
- * keyboard and scripts-off specs (slice GR1a; scenario CS12 and CS13). Two synthetic cases of one unit, one of them with a brief; the
- * signed-in person holds a level on both and the right to investigate.
+ * keyboard and scripts-off specs (slices GR1a and GR1e; scenario CS12, CS13 and CS25). Two synthetic cases of one unit, one of them with
+ * a brief and a history of two steps (one a brief edit); the signed-in person holds a level on both and the right to investigate.
  */
 import type { Page } from "@playwright/test";
 
@@ -28,14 +28,19 @@ export const KEYBOARD_CASES: Case[] = [
       priority: "Who moves the cargo at night?",
       requirements: [{ id: "r-k", text: "Which vessels berth after dark?", status: "open", answered_at: null, attachments: [{ kind: "trend", id: "t-k", title: "Berths" }] }],
     },
+    history: [
+      { id: "hk-seed", label: "Seeded", created_at: "2026-10-02T09:10:00Z" },
+      { id: "hk-brief", label: "Edited the brief", created_at: "2026-10-03T10:00:00Z" },
+    ],
   },
   { id: "k-ferry", name: "Ferry routes", created_at: "2026-11-20T16:00:00Z", created_by: "acct-k", owning_unit: UNIT, domains: [], datasets: [], brief: { priority: "", requirements: [] } },
 ];
 
 /** The stops of the list, in the page's own order: the skip link, the layout's sign-out, each case's link, the way back. */
 export const LIST_TAB_ORDER = ["a: Skip to main content", "button: Sign out", "a: Harbour watch", "a: Ferry routes", "a: Back to Home"];
-/** The stops of a case's page: the skip link, the sign-out, its drawing boards (slice GG4a), the way back to the cases, the way back to Home. */
-export const CASE_TAB_ORDER = ["a: Skip to main content", "button: Sign out", "a: Drawing boards in this case", "a: Back to your cases", "a: Back to Home"];
+/** The stops of a case's page: the skip link, the sign-out, the contents' three links, its drawing boards (slice GG4a), the way back to
+ * the cases, the way back to Home. */
+export const CASE_TAB_ORDER = ["a: Skip to main content", "button: Sign out", "a: About this case", "a: Brief", "a: History", "a: Drawing boards in this case", "a: Back to your cases", "a: Back to Home"];
 
 export async function withCases(assets: Assets, run: (base: string) => Promise<void>): Promise<void> {
   const token = bearer();

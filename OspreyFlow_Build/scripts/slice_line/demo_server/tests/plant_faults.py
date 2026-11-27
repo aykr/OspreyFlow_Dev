@@ -254,6 +254,26 @@ M = [
  ('early_warning.py', 'make_bundle(branch, b, full, BUILD_HELD)', 'make_bundle(branch, b, True, BUILD_HELD)', 'test_build_send and (lost_it)'),
  ('early_warning.py', '        return f"refused by the build account ({data.get(\'reason\')})"', '        return "sent"', 'test_build_send and (busy)'),
  ('early_warning.py', '    return f"no answer from the build account (ssh exit {code})"', '    return "sent"', 'test_build_send and (down)'),
+ # 64 (27 November 2026): D255, the budget left to the Mac; two stacks side by side by demo-server's capacity.json
+ ('demo_server/runner.py', '    if not tests or not all(BUDGET_TEST.match(n) for n in tests):', '    if not tests:', 'budget_failure_beside'),
+ ('demo_server/runner.py', '    if "test-js" not in targets or not set(targets) <= {"test-js", "test"}:', '    if "test-js" not in targets:', 'budget_failure_beside'),
+ ('demo_server/runner.py', '    return len(runs) >= PYTEST_RUNS and all(" passed" in s and not PYTEST_RED.search(s) for s in runs)', '    return True', 'budget_failure_beside'),
+ ('demo_server/runner.py', '    return len(runs) >= PYTEST_RUNS and all(" passed" in s and not PYTEST_RED.search(s) for s in runs)', '    return all(" passed" in s and not PYTEST_RED.search(s) for s in runs)', 'budget_failure_beside'),
+ ('demo_server/runner.py', '        if target == "test" and code != 0 and budget_only(lines, named, failed):', '        if False:', 'red_only_on_a_timing_budget'),
+ ('demo_server/runner.py', '        red = any(s["exit"] != 0 and not s.get("left_to_mac") for s in result["steps"]) or \\', '        red = any(s["exit"] != 0 for s in result["steps"]) or \\', 'red_only_on_a_timing_budget'),
+ ('demo_server/runner.py', '            left.update(failed=list(named), rerun="test-js")', '            left.update(failed=list(named), rerun="test")', 'red_only_on_a_timing_budget'),
+ ('demo_server/runner.py', '    if len(running) + want > cap["max_jobs"]:', '    if len(running) + want > p.MAX_JOBS:', 'second_stack_runs_beside'),
+ ('demo_server/runner.py', '        if room is None or room < need:', '        if room is None:', 'without_room_at_that_moment'),
+ ('demo_server/runner.py', '    lanes = [ln for ln in cap["lanes"] if ln not in lanes_in_use(running, cap["lanes"])][:want]', '    lanes = [ln for ln in GATE_LANES if ln not in lanes_in_use(running, cap["lanes"])][:want]', 'second_stack_runs_beside'),
+ ('demo_server/runner.py', '"CPUQuota=" + cap["cpu_quota"]', '"CPUQuota=" + p.CPU_QUOTA', 'under_the_file_s_caps'),
+ ('demo_server/runner.py', '"MemoryMax=" + cap["memory_max"]', '"MemoryMax=" + p.MEMORY_MAX', 'under_the_file_s_caps'),
+ ('demo_server/runner.py', '    said = {"capacity": cap["refused"]} if cap.get("refused") else {}', '    said = {}', 'cannot_take_whole'),
+ ('demo_server/runner.py', 'or len(lanes) < got["max_jobs"] \\', 'or False \\', 'cannot_take_whole'),
+ ('demo_server/runner.py', ' and x not in NOT_A_JOB_LANE for x in lanes):', ' for x in lanes):', 'cannot_take_whole'),
+ ('demo_server/runner.py', 'MOST_JOBS = 2 * p.MAX_STACK', 'MOST_JOBS = 99', 'cannot_take_whole'),
+ ('demo_server/runner.py', 'or int(str(got["memory_max"])[:-1]) > MOST_MEMORY_GIB:', 'or False:', 'cannot_take_whole'),
+ ('demo_server/runner.py', '    elif not CPU_QUOTA_SHAPE.match(str(got["cpu_quota"])) or int(str(got["cpu_quota"])[:-1]) > 1600:', '    elif False:', 'cannot_take_whole'),
+ ('demo_server/runner.py', '    except (OSError, ValueError):\n        return {**today, "refused": "capacity.json is not readable JSON: today\'s limits"}', '    except (OSError, ValueError):\n        return {**today, "max_jobs": 6, "lanes": ["merger", "platform-b", "rules-b", "case-b", "studio-b", "docs"]}', 'cannot_take_whole'),
 ]
 bad = 0
 for f, old, new, test in M:

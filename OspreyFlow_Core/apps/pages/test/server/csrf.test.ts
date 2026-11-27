@@ -11,6 +11,7 @@
 import { describe, expect, it } from "vitest";
 
 import { tokensMatch } from "../../server/csrf.js";
+import { PAGES } from "../../server/pageList.js";
 import { COOKIE_NAME } from "../../server/sessionPolicy.js";
 import { build } from "../support/build.js";
 import { request, setCookies, signIn } from "../support/http.js";
@@ -120,6 +121,28 @@ describe("a forged cross-site request", () => {
     expect(res.text).not.toContain("REFUSED-TOKEN-VALUE");
     // The sliding session may renew its own cookie (same signed identifier); nothing else is set.
     expect(setCookies(res).map((c) => c.split(";")[0])).toEqual([cookie]);
+  });
+});
+
+// The first GOV.UK page that writes (slice GG4c): its POSTs, through the real page list, stand behind this check like every other.
+describe("the boards page's writes, through the real page list", () => {
+  const writes = ["/cases/boards?case=c-1", "/cases/boards?case=c-1&board=b-1"];
+
+  it("are refused 403 with no token or another session's, and reach the page only with this session's", async () => {
+    const { app } = build({ pages: PAGES, tree: "govuk" });
+    const mine = await signIn(app);
+    const theirs = await signIn(app);
+    for (const path of writes) {
+      for (const body of ["action=delete", `_csrf=${theirs.csrf}&action=delete`]) {
+        const res = await request(app).post(path).set("Cookie", mine.cookie).type("form").send(body);
+        expect(res.status, `${path} ${body}`).toBe(403);
+        expect(res.text).toMatch(/could not be checked/i);
+      }
+    }
+    // With this session's token the page answers: with no Conduit to ask here, that it could not be read.
+    const reached = await request(app).post(writes[1] as string).set("Cookie", mine.cookie).type("form").send(`_csrf=${mine.csrf}&action=delete`);
+    expect(reached.status).toBe(503);
+    expect(reached.text).toMatch(/could not be read/);
   });
 });
 

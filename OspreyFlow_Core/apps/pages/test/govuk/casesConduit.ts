@@ -1,27 +1,33 @@
 /**
- * A fixture Conduit for the cases page (slice GR1a): a real HTTP server on a free port that RECORDS every call and REFUSES what the real
+ * A fixture Conduit for the cases page (slices GR1a and GR1e): a real HTTP server on a free port that RECORDS every call and REFUSES what the real
  * routes refuse (rule 15: a fixture that only grants proves the page agrees with our hopes). Synthetic throughout (rule 9).
  *
  * What it refuses, in the real routes' order (`services/api/app.py`):
  *  - the router first, for anyone, on the DECODED path, as the real server's router sees it (an encoded slash is a slash): a path it has not is 404 `{"detail": "Not Found"}`, a method the path does not serve is 405
  *    `{"detail": "Method Not Allowed"}`. The methods are the real routes': `/v1/investigations` GET and POST (a new case);
- *    `/v1/investigations/{id}` GET, PATCH (a rename) and DELETE (a removal); `/v1/investigations/{id}/brief` GET. Every other path under
+ *    `/v1/investigations/{id}` GET, PATCH (a rename) and DELETE (a removal); `/v1/investigations/{id}/brief` GET;
+ *    `/v1/investigations/{id}/history` GET and `/v1/investigations/{id}/history/{step_id}` POST (a restore). Every other path under
  *    a case (`/views`, `/datasets`, `/tab`, `/access` and the rest the real Conduit serves) is NOT modelled: 500, recorded, never a 404
  *    the real router would not give;
  *  - then who the bearer is: none is 401 `{"detail": "Not authenticated"}` (FastAPI's `HTTPBearer`; a token in the query is ignored, so
  *    refused as none); one it does not know is 401 with the resolver's own reason as the detail (`get_principal`: `detail=str(exc)`,
  *    whose words vary with the reason; the page draws none of them);
- *  - then a route-level right (`dependencies=[Depends(require_right(...))]`, run before the case's gate): the brief needs `investigate`,
+ *  - then a route-level right (`dependencies=[Depends(require_right(...))]`, run before the case's gate): the brief, the history and a
+ *    restore need `investigate`,
  *    a rename `share_case`, a removal `remove_case` and a new case `create_case`; without it, 403
  *    `{"detail": {"error": "right_required", "right": <right>}}`;
  *  - then the case's gate (`_authorized_at`): a case that does not exist, one of another unit and one the reader holds no level on are
- *    the same 404 `{"error": "investigation_not_found"}`; a level too low for the route is 403 (a rename and a removal need Author);
+ *    the same 404 `{"error": "investigation_not_found"}`; a level too low for the route is 403 (a rename and a removal need Author, a
+ *    restore Editor; every read Viewer);
  *  - a write that passes all of these is NOT modelled (this slice's page never writes): 500, recorded, so a later write slice has to
  *    teach it the real answers and cannot lean on a made-up one.
  * What it sends, as the route's models do: `InvestigationListing` rows for the list, in the store's order (the fixture's own order of
  * cases), and only the reader's unit's cases they hold a level on (`list_for`); `Investigation` for a case (no `domains_chosen`: it is
  * `exclude=True`); `CaseBrief` for the brief, with **every attachment this reader may not read left out** (`case_brief.py`, rule 3), as
- * the store's title resolver does. A test can make each route fail (`list_answer`, `case_answer`, `brief_answer`, `*_no_answer`).
+ * the store's title resolver does; `HistoryStepSummary` rows for the history, in the case's own order (`list_steps`: `ORDER BY seq ASC`), each
+ * stored label that is not one the route shows sent as `Changed` (`history.py`), and `restorable` false for a brief edit and true
+ * otherwise (`NOT_RESTORABLE`, read from the label sent), with no size, count or body. A test can make each route fail (`list_answer`,
+ * `case_answer`, `brief_answer`, `history_answer`, `*_no_answer`).
  */
 import { createServer } from "node:http";
 import type { IncomingHttpHeaders, IncomingMessage, Server, ServerResponse } from "node:http";
@@ -56,6 +62,13 @@ export interface Requirement {
   attachments: Attachment[];
 }
 
+/** One stored step of a case's history: its label as the store holds it (which may be an old numbered one the route rewrites). */
+export interface Step {
+  id: string;
+  label: string;
+  created_at: string;
+}
+
 export interface Case {
   id: string;
   name: string;
@@ -65,6 +78,8 @@ export interface Case {
   domains: ("fibo" | "niem" | "stix")[];
   datasets: { id: string; name: string }[];
   brief: { priority: string; requirements: Requirement[] };
+  /** The case's steps, in the store's order (`seq`); absent, none. */
+  history?: Step[];
 }
 
 export interface Call {
@@ -84,7 +99,9 @@ export interface CasesConduitOptions {
   list_answer?: Canned;
   case_answer?: Canned;
   brief_answer?: Canned;
+  history_answer?: Canned;
   list_no_answer?: boolean;
+  history_no_answer?: boolean;
   case_no_answer?: boolean;
   brief_no_answer?: boolean;
 }
@@ -139,6 +156,20 @@ export const briefOf = (c: Case, reader: Reader): Record<string, unknown> => ({
   })),
 });
 
+/** The labels the route sends as stored (`history_labels.py`'s `FIXED_LABELS` and `CHANGED`; `test_govuk_cases_scenario.py` holds this
+ * list to that file): any other stored label is sent as `Changed`. Written out here, not imported from the page, so the page and the
+ * fixture cannot agree by construction. */
+export const SHOWN_LABELS = ["Seeded", "Expanded", "Showed links among the view", "Removed", "Ran a starter question", "Showed two who share contacts", "Opened from an alert", "Showed an ownership structure", "Opened an alert", "Edited the brief", "Changed"];
+/** `NOT_RESTORABLE`: a step that holds no canvas snapshot. */
+export const NOT_RESTORABLE = ["Edited the brief"];
+
+/** What the Conduit sends for a case's history (`list[HistoryStepSummary]`): metadata only, a label it does not show as `Changed`. */
+export const historyOf = (c: Case): Record<string, unknown>[] =>
+  (c.history ?? []).map((s) => {
+    const label = SHOWN_LABELS.includes(s.label) ? s.label : "Changed";
+    return { id: s.id, label, created_at: s.created_at, restorable: !NOT_RESTORABLE.includes(label) };
+  });
+
 const RANK: Record<Level, number> = { viewer: 1, editor: 2, author: 3 };
 
 export async function casesConduit(options: CasesConduitOptions): Promise<CasesConduit> {
@@ -170,14 +201,14 @@ export async function casesConduit(options: CasesConduitOptions): Promise<CasesC
     const path = decodeURIComponent(url.split("?")[0] ?? "");
     const method = req.method ?? "";
     // The router answers first, as FastAPI's does.
-    if (/^\/v1\/investigations\/[^/]+\/.+$/.test(path) && !/^\/v1\/investigations\/[^/]+\/brief$/.test(path)) {
+    if (/^\/v1\/investigations\/[^/]+\/.+$/.test(path) && !/^\/v1\/investigations\/[^/]+\/(?:brief|history(?:\/[^/]+)?)$/.test(path)) {
       return send(500, { detail: "the fixture Conduit does not model this route of a case" });
     }
-    const match = /^\/v1\/investigations(?:\/([^/]+)(\/brief)?)?$/.exec(path);
+    const match = /^\/v1\/investigations(?:\/([^/]+)(\/brief|\/history(\/[^/]+)?)?)?$/.exec(path);
     if (!match) return send(404, { detail: "Not Found" });
     const id = match[1];
-    const route = id === undefined ? "list" : match[2] === undefined ? "case" : "brief";
-    const methods: Record<string, string[]> = { list: ["GET", "POST"], case: ["GET", "PATCH", "DELETE"], brief: ["GET"] };
+    const route = id === undefined ? "list" : match[2] === undefined ? "case" : match[2] === "/brief" ? "brief" : match[3] === undefined ? "history" : "restore";
+    const methods: Record<string, string[]> = { list: ["GET", "POST"], case: ["GET", "PATCH", "DELETE"], brief: ["GET"], history: ["GET"], restore: ["POST"] };
     if (!(methods[route] as string[]).includes(method)) return send(405, { detail: "Method Not Allowed" });
     const header = req.headers["authorization"];
     const token = typeof header === "string" && header.startsWith("Bearer ") ? header.slice(7) : undefined;
@@ -185,7 +216,7 @@ export async function casesConduit(options: CasesConduitOptions): Promise<CasesC
     const reader = options.readers.find((r) => r.token === token);
     if (!reader) return send(401, { detail: UNKNOWN_BEARER });
     // A route-level right, before the case's gate.
-    const right = route === "brief" ? "investigate" : route === "list" && method === "POST" ? "create_case" : method === "PATCH" ? "share_case" : method === "DELETE" ? "remove_case" : undefined;
+    const right = route === "brief" || route === "history" || route === "restore" ? "investigate" : route === "list" && method === "POST" ? "create_case" : method === "PATCH" ? "share_case" : method === "DELETE" ? "remove_case" : undefined;
     if (right !== undefined && !reader.rights.includes(right)) return send(403, rightRefusal(right));
     if (route === "list") {
       if (method === "POST") return send(500, { detail: "the fixture Conduit does not model a successful write" });
@@ -197,10 +228,11 @@ export async function casesConduit(options: CasesConduitOptions): Promise<CasesC
     const found = options.cases.find((c) => c.id === id);
     const level = found ? reader.levels[found.id] : undefined;
     if (!found || found.owning_unit !== reader.unit || level === undefined) return send(404, NOT_FOUND_CASE);
-    const needed: Level = method === "GET" ? "viewer" : "author";
+    const needed: Level = method === "GET" ? "viewer" : route === "restore" ? "editor" : "author";
     if (RANK[level] < RANK[needed]) return send(403, { detail: `this needs the ${needed} level on the case` });
     if (method !== "GET") return send(500, { detail: "the fixture Conduit does not model a successful write" });
     if (route === "case") return canned(options.case_answer, options.case_no_answer, () => send(200, investigationOf(found)));
+    if (route === "history") return canned(options.history_answer, options.history_no_answer, () => send(200, historyOf(found)));
     return canned(options.brief_answer, options.brief_no_answer, () => send(200, briefOf(found, reader)));
   };
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));

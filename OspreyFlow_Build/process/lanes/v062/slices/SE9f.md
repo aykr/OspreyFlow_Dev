@@ -59,3 +59,15 @@ The merge gate refused round 1's tip `04f7793` on another slice's test, `tests/g
 '/packs/{pack_id}/items"'"). **This round: correct only the line numbers in that diff's citations to where the same cited
 text now stands on your merge result** (nothing else in the diff, no test, no other file), and keep round 1's work as it
 is. Then the pack-trends scenario test is green on the merge result, and your frozen checks are green.
+
+## Round 3 (the conductor, 27 November 2026, 00:34 UTC): the plant that names the old line
+
+Round 2's diff is right (`app.py:19905` holds the add-item route on the merge result). The merge gate refused tip
+`a0a3092` on one case of the same test: `test_the_check_fails_for_each_planted_fault[a cited route line that drifted
+(the add-item route as it was before main moved)]`, "the plant's anchor 'services/api/app.py:19895' is not in
+citation_diff" (1 failed, 51 passed). The plant at `tests/glass_trees/test_govuk_pack_trends_scenario.py:562` replaces
+`services/api/app.py:19895` with `19861`, and the diff no longer holds 19895. **This round: change that plant's anchor
+(its first string) from `services/api/app.py:19895` to `services/api/app.py:19905`, the line your diff now cites, and
+check no other plant in that file names a line your round 2 changed.** Keep the drifted line `19861` and its expected
+words, provided 19861 still does not hold the route. Change nothing else. The test file is green on your merge result (52
+passed), the plant is still red when the check is weakened, and your frozen checks are green.

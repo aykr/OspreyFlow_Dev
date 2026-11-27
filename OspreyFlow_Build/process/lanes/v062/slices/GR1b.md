@@ -52,3 +52,11 @@ typecheck`; `node scripts/no_react_check.mjs`; the GOV.UK scenario tests (cases,
 
 A case's datasets changed later (GR1f); a composite dataset; the no-case drawing; any Conduit change (a reason on
 `dataset_refused` would be an amendment); `apps/workspace`; the Default tree's twin.
+
+## Taking main in after GR1e (the owner, 27 November 2026, about 09:20 UTC): the scenario numbers
+
+GR1e, now on main, uses scenario CS16 to CS26. **The owner's ruling (a):** GR1b's rows CS16 to CS33 become **CS27 to CS44**, and main keeps CS16 to CS26.
+
+- **The owner allows you to change your acceptance file `apps/pages/test/govuk/cases-new.test.ts` for this renumbering alone**, and the scenario rows and pins that name those numbers with it. Change nothing else in that file.
+- Then merge main in, and join the other conflicts so both features work: `cases.ts`, `casesWords.ts`, `cases.njk`, `FUNCTIONS.yaml`, the cases tests, `casesConduit.ts` and `casesServer.ts`. Keep main's entries first and yours after, as in your last merge.
+- Your frozen checks are green. Every `tests/glass_trees/test_govuk_*_scenario.py` file is green on your tip; name each in your report.

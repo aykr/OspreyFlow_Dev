@@ -172,6 +172,8 @@ class BoardOpened(BaseModel):
     node_types: list[str] = Field(default_factory=list)
     link_types: list[str] = Field(default_factory=list)
     markings: list[str] = Field(default_factory=list)
+    #: The case's ceiling to a reader cleared for it; to anyone else the highest marking within
+    #: both it and their clearance, never the case's own name (rule 3; GG4j).
     ceiling: str | None = None
     grading_scheme: GradingScheme = "5x5x5"
     #: Its parts' grades (ADR-143 Amendment 6: a scheme file's are known only from here).

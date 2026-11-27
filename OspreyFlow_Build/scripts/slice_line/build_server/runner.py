@@ -315,8 +315,12 @@ SEAT_RESULTS_BRANCH = "seat-results"
 MAX_ORDER = 1024 ** 2
 ORDER_KEYS = {"seat", "slice", "round", "prompt", "model", "effort", "account", "records"}
 RECORD_NAME = re.compile(r"\A[a-z][a-z0-9-]{0,40}\.json\Z")
-#: How a seat is run: the line's own run_seat.py, from this account's clone, given the order (its --order mode).
-SEAT_RUN = [sys.executable, str(CLONE / "OspreyFlow_Build/scripts/slice_line/run_seat.py"), "--order"]
+#: How a seat is run: the line's own run_seat.py, given the order (its --order mode), from the seat's main tree, made
+#: at exactly the main the Mac sent with the order; never the copy in the clone's own working tree, which the runner
+#: never checks out and so stays as first cloned (GG3a's verifier, 26 November 2026: the clone's older run_seat.py
+#: had no --order and read the order's path as a seat). SEAT_RUN is None but in the line's tests, which stand it in.
+SEAT_LINE = "OspreyFlow_Build/scripts/slice_line/run_seat.py"
+SEAT_RUN = None
 SEAT_WORKER = [sys.executable, str(Path(__file__).resolve()), "_seat"]
 
 
@@ -506,6 +510,13 @@ def launch_seat(slice_id: str, seat: str, env: dict) -> None:
                        env=env, stdin=out, stdout=out, stderr=out)
 
 
+def seat_command(order: dict) -> list:
+    """run_seat.py in its --order mode, from the seat's main tree (the main the Mac sent), not the clone's own."""
+    if SEAT_RUN:
+        return list(SEAT_RUN)
+    return [sys.executable, str(Path(order["trees"]["main"]) / SEAT_LINE), "--order"]
+
+
 def run_seat(slice_id: str, seat: str) -> int:
     """The seat itself (in its tmux session): the line's run_seat.py on the order, then its result and its records
     committed on seat-results, and the status set."""
@@ -513,7 +524,7 @@ def run_seat(slice_id: str, seat: str) -> int:
     order = read_json(d / "order.json") or {}
     t0 = time.monotonic()
     with (d / "seat.log").open("w") as log:
-        code = subprocess.run([*SEAT_RUN, str(d / "order.json")], cwd=order.get("trees", {}).get(
+        code = subprocess.run([*seat_command(order), str(d / "order.json")], cwd=order.get("trees", {}).get(
             "wt" if seat == "builder" else "vt", str(d)), stdout=log, stderr=log).returncode
     st = read_json(d / "status.json") or {}
     if st.get("state") == "stopped":

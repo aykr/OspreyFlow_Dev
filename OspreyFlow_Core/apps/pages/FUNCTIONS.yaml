@@ -206,7 +206,7 @@ functions:
     name: "Cases, case brief, saved views, history (also access, settings, datasets, domains, new case)"
     where: "apps/workspace/src/investigation/, apps/workspace/src/views/, apps/workspace/src/history/"
     slice: "R4 (list), R5"
-    scenario: "A7, B14, B21, CS1, CS2, CS3, CS4, CS5, CS6, CS7, CS8, CS9, CS10, CS11, CS12, CS13, CS14, CS15"
+    scenario: "A7, B14, B21, CS1, CS2, CS3, CS4, CS5, CS6, CS7, CS8, CS9, CS10, CS11, CS12, CS13, CS14, CS15, CS16, CS17, CS18, CS19, CS20, CS21, CS22, CS23, CS24, CS25, CS26"
     route: ""
     status: "planned"
   # The plan has not yet named a build for this row; the inventory's own slice is kept.
@@ -261,7 +261,7 @@ functions:
     name: "Drawing boards (and a watch or alert drawn from them)"
     where: "apps/workspace/src/boards/"
     slice: "GG4"
-    scenario: "BD1, BD2, BD3, BD4, BD5, BD6, BD7, BD8, BD9, BD10, BD11, BD12, BD13, BD14, BD15, BD16, BD17"
+    scenario: "BD1, BD2, BD3, BD4, BD5, BD6, BD7, BD8, BD9, BD10, BD11, BD12, BD13, BD14, BD15, BD16, BD17, BD18, BD19, BD20, BD21, BD22, BD23, BD24, BD25, BD26, BD27, BD28, BD29, BD30, BD31"
     route: ""
     status: "planned"
   # The plan has not yet named a build for this row. C5 (spec/08) is proposed, not owner-ruled; the Matrix has none.
@@ -317,12 +317,17 @@ functions:
     scenario: ""
     route: ""
     status: "planned"
-  # The plan has not yet named a build for this row; the inventory's own slice is kept.
+  # RM1 is alerts, rules and watches (the owner, 24 November 2026). Its first slice, RM1a, is the alert queue, read-only, at `/alert-queue`, which
+  # is in `tree-govuk/routes.yaml` as the first page of the function. The row's route stays empty and the row "planned": the function is not
+  # complete, because the rules, watches, closing and assigning, an alert's own page and connection strength are later slices, and a row with a
+  # route is read as a function whose GOV.UK page exists (`scripts/tree_parity.py`). None of B12, B13, B14 and B20 says what a person who only
+  # reads the queue is shown, so scenario AQ of spec/08 was written first and `apps/pages/test/govuk/alert-queue.test.ts` is the proof. No
+  # Default twin yet (the owner, 24 November 2026).
   - id: alerts-rules-watches
     name: "Alerts, rules, watches, connection strength"
-    where: "apps/workspace/src/alerts/, apps/workspace/src/watches/, apps/workspace/src/strength/"
-    slice: "R7"
-    scenario: "B12, B13, B14, B20"
+    where: "apps/workspace/src/alerts/, apps/workspace/src/watches/, apps/workspace/src/strength/; GOV.UK page apps/pages/server/alertQueue.ts (the queue)"
+    slice: "RM1"
+    scenario: "B12, B13, B14, B20, AQ1, AQ2, AQ3, AQ4, AQ5, AQ6, AQ7, AQ8, AQ9, AQ10, AQ11"
     route: ""
     status: "planned"
   # The plan has not yet named a build for this row. C9 and C11 (spec/08) are proposed, not owner-ruled.

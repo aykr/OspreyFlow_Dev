@@ -89,6 +89,30 @@ The generated TypeScript follows the schema (`make -C ../OspreyFlow_Build schema
 `apps/pages` (GG4a's page draws no source until a later page part), `apps/workspace` beyond what the generated types
 change, any key or address; the ceiling (GG4j).
 
+## The owner's approval (27 November 2026, 03:21 UTC): round 2 starts
+
+**The owner approves the ADR-143 amendment as committed at `92605bf`
+(`OspreyFlow_Build/process/lanes/v062/GG4b_ADR143_AMENDMENT.diff`), with (a) on all five of round 1's questions.**
+Apply that diff exactly, with no hunk changed, added or dropped, as its own commit before any test or code. Then build
+round 2 above, with these answers:
+
+1. **Q1 (a):** a reader who may not read the document gets neither the note nor the document. **The three small
+   front-end changes are in this slice's scope**, and they lift "Not touched: `apps/pages`, `apps/workspace`" above for
+   these three alone:
+   - the GOV.UK board page accepts an item with neither;
+   - the React inspector's "No source note was given" sentence;
+   - the React drawing form's required note.
+   Each change gets its own test, red first.
+2. **Q2 (a):** editing an old item must add a note.
+3. **Q3 (a):** promotion requires a note, whoever asks.
+4. **Q4 (a):** at most one batched document read for each answer that needs several graph reads.
+5. **Q5 (a), row 15's budget:** document reads do not grow with the number of items (the planted fault: one read per
+   element, in place of the batch), and the server's live step meets `spec/02` §5 (an expansion of up to 500 nodes
+   under 800 ms).
+
+Your own reading from round 1 stands: changing a drawn item's document leaves the old id in its stored sources. The
+amendment covers that; the edit and the working set keep stored ids. Name the test that shows it.
+
 ## Acceptance test
 
 `OspreyFlow_Build/tests/ontology/test_drawn_source_document_withheld.py` (new; red on main, green after).
