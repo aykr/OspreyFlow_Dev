@@ -57,6 +57,7 @@ import { generateSecret } from "../support/secret.js";
 import { bearer, providerFor, textOf } from "../support/studioWorld.js";
 import { NOT_FOUND_CASE, SHOWN_LABELS, UNKNOWN_BEARER, briefOf, casesConduit, historyOf, investigationOf, listingOf, rightRefusal } from "./casesConduit.js";
 import type { Case, CasesConduit, CasesConduitOptions, Reader } from "./casesConduit.js";
+import { sharedPackageEntries } from "../../scripts/sharedEntries.mjs";
 
 // The compiled service is checked against `server/types/glassShared.d.ts`; this holds each declaration the cases page added to the
 // package's own type, so that a shape the package changes and the stub still has as it was fails `npm run typecheck`.
@@ -811,8 +812,8 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
       for (const sentence of SHARED_SENTENCES) expect(s.text.includes(sentence), `${s.name} writes again ${JSON.stringify(sentence)}`).toBe(false);
     }
     expect(choosingProblems(sources)).toEqual([]);
-    const build = read(PAGES_DIR, "scripts", "build.mjs");
-    expect(build).toContain('join(root, "server", "views", "casesWords.ts")');
+    // The build bundles the words with the shared package: it takes every server file that imports the package (`apps/pages/scripts/sharedEntries.mjs`).
+    expect(sharedPackageEntries(join(PAGES_DIR, "server"))).toContain(join(PAGES_DIR, "server", "views", "casesWords.ts"));
   });
 
   describe("CS15: each check is red against the real page with one thing changed", () => {

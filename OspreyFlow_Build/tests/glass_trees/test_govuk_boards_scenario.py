@@ -1,10 +1,12 @@
-"""Scenario BD: a case's drawing boards and one board's drawn items and links as tables, read-only, on the GOV.UK tree (slice GG4a;
-ADR-143 decisions 3 to 5; ADR-152 decisions 1, 4, 5, 6, 7 and 12; the owner's rulings of 25 November 2026 on GG4a's draft: every
-proposal (a), and, for question 2, his exception (b): GG4a starts before GG3, since a board draws without Sigma).
+"""Scenario BD: a case's drawing boards and one board's drawn items and links as tables on the GOV.UK tree (slice GG4a), and making,
+sharing and deleting a board as scripts-off forms (slice GG4c, BD18 onward); ADR-143 decisions 3 to 5; ADR-152 decisions 1, 4, 5, 6, 7
+and 12; the owner's rulings of 25 November 2026 on GG4a's draft (every proposal (a), and, for question 2, his exception (b): GG4a starts
+before GG3, since a board draws without Sigma) and of 26 November 2026 on GG4c's (every proposal (a); no unshare route).
 
 **There is no React-first proof** (decision 12 asks for one only "where one exists"): the React boards are a place of buttons and a
 drawing surface, and the `drawing-boards` row has no journey. The scenario is written first, from those screens, the Conduit's own routes
-and the ADR's text, and the page test (`apps/pages/test/govuk/boards.test.ts`) is the proof.
+and the ADR's text, and the page tests (`apps/pages/test/govuk/boards.test.ts` for BD1 to BD17, `boards-write.test.ts` for BD18 onward)
+are the proof.
 
 This file holds the document, the page test, the `drawing-boards` row, the route list, the page module and the field census in step:
 
@@ -14,9 +16,13 @@ This file holds the document, the page test, the `drawing-boards` row, the route
   that it works with scripts off, or what it leaves out             -> `test_the_scenario_says_what_it_shows_who_sees_it_and_scripts_off`
 * the row without its scenario ids, given a route while the function
   is incomplete                                                      -> `test_the_boards_row_carries_the_scenario_and_no_route`
-* a route list that is not the paths the tree has pages for          -> `test_the_route_list_has_the_six_pages`
+* the page's path not in the route list, or listed twice             -> `test_the_route_list_holds_the_page_once`
 * the page module not the row's, at the path, for the GOV.UK tree
-  alone, answering GET alone, or not in the one table of pages       -> `test_the_page_module_is_the_boards_rows_at_its_path`
+  alone, answering GET and POST alone, or not in the one table       -> `test_the_page_module_is_the_boards_rows_at_its_path`
+* a write route whose rights, case gate, creator check or body
+  refusal is no longer what the fixture Conduit copies, an unshare
+  route, a form passed through to the Conduit, the owner's words
+  changed in the page or missing from the scenario                   -> `test_the_writes_are_the_routes_and_the_owners_words`
 * a field of the routes' models neither drawn by the page nor named
   as left out, a name for no field, the page's never-sent or
   may-be-absent lists not the models' own                            -> `test_the_field_census_is_the_models_fields`
@@ -34,7 +40,8 @@ THE FOLDERS THIS TEST WALKS (the conductor's scan-map row): none. It reads named
 in-memory copy of what it read; it never writes into the repository. The files, from the repository's root:
 `OspreyFlow_Build/spec/{08_ACCEPTANCE_SCENARIOS,03_CONDUIT_MIDDLEWARE,06_DECISIONS}.md`, and under `OspreyFlow_Core`:
 `apps/pages/FUNCTIONS.yaml`, `apps/pages/tree-govuk/routes.yaml`, `apps/pages/test/govuk/boards.test.ts`,
-`apps/pages/test/govuk/keyboard/boards.spec.ts`, `apps/pages/test/govuk/scripts-off/boards.spec.ts`,
+`apps/pages/test/govuk/boards-write.test.ts`, `apps/pages/test/govuk/keyboard/boards.spec.ts`,
+`apps/pages/test/govuk/scripts-off/boards.spec.ts`,
 `apps/pages/server/{boards,pageList,pages,conduit}.ts`, `apps/pages/server/views/{boardsWords,notFoundWords}.ts`,
 `services/api/{app,boards}.py`, `services/api/working_set/models.py`, `packages/schemas/{boards,domain}.py`, `packages/ontology/handling.py`,
 `apps/workspace/src/workingset/ViewOverCapDialog.tsx`,
@@ -65,6 +72,8 @@ SPEC_08 = SPEC / "08_ACCEPTANCE_SCENARIOS.md"
 FUNCTIONS = PAGES / "FUNCTIONS.yaml"
 ROUTES = PAGES / "tree-govuk" / "routes.yaml"
 PAGE_TEST = PAGES / "test" / "govuk" / "boards.test.ts"
+WRITE_TEST = PAGES / "test" / "govuk" / "boards-write.test.ts"
+APP = CORE / "services" / "api" / "app.py"
 KEYBOARD_TEST = PAGES / "test" / "govuk" / "keyboard" / "boards.spec.ts"
 SCRIPTS_OFF_TEST = PAGES / "test" / "govuk" / "scripts-off" / "boards.spec.ts"
 PAGE_MODULE = PAGES / "server" / "boards.ts"
@@ -89,9 +98,12 @@ VALUES: dict[str, tuple[str, Path, str]] = {
 SECTION = "## Scenario BD"
 ID = re.compile(r"^BD\d+$")
 TITLE = re.compile(r"""\b(?:it|test)\(\s*(?:"|')(BD\d+): """)
-PAGE_TEST_NAME = "boards.test.ts"
 PATH = "/cases/boards"
-EXPECTED_IDS = [f"BD{n}" for n in range(1, 18)]
+EXPECTED_IDS = [f"BD{n}" for n in range(1, 32)]
+#: Which page test proves each row: GG4a's rows in its file, GG4c's (the writes) in theirs.
+TEST_FILES: dict[str, str] = {
+    row_id: ("boards.test.ts" if int(row_id[2:]) <= 17 else "boards-write.test.ts") for row_id in EXPECTED_IDS
+}
 ROW = "drawing-boards"
 ROW_NAME = "Drawing boards (and a watch or alert drawn from them)"
 ROW_WHERE = "apps/workspace/src/boards/"
@@ -127,7 +139,33 @@ BRIEF: dict[str, tuple[str, ...]] = {
     "scripts off": ("BD15",),
     "the trees, the lists and the words": ("BD16",),
     "each check red against the real page with one thing changed": ("BD17",),
+    "the new board, offered on both rights": ("BD18",),
+    "a blank board made: one post, then 303": ("BD19",),
+    "a wrong name: the error summary, the words kept, nothing sent": ("BD20",),
+    "a refusal for the right or the level, in the page's words": ("BD21",),
+    "a share, told it cannot be undone": ("BD22",),
+    "share and delete only on may_draw; a non-creator: a missing board": ("BD23",),
+    "a delete asked first, then the banner once": ("BD24",),
+    "the anti-forgery token": ("BD25",),
+    "a failed write and an ended session": ("BD26",),
+    "one call per write, so one audit row": ("BD27",),
+    "the writes by keyboard": ("BD28",),
+    "the writes with scripts off": ("BD29",),
+    "the fixture refuses a write as the route does": ("BD30",),
+    "each write check red against the real page with one thing changed": ("BD31",),
 }
+
+#: The words the owner ruled for the writes (26 November 2026): each in the page's words module and in the scenario.
+RULED_WORDS = (
+    "New drawing board",
+    "Share with the case",
+    "You cannot make boards in this case",
+    "Delete this board?",
+    "What was drawn on it stays in the case.",
+    "The board was deleted. What was drawn on it stays in the case.",
+)
+#: The write routes, each with whether it asks `own_board` (the board's creator): what the fixture's order of refusals copies.
+WRITE_ROUTES: dict[str, bool] = {"make_board": False, "share_board": True, "delete_board": True}
 
 
 def read(path: Path) -> str:
@@ -275,6 +313,8 @@ def inputs() -> dict[str, Any]:
         "functions": yaml.safe_load(read(FUNCTIONS))["functions"],
         "routes": yaml.safe_load(read(ROUTES))["routes"],
         "page_test": read(PAGE_TEST),
+        "write_test": read(WRITE_TEST),
+        "app": read(APP),
         "page_module": read(PAGE_MODULE),
         "page_list": read(PAGE_LIST),
         "words": read(WORDS),
@@ -304,19 +344,22 @@ def scenario_problems(data: dict[str, Any]) -> list[str]:
             found.append(f"{row_id} runs on {tree!r}: the boards page is the GOV.UK tree's")
         if not read_from:
             found.append(f"{row_id} says nothing of what it was read from")
-        if PAGE_TEST_NAME not in page_test:
-            found.append(f"{row_id} names no page test")
+        wanted = TEST_FILES.get(row_id, "boards-write.test.ts")
+        if f"`{wanted}`" not in page_test:
+            found.append(f"{row_id} names no page test: {wanted}")
     if list(rows) != EXPECTED_IDS:
         found.append(f"the scenario's ids are {list(rows)}, not {EXPECTED_IDS}")
     for behaviour, ids in BRIEF.items():
         for row_id in ids:
             if row_id not in rows:
                 found.append(f"the behaviour {behaviour!r} has no scenario {row_id}")
-    named_in_tests = set(TITLE.findall(data["page_test"]))
-    for row_id in sorted(set(rows) - named_in_tests):
-        found.append(f"{row_id} names {PAGE_TEST_NAME} but no case of it is titled {row_id}")
-    for row_id in sorted(named_in_tests - set(rows)):
-        found.append(f"{PAGE_TEST_NAME} has a case titled {row_id}, which is no scenario")
+    for key, name in (("page_test", "boards.test.ts"), ("write_test", "boards-write.test.ts")):
+        titled = set(TITLE.findall(data[key]))
+        proved = {r for r in rows if TEST_FILES.get(r) == name}
+        for row_id in sorted(proved - titled):
+            found.append(f"{row_id} names {name} but no case of it is titled {row_id}")
+        for row_id in sorted(titled - proved):
+            found.append(f"{name} has a case titled {row_id}, which is no scenario of its own")
     return found
 
 
@@ -333,7 +376,12 @@ def prose_problems(data: dict[str, Any]) -> list[str]:
         ("no 'not shared' sentence", "never a sentence that the board is not shared with them"),
         ("the hidden item", "absent from every table and every count, with no gap"),
         ("the withdrawn count", "which it does to the board's creator alone"),
-        ("read-only", "read-only"),
+        ("the writes", "It writes three things and no others"),
+        ("post, then a redirect", "post, then `303` to a `GET`"),
+        ("no unshare", "there is no unshare route, and none is asked for here"),
+        ("nothing passed through", "the form's fields are never passed through"),
+        ("no maker named", "names who made a board"),
+        ("no source on a write's page", "none shows a drawn item's source or a document's identifier"),
         ("the Default tree", "answers `/cases/boards` as a path nothing serves"),
         ("the filtering rule", "filters nothing after the answer comes"),
         ("the route's own count", "never one the page makes"),
@@ -379,10 +427,15 @@ def function_problems(data: dict[str, Any]) -> list[str]:
 
 
 def route_problems(data: dict[str, Any]) -> list[str]:
-    expected = ["/help", "/admin/people", "/reports", "/packs/trends", "/cases", PATH, "/alert-queue"]
-    if data["routes"] != expected:
-        return [f"the route list is {data['routes']!r}: the tree has seven pages, {expected}"]
-    return []
+    # The page's own path is in the tree's route list, once. Whether the list and the pages that name the GOV.UK tree agree is
+    # checked in one place, `apps/pages/test/govuk/help.test.ts` (HP9), from the files themselves, so a page added to the tree
+    # edits no other page's test (`test_route_pins.py`).
+    found: list[str] = []
+    if data["routes"].count(PATH) != 1:
+        found.append(f"the route list {data['routes']!r} holds {PATH} {data['routes'].count(PATH)} times, not once")
+    if len(set(data["routes"])) != len(data["routes"]):
+        found.append("the route list names a path twice")
+    return found
 
 
 def module_problems(data: dict[str, Any]) -> list[str]:
@@ -392,7 +445,7 @@ def module_problems(data: dict[str, Any]) -> list[str]:
         ("its id", f'id: "{ROW}"'),
         ("its path", f'path: "{PATH}"'),
         ("the GOV.UK tree alone", 'trees: ["govuk"]'),
-        ("GET alone", 'methods: ["GET"]'),
+        ("GET and POST alone", 'methods: ["GET", "POST"]'),
     ):
         if needle not in text:
             found.append(f"the page module does not name {label}: {needle!r}")
@@ -534,7 +587,57 @@ def source_problems(data: dict[str, Any]) -> list[str]:
     return found
 
 
+def route_facts(source: str, name: str) -> tuple[str, dict[str, str], set[str]] | None:
+    """Of the route function `name`: its decorators as text, its parameters' annotations, and the methods it calls."""
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.AsyncFunctionDef) and node.name == name:
+            decorators = "\n".join(ast.unparse(d) for d in node.decorator_list)
+            params = {a.arg: ast.unparse(a.annotation) for a in node.args.args if a.annotation is not None}
+            called = {
+                c.func.attr for c in ast.walk(node) if isinstance(c, ast.Call) and isinstance(c.func, ast.Attribute)
+            }
+            return decorators, params, called
+    return None
+
+
+def write_problems(data: dict[str, Any]) -> list[str]:
+    """The writes: the routes' gates the fixture copies, no unshare route, the page's own body, and the owner's words."""
+    found: list[str] = []
+    app = data["app"]
+    for name, owns in WRITE_ROUTES.items():
+        facts = route_facts(app, name)
+        if facts is None:
+            found.append(f"the route {name} is not in app.py")
+            continue
+        decorators, params, called = facts
+        if "dependencies=_DRAWS" not in decorators:
+            found.append(f"{name} no longer asks the drawing rights before anything else (the fixture's first refusal)")
+        if params.get("investigation") != "InvestigationEditorDep":
+            found.append(f"{name} no longer stands behind the case's Editor gate (the fixture's second refusal)")
+        if owns and "own_board" not in called:
+            found.append(f"{name} no longer asks for the board's creator")
+    if "_DRAWS = [Depends(require_right(Right.DRAW_ON_BOARDS)), Depends(require_right(Right.INVESTIGATE))]" not in app:
+        found.append("the drawing rights are not draw_on_boards then investigate, as the fixture asks them")
+    if re.search(r"/boards/\{board_id\}/(?:unshare|private)|def unshare_board", app):
+        found.append("the Conduit has an unshare route: the page and the scenario say there is none")
+    body = re.search(r"class BoardInput\(BaseModel\):.*?(?=\nclass )", data["models"]["Board"], flags=re.DOTALL)
+    if body is None or 'ConfigDict(extra="forbid")' not in body.group(0):
+        found.append("BoardInput no longer forbids an extra field, which the fixture refuses")
+    if 'json: { name, start: "blank" }' not in data["page_module"]:
+        found.append("the page does not build a new board's body itself, from the name and a blank start")
+    if re.search(r"json:\s*(?:req\.body|fields|body)\b", data["page_module"]):
+        found.append("the page passes a form through to the Conduit")
+    section = section_of(data["spec_08"])
+    for words in RULED_WORDS:
+        if f'"{words}"' not in data["words"]:
+            found.append(f"boardsWords.ts does not hold the ruled words {words!r}")
+        if words not in section:
+            found.append(f"the scenario does not say the ruled words {words!r}")
+    return found
+
+
 CHECKS = (
+    write_problems,
     source_problems,
     scenario_problems,
     prose_problems,
@@ -577,7 +680,7 @@ def test_the_boards_row_carries_the_scenario_and_no_route() -> None:
     assert function_problems(inputs()) == []
 
 
-def test_the_route_list_has_the_six_pages() -> None:
+def test_the_route_list_holds_the_page_once() -> None:
     assert route_problems(inputs()) == []
 
 
@@ -595,6 +698,10 @@ def test_the_page_allows_exactly_the_models_values() -> None:
 
 def test_no_source_is_drawn_until_gg4b() -> None:
     assert source_problems(inputs()) == []
+
+
+def test_the_writes_are_the_routes_and_the_owners_words() -> None:
+    assert write_problems(inputs()) == []
 
 
 # ---------------------------------------------------------------------------------------------------- planted faults (rule 15)
@@ -630,6 +737,17 @@ def _model(model: str, old: str, new: str) -> Callable[[dict[str, Any]], None]:
     def plant(data: dict[str, Any]) -> None:
         assert old in data["models"][model], f"the plant's anchor {old!r} is not in {model}'s source"
         data["models"][model] = data["models"][model].replace(old, new, 1)
+
+    return plant
+
+
+def _app(old: str, new: str, after: str) -> Callable[[dict[str, Any]], None]:
+    """A change to app.py at the first `old` after the words `after` (the same gate is written on many routes)."""
+
+    def plant(data: dict[str, Any]) -> None:
+        start = data["app"].index(after)
+        at = data["app"].index(old, start)
+        data["app"] = data["app"][:at] + new + data["app"][at + len(old) :]
 
     return plant
 
@@ -709,11 +827,91 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
     ("the row with one id short", _row(ROW, scenario=", ".join(EXPECTED_IDS[:-1])), function_problems, "scenario"),
     ("the row routed while incomplete", _row(ROW, route=PATH), function_problems, "stays empty"),
     ("the row's slice moved", _row(ROW, slice="GG4a"), function_problems, "has moved"),
-    ("a route in the list the code has no page for", lambda d: d["routes"].append("/welcome"), route_problems, "seven pages"),
-    ("the boards path left out of the list", lambda d: d["routes"].remove(PATH), route_problems, "seven pages"),
+    ("the page's path listed twice", lambda d: d["routes"].append(PATH), route_problems, "not once"),
+    ("the boards path left out of the list", lambda d: d["routes"].remove(PATH), route_problems, "not once"),
     ("the page at another path", _replace("page_module", f'path: "{PATH}"', 'path: "/boards"'), module_problems, "its path"),
     ("the page for both trees", _replace("page_module", 'trees: ["govuk"]', 'trees: ["default", "govuk"]'), module_problems, "GOV.UK tree alone"),
-    ("the page answering POST", _replace("page_module", 'methods: ["GET"]', 'methods: ["GET", "POST"]'), module_problems, "GET alone"),
+    (
+        "the page answering DELETE",
+        _replace("page_module", 'methods: ["GET", "POST"]', 'methods: ["GET", "POST", "DELETE"]'),
+        module_problems,
+        "GET and POST alone",
+    ),
+    ("a write's test retitled", _replace("write_test", 'it("BD24: ', 'it("BD42: '), scenario_problems, "titled BD24"),
+    (
+        "a write row naming the read's test",
+        _in_section("| `boards-write.test.ts`, `keyboard/boards.spec.ts` |", "| `boards.test.ts`, `keyboard/boards.spec.ts` |"),
+        scenario_problems,
+        "BD28 names no page test",
+    ),
+    (
+        "no unshare left unsaid",
+        _in_section("there is no unshare route, and none is asked for here", "sharing is for good"),
+        prose_problems,
+        "no unshare",
+    ),
+    (
+        "the share route without the drawing rights",
+        _app("dependencies=_DRAWS)", "dependencies=_READS_BOARDS)", '/boards/{board_id}/share", '),
+        write_problems,
+        "share_board no longer asks the drawing rights",
+    ),
+    (
+        "the delete route at the Viewer level",
+        _app("InvestigationEditorDep", "InvestigationViewerDep", "async def delete_board("),
+        write_problems,
+        "delete_board no longer stands behind",
+    ),
+    (
+        "the delete route not asking for the creator",
+        _app("boards.own_board(", "boards.board(", "async def delete_board("),
+        write_problems,
+        "delete_board no longer asks for the board's creator",
+    ),
+    (
+        "the rights asked the other way round",
+        _app(
+            "Right.DRAW_ON_BOARDS)), Depends(require_right(Right.INVESTIGATE))]",
+            "Right.INVESTIGATE)), Depends(require_right(Right.DRAW_ON_BOARDS))]",
+            "_DRAWS = [",
+        ),
+        write_problems,
+        "draw_on_boards then investigate",
+    ),
+    (
+        "an unshare route added",
+        _app(
+            "@app.delete(",
+            '@app.post("/v1/investigations/{investigation_id}/boards/{board_id}/unshare")\n'
+            "async def unshare_board() -> None: ...\n\n\n@app.delete(",
+            "async def share_board(",
+        ),
+        write_problems,
+        "has an unshare route",
+    ),
+    (
+        "the new board's model taking extra fields",
+        _model(
+            "Board",
+            'or from a selection on the canvas."""\n\n    model_config = ConfigDict(extra="forbid")\n',
+            'or from a selection on the canvas."""\n\n    model_config = ConfigDict()\n',
+        ),
+        write_problems,
+        "forbids an extra field",
+    ),
+    ("the form passed through", _replace("page_module", 'json: { name, start: "blank" }', "json: req.body"), write_problems, "passes a form through"),
+    (
+        "the refusal's words changed",
+        _replace("words", '"You cannot make boards in this case"', '"You are not allowed to make boards"'),
+        write_problems,
+        "does not hold the ruled words",
+    ),
+    (
+        "the banner's words changed",
+        _replace("words", '"The board was deleted. What was drawn on it stays in the case."', '"The board was deleted."'),
+        write_problems,
+        "does not hold the ruled words",
+    ),
     ("the page under another row", _replace("page_module", f'id: "{ROW}"', 'id: "cases-and-views"'), module_problems, "its id"),
     (
         "the page left out of the table of pages",
@@ -737,7 +935,7 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
     ),
     (
         "a census name for no field",
-        _replace("words", '"may_draw", "may_promote"]', '"may_draw", "may_promote", "may_share"]'),
+        _replace("words", '"grading_grades", "may_promote"]', '"grading_grades", "may_promote", "may_share"]'),
         census_problems,
         "BoardOpened.may_share, which the model does not have",
     ),

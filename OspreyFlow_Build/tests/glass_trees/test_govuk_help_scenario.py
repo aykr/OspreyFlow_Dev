@@ -16,7 +16,7 @@ slice's brief; items 2 to 5 are the vitest file's and the gates' own tests):
 * `spec/02` silent on the tree, its switch, or the ruling            -> `test_spec_02_says_what_the_tree_and_its_switch_are`
 * the `help` row left without its scenarios, route or slice, the top
   bar still holding Help, or `reports` not split                     -> `test_the_function_rows_are_split_as_the_owner_ruled`
-* a route list that is not the paths the tree has pages for          -> `test_the_route_list_is_the_one_help_page`
+* the page's path not in the route list, or listed twice             -> `test_the_route_list_holds_the_help_page_once`
 * no register row for `govuk-frontend`, a licence that is not MIT, or
   the identity condition left out of the row or of section 7          -> `test_the_register_has_govuk_frontend_with_its_condition`
 
@@ -265,23 +265,20 @@ def function_problems(data: dict[str, Any]) -> list[str]:
 
 
 def route_problems(data: dict[str, Any]) -> list[str]:
+    # The page's own path is in the tree's route list, once. Whether the list and the pages that name the GOV.UK tree agree is
+    # checked in one place, `apps/pages/test/govuk/help.test.ts` (HP9), from the files themselves, so a page added to the tree
+    # edits no other page's test (`test_route_pins.py`).
+    found: list[str] = []
+    if data["routes"].count("/help") != 1:
+        found.append(f"the route list {data['routes']!r} holds {"/help"} {data['routes'].count("/help")} times, not once")
+    if len(set(data["routes"])) != len(data["routes"]):
+        found.append("the route list names a path twice")
     routed = sorted(row["route"] for row in data["functions"] if row.get("route"))
-    # The tree's second page, the Admin People list (slice AD3a), is the first section of the `admin` row, whose own route stays empty
-    # while the function is incomplete: it is in the list, and no row carries it (`test_govuk_admin_people_scenario.py` holds that).
-    # Slice GR3a added the alert monitoring page (`/reports`): its row, `reports-figures`, carries the route.
-    # Slice GR4a's trends shown together (`/packs/trends`) is the fourth; its row, `reports-trends-shown-together`, keeps an empty route
-    # while the function is incomplete (`test_govuk_pack_trends_scenario.py`). The fifth, the cases page (slice GR1a), is the first part
-    # of the `cases-and-views` row, whose route stays empty likewise (`test_govuk_cases_scenario.py`), and the sixth, a case's drawing
-    # boards (slice GG4a), the first part of the `drawing-boards` row (`test_govuk_boards_scenario.py`).
-    # Slice RM1a added the alert queue (`/alert-queue`), the seventh: its row, `alerts-rules-watches`, keeps an empty route while the function
-    # is incomplete (`test_govuk_alert_queue_scenario.py`).
-    if data["routes"] != ["/help", "/admin/people", "/reports", "/packs/trends", "/cases", "/cases/boards", "/alert-queue"]:
-        return [
-            f"the route list is {data['routes']!r}: the tree has seven pages, /help, /admin/people, /reports, /packs/trends, /cases, /cases/boards and /alert-queue"
-        ]
+    # The rows whose function is complete carry their route (Help's and the alert monitoring figures'); a page whose function is
+    # not complete is in the list, and its row's route stays empty (each page's own scenario test holds its row).
     if routed != ["/help", "/reports"]:
-        return [f"the rows that have a route are {routed!r}, not just /help and /reports"]
-    return []
+        found.append(f"the rows that have a route are {routed!r}, not just /help and /reports")
+    return found
 
 
 def register_problems(data: dict[str, Any]) -> list[str]:
@@ -348,7 +345,7 @@ def test_the_function_rows_are_split_as_the_owner_ruled() -> None:
     assert function_problems(inputs()) == []
 
 
-def test_the_route_list_is_the_one_help_page() -> None:
+def test_the_route_list_holds_the_help_page_once() -> None:
     assert route_problems(inputs()) == []
 
 
@@ -412,7 +409,7 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
     ("the old combined top bar row back", _row("functions", "top-bar-home", id="top-bar-home-help"), function_problems, "owner ruled it split"),
     ("reports not split", _row("functions", "reports-figures", id="reports"), function_problems, "owner ruled it split"),
     ("the dashboards row given a slice", _row("functions", "reports-dashboards", slice="GR3"), function_problems, "must be later"),
-    ("a route in the list the code has no page for", lambda d: d["routes"].append("/welcome"), route_problems, "seven pages"),
+    ("the page's path listed twice", lambda d: d["routes"].append("/help"), route_problems, "not once"),
     ("a row routed with the list left short", _row("functions", "top-bar-home", route="/"), route_problems, "not just /help"),
     ("no register row", _drop("register", "govuk-frontend"), register_problems, "not one"),
     ("a licence that is not MIT", _register_row(licence="GPL-3.0-only"), register_problems, "not MIT"),

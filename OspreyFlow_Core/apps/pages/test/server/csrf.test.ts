@@ -124,6 +124,28 @@ describe("a forged cross-site request", () => {
   });
 });
 
+// The first GOV.UK page that writes (slice GG4c): its POSTs, through the real page list, stand behind this check like every other.
+describe("the boards page's writes, through the real page list", () => {
+  const writes = ["/cases/boards?case=c-1", "/cases/boards?case=c-1&board=b-1"];
+
+  it("are refused 403 with no token or another session's, and reach the page only with this session's", async () => {
+    const { app } = build({ pages: PAGES, tree: "govuk" });
+    const mine = await signIn(app);
+    const theirs = await signIn(app);
+    for (const path of writes) {
+      for (const body of ["action=delete", `_csrf=${theirs.csrf}&action=delete`]) {
+        const res = await request(app).post(path).set("Cookie", mine.cookie).type("form").send(body);
+        expect(res.status, `${path} ${body}`).toBe(403);
+        expect(res.text).toMatch(/could not be checked/i);
+      }
+    }
+    // With this session's token the page answers: with no Conduit to ask here, that it could not be read.
+    const reached = await request(app).post(writes[1] as string).set("Cookie", mine.cookie).type("form").send(`_csrf=${mine.csrf}&action=delete`);
+    expect(reached.status).toBe(503);
+    expect(reached.text).toMatch(/could not be read/);
+  });
+});
+
 // New case on the GOV.UK tree (slice GR1b): its POST, through the real page list, stands behind this check like every other.
 describe("the cases page's write, through the real page list", () => {
   it("is refused 403 with no token or another session's, and reaches the page only with this session's", async () => {

@@ -1,5 +1,6 @@
-// Builds the service: TypeScript to dist/, then the Help page's, the trends page's and the cases page's words bundled with the shared package, then what tsc copies no part of (each tree's templates and the
-// function list the route modules are checked against), then the browser assets (scripts/assets.mjs).
+// Builds the service: TypeScript to dist/, then the server files that import the shared package bundled with it, then what tsc
+// copies no part of (each tree's templates and the function list the route modules are checked against), then the browser
+// assets (scripts/assets.mjs).
 // The compiler is the one installed for this workspace, found by path: never `npx`, which fetches a
 // package of that name from the registry when it is not installed (and `tsc` there is not TypeScript).
 import { execFileSync } from "node:child_process";
@@ -10,6 +11,7 @@ import { join, resolve } from "node:path";
 import { build } from "esbuild";
 
 import { buildAssets } from "./assets.mjs";
+import { sharedPackageEntries } from "./sharedEntries.mjs";
 
 const root = join(import.meta.dirname, "..");
 // `--out <folder>` writes the build there instead of to `dist/` (the layout is the same: a test builds to a scratch folder and
@@ -22,20 +24,15 @@ rmSync(out, { recursive: true, force: true });
 execFileSync(process.execPath, [tsc, "-p", "tsconfig.build.json", "--outDir", out], { cwd: root, stdio: "inherit" });
 cpSync(join(root, "tree-default"), join(out, "tree-default"), { recursive: true });
 cpSync(join(root, "tree-govuk"), join(out, "tree-govuk"), { recursive: true });
-// The server files that import the shared package (`server/views/helpWords.ts`: the Help page's words are `roles.ts`'s, never
-// written again; `server/views/packTrendsWords.ts`: trends shown together say a pack and a trend in `packages/glass-shared/src/reports/packText.ts`'s words, slice GR4a;
-// `server/views/casesWords.ts`: the cases page says a level, a domain pack and a moment in the package's words, slice GR1a;
-// `server/views/boardsWords.ts`: the boards page says a moment in the package's words, slice GG4a)
-// are bundled with the package's source, over what `tsc` wrote: `tsc` checks them against `server/types/glassShared.d.ts` and the
-// compiled service imports no workspace package at run time (the image's run-time stage holds none). Nothing else is bundled.
+// The server files that import the shared package (a page's words in the package's own, never written again: the Help page's
+// are `roles.ts`'s) are bundled with the package's source, over what `tsc` wrote: `tsc` checks them against
+// `server/types/glassShared.d.ts` and the compiled service imports no workspace package at run time (the image's run-time stage
+// holds none). Nothing else is bundled. They are found by reading the server's files (`sharedEntries.mjs`), so a page adds no
+// line here. Each bundle is written over the file `tsc` wrote for it, at the same path under `server/`.
 await build({
-  entryPoints: [
-    join(root, "server", "views", "helpWords.ts"),
-    join(root, "server", "views", "packTrendsWords.ts"),
-    join(root, "server", "views", "casesWords.ts"),
-    join(root, "server", "views", "boardsWords.ts"),
-  ],
-  outdir: join(out, "server", "views"),
+  entryPoints: sharedPackageEntries(join(root, "server")),
+  outbase: join(root, "server"),
+  outdir: join(out, "server"),
   bundle: true,
   format: "esm",
   platform: "node",
