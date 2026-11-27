@@ -183,7 +183,7 @@ comes, is the run of record.
 3. **Through a forwarder that carries no `Range`, the PMTiles basemap draws nothing** (case 2). The map still reaches `load` and
    `idle`. The only signs are pmtiles' byte-serving error and an empty picture. This is GG5b's question 3 measured: the
    forwarder's missing `Range` blocks the basemap, and a readiness check of `load`/`idle` alone would pass it.
-4. **Playwright's WebKit screenshot adds a `<style>` element to the page** (even with `caret: "initial"`), and the page's policy
+4. **(Corrected on the Mac: it does raise an event; see the end of this report.)** **Playwright's WebKit screenshot adds a `<style>` element to the page** (even with `caret: "initial"`), and the page's policy
    refuses it, on the console only and with no event. It is the test's own, not the map's. The spec lets exactly that text past,
    only while a screenshot is taken. Case 12 shows the same text counted in any other phase.
 5. **Headless WebKit can present a frame short of tiles after `idle`.** The same partial picture held for 6 s, with every tile
@@ -274,7 +274,7 @@ earlier pair on the spec as merged was also 28 and 28. The real page drew water 
 286,283 px in both, the server's own figures, and the built asset names are the same. The directive table and every plant
 came out as above.
 
-**WebKit and the frozen command.** This Mac's shared Playwright cache has no `webkit-2370`, so the frozen acceptance command
+**WebKit and the frozen command (since resolved: see below).** This Mac's shared Playwright cache has no `webkit-2370`, so the frozen acceptance command
 as first run here (22:09:59 UTC) gave Chromium 28 passed and WebKit 28 failed, each `Executable doesn't exist`. A builder
 writes only inside its worktree, so the WebKit runs above set `PLAYWRIGHT_BROWSERS_PATH` to a git-ignored folder under this
 worktree's `node_modules`, installed there with `PLAYWRIGHT_SKIP_BROWSER_GC=1`. **The frozen command stays red for WebKit
@@ -286,4 +286,45 @@ traversal reds do not happen here. `tsc -p apps/pages/tsconfig.json` (finding 7;
 `test/csp`. Pass: lint, the root typecheck, the page's own `tsconfig`, `no_react_check`, `version_isolation_check`,
 `licence-check` (94 Python and 444 Node packages, all allowed), `tests/test_doc_citations_check.py` (10 passed),
 `doc_citations_check`, `test_file_coverage_check`. `ruff` not run: no Python touched.
+
+### Later in round 1 (27 November 2026, UTC)
+
+**WebKit is now in the shared cache** (`webkit-2370`). At 03:22 the frozen acceptance command, as written and with no
+`PLAYWRIGHT_BROWSERS_PATH`, passed 56 of 56 on the spec as it then stood.
+
+**Two holes in the checker, found by reading it, shown red, then fixed.** Red cases in `84d9809`, the fix in `3a07596`.
+
+| Hole | The plant, at its real call site | Red (both browsers) | Fix |
+| --- | --- | --- | --- |
+| A page with **no policy at all** passed: the policy sent equalled the builder's own, both empty | the page's route mounted ahead of `securityHeaders()`, as a mis-ordered `app.use` would mount it | `failures()` returned `[]` | `the page was served with no policy` |
+| (a) was read **before the picture**, so a violation event raised during the picture (up to 6 s) was not recorded; only the console line was | a real refused `fetch` made while the picture is read | no `policy violation:` entry | events are read last. With the early read planted back into the fixed spec: red again, then restored |
+
+The same unmounted-route plant on the worker's asset route shows `the worker's script was served with no policy` firing.
+This report said above that the branch had never been shown red; it now has been. Each policy is now recorded from the
+response as it finishes, so a response that skipped the headers is recorded as having none.
+
+**Finding 4 above is wrong.** Once events were read last, WebKit showed `policy violation: style-src-elem refused inline in
+the document` on every page whose picture was taken (16 cases red). Playwright's screenshot style **does** raise a
+`securitypolicyviolation` event; the spec had read the events before its first screenshot. Widening the exemption to the
+event would also have hidden a real inline `<style>` from the map during that time. So **the exemption is gone**: the
+picture is now the map's own canvas, read with `toDataURL()` inside a `render` event, which adds nothing to the page. WebKit
+then reports no refusal, so the refusal was the screenshot's. The pixel counts equal the screenshot's in both browsers
+(water 91,357, land cover 99,208, raster 286,283). Findings 4 and 5 no longer shape the spec, and "the screenshot
+exception" in the table of cases and "After the review" no longer exists. Case 12 now asserts the event and the console line
+in both browsers. What the check proves is that the map **drew** each layer into its drawing buffer, not what a screen
+presented.
+
+**The table is now 31 cases × 2 browsers = 62** (28 as above, plus the page's route unprotected, the worker's route
+unprotected, and a refusal while drawing). The directive table and the answers to the brief's plants did not change.
+
+**What differs from the server, in short:** 62 cases, not 56; no WebKit libraries or host-check flag are needed;
+`npm test --workspace apps/pages` is 1,086 of 1,086 (the server had 2 reds); `tsc -p apps/pages/tsconfig.json` (not a frozen
+check) shows 201 errors here and 190 there, none in `test/csp`; `licence-check` passes with 94 Python and 444 Node packages.
+
+**What runs this test.** `npm run test:csp --workspace apps/pages` is this slice's frozen acceptance command. Neither
+`make ci` nor GitHub's CI runs it until the owner applies `ci-wiring.patch` (`git apply --check` still passes; so does the
+ADR diff's). The slice's brief lets it merge without them.
+
+**Unchanged:** `server/headers.ts` (answer 3 (a)). Not in this slice: rotation and pitch (GG5b's own decision). A GG5b that
+draws graph layers through Sigma waits for the Sigma 4 proof (ADR-152 decision 9; the workspace still pins `sigma ^3.0.0`).
 
