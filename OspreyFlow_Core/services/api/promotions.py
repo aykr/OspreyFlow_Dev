@@ -343,8 +343,10 @@ class Promotions:
             if read.item.kind in ("node", "link"):
                 if drawn is None or drawn.grading is None:
                     problems.append(("graded", "It has no grading."))
-                elif not ((drawn.source_note or "").strip() or drawn.source_document):
-                    problems.append(("graded", "It has no source note or source document."))
+                elif not (drawn.source_note or "").strip():
+                    # ADR-143 Amendment 8 item 10: the note, whoever asks. A document is sent only
+                    # to who may read it, so counting it would answer differently by reader.
+                    problems.append(("graded", "It has no source note."))
             out[read.item.item_id] = problems
         return out
 

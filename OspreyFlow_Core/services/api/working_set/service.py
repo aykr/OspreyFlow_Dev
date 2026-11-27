@@ -23,6 +23,12 @@ using the same predicate the adapter's compiled Gremlin is built from
 principal was entitled to fetch is not disclosed to a different principal
 who is not.
 
+**A drawn item's cited document** (ADR-143 Amendment 8; slice GG4b). The stored bodies keep every
+cited document, so every read that fills the working set is made inside `cited_documents_kept`; and
+every send of a body to a person goes through `withhold_sources` with the result of one batched read
+for the answer, made with the reader's principal (`_readable_documents`), never recorded and never
+kept for a later one. A send made with no read withholds every cited document.
+
 No count of what a reader may not read leaves this class (ADR-124 decision 1): a figure tied to a
 seed, a link type or a colleague's action can be made to point at the one item it counts. The caps
 are the same: each is counted over `_project` of the stored set for the reader asking, plus what the
@@ -35,7 +41,7 @@ import asyncio
 import json
 import logging
 from collections import OrderedDict
-from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Container, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -49,8 +55,11 @@ from conduit_common.identity import new_edge_id, now_utc
 from ontology.errors import HandlingSchemeError
 from ontology.handling import (
     HandlingScheme,
+    cited_documents,
+    cited_documents_kept,
     principal_may_read,
     principal_may_view,
+    readable_cited_documents,
     withhold_sources,
 )
 from ports.graph import GraphPort
@@ -138,6 +147,15 @@ def _without_cluster(node: Node) -> Node:
     return node.model_copy(
         update={"resolution": node.resolution.model_copy(update={"cluster_id": None})}
     )
+
+
+def _bodies(delta: WorkingSetDelta | WorkingSetDeltaSent) -> list[Node | Edge]:
+    """The nodes and links `delta` carries whole, stored or sent."""
+    if isinstance(delta, DeltaAdd | DeltaSnapshot):
+        return [*delta.nodes, *delta.edges]
+    if isinstance(delta, DeltaReplaceEdge | DeltaReplaceEdgeSent):
+        return [delta.edge]
+    return []
 
 
 def _with_clusters(nodes: list[Node], clusters: Mapping[NodeId, ClusterId]) -> list[Node]:
@@ -412,6 +430,7 @@ class WorkingSetService:
         edges: Sequence[Edge],
         principal: Principal,
         known: Mapping[NodeId, Node] | None = None,
+        readable_documents: Container[str] | None = None,
     ) -> tuple[list[Node], list[Edge], int]:
         """The read-time handling filter `03_CONDUIT_MIDDLEWARE.md` §4
         requires. An edge is visible only if both its own handling block
@@ -434,7 +453,9 @@ class WorkingSetService:
         # ADR-130 Amendment 2: each element is sent with its sources only where every dataset it
         # belongs to is one the reader's case reads. A copy: the stored bodies keep the record.
         visible_nodes = [
-            _without_cluster(withhold_sources(n, principal)) for n in nodes if n.id in readable
+            _without_cluster(withhold_sources(n, principal, readable_documents))
+            for n in nodes
+            if n.id in readable
         ]
         visible_edges: list[Edge] = []
         hidden_edges = 0
@@ -446,17 +467,58 @@ class WorkingSetService:
                 and e.source in readable
                 and e.target in readable
             ):
-                visible_edges.append(withhold_sources(e, principal))
+                visible_edges.append(withhold_sources(e, principal, readable_documents))
             else:
                 hidden_edges += 1
         hidden_count = (len(nodes) - len(visible_nodes)) + hidden_edges
         return visible_nodes, visible_edges, hidden_count
+
+    async def _readable_documents(
+        self, elements: Sequence[Node | Edge], principal: Principal
+    ) -> frozenset[str]:
+        """ADR-143 Amendment 8 items 2 and 3: of the documents the drawn elements among `elements`
+        cite, those `principal` may read now, by one `get_nodes` for all of them. It asks the
+        reader's own question through the adapter's access step; an answer that cites nothing
+        makes no read, and a read that fails keeps nothing. A service built with no graph keeps
+        nothing."""
+        if self._graph is None:
+            return frozenset()
+        return await readable_cited_documents(elements, principal, self._graph.get_nodes)
+
+    async def _projected(
+        self,
+        deltas: Sequence[WorkingSetDelta],
+        principal: Principal,
+        known: Mapping[NodeId, Node] | None = None,
+    ) -> list[WorkingSetDeltaSent]:
+        """`deltas` as `principal` is sent them, with **one** batched read of the documents their
+        drawn elements cite for all of them (a frame, a catch-up, a restore's answer). What is
+        asked about is what `project_delta` would send, so a document cited only by an element
+        this reader is not sent is not asked about."""
+        sent: list[Node | Edge] = []
+        for delta in deltas:
+            if cited_documents(_bodies(delta)):
+                with cited_documents_kept():
+                    sent += _bodies(self.project_delta(delta, principal, known))
+        documents = await self._readable_documents(sent, principal)
+        return [self.project_delta(delta, principal, known, documents) for delta in deltas]
+
+    async def _projected_membership(
+        self, nodes: Sequence[Node], edges: Sequence[Edge], principal: Principal
+    ) -> tuple[list[Node], list[Edge]]:
+        """Stored bodies as `principal` may see them (`_project`), with one batched read of the
+        documents the drawn ones cite."""
+        snapshot = DeltaSnapshot(seq=0, nodes=list(nodes), edges=list(edges))
+        (sent,) = await self._projected([snapshot], principal)
+        assert isinstance(sent, DeltaSnapshot)
+        return sent.nodes, sent.edges
 
     def project_delta(
         self,
         delta: WorkingSetDelta,
         principal: Principal,
         known: Mapping[NodeId, Node] | None = None,
+        readable_documents: Container[str] | None = None,
     ) -> WorkingSetDeltaSent:
         """Re-filters one already-recorded delta for `principal` — the
         replay-on-reconnect path (`sync`) and the live WebSocket push
@@ -472,19 +534,24 @@ class WorkingSetService:
         sent forms never hold the record. A reproject is sent with a fixed reason code and only
         the cluster keys the reader may read. `known` is the working set's nodes, which a link's
         ends and a cluster's keys are judged against; without it no end or key can be judged and
-        none is sent."""
+        none is sent. `readable_documents` is the answer's batched read (`_projected`); given
+        none, no drawn item's cited document is sent (ADR-143 Amendment 8)."""
         if isinstance(delta, DeltaAdd):
-            nodes, edges, _ = self._project(delta.nodes, delta.edges, principal, known)
+            nodes, edges, _ = self._project(
+                delta.nodes, delta.edges, principal, known, readable_documents
+            )
             return delta.model_copy(update={"nodes": nodes, "edges": edges})
         if isinstance(delta, DeltaSnapshot):
-            nodes, edges, _ = self._project(delta.nodes, delta.edges, principal)
+            nodes, edges, _ = self._project(
+                delta.nodes, delta.edges, principal, None, readable_documents
+            )
             # `withheld` is `sync`'s full snapshot's alone (ADR-124 decision 5): whatever a stored
             # snapshot carries, replayed or pushed, is not sent.
             return delta.model_copy(update={"nodes": nodes, "edges": edges, "withheld": None})
         if isinstance(delta, DeltaRemove):
             return self._project_removal(delta, principal, known)
         if isinstance(delta, DeltaReplaceEdge):
-            return self._project_replacement(delta, principal, known)
+            return self._project_replacement(delta, principal, known, readable_documents)
         if isinstance(delta, DeltaReproject):
             # ADR-124 Amendment 19: a marker, never another reader's cluster ids. A value is a node
             # id,
@@ -545,7 +612,11 @@ class WorkingSetService:
         return DeltaRemoveSent(seq=delta.seq, node_ids=node_ids, edge_ids=edge_ids)
 
     def _project_replacement(
-        self, delta: DeltaReplaceEdge, principal: Principal, known: Mapping[NodeId, Node] | None
+        self,
+        delta: DeltaReplaceEdge,
+        principal: Principal,
+        known: Mapping[NodeId, Node] | None,
+        readable_documents: Container[str] | None = None,
     ) -> DeltaAdd | DeltaRemoveSent | DeltaReplaceEdgeSent:
         """The four rows of ADR-124 decision 4: the replace, the new link alone as an addition, the
         old link alone as a removal, or nothing. Each half is judged by its own marking and both of
@@ -562,10 +633,14 @@ class WorkingSetService:
         )
         if old_ok and new_ok:
             return DeltaReplaceEdgeSent(
-                seq=delta.seq, old_edge_id=delta.old_edge_id, edge=withhold_sources(new, principal)
+                seq=delta.seq,
+                old_edge_id=delta.old_edge_id,
+                edge=withhold_sources(new, principal, readable_documents),
             )
         if new_ok:
-            return DeltaAdd(seq=delta.seq, edges=[withhold_sources(new, principal)])
+            return DeltaAdd(
+                seq=delta.seq, edges=[withhold_sources(new, principal, readable_documents)]
+            )
         if old_ok:
             return DeltaRemoveSent(seq=delta.seq, edge_ids=[delta.old_edge_id])
         return DeltaRemoveSent(seq=delta.seq)
@@ -576,7 +651,8 @@ class WorkingSetService:
         """A live push, projected for `principal` with its links' ends judged against the working
         set as it now stands (`_project`'s `known`)."""
         known = await self._store.source_fidelity_nodes(investigation_id)
-        return self.project_delta(delta, principal, known)
+        (sent,) = await self._projected([delta], principal, known)
+        return sent
 
     async def get_resolution_threshold(self, investigation_id: str) -> float:
         """`GET /v1/resolution/threshold` (`03_CONDUIT_MIDDLEWARE.md` §3.5). `None` in the store
@@ -1130,8 +1206,11 @@ class WorkingSetService:
         the canvas after it (the readable nodes and the kept links)."""
         node_ids = list(dict.fromkeys(node_ids_asked))
         edge_ids = list(dict.fromkeys(edge_ids_asked))
-        vault_nodes = {n.id: n for n in await self._graph.get_nodes(node_ids, principal)}
-        vault_edges = {e.id: e for e in await self._graph.get_edges(edge_ids, principal)}
+        # What fills the working set keeps its cited documents (ADR-143 Amendment 8 item 5): the
+        # stored bodies are everyone's, and each send decides again.
+        with cited_documents_kept():
+            vault_nodes = {n.id: n for n in await self._graph.get_nodes(node_ids, principal)}
+            vault_edges = {e.id: e for e in await self._graph.get_edges(edge_ids, principal)}
         seeded = [vault_nodes[i] for i in node_ids if i in vault_nodes]
         wanted_ends = {
             end for e in vault_edges.values() for end in (e.source, e.target)
@@ -1179,7 +1258,8 @@ class WorkingSetService:
             outcome = await self.seed(investigation_id, nodes, [], principal)
             return outcome.model_copy(update={"links_among": "not_asked"})
         wanted = new_ids | await view.visible_node_ids()
-        among = await self._graph.edges_among(sorted(wanted), principal)
+        with cited_documents_kept():  # named by id only: `seed` reads each again
+            among = await self._graph.edges_among(sorted(wanted), principal)
         outcome = await self.seed(investigation_id, nodes, among, principal)
         return outcome.model_copy(update={"links_among": "added"})
 
@@ -1188,7 +1268,8 @@ class WorkingSetService:
     ) -> ExpansionOutcome:
         """`POST /expand`: the filtered result the analyst receives, added to the working set. No
         figure for what the filter left out is asked for or returned (ADR-124 decision 1)."""
-        subgraph = await self._graph.expand(req, principal)
+        with cited_documents_kept():  # a read that fills the working set
+            subgraph = await self._graph.expand(req, principal)
         # ADR-098: the links the expansion did not walk along, among its nodes and the view, when
         # it is small enough to ask; all of them or, if they would pass the cap, none. The view is
         # the reader's own (ADR-124 decision 2): a stored node they may not read is not in it, so
@@ -1203,9 +1284,9 @@ class WorkingSetService:
             )
             return outcome.model_copy(update={"links_among": "not_asked"})
         # The view is small here, so its nodes can be named for the graph.
-        among = await self._graph.edges_among(
-            sorted(await view.visible_node_ids() | new_ids), principal
-        )
+        in_view = sorted(await view.visible_node_ids() | new_ids)
+        with cited_documents_kept():
+            among = await self._graph.edges_among(in_view, principal)
         walked = {e.id for e in subgraph.edges}
         extra = [e for e in among if e.id not in walked]
         try:
@@ -1248,7 +1329,8 @@ class WorkingSetService:
             if node_ids is None
             else await reader.visibly_stored_among(node_ids)
         )
-        among = await self._graph.edges_among(sorted(ids), principal)
+        with cited_documents_kept():  # a read that fills the working set
+            among = await self._graph.edges_among(sorted(ids), principal)
         route_nodes: dict[NodeId, Node] = {}
         route_edges: dict[EdgeId, Edge] = {e.id: e for e in among}
         unconnected = more = connected = 0
@@ -1257,9 +1339,10 @@ class WorkingSetService:
             for i, source in enumerate(chosen):
                 for target in chosen[i + 1 :]:
                     for length in range(1, degree + 1):
-                        routes = await self._graph.paths_at_length(
-                            source, target, length, CONNECTIONS_SHOWN, principal
-                        )
+                        with cited_documents_kept():
+                            routes = await self._graph.paths_at_length(
+                                source, target, length, CONNECTIONS_SHOWN, principal
+                            )
                         if routes.paths:
                             for path in routes.paths:
                                 route_nodes.update({n.id: n for n in path.nodes})
@@ -1277,7 +1360,7 @@ class WorkingSetService:
         return LinksAmongOutcome(
             delta=outcome.delta, added=len(new), added_nodes=len(new_nodes), degree=degree,
             unconnected_pairs=unconnected, more_routes_pairs=more, connected_pairs=connected,
-        )  # fmt: skip
+        ).holding(outcome.to_publish())  # fmt: skip
 
     async def expand_preview(
         self, investigation_id: str, req: ExpandRequest, principal: Principal
@@ -1381,7 +1464,9 @@ class WorkingSetService:
         them), so the change sent says so, or the canvas never draws them and `links_among`,
         finding them stored, adds nothing. Each is read from the store after the add, kept only
         when both its ends are stored, and filtered for `principal` as any change is (rule 3): a
-        link they may not read, or one to an end they may not read, is not sent."""
+        link they may not read, or one to an end they may not read, is not in the change. The
+        links are returned as stored, their cited documents kept: the change is stored with them,
+        and each send of it is projected for its reader (ADR-143 Amendment 8 item 5)."""
         if not arriving:
             return []
         at = await self._store.adjacent_edge_ids(investigation_id, [n.id for n in arriving])
@@ -1394,7 +1479,29 @@ class WorkingSetService:
         ends = await asyncio.gather(*(self._store.get_node(investigation_id, i) for i in end_ids))
         known = {n.id: n for n in ends if n is not None}
         _, visible, _ = self._project([], links, principal, known)
-        return visible
+        shown = {e.id for e in visible}
+        return [e for e in links if e.id in shown]
+
+    async def _writers_view(
+        self, stored: DeltaAdd, returning: set[EdgeId], principal: Principal
+    ) -> DeltaAdd:
+        """The add as its writer is answered: each drawn element, and each stored link the add
+        brought back, as `principal` may be sent it, with one batched read of the documents the
+        drawn ones cite. Everything else was read from the Vault as this writer, or written by
+        the Conduit for them, and goes as it was."""
+        documents = await self._readable_documents(_bodies(stored), principal)
+
+        def theirs[Element: (Node, Edge)](element: Element) -> Element:
+            if element.provenance.drawn is None and element.id not in returning:
+                return element
+            return withhold_sources(element, principal, documents)
+
+        return stored.model_copy(
+            update={
+                "nodes": [theirs(n) for n in stored.nodes],
+                "edges": [theirs(e) for e in stored.edges],
+            }
+        )
 
     async def _add(
         self,
@@ -1444,7 +1551,8 @@ class WorkingSetService:
                 clusters = DeltaReproject(
                     seq=delta.seq, reason=REASON_ENTRY, affected_cluster_ids=ids
                 )
-        return ExpansionOutcome(delta=delta, clusters=clusters)
+        answered = await self._writers_view(delta, {e.id for e in returning}, principal)
+        return ExpansionOutcome(delta=answered, clusters=clusters).holding(delta)
 
     async def current_membership(self, investigation_id: str) -> tuple[list[Node], list[Edge]]:
         """The full source-fidelity (unfiltered) membership — `app.py`'s
@@ -1464,8 +1572,7 @@ class WorkingSetService:
         """The working set as `principal` may see it, with the same `_project` every list read
         runs: what the change form's offered types are read from (ADR-090)."""
         nodes, edges = await self.current_membership(investigation_id)
-        visible_nodes, visible_edges, _ = self._project(nodes, edges, principal)
-        return visible_nodes, visible_edges
+        return await self._projected_membership(nodes, edges, principal)
 
     def may_view_all(self, handlings: Sequence[Handling], principal: Principal) -> bool:
         """`principal` may view every one of `handlings`, by the same two axes the analytics store
@@ -1480,7 +1587,11 @@ class WorkingSetService:
         self, investigation_id: str, node_id: NodeId, principal: Principal
     ) -> Node | None:
         """The node `node_id` as `principal` may see it in this case, or `None`: not in the working
-        set and above `principal` read the same, as `visible_edge` has it (ADR-092's reader)."""
+        set and above `principal` read the same, as `visible_edge` has it (ADR-092's reader).
+
+        For a check, and for what the Conduit reads from it itself: no document read is made, so a
+        drawn node comes without any document it cites (ADR-143 Amendment 8). A caller that sends
+        a body to a person takes it from `visible_membership`."""
         found = await self._store.get_node(investigation_id, node_id)
         if found is None:
             return None
@@ -1498,7 +1609,9 @@ class WorkingSetService:
         question — a note is readable and writable exactly when its link is visible — so a
         refusal here must not reveal which of the three it was, the same rule `_project` already
         follows for every list read. It reads the one link and its two ends, not the whole set,
-        and runs the same `_project` the lists use, so the two can never disagree."""
+        and runs the same `_project` the lists use, so the two can never disagree. As
+        `visible_node`, it makes no document read, so a drawn link comes without any document it
+        cites (ADR-143 Amendment 8)."""
         edge = await self._store.get_edge(investigation_id, edge_id)
         if edge is None:
             return None
@@ -1584,7 +1697,7 @@ class WorkingSetService:
         narrow = NarrowingFilter.model_validate(keeps.model_dump())
         stored_nodes = await self._store.source_fidelity_nodes(investigation_id)
         stored_edges = await self._store.source_fidelity_edges(investigation_id)
-        visible_nodes, visible_edges, _ = self._project(
+        visible_nodes, visible_edges = await self._projected_membership(
             list(stored_nodes.values()), list(stored_edges.values()), principal
         )
         nodes = [n for n in visible_nodes if narrow.keeps_node(n)]
@@ -1632,8 +1745,9 @@ class WorkingSetService:
         # case's datasets are in `principal`, ADR-099): what comes back is what is stored, the
         # Vault's current bodies and never the step's recorded ones, so a node raised since is not
         # written back at its old marking, and a member the restorer may not read is not added.
-        vault_nodes = await self._graph.get_nodes(sorted(step_node_ids), principal)
-        vault_edges = await self._graph.get_edges(sorted(step_edge_ids), principal)
+        with cited_documents_kept():  # what is stored again keeps its cited documents
+            vault_nodes = await self._graph.get_nodes(sorted(step_node_ids), principal)
+            vault_edges = await self._graph.get_edges(sorted(step_edge_ids), principal)
 
         # The cap, before anything is written (rule 2, decision 2). The restorer's own view after
         # this restore is the Vault's readable members plus the step members they may read in the
@@ -1682,7 +1796,7 @@ class WorkingSetService:
         seq = await self._store.next_seq(investigation_id)
         snapshot = DeltaSnapshot(seq=seq, nodes=all_nodes, edges=all_edges)
         await self._store.append_delta(investigation_id, snapshot)
-        response = self.project_delta(snapshot, principal)
+        (response,) = await self._projected([snapshot], principal)
         assert isinstance(response, DeltaSnapshot)
         return Restored(published=snapshot, response=response)
 
@@ -1832,7 +1946,8 @@ class WorkingSetService:
                     seq = await self._store.current_seq(investigation_id)
                     return [DeltaViewOverCap(seq=seq, would_be=breach)]
                 known = await self._store.source_fidelity_nodes(investigation_id)
-                return [self.project_delta(raw, principal, known) for raw in raw_deltas]
+                # One read of the cited documents for the whole catch-up.
+                return await self._projected(raw_deltas, principal, known)
 
         # The sequence number first, and then the bodies: a write landing between the two reads
         # leaves a snapshot that holds it or carries a number below it, and the client replays it.
@@ -1844,7 +1959,7 @@ class WorkingSetService:
             return [DeltaViewOverCap(seq=seq, would_be=breach)]
         nodes = await self._store.source_fidelity_nodes(investigation_id)
         edges = await self._store.source_fidelity_edges(investigation_id)
-        visible_nodes, visible_edges, _ = self._project(
+        visible_nodes, visible_edges = await self._projected_membership(
             list(nodes.values()), list(edges.values()), principal
         )
         # Step 3h: the reader's own clusters, set on the snapshot they are sent.

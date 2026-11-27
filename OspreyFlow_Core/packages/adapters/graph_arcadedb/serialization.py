@@ -22,7 +22,8 @@ Indexing a field that is never populated is worse than not indexing it —
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Container, Iterable, Mapping
+from dataclasses import dataclass
 from typing import Any
 
 from ontology.handling import withhold_sources
@@ -147,10 +148,35 @@ def edge_write_to_properties(
     return props
 
 
-def node_from_element_map(record: Mapping[str, Any], principal: Principal | None = None) -> Node:
+@dataclass(frozen=True)
+class DrawnRecord:
+    """A drawn element's stored provenance, before its record is read as an element: what says
+    which documents it cites."""
+
+    provenance: Provenance
+
+
+def drawn_records(records: Iterable[Mapping[str, Any]]) -> list[DrawnRecord]:
+    """The drawn elements among `records`, by their provenance. A record that is not drawn is not
+    read twice."""
+    return [
+        DrawnRecord(Provenance.model_validate(record["provenance"]))
+        for record in records
+        if (record.get("provenance") or {}).get("drawn")
+    ]
+
+
+def node_from_element_map(
+    record: Mapping[str, Any],
+    principal: Principal | None = None,
+    readable_documents: Container[str] | None = None,
+) -> Node:
     """The stored record as a `Node`. Given the reading `principal`, a node whose datasets the
     principal's case does not wholly read comes back with its sources withheld (ADR-130
-    Amendment 2). No principal is a system read of the whole record: the Conduit's own scripts."""
+    Amendment 2), and a drawn node without each cited document that is not in
+    `readable_documents`, the answer's one batched read (ADR-143 Amendment 8): given none, every
+    cited document is left out. No principal is a system read of the whole record: the Conduit's
+    own scripts."""
     # `supersede_node` updates the top-level flattened `superseded_by`
     # directly, on the *old* revision, without rewriting its nested
     # `audit` blob — so the flattened field, when present, is the
@@ -170,10 +196,14 @@ def node_from_element_map(record: Mapping[str, Any], principal: Principal | None
         audit=AuditStub.model_validate(audit_data),
         datasets=list(record.get("datasets") or []),
     )
-    return node if principal is None else withhold_sources(node, principal)
+    return node if principal is None else withhold_sources(node, principal, readable_documents)
 
 
-def edge_from_element_map(record: Mapping[str, Any], principal: Principal | None = None) -> Edge:
+def edge_from_element_map(
+    record: Mapping[str, Any],
+    principal: Principal | None = None,
+    readable_documents: Container[str] | None = None,
+) -> Edge:
     """As `node_from_element_map`, for a link."""
     interval = None
     if record.get("interval"):
@@ -199,4 +229,4 @@ def edge_from_element_map(record: Mapping[str, Any], principal: Principal | None
         ),
         datasets=list(record.get("datasets") or []),
     )
-    return edge if principal is None else withhold_sources(edge, principal)
+    return edge if principal is None else withhold_sources(edge, principal, readable_documents)

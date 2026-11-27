@@ -5666,7 +5666,7 @@ async def seed(
     valkey: Annotated[Valkey, Depends(get_valkey)],
 ) -> ExpansionOutcome:
     outcome = await working_set.seed(investigation.id, body.nodes, body.edges, principal)
-    await publish_delta(valkey, investigation.id, outcome.delta)
+    await publish_delta(valkey, investigation.id, outcome.to_publish())
     await _record_history_step(
         working_set,
         history,
@@ -5703,7 +5703,7 @@ async def add_by_ids_route(
     own by-id reading; rule 3), and how many are not, never which. Past the working set's cap it is
     refused with the typed `limit_exceeded` and its three choices, as any add is (rule 2)."""
     added = await working_set.add_by_ids(investigation.id, body.node_ids, body.link_ids, principal)
-    await publish_delta(valkey, investigation.id, added.outcome.delta)
+    await publish_delta(valkey, investigation.id, added.outcome.to_publish())
     await _record_history_step(
         working_set,
         history,
@@ -5736,7 +5736,7 @@ async def expand(
     valkey: Annotated[Valkey, Depends(get_valkey)],
 ) -> ExpansionOutcome:
     outcome = await working_set.expand(investigation.id, body.request, principal)
-    await publish_delta(valkey, investigation.id, outcome.delta)
+    await publish_delta(valkey, investigation.id, outcome.to_publish())
     await _record_history_step(
         working_set,
         history,
@@ -5775,7 +5775,7 @@ async def links_among_route(
     outcome = await working_set.links_among(
         investigation.id, principal, node_ids=body.node_ids, degree=body.degree
     )
-    await publish_delta(valkey, investigation.id, outcome.delta)
+    await publish_delta(valkey, investigation.id, outcome.to_publish())
     await _record_history_step(
         working_set,
         history,
@@ -5861,7 +5861,7 @@ async def add_by_identifiers_route(
         outcome = await working_set.add_by_identifiers(
             investigation.id, resolution.nodes, principal, with_links=body.with_links
         )
-        await publish_delta(valkey, investigation.id, outcome.delta)
+        await publish_delta(valkey, investigation.id, outcome.to_publish())
         await _record_history_step(
             working_set,
             history,
@@ -7027,7 +7027,7 @@ async def explore_starter_run_route(
     case's working set."""
     nodes, edges = await explore.run_starter(principal, public_ontology(ontology), question_id)
     outcome = await working_set.seed(investigation.id, nodes, edges, principal)
-    await publish_delta(valkey, investigation.id, outcome.delta)
+    await publish_delta(valkey, investigation.id, outcome.to_publish())
     await _record_history_step(
         working_set,
         history,
@@ -7112,7 +7112,7 @@ async def shared_pair_canvas_route(
         principal, node_id, other_id, edge_type=_shared_link_type(ontology, edge_type)
     )
     outcome = await working_set.seed(investigation.id, nodes, edges, principal)
-    await publish_delta(valkey, investigation.id, outcome.delta)
+    await publish_delta(valkey, investigation.id, outcome.to_publish())
     await _record_history_step(
         working_set,
         history,
@@ -14845,7 +14845,7 @@ async def ownership_canvas(
     outcome = await working_set.seed(
         investigation.id, list(nodes.values()), list(edges.values()), principal
     )
-    await publish_delta(valkey, investigation.id, outcome.delta)
+    await publish_delta(valkey, investigation.id, outcome.to_publish())
     await _record_history_step(
         working_set,
         history,
@@ -15898,7 +15898,7 @@ async def alert_canvas(
         alerts_store, graph, analytics, investigation.id, alert_id, principal
     )
     outcome = await working_set.seed(investigation.id, nodes, edges, principal)
-    await publish_delta(valkey, investigation.id, outcome.delta)
+    await publish_delta(valkey, investigation.id, outcome.to_publish())
     await _record_history_step(
         working_set,
         history,

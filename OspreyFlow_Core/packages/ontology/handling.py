@@ -8,16 +8,33 @@ configuration change with nothing above this module to touch.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+import logging
+from collections.abc import (
+    Awaitable,
+    Callable,
+    Container,
+    Iterable,
+    Iterator,
+    Mapping,
+    Sequence,
+)
 from contextlib import contextmanager
 from contextvars import ContextVar
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Protocol
 
 import yaml
 from pydantic import BaseModel, ValidationError
 
-from schemas.domain import Edge, Handling, Node, Principal
+from schemas.domain import (
+    DrawnAssertion,
+    Edge,
+    Handling,
+    Node,
+    Principal,
+    Provenance,
+    SourceRef,
+)
 from schemas.mapconfig import (
     GAZETTEER_DATASET_PREFIX,
     GAZETTEER_ONLY_IDENTIFIERS,
@@ -27,6 +44,13 @@ from schemas.mapconfig import (
 from .errors import HandlingSchemeError
 
 _SCHEME_DIR = Path(__file__).resolve().parent / "handling"
+_log = logging.getLogger(__name__)
+
+#: The locator of every source a drawing board writes (`services/api/boards.py`). It is how a source
+#: the board wrote, which may name a cited document, is told from any other.
+BOARD_SOURCE_LOCATOR = "a drawing board of the case"
+#: The type a cited id must be: the question drawing asks (ADR-143 decision 4).
+_CITABLE_TYPE = "Document"
 
 Dissemination = Literal["permitted", "conditional", "restricted"]
 
@@ -315,6 +339,7 @@ def sources_within_case(datasets: Sequence[str], principal: Principal) -> bool:
 
 
 _SOURCES_IN_FULL: ContextVar[bool] = ContextVar("sources_in_full", default=False)
+_CITED_DOCUMENTS_KEPT: ContextVar[bool] = ContextVar("cited_documents_kept", default=False)
 
 
 @contextmanager
@@ -332,17 +357,148 @@ def sources_in_full() -> Iterator[None]:
         _SOURCES_IN_FULL.reset(token)
 
 
-def withhold_sources[Element: (Node, Edge)](element: Element, principal: Principal) -> Element:
+@contextmanager
+def cited_documents_kept() -> Iterator[None]:
+    """ADR-143 Amendment 8 item 5: inside this scope `withhold_sources` leaves a drawn element's
+    cited documents as stored, and applies every other rule. For a read that fills the working set,
+    or whose result is written back: otherwise one person's view would be stored as everyone's, and
+    an author who may no longer read a document would erase it by changing a label. No document read
+    is made inside it. The read is still made with the request's principal (rule 3). A context
+    variable, so it holds for the calling task alone. What such a read returns goes to no one
+    without the rule: every send applies `withhold_sources` outside this scope."""
+    token = _CITED_DOCUMENTS_KEPT.set(True)
+    try:
+        yield
+    finally:
+        _CITED_DOCUMENTS_KEPT.reset(token)
+
+
+def withhold_sources[Element: (Node, Edge)](
+    element: Element, principal: Principal, readable_documents: Container[str] | None = None
+) -> Element:
     """`element` as `principal` may be sent it: where its sources are not within the case, a copy
     with them emptied and `provenance.sources_withheld` set. Otherwise `element` itself. Nothing
-    stored is changed; the working set holds the full body and projects this for each reader."""
+    stored is changed; the working set holds the full body and projects this for each reader.
+
+    `readable_documents` is the result of the one batched read for the answer
+    (`readable_cited_documents`): the documents its drawn elements cite that this reader may read
+    now (ADR-143 Amendment 8). A cited document not in it is withheld, and **given none, every one
+    is**, so a caller that makes no read fails closed. This function makes no read itself."""
     if _SOURCES_IN_FULL.get():
         return element
     element = _board_as_known(element, principal)
     element = _gazetteer_identifiers_withheld(element, principal)
+    if not _CITED_DOCUMENTS_KEPT.get():
+        element = _cited_documents_as_known(element, readable_documents or frozenset())
     if sources_within_case(element.datasets, principal):
         return element
     provenance = element.provenance.model_copy(update={"sources": [], "sources_withheld": True})
+    return element.model_copy(update={"provenance": provenance})
+
+
+def _note_source_id(drawn: DrawnAssertion) -> str:
+    """The id of the source of an item drawn from a note alone: it names no document."""
+    return f"drawn:{drawn.item_id}"
+
+
+def _cites(source: SourceRef, drawn: DrawnAssertion) -> bool:
+    """Whether a drawn element's source names a cited document: one the board wrote, other than the
+    note's own, or one naming the document the assertion cites now. Any other source (a loaded
+    row's, merged onto a promoted item) is not the board's, and not this rule's."""
+    if source.document_id == drawn.source_document:
+        return True
+    return source.locator == BOARD_SOURCE_LOCATOR and source.document_id != _note_source_id(drawn)
+
+
+class Provenanced(Protocol):
+    """Anything that says what it cites: a node, a link, or a stored record's provenance."""
+
+    @property
+    def provenance(self) -> Provenance: ...
+
+
+def cited_documents(elements: Iterable[Provenanced]) -> set[str]:
+    """Every document the drawn elements among `elements` cite: the one each assertion names now,
+    and each a source the board wrote names, which after an edit may be one cited before (the edit
+    leaves the stored sources as they were, and a second write keeps every stored source)."""
+    cited: set[str] = set()
+    for element in elements:
+        drawn = element.provenance.drawn
+        if drawn is None:
+            continue
+        if drawn.source_document is not None:
+            cited.add(drawn.source_document)
+        cited |= {s.document_id for s in element.provenance.sources if _cites(s, drawn)}
+    return cited
+
+
+async def readable_cited_documents(
+    elements: Iterable[Provenanced],
+    principal: Principal,
+    read: Callable[[list[str], Principal], Awaitable[Iterable[Node]]],
+) -> frozenset[str]:
+    """ADR-143 Amendment 8 items 2 and 3: the one batched read for an answer. Of the documents the
+    drawn elements among `elements` cite, those `principal` may read **now**: the ids `read` (the
+    graph adapter's own access step, with this reader's principal: its handling and the case's
+    datasets) finds that are a `Document`. One call of `read` for the whole answer, never one for
+    each element, and none where nothing is cited or the caller's own scope keeps every document
+    (a read that fills the working set or is written back). **A read that fails keeps nothing.**
+    No answer is kept for a later one."""
+    if _SOURCES_IN_FULL.get() or _CITED_DOCUMENTS_KEPT.get():
+        return frozenset()
+    cited = cited_documents(elements)
+    if not cited:
+        return frozenset()
+    try:
+        # The documents are asked for only to know that they are read: their own provenance is not
+        # looked at, so no further read follows from this one.
+        with cited_documents_kept():
+            found = await read(sorted(cited), principal)
+    except Exception:
+        _log.warning(
+            "the documents an answer's drawn items cite could not be read, so none is sent",
+            exc_info=True,
+        )
+        return frozenset()
+    return frozenset(n.id for n in found if n.type == _CITABLE_TYPE and n.id in cited)
+
+
+def _cited_documents_as_known[Element: (Node, Edge)](
+    element: Element, readable: Container[str]
+) -> Element:
+    """ADR-143 Amendment 8 items 1 and 8 (rule 3): a drawn element is sent without each cited
+    document that is not among `readable`. `drawn.source_document` is sent empty; the sources that
+    named a withheld document become one `drawn:<item_id>` source, never repeated, the source of an
+    item drawn from a note alone, so that what is sent does not say how many documents were
+    withheld, or that any was. A note is never blanked; an empty one beside a withheld document is
+    sent as none, whatever was stored. It changes which fields of an element the reader already
+    sees are sent, and no traversal, degree, path or count."""
+    drawn = element.provenance.drawn
+    if drawn is None:
+        return element
+    placeholder = _note_source_id(drawn)
+    withheld = {i for i in cited_documents([element]) if i not in readable}
+    if not withheld:
+        return element
+    sources: list[SourceRef] = []
+    placed = False
+    for source in element.provenance.sources:
+        named = _cites(source, drawn) and source.document_id in withheld
+        if not named and source.document_id != placeholder:
+            sources.append(source)
+        elif not placed:
+            sources.append(
+                SourceRef(document_id=placeholder, locator=BOARD_SOURCE_LOCATOR, excerpt_hash="")
+            )
+            placed = True
+    update: dict[str, object] = {}
+    if drawn.source_document in withheld:
+        update["source_document"] = None
+        if not (drawn.source_note and drawn.source_note.strip()):
+            update["source_note"] = None
+    provenance = element.provenance.model_copy(
+        update={"sources": sources, "drawn": drawn.model_copy(update=update)}
+    )
     return element.model_copy(update={"provenance": provenance})
 
 

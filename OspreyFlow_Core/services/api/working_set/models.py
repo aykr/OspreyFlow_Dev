@@ -16,10 +16,11 @@ code, not only in a docstring.
 
 from __future__ import annotations
 
+from collections.abc import Container
 from datetime import datetime
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, Self
 
-from pydantic import BaseModel, Field, TypeAdapter, model_validator
+from pydantic import BaseModel, Field, PrivateAttr, TypeAdapter, model_validator
 
 from ontology.handling import withhold_sources
 from schemas.domain import ClusterId, Edge, EdgeId, Handling, Node, NodeId, Principal
@@ -119,14 +120,18 @@ class DeltaAdd(BaseModel):
     edges: list[Edge] = Field(default_factory=list)
 
 
-def add_for_reader(delta: DeltaAdd, reader: Principal) -> DeltaAdd:
+def add_for_reader(
+    delta: DeltaAdd, reader: Principal, readable_documents: Container[str] | None = None
+) -> DeltaAdd:
     """`delta` as `reader` may be sent it: each element's sources withheld where the reader's case
-    does not read every dataset of it (ADR-130 Amendment 2). For a writer's own response; the
-    delta it publishes is projected per recipient by `WorkingSetService.project_delta`."""
+    does not read every dataset of it (ADR-130 Amendment 2), and a drawn element without each
+    cited document not in `readable_documents` (ADR-143 Amendment 8; given none, every one). For a
+    writer's own response; the delta it publishes is projected per recipient by
+    `WorkingSetService.project_delta`."""
     return delta.model_copy(
         update={
-            "nodes": [withhold_sources(n, reader) for n in delta.nodes],
-            "edges": [withhold_sources(e, reader) for e in delta.edges],
+            "nodes": [withhold_sources(n, reader, readable_documents) for n in delta.nodes],
+            "edges": [withhold_sources(e, reader, readable_documents) for e in delta.edges],
         }
     )
 
@@ -320,7 +325,26 @@ def lacks_record(delta: WorkingSetDelta) -> bool:
     return isinstance(delta, DeltaRemove | DeltaReplaceEdge) and delta.removed is None
 
 
-class ExpansionOutcome(BaseModel):
+class _Published(BaseModel):
+    """An add's answer, whose `delta` is **the writer's own view** of it. What is stored and
+    published, which each recipient's socket projects for its own reader, is the delta as the
+    working set holds it, its cited documents kept (ADR-143 Amendment 8 item 5): otherwise the
+    writer's view would reach everyone as the item itself. It is private, so no answer carries
+    it."""
+
+    delta: DeltaAdd
+    _stored: DeltaAdd | None = PrivateAttr(default=None)
+
+    def holding(self, stored: DeltaAdd) -> Self:
+        self._stored = stored
+        return self
+
+    def to_publish(self) -> DeltaAdd:
+        """The delta as stored, for `notify.publish_delta` alone: never for a person."""
+        return self._stored if self._stored is not None else self.delta
+
+
+class ExpansionOutcome(_Published):
     """What `WorkingSetService.expand` returns on success — the delta the client should apply. It
     carries no count of what was withheld (ADR-124 decision 1): a figure tied to a seed and a link
     type can be made to point at the one hidden link it counts."""
@@ -374,7 +398,7 @@ class LinksAmongRequest(BaseModel):
         return self
 
 
-class LinksAmongOutcome(BaseModel):
+class LinksAmongOutcome(_Published):
     """`POST .../links-among` (ADR-098): the delta that draws the new links, and how many — with,
     past one degree (Amendment 4), the nodes the routes brought, the pairs no route joins within
     the degree, and the pairs with more routes at their degree than were drawn (said, rule 2)."""
