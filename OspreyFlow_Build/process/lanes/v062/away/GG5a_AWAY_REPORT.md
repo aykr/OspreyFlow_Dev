@@ -150,7 +150,7 @@ The minor points:
 - **The folders read** are listed below.
 
 Not changed:
-- **The worker listener's race** (installed after the worker starts). The console witness of the document and of each worker covers it, and three full runs saw no flake.
+- **The worker listener's race** (installed after the worker starts). The console witness of the document and of each worker covers it, and three full runs saw no flake. **(Wrong, and fixed in round 2: see "Round 2" at the end. The race was real and the console did not cover it.)**
 - **The patch's location**, kept beside the spec as the GOV.UK and keyboard runners' patches are kept. Item 10's point about the Makefile is question 2.
 
 **WebKit on this account.** `webkit-2370` was installed by this session and no other lane had WebKit before it. The
@@ -351,3 +351,48 @@ The slice changes no server code and no test that Vitest runs. Nothing was retri
 conductor:** two runs of the pages' server tests close together on one Mac (two seats, or a seat beside a merge's gate)
 can go red like this. Whether that gets a backlog row is the conductor's call.
 
+## Round 2 on the Mac: the worker's recorder (27 November 2026)
+
+**The verifier's finding was right, and the hole was larger than it said.** The spec sent the worker's violation recorder in
+from outside after the worker had started, and swallowed a failure to do so. This report said the console of the document and
+of each worker covered that gap. It did not. **Chromium writes no console line for a refusal in a worker**, on the worker's
+listener or the page's: the vector-tile case there records 11 violation events and no console line. WebKit writes one on both.
+
+**The plant** is a worker file whose first line after the recorder asks a third origin (`fetch`), MapLibre's bytes after it.
+Run five times in each browser against round 1's spec, it was red 10 of 10:
+
+| Browser | What round 1's checker said of a refusal made as the worker started |
+| --- | --- |
+| Chromium | **nothing: `failures()` returned `[]`**, so the standing test passed the run as clean |
+| WebKit | the console lines only; no `policy violation:` entry, so the violation event was lost |
+
+Two more plants showed the silent `.catch`: a worker with no recorder, and a worker that closes as it starts. Neither was
+named. Red in `47eec12`, the fix in the commit after it.
+
+**The fix.**
+- The recorder is the first thing in the worker file the test's origin serves, ahead of MapLibre's bytes, which are
+  unchanged. It is the same `recordViolations` function the document gets through `addInitScript`. The worker file imports
+  no other module (checked with esbuild's metafile on 6.19.0), so none of it is evaluated ahead of the recorder.
+- A worker is either read or named: `a worker's violations are not known: it ran without the recorder` or `... it could not
+  be read`. There is no `.catch` that returns an empty list.
+- The vector-tile case now also asserts WebKit's `[load, worker]` console line. Shown red by taking `worker.on("console")`
+  out, then restored. Chromium has no such line to assert, so there the worker's own record is the only witness.
+
+**What this changes above.**
+- "MapLibre's own `dist/maplibre-gl-worker.mjs` byte for byte" is now: its bytes unchanged, behind the test's recorder. A
+  violation's line number in the worker counts the recorder's lines too. The package line numbers under "The traces" are the
+  package's own.
+- The worker asset in the violation texts is now `maplibre-gl-worker-A91063CA.js`, not `...-C8564C4A.js`.
+- "Two witnesses" to (a) holds in the document, and in a worker in WebKit only.
+- **34 cases × 2 browsers = 68** (31 as before, plus the refusal at the worker's start, the unrecorded worker and the closed
+  worker). The directive table did not change.
+
+**The runs:** the frozen command, 68 of 68. The worker cases, the vector-tile case and the real page, repeated 8 times in
+each browser, 80 of 80. The real page drew the same pixel counts as before.
+
+**A limit, not closed here:** a worker the browser never reports to Playwright would be neither read nor named. Both browsers
+report MapLibre's workers (Chromium 1, WebKit 3), and the real page's case asserts at least one. A deployed run's worker file
+carries no recorder, so a deployed check needs its own way to hear a worker.
+
+`ci-wiring.patch` and `GG5a_ADR152_DECISION8_RUN.diff` are unchanged, unapplied, and both still pass `git apply --check`.
+`server/headers.ts` is unchanged.

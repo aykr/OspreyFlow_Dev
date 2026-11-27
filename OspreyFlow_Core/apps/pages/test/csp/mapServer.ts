@@ -9,8 +9,11 @@
 //   * the assets: `assetsHandler()` from `server/assets.ts` at `ASSETS_PREFIX`, after the headers, as `server/app.ts:227` mounts
 //     it, so the page's module, its stylesheet and MapLibre's worker are served with the types, names and refusals a deployed
 //     page service gives them (a content-hashed name, and `.js`, because the handler has no type for `.mjs`);
-//   * the worker: MapLibre's own `dist/maplibre-gl-worker.mjs`, byte for byte, named by `setWorkerUrl` on the page's own origin,
-//     as `apps/workspace/src/map/maplibreWorker.ts` names it;
+//   * the worker: MapLibre's own `dist/maplibre-gl-worker.mjs`, named by `setWorkerUrl` on the page's own origin, as
+//     `apps/workspace/src/map/maplibreWorker.ts` names it. Its bytes are unchanged, with one thing ahead of them: the test's
+//     violation recorder, so that it listens before any line of MapLibre runs. A listener sent in from outside once the worker
+//     has started loses a refusal raised before it lands (measured, both browsers). The file imports no other module, so
+//     nothing of it is evaluated ahead of the recorder. A violation's line number in the worker counts the recorder's lines too;
 //   * the tiles: GG6's synthetic archive, `apps/workspace/keyboard/fixtures/map-tiles.pmtiles`, read from disk by path (the
 //     owner's ruling, GG5a draft question 5 (a): a file read, not an import, so invariant I5's import boundary is untouched),
 //     answered as a ranged route answers it (206 with `Content-Range`, 416 past the end).
@@ -24,7 +27,7 @@
 // worker address points at it, and it records every request that reaches it: a request it records is one that left the page's
 // origin, whatever the browser's own events said.
 import { createHash } from "node:crypto";
-import { copyFileSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -61,9 +64,9 @@ export type StyleCase = "full" | "tile-elsewhere" | "tile-third" | "glyphs-elsew
 export const THIRD_ORIGIN = "http://third-origin.test";
 /** Where the page's worker is: the page's own origin (as `maplibreWorker.ts` does), or another origin (a planted fault). */
 export type WorkerCase = "self" | "elsewhere";
-/** A planted worker file in place of the one the page names (rule 15), each MapLibre's own bytes with at most one line ahead of
- * them. `asks-at-start`: it asks a third origin as it starts, before anything outside the worker can have reached it.
- * `unrecorded`: it runs with no violation recorder. `closes-at-start`: it is gone before its record is read. */
+/** A planted worker file in place of the one the page names (rule 15), each MapLibre's own bytes with at most the recorder and
+ * one planted line ahead of them. `asks-at-start`: it asks a third origin as it starts, before anything outside the worker can
+ * have reached it. `unrecorded`: it runs with no violation recorder. `closes-at-start`: it is gone before its record is read. */
 export type WorkerFileCase = "asks-at-start" | "unrecorded" | "closes-at-start";
 /** How the archive is answered: by range (as the Conduit's ranged route answers it), or whole, ignoring `Range`. */
 export type ArchiveCase = "ranged" | "whole";
@@ -237,21 +240,23 @@ interface Assets {
   module: string;
   stylesheet: string;
   worker: string;
+  /** MapLibre's worker file as the package ships it. */
   workerBytes: Buffer;
   /** The planted worker files, by case. */
   plantedWorkers: Record<WorkerFileCase, string>;
 }
 
-/** Each planted worker file's first line, ahead of MapLibre's own bytes. */
-const WORKER_PLANTS: Record<WorkerFileCase, string> = {
-  "asks-at-start": `fetch("${THIRD_ORIGIN}/at-start").catch(() => {});\n`,
-  unrecorded: "/* planted: no violation recorder */\n",
-  "closes-at-start": "self.close();\n",
+/** What goes ahead of MapLibre's bytes in each planted worker file: the recorder (all but `unrecorded`), then the planted line. */
+const WORKER_PLANTS: Record<WorkerFileCase, { recorded: boolean; line: string }> = {
+  "asks-at-start": { recorded: true, line: `fetch("${THIRD_ORIGIN}/at-start").catch(() => {});\n` },
+  unrecorded: { recorded: false, line: "/* planted: no violation recorder */\n" },
+  "closes-at-start": { recorded: true, line: "self.close();\n" },
 };
 
 /** The page's module and stylesheet, bundled by this test's own esbuild call with the options `apps/pages/scripts/assets.mjs` gives a
- * module (one ES module, ES2018, browser, minified, no splitting, no source map), and MapLibre's worker file copied beside them. */
-async function buildAssets(): Promise<Assets> {
+ * module (one ES module, ES2018, browser, minified, no splitting, no source map), and MapLibre's worker file written beside them,
+ * behind the violation recorder. */
+async function buildAssets(workerRecorder: string): Promise<Assets> {
   const dir = mkdtempSync(join(tmpdir(), "ospreyflow-pages-csp-assets-"));
   await build({
     entryPoints: [join(HERE, "page", "map-page.ts"), join(HERE, "page", "map-page.css")],
@@ -277,15 +282,16 @@ async function buildAssets(): Promise<Assets> {
   // npm hoists the one 6.19.0 to the root `node_modules` (the workspace resolves the same version), so look there second.
   const distDir = existsSync(join(MAPLIBRE_DIST, "maplibre-gl-worker.mjs")) ? MAPLIBRE_DIST : MAPLIBRE_DIST_HOISTED;
   const workerBytes = readFileSync(join(distDir, "maplibre-gl-worker.mjs"));
-  const worker = hashedName("maplibre-gl-worker", workerBytes, ".js");
-  copyFileSync(join(distDir, "maplibre-gl-worker.mjs"), join(dir, worker));
+  const workerFile = (ahead: string): string => {
+    const bytes = Buffer.concat([Buffer.from(ahead, "utf8"), workerBytes]);
+    const file = hashedName("maplibre-gl-worker", bytes, ".js");
+    writeFileSync(join(dir, file), bytes);
+    return file;
+  };
+  const recorder = `${workerRecorder}\n`;
+  const worker = workerFile(recorder);
   const plantedWorkers = Object.fromEntries(
-    Object.entries(WORKER_PLANTS).map(([name, line]) => {
-      const bytes = Buffer.concat([Buffer.from(line, "utf8"), workerBytes]);
-      const file = hashedName("maplibre-gl-worker", bytes, ".js");
-      writeFileSync(join(dir, file), bytes);
-      return [name, file];
-    }),
+    Object.entries(WORKER_PLANTS).map(([name, plant]) => [name, workerFile(`${plant.recorded ? recorder : ""}${plant.line}`)]),
   ) as Record<WorkerFileCase, string>;
   return { dir, module, stylesheet, worker, workerBytes, plantedWorkers };
 }
@@ -334,8 +340,9 @@ function ranged(archive: Buffer, how: () => ArchiveCase): RequestHandler {
   };
 }
 
-export async function startMapServer(): Promise<MapServer> {
-  const assets = await buildAssets();
+/** `workerRecorder` is the script that records a worker's policy violations: it goes ahead of MapLibre's bytes in the worker file. */
+export async function startMapServer(workerRecorder: string): Promise<MapServer> {
+  const assets = await buildAssets(workerRecorder);
   const archive = readFileSync(ARCHIVE_FILE);
   const tileDataOffset = Number(archive.readBigUInt64LE(56));
   const sprite = solidPng(16, 16, COLOURS.road);

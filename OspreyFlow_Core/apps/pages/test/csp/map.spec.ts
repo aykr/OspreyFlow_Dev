@@ -4,7 +4,9 @@
 //
 // The page is test-only (`mapServer.ts` has what is real and what is synthetic). For each page this records
 //   (a) every `securitypolicyviolation` event, in the document and in every worker the page starts (a request a worker makes
-//       is refused in the worker, and the document never hears of it);
+//       is refused in the worker, and the document never hears of it), by a recorder that listens before any other script there:
+//       in the document by an init script, in a worker as the first thing in its file (`mapServer.ts`). A worker whose record
+//       cannot be read is named: it is never taken for a worker that was refused nothing;
 //   (b) every request whose origin is not the page's own: seen by the browser (its request events and a route that refuses
 //       anything bound for a third origin), and, independently, every request that reached the other origin's own server;
 //   (c) the map reaching `load` and `idle`, a tile block read from the archive, and the canvas showing the water and land cover
@@ -34,7 +36,10 @@ interface Violation {
 interface Run {
   browser: string;
   violations: Violation[];
-  /** CSP refusals the browser wrote to the console (a second witness to (a)). */
+  /** Why a worker's violations are not known, for each worker whose record could not be read. */
+  unknownWorkers: string[];
+  /** CSP refusals the browser wrote to the console: a second witness to (a), though not to all of it. Chromium writes none for
+   * a refusal in a worker (measured). */
   consoleRefusals: string[];
   /** Requests the browser made to an origin not the page's own. */
   outside: string[];
@@ -61,7 +66,7 @@ const DRAWN_MS = 6_000;
 
 let server: MapServer;
 test.beforeAll(async () => {
-  server = await startMapServer();
+  server = await startMapServer(`(${recordViolations.toString()})("worker");`);
 });
 test.afterAll(async () => {
   await server?.close();
@@ -81,7 +86,8 @@ interface InBrowser {
   ): void;
 }
 
-/** Installed in the document before any of its own script runs, and in each worker as soon as it is seen. */
+/** Installed in the document before any of its own script runs (an init script), and in a worker as the first thing in its file.
+ * It goes to both as its own source text, so it reaches for nothing outside itself. */
 function recordViolations(where: string): void {
   const scope = globalThis as unknown as InBrowser;
   if (scope.__CSP__) return;
@@ -124,7 +130,6 @@ async function openMap(page: Page, browser: string, request: PageRequest, whileD
   page.on("worker", (worker) => {
     workers.push(worker);
     worker.on("console", refusal("worker"));
-    void worker.evaluate(recordViolations, "worker").catch(() => undefined);
   });
   page.on("request", (req) => {
     if (isNetwork(req.url()) && originOf(req.url()) !== server.origin) outside.push(req.url());
@@ -175,16 +180,21 @@ async function openMap(page: Page, browser: string, request: PageRequest, whileD
   await page.waitForTimeout(250);
   // (a), read last: every event up to here, those fired while the picture was read among them.
   const violations = (await page.evaluate(() => (globalThis as unknown as InBrowser).__CSP__ ?? [])) as Violation[];
+  const unknownWorkers: string[] = [];
   for (const worker of workers) {
-    const inWorker = await worker
-      .evaluate(() => (globalThis as unknown as InBrowser).__CSP__ ?? [])
-      .catch(() => [] as unknown[]);
-    violations.push(...(inWorker as Violation[]));
+    try {
+      const inWorker = await worker.evaluate(() => (globalThis as unknown as InBrowser).__CSP__ ?? null);
+      if (inWorker === null) unknownWorkers.push(`it ran without the recorder: ${worker.url()}`);
+      else violations.push(...(inWorker as Violation[]));
+    } catch (error) {
+      unknownWorkers.push(`it could not be read: ${worker.url()} (${String(error).split("\n")[0]})`);
+    }
   }
   const policy = server.policies[policiesBefore] ?? { builder: "", sent: "" };
   return {
     browser,
     violations,
+    unknownWorkers,
     consoleRefusals,
     outside,
     reachedElsewhere: server.reachedElsewhere.slice(elsewhereBefore).map((r) => `${server.elsewhere}${r.path}`),
@@ -303,6 +313,7 @@ const DRAWN = 200;
 function failures(run: Run): string[] {
   const out: string[] = [];
   for (const v of run.violations) out.push(`policy violation: ${v.directive} refused ${v.blocked || "(no address)"} in the ${v.where}`);
+  for (const why of run.unknownWorkers) out.push(`a worker's violations are not known: ${why}`);
   for (const text of run.consoleRefusals) out.push(`refused, on the console: ${text}`);
   for (const url of new Set([...run.outside, ...run.reachedElsewhere])) out.push(`request to another origin: ${url}`);
   // None sent and none made are equal, so a page that never passed the headers is named for itself.
