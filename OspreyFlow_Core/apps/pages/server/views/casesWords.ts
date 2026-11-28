@@ -1,6 +1,7 @@
 /**
- * The cases page's words and the views it is drawn from (slices GR1a and GR1e; ADR-152 decisions 5, 6 and 12; FUNCTIONS row
- * `cases-and-views`; scenario CS). Nothing here is a call or a right: a word, or a function from what the Conduit answered to what the template draws.
+ * The cases page's words and the views it is drawn from (slices GR1a and GR1e; New case, slice GR1b; ADR-152 decisions 5, 6 and 12;
+ * FUNCTIONS row `cases-and-views`; scenario CS). Nothing here is a call or an access rule: a word, a function from what the Conduit
+ * answered to what the template draws, or, for New case, from what the form posted to the body the Conduit is sent.
  *
  * What the page says of a level, a domain pack, an untitled case and a moment is the shared package's (`packages/glass-shared`): the
  * Help page's level names, the Studio's pack labels, the case picker's untitled name and its way of writing a moment, imported and never
@@ -16,13 +17,17 @@
  * The views keep every case, every requirement and every step the Conduit sent, in the order it sent them: nothing here removes, cuts, sorts or
  * counts (decision 5; rule 3 stays with the Conduit and its adapters, and the brief's route already leaves out an attachment the reader
  * may not read). Plain words, British English.
+ *
+ * **New case** (the owner's rulings of 26 November 2026): `GET /v1/datasets` is read as strictly (`datasetsOf`, `NEW_CASE_CENSUS`), every
+ * dataset sent is offered, in the order sent, and what a new case sends (`createCaseBody`) is `CREATE_FIELDS`, built one at a time
+ * from the form: nothing else of the post goes on, its anti-forgery token least of all.
  */
-import { LEVEL_WORDS, caseLabel, domainLabels, utcStampOf } from "@ospreyflow/glass-shared";
+import { DOMAIN_PACKS, LEVEL_WORDS, POLE_LABEL, UNTITLED_CASE, caseLabel, datasetChoiceLabel, domainLabels, utcStampOf } from "@ospreyflow/glass-shared";
 import type { DomainPack } from "@ospreyflow/glass-shared";
 
 export const CASES_WORDS = {
   listTitle: "Your cases",
-  lede: "The cases you hold a level on. This page only shows them.",
+  lede: "The cases you hold a level on.",
   caption: "Your cases",
   columns: ["Case", "Your level", "Domains", "Datasets", "Made"],
   closed: "You closed this case's tab",
@@ -66,6 +71,49 @@ export const CASES_WORDS = {
   boards: "Drawing boards in this case",
   toCases: "Back to your cases",
   back: "Back to Home",
+  // New case (slice GR1b). The two refusals, "You cannot make cases", the banner and the data question's two choices are the owner's
+  // ruled words (26 November 2026) and `spec/02`'s.
+  newCase: "New case",
+  rightsUnread: "Whether you can make cases could not be read just now, so New case is not offered.",
+  cannot: "You cannot make cases",
+  caseName: "Case name",
+  caseNameHint: `Left empty, the case is called ${UNTITLED_CASE}.`,
+  dataQuestion: "What data does this case read?",
+  makeNew: "Make a new dataset — empty, loaded in the Ingest Studio",
+  useExisting: "Use an existing dataset…",
+  newDatasetName: "Name of the new dataset",
+  newDatasetHint: "Left empty, it takes the case's name.",
+  datasetLegend: "Existing dataset",
+  datasetHint: "The case reads this dataset only; its Author can change it later.",
+  domainsLegend: "Domain models",
+  // Said when the form is drawn with no box ticked, and true whatever is ticked afterwards: there is no script to take it away.
+  noneTicked: `With no box ticked: ${POLE_LABEL}`,
+  createButton: "Create case",
+  errorTitle: "There is a problem",
+  errorPrefix: "Error:",
+  nameRefused: "A dataset with that name may already exist. Choose another name",
+  datasetRefused: "That dataset cannot be used for a new case",
+  formUnreadable: "The new case form could not be read just now. Nothing has changed. Try again in a few minutes.",
+  notMadeTitle: "The case was not made",
+  // The owner's ruling: a lost or failed answer says nothing was made. The list of cases is linked under it.
+  notMade: "The case could not be made just now. Nothing was made. Try again in a few minutes.",
+  bannerTitle: "Success",
+  caseMade: "Case made. Its data is loaded in the Ingest Studio",
+  openStudio: "Open the Ingest Studio",
+} as const;
+
+/** The address of the New case form, and where it posts (one page is one row in a tree: `pages.ts`). */
+export const NEW_CASE_HREF = "/cases?new=1";
+/** The right that offers *New case*: `Right.CREATE_CASE`, which the create's route asks for. */
+export const CREATE_CASE = "create_case";
+/** The code of the create's one dataset refusal, which carries no detail (`_dataset_refused_handler`). */
+export const DATASET_REFUSED = "dataset_refused";
+/** The fields of `CreateInvestigationInput` the page sends: `createCaseBody` sends no other. */
+export const CREATE_FIELDS = ["name", "dataset_ids", "new_dataset_name", "domains"] as const;
+
+/** `Dataset` as the new case form reads it: the fields it draws (the id as a radio's value only) and those it leaves out. */
+export const NEW_CASE_CENSUS = {
+  Dataset: { drawn: ["id", "name", "kind", "members"], left: ["owning_unit", "created_at", "created_by", "egress", "layer_of", "highest_marking", "promotion_policy"] },
 } as const;
 
 /** Each model the page reads: the fields it draws and the fields it leaves out (Scenario CS names the same). */
@@ -98,6 +146,7 @@ export const KINDS = ["trend", "pattern", "assessment", "view"] as const;
 // not one of them. The page draws a label as sent and never in words of its own; a label outside this list is a body it does not draw
 // from (could not be read). The scenario test holds this list to that file.
 export const HISTORY_LABELS: readonly string[] = ["Seeded", "Expanded", "Showed links among the view", "Removed", "Ran a starter question", "Showed two who share contacts", "Opened from an alert", "Showed an ownership structure", "Opened an alert", "Edited the brief", "Changed"];
+export const DATASET_KINDS = ["source", "composite", "analyst_layer", "drawn"] as const;
 
 type Level = (typeof LEVELS)[number];
 type Kind = (typeof KINDS)[number];
@@ -265,15 +314,23 @@ function historyOf(body: unknown): HistoryView | undefined {
   return rows.length === 0 ? { kind: "none" } : { kind: "steps", rows };
 }
 
+/** `Investigation`, read strictly; `undefined` when the body is not one. */
+function investigationOf(body: unknown): { id: string; name: string; created_at: string; domains: DomainPack[] } | undefined {
+  if (!isObject(body)) return undefined;
+  const { id, name, created_at, created_by, owning_unit, domains } = body;
+  if (!isText(id) || !isText(name) || !isTime(created_at) || !isText(created_by) || !isText(owning_unit) || !isPacks(domains)) return undefined;
+  return { id, name, created_at, domains };
+}
+
 /**
  * One case's page (`caseId`, the address's), from its own read (`Investigation`), its brief (`CaseBrief`), its history
  * (`list[HistoryStepSummary]`) and the list (for the reader's level on it and the datasets it reads, which the case's own route does not
  * send); `undefined` when any is not the route's, or the list does not hold the case (it is never drawn without its level).
  */
 export function caseView(caseId: string, investigation: unknown, brief: unknown, history: unknown, list: unknown): CaseView | undefined {
-  if (!isObject(investigation)) return undefined;
-  const { id, name, created_at, created_by, owning_unit, domains } = investigation;
-  if (!isText(id) || !isText(name) || !isTime(created_at) || !isText(created_by) || !isText(owning_unit) || !isPacks(domains)) return undefined;
+  const read = investigationOf(investigation);
+  if (read === undefined) return undefined;
+  const { name, created_at, domains } = read;
   const listings = listingsOf(list);
   const briefView = briefOf(brief);
   const historyView = historyOf(history);
@@ -290,5 +347,137 @@ export function caseView(caseId: string, investigation: unknown, brief: unknown,
     brief: briefView,
     history: historyView,
     boards: caseBoardsHref(caseId),
+  };
+}
+
+// ------------------------------------------------------------------------------------------------ New case (slice GR1b)
+
+/** The id of the case a `201` says was made, from a body read as strictly as a case's own page reads it; `undefined` when it cannot be. */
+export const madeCaseId = (body: unknown): string | undefined => investigationOf(body)?.id;
+
+/** Whether `GET /v1/me/rights` offers *New case*; `undefined` when the body is not the route's (nothing is offered, and it is said). */
+export function mayMakeCases(body: unknown): boolean | undefined {
+  if (!isObject(body)) return undefined;
+  const rights = body["rights"];
+  return isTexts(rights) ? rights.includes(CREATE_CASE) : undefined;
+}
+
+/** Whether a 422's body is the create's one dataset refusal, as against a refusal of the body itself. */
+export const isDatasetRefusal = (body: unknown): boolean => isObject(body) && body["error"] === DATASET_REFUSED;
+
+export interface DatasetOption {
+  value: string;
+  label: string;
+}
+
+/** One row of `GET /v1/datasets`, read strictly, as a choice; `undefined` when it is not a `Dataset`. */
+function datasetOptionOf(row: unknown): DatasetOption | undefined {
+  if (!isObject(row)) return undefined;
+  const { id, name, owning_unit, created_at, created_by, egress, kind, members, layer_of, highest_marking, promotion_policy } = row;
+  if (!isText(id) || !isText(name) || !isText(owning_unit) || !isTime(created_at) || !isText(created_by) || !isText(egress)) return undefined;
+  if (!DATASET_KINDS.some((known) => known === kind) || !isTexts(members) || !isText(promotion_policy)) return undefined;
+  if (!(layer_of === null || isText(layer_of)) || !(highest_marking === null || isText(highest_marking))) return undefined;
+  return { value: id, label: datasetChoiceLabel({ id, name, owning_unit, kind: kind === "composite" ? "composite" : "source", members }) };
+}
+
+/** `GET /v1/datasets` as choices, every one in the order sent; `undefined` when it is not a list of datasets (never none). */
+export function datasetsOf(body: unknown): DatasetOption[] | undefined {
+  if (!Array.isArray(body)) return undefined;
+  const options: DatasetOption[] = [];
+  for (const row of body as unknown[]) {
+    const read = datasetOptionOf(row);
+    if (read === undefined) return undefined;
+    options.push(read);
+  }
+  return options;
+}
+
+/** What the form holds: as typed and chosen, so that a refused form is drawn again with it. */
+export interface NewCaseFields {
+  name: string;
+  data: "new" | "existing";
+  newDatasetName: string;
+  datasetId: string;
+  domains: string[];
+}
+
+export const BLANK_FIELDS: NewCaseFields = { name: "", data: "new", newDatasetName: "", datasetId: "", domains: [] };
+
+const typed = (value: unknown): string => (isText(value) ? value : "");
+
+/** The posted form's fields; `undefined` when it chooses neither new nor existing data, which no post of the page's form can. */
+export function newCaseFields(posted: unknown): NewCaseFields | undefined {
+  if (!isObject(posted)) return undefined;
+  const data = posted["data"];
+  if (data !== "new" && data !== "existing") return undefined;
+  const domains = posted["domains"];
+  return {
+    name: typed(posted["name"]),
+    data,
+    newDatasetName: typed(posted["new_dataset_name"]),
+    datasetId: typed(posted["dataset_id"]),
+    // A box ticked once arrives as a text, several as a list. What was ticked is sent as it came: the route refuses what is no pack.
+    domains: isText(domains) ? [domains] : isTexts(domains) ? domains : [],
+  };
+}
+
+/**
+ * The body of `POST /v1/investigations`, from the form's fields: the case's name (left empty, the route's own default), exactly one of
+ * `dataset_ids` and `new_dataset_name` by the choice made (the other choice's field is not read), a new dataset's empty name taking the
+ * case's, and the packs as ticked, an empty list included (a list, empty included, is a choice). An existing dataset asked for with none
+ * chosen sends an empty list, which the route refuses after it has judged the right.
+ */
+export function createCaseBody(fields: NewCaseFields): Record<string, unknown> {
+  const name = fields.name.trim() || UNTITLED_CASE;
+  const reads =
+    fields.data === "existing"
+      ? { dataset_ids: fields.datasetId === "" ? [] : [fields.datasetId] }
+      : { new_dataset_name: fields.newDatasetName.trim() || name };
+  return { name, ...reads, domains: fields.domains };
+}
+
+export interface Choice {
+  htmlId: string;
+  value: string;
+  label: string;
+  checked: boolean;
+}
+
+export interface NewCaseView {
+  kind: "new";
+  action: string;
+  name: string;
+  existing: boolean;
+  newDatasetName: string;
+  datasets: Choice[];
+  packs: Choice[];
+  noneTicked: boolean;
+  /** The route's dataset refusal, said by which data choice the page sent: against the new dataset's name, or against the choice. */
+  error: { against: "name" | "choice"; says: string; href: string } | undefined;
+}
+
+/** The New case form: blank, or drawn again with the person's words after the route refused the dataset (`refused`). */
+export function newCaseView(offered: DatasetOption[], fields: NewCaseFields, refused: boolean): NewCaseView {
+  // A radio's id is its place in the list, never the dataset's id: an id is on the page in a radio's value alone.
+  const datasets = offered.map((option, index) => ({ ...option, htmlId: `dataset-${index + 1}`, checked: option.value === fields.datasetId }));
+  const packs = DOMAIN_PACKS.map((pack) => ({ htmlId: `domains-${pack.name}`, value: pack.name, label: pack.label, checked: fields.domains.includes(pack.name) }));
+  const existing = fields.data === "existing";
+  const choiceHref = datasets.length > 0 ? "#dataset-1" : "#data-new";
+  const error = !refused
+    ? undefined
+    : existing
+      ? { against: "choice" as const, says: CASES_WORDS.datasetRefused, href: choiceHref }
+      : { against: "name" as const, says: CASES_WORDS.nameRefused, href: "#new-dataset-name" };
+  return {
+    kind: "new",
+    action: NEW_CASE_HREF,
+    name: fields.name,
+    // With no dataset to offer, only a new one is offered, and it is the one checked.
+    existing: existing && datasets.length > 0,
+    newDatasetName: fields.newDatasetName,
+    datasets,
+    packs,
+    noneTicked: !packs.some((pack) => pack.checked),
+    error,
   };
 }

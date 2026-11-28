@@ -14,7 +14,7 @@
  *  - an empty brief drawn as an empty list                                                                        -> CS5
  *  - no level, another unit, no such case told apart, or told in other words than an unknown path's             -> CS6
  *  - the brief's 403 passed through, or said as "no access"                                                      -> CS7
- *  - the case read twice in one render, the browser's headers sent on, a write, an unsigned read                 -> CS8
+ *  - the case read twice in one render, the browser's headers sent on, a write from a read, an unsigned read     -> CS8
  *  - a failed read drawn as an empty table or brief, an ended session not said                                   -> CS9
  *  - a missing required field read as empty                                                                       -> CS10
  *  - a field neither drawn nor named as left out, a left-out field that changes the page                         -> CS11
@@ -426,7 +426,7 @@ const callProblems = (made: string[], want: string[]): string[] => (JSON.stringi
 
 // ------------------------------------------------------------------------------------------------ the sources
 
-const SOURCES = ["server/cases.ts", "server/views/casesWords.ts", "tree-govuk/cases.njk"];
+const SOURCES = ["server/cases.ts", "server/views/casesWords.ts", "tree-govuk/cases.njk", "tree-govuk/new-case.njk"];
 const sourcesOfThePage = (): { name: string; text: string }[] => SOURCES.map((name) => ({ name, text: read(PAGES_DIR, name) }));
 const withoutComments = (text: string): string => text.replace(/\/\*[\s\S]*?\*\/|\/\/.*$|\{#[\s\S]*?#\}/gm, "");
 /** The page does not choose what is drawn: no call in its code removes, cuts, sorts or turns a row round (decision 5). The census's own
@@ -639,7 +639,8 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
   it("CS8: the Conduit is asked as the person, the case exactly once per render, nothing of the browser's, no write, nothing unsigned", async () => {
     const w = await world();
     await getAs(w, PATH).set("Origin", "http://example.invalid").set("Referer", "http://example.invalid/x");
-    expect(calls(w.conduit)).toEqual(["GET /v1/investigations"]);
+    // The list, then the rights that say whether New case is offered (slice GR1b).
+    expect(calls(w.conduit)).toEqual(["GET /v1/investigations", "GET /v1/me/rights"]);
     w.conduit.calls.splice(0);
     await getAs(w, pageOf("c-harbour")).set("Origin", "http://example.invalid");
     expect(callProblems(calls(w.conduit), caseCalls("c-harbour"))).toEqual([]);
@@ -803,7 +804,7 @@ describe("the cases page on the GOV.UK tree (scenario CS)", () => {
     const page = PAGES.find((p) => p.path === PATH);
     expect(page?.id).toBe("cases-and-views");
     expect(page?.trees).toEqual(["govuk"]);
-    expect(page?.methods).toEqual(["GET"]);
+    expect(page?.methods).toEqual(["GET", "POST"]);
     expect(read(PAGES_DIR, "tree-govuk", "routes.yaml")).toMatch(/^ {2}- \/cases$/m);
     const sources = sourcesOfThePage();
     for (const s of sources) {
@@ -1149,7 +1150,8 @@ describe("the history part of a case's page (scenario CS, slice GR1e)", () => {
     expect(calls(w.conduit).filter((c) => c.endsWith("/history"))).toEqual(["GET /v1/investigations/c-harbour/history"]);
     w.conduit.calls.splice(0);
     await getAs(w, PATH);
-    expect(calls(w.conduit)).toEqual(["GET /v1/investigations"]);
+    // The list, then the rights that say whether New case is offered (slice GR1b): no history.
+    expect(calls(w.conduit)).toEqual(["GET /v1/investigations", "GET /v1/me/rights"]);
   });
 
   it("CS23: a history that is not a list, or a step missing or misshaping any field, is the case's could-not-be-read page, never a default", async () => {

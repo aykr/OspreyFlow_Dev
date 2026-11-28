@@ -255,6 +255,7 @@ export {
   scopeBadge,
   setCaseDatasets,
   sortedDomains,
+  UNTITLED_CASE,
 } from "./investigation/cases";
 export * from "./admin/needsYou/needsYouApi";
 export * from "./admin/needsYou/openings";
