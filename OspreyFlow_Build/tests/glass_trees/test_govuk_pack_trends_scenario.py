@@ -22,8 +22,9 @@ The row is the page's own because one id is one page in a tree (`server/pages.ts
   alone, answering GET alone, or not in the one table of pages         -> `test_the_page_module_is_its_own_rows_at_its_path`
 * the "no scenario" list holding the page's row                        -> `test_the_known_without_scenario_list_no_longer_holds_the_row`
 * the citation correction for ADR-152 decision 10 pointing a line
-  number at a line that does not hold what it says, or citing by text
-  a file that does not hold that text                                   -> `test_the_citation_correction_cites_lines_that_hold_what_it_says`
+  number at a line that does not hold what it says, citing by text a
+  file that does not hold that text, or naming in its words no route,
+  a route the file does not declare, or not the add-item route         -> `test_the_citation_correction_cites_lines_that_hold_what_it_says`
 * a line added above the add-item route breaking its citation          -> `test_a_line_added_above_the_route_leaves_the_citation_holding`
 
 THE FOLDERS THIS TEST WALKS (the conductor's scan-map row): none. It reads named files only, by path, and plants every fault in an
@@ -73,6 +74,12 @@ CITED_LINES: dict[str, str] = {
     "packages/schemas/packs.py": "trend_id",
     "services/api/app.py": '/packs/{pack_id}/items"',
 }
+#: The method of the route cited by its text: its words must name this method on the path above, for a route the file declares.
+CITED_METHODS: dict[str, str] = {"services/api/app.py": "POST"}
+#: One citation in the correction: the file, then a line number, or the route it means in the words "(the `METHOD …/path` route)".
+CITATION = re.compile(r"`((?:packages|services)/[\w/]+\.py)(?::(\d+))?`(?: \(the `([A-Z]+) …(/[^`]+)` route\))?")
+#: A route a file declares: the decorator's method, and the path that is its first argument.
+DECLARED_ROUTE = re.compile(r'^@app\.([a-z]+)\(\s*"([^"]+)"', re.MULTILINE)
 
 SECTION = "## Scenario TS"
 ID = re.compile(r"^TS\d+$")
@@ -267,19 +274,20 @@ def citation_problems(data: dict[str, Any]) -> list[str]:
 
 def citation_diff_problems(data: dict[str, Any]) -> list[str]:
     """Each file the owner's citation correction adds holds what the correction says it does: at the line it names, or anywhere in the
-    file when it names no line (slice GR4c: the route is cited by its text, so a line added above it changes nothing cited).
+    file when it names no line (slice GR4c: the route is cited by its text, so a line added above it changes nothing cited). A
+    citation with no line also names its route in words: the file declares that route, and it is the one meant.
 
     The decision log's own checks do not look at what a line number points to, so a line that drifted was green: this reads the line
     itself.
     """
     found: list[str] = []
     added = " ".join(line[1:].strip() for line in data["citation_diff"].splitlines() if line.startswith("+") and not line.startswith("+++"))
-    cites = re.findall(r"`((?:packages|services)/[\w/]+\.py)(?::(\d+))?`", added)
-    named = {name for name, _ in cites}
+    cites = CITATION.findall(added)
+    named = {cite[0] for cite in cites}
     for name in CITED_LINES:
         if name not in named:
             found.append(f"the citation correction does not cite {name}")
-    for name, number in cites:
+    for name, number, method, path in cites:
         text = data["cited_files"].get(name, "")
         lines = text.splitlines()
         wanted = CITED_LINES.get(name)
@@ -288,6 +296,12 @@ def citation_diff_problems(data: dict[str, Any]) -> list[str]:
         elif not number:
             if wanted not in text:
                 found.append(f"{name} is cited by its text, and nowhere holds {wanted!r}")
+            elif not method:
+                found.append(f"{name} is cited by its text, and the correction names no route in it")
+            elif not any(verb.upper() == method and declared.endswith(path) for verb, declared in DECLARED_ROUTE.findall(text)):
+                found.append(f"{name} declares no {method} route ending {path!r}, which the correction names")
+            elif method != CITED_METHODS.get(name) or not f'{path}"'.endswith(wanted):
+                found.append(f"the correction names {method} …{path}, which is not the add-item route in {name}")
         elif not 0 < int(number) <= len(lines) or wanted not in lines[int(number) - 1]:
             at = lines[int(number) - 1].strip() if 0 < int(number) <= len(lines) else "past the end of the file"
             found.append(f"{name}:{number} does not hold {wanted!r} (it holds {at!r})")
