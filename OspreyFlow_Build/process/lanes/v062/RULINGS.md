@@ -3,6 +3,21 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 28 November 2026, about 09:00 to 09:35 UTC: the fastest path to 0.7.0, and the CI split automated for today (the owner, in chat)
+
+1. **For the rest of the build: the fastest path to 0.7.0.** The line stays frozen.
+   - A line fix is made only if a red stops all merging or blocks the release.
+   - It is the smallest possible, proved by a real gate first, and it goes to the owner.
+   - Merges run back to back.
+   - The owner's decisions are batched at about 17:00, unless something stops all merging.
+2. **Builder order:** GR4c takes the first free slot, ahead of PL8b and IS4a; then GA1a, GG3a and GG3b.
+3. **CO3d's split diff** (`CO3D_CONFORMANCE_SPLIT.diff`) is applied by the owner. **Today only, it is automated on his word:**
+   - When the GG4b and SE9g train has landed and its records commit is in, and no merge or records commit is running, the conductor touches `/tmp/gap_for_ci` and starts nothing on main.
+   - The owner's watcher checks the diff's hash, applies it and commits it.
+   - `/tmp/ci_applied` is his "applied": the conductor pushes with its next records commit and carries on.
+   - If `/tmp/ci_apply_failed` appears, or neither file appears within 10 minutes, the conductor carries on without the split. It runs `git status` first: a changed but uncommitted `ci.yml` is left for the owner and named in the 17:00 batch.
+   - The two conformance parts' times from the first run go to the owner.
+
 ## 28 November 2026, about 07:20 UTC: the 07:00 batch answered (the owner, in chat)
 
 1. **CO3d and the conformance-model parts: (a).** They wait until 0.7.0 is cut. Conformance reds are cleared by one rerun each (D44).

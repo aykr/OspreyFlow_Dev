@@ -24,7 +24,7 @@
    - The other checks stay as they are:
      - a file in `CITED_LINES` that the correction no longer cites stays red;
      - a cited file that the check does not know stays red.
-3. **Red first (rule 15), at the real shape.** Add a case that takes main's real inputs and inserts lines above the add-item route in `app.py`'s text, the shape SE9j's merge produces. It asserts no problem is found.
+3. **Red first (rule 15), at the real shape.** Add a case named `test_a_line_added_above_the_route_leaves_the_citation_holding` (the acceptance command runs it by that id) that takes main's real inputs and inserts lines above the add-item route in `app.py`'s text, the shape SE9j's merge produces. It asserts no problem is found.
    - The case is red on main, failing for the line number reason; give its failing line in your report.
    - It is green after your change.
 4. **The planted faults stay meaningful.** Today's "a cited route line that drifted" case (about line 566) no longer applies to `app.py`. Change it so each red case fails for its own reason, and give each case's red reason in your report:
