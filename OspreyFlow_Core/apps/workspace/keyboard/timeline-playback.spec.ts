@@ -9,11 +9,8 @@
 // `export-panel.spec.ts` already establishes for its own artefact-kind `Select`.
 import { expect, test, type Page } from "@playwright/test";
 
-import {
-  assertAllCovered,
-  registerCovered,
-  TIMELINE_PLAYBACK_ACTIONS,
-} from "@ospreyflow/glass-shared";
+import { TIMELINE_PLAYBACK_ACTIONS } from "@ospreyflow/glass-shared";
+import { assertAllCovered, registerCovered } from "../../provedActions";
 
 // A strip with one dated event: a case with none has no brush and no playback at all (ADR-087), so
 // the playback and exact-date cases below need a case that has them.

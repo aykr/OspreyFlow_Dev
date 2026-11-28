@@ -390,7 +390,8 @@ def test_the_two_registry_coverage_tests_read_the_registry_from_the_package() ->
     """The workspace's test enumerates `ALL_REGISTRIES` and so imports it from the package, still scanning its own
     folder's specs. The harness's test does not import the registry at all (it scans its own folder's text, and says
     why: importing it would demand the workspace's registries be covered there too); what it reads the registry
-    through is the harness's `actions.ts`, which imports it from the package."""
+    through is the harness's `actions.ts`, which imports `defineActionRegistry` from the package and re-exports the
+    proving helpers from `apps/provedActions.ts`."""
     keyboard = CORE / "apps" / "workspace" / "keyboard"
     workspace = (keyboard / "registryCoverage.test.ts").read_text(encoding="utf-8")
     harness = (CORE / "apps" / "harness" / "keyboard" / "registryCoverage.test.ts").read_text(
@@ -409,10 +410,12 @@ def test_the_two_registry_coverage_tests_read_the_registry_from_the_package() ->
         rf"""import\s*\{{[^}}]*\bdefineActionRegistry\b[^}}]*\}}\s*from\s*["']{re.escape(PACKAGE_NAME)}["']""",
         harness_actions,
     ), f"the harness's actions.ts does not import defineActionRegistry from {PACKAGE_NAME}"
+    # The declarations come from the package; the two that prove and check them are test-side, in the one store both
+    # apps' keyboard suites share, which keeps a run's proofs outside the worker's memory (CO3e).
     assert re.search(
-        rf"""export\s*\{{[^}}]*\bassertAllCovered\b[^}}]*\}}\s*from\s*["']{re.escape(PACKAGE_NAME)}["']""",
+        r"""export\s*\{[^}]*\bassertAllCovered\b[^}]*\}\s*from\s*["']\.\./\.\./provedActions["']""",
         harness_actions,
-    ), f"the harness's actions.ts does not re-export assertAllCovered from {PACKAGE_NAME}"
+    ), "the harness's actions.ts does not re-export assertAllCovered from apps/provedActions"
     # Neither reaches the registry by a path, nor reads the package's folder for specs.
     assert "workspace/keyboard/actionRegistry" not in harness + harness_actions
     # The scan stays where the specs are: the workspace's own folder, never the package's.

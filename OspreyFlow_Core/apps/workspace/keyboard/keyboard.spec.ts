@@ -32,11 +32,8 @@ import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import { KEYBOARD_PORT } from "./ports";
 
-import {
-  assertAllCovered,
-  CANVAS_ACTIONS,
-  registerCovered,
-} from "@ospreyflow/glass-shared";
+import { CANVAS_ACTIONS } from "@ospreyflow/glass-shared";
+import { assertAllCovered, registerCovered } from "../../provedActions";
 
 /** Tabs until `target` is focused — never a counted number of Tabs, which breaks whenever the
  * menu gains an item (seen 9 October 2026: *Set picture…* and the Depicts link row joined the

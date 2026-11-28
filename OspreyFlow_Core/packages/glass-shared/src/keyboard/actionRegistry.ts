@@ -13,13 +13,18 @@
  * every registered id was covered, failing with the exact missing ids rather than passing
  * silently.
  *
+ * **Only the declarations are here.** `registerCovered` and `assertAllCovered` are in
+ * `apps/provedActions.ts`, test-side, which keeps a run's proofs on disk so that they outlive a
+ * replaced Playwright worker (CO3e, 27 November 2026). It needs `node:fs`, and this package goes
+ * into the browser bundle.
+ *
  * **Namespaced per registry, not one flat `Set<string>` — Phase 7 Stage 4's own fix.** A third
  * registry (`QUERY_BUILDER_ACTIONS`) exposed a gap the first two (`CANVAS_ACTIONS`,
  * `METRICS_PANEL_ACTIONS`) never had to answer: nothing stopped a `registerCovered` call in one
  * surface's spec file from satisfying a *different* surface's `assertAllCovered`, if their id
  * strings ever collided — the two existing files avoided it only because `CANVAS_ACTIONS` and
- * `METRICS_PANEL_ACTIONS` happen not to share a string, not because anything enforced it. Keying
- * `covered` by registry name closes that by construction: a call for the wrong registry can never
+ * `METRICS_PANEL_ACTIONS` happen not to share a string, not because anything enforced it. Keeping
+ * proofs by registry name closes that by construction: a call for the wrong registry can never
  * satisfy this one's assertion, regardless of what `playwright.config.ts` does with workers.
  *
  * **`defineActionRegistry` self-registers into `ALL_REGISTRIES`** so `registryCoverage.test.ts`
@@ -49,31 +54,6 @@ export function defineActionRegistry<const T extends readonly string[]>(
 ): T {
   ALL_REGISTRIES.push({ name, actions });
   return actions;
-}
-
-const covered = new Map<string, Set<string>>();
-
-function coveredSetFor(registryName: string): Set<string> {
-  let set = covered.get(registryName);
-  if (!set) {
-    set = new Set<string>();
-    covered.set(registryName, set);
-  }
-  return set;
-}
-
-export function registerCovered(registryName: string, id: string): void {
-  coveredSetFor(registryName).add(id);
-}
-
-export function assertAllCovered(registryName: string, actions: readonly string[]): void {
-  const seen = coveredSetFor(registryName);
-  const missing = actions.filter((id) => !seen.has(id));
-  if (missing.length > 0) {
-    throw new Error(
-      `${registryName}: keyboard action(s) registered with no proving test case: ${missing.join(", ")}`,
-    );
-  }
 }
 
 /**

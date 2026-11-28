@@ -1,7 +1,8 @@
 // The workspace shell by keyboard alone (ADR-097 step 1, rule 13). No `page.mouse`, no `.click()`.
 import { expect, test } from "@playwright/test";
 
-import { SHELL_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
+import { SHELL_ACTIONS } from "@ospreyflow/glass-shared";
+import { assertAllCovered, registerCovered } from "../../provedActions";
 
 const REGISTRY = "SHELL_ACTIONS";
 

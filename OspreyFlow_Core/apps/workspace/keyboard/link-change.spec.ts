@@ -4,7 +4,8 @@
 // the server, which is why nothing here edits the link in the page.
 import { expect, test, type Page } from "@playwright/test";
 
-import { LINK_CHANGE_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
+import { LINK_CHANGE_ACTIONS } from "@ospreyflow/glass-shared";
+import { assertAllCovered, registerCovered } from "../../provedActions";
 
 declare global {
   interface Window {

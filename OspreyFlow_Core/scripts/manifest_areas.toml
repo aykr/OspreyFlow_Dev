@@ -214,6 +214,7 @@ paths = ["scripts", "harness", "cli"]
 folders = ["docs", "notices", "config", "providers", "recipes"]
 files = [
   "apps/lanePorts.ts",
+  "apps/provedActions.ts",
   "README.md",
   "DESIGN.md",
   "DEMO_GUIDE.md",

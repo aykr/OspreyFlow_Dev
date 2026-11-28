@@ -4,7 +4,8 @@
 // read back.
 import { expect, test, type Page } from "@playwright/test";
 
-import { QUESTIONS_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
+import { QUESTIONS_ACTIONS } from "@ospreyflow/glass-shared";
+import { assertAllCovered, registerCovered } from "../../provedActions";
 
 const REGISTRY = "QUESTIONS_ACTIONS";
 

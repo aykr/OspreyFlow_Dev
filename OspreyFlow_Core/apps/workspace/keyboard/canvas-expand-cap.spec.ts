@@ -8,7 +8,8 @@
 // which is how a single choice can reach the cap.
 import { expect, type Page, test } from "@playwright/test";
 
-import { CANVAS_CAP_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
+import { CANVAS_CAP_ACTIONS } from "@ospreyflow/glass-shared";
+import { assertAllCovered, registerCovered } from "../../provedActions";
 
 const REGISTRY = "CANVAS_CAP_ACTIONS";
 const REFUSED = { error: "limit_exceeded", cap_kind: "nodes", cap: 5000, would_be: 6210, options: ["save_as_view", "filter", "promote_to_batch"] };
