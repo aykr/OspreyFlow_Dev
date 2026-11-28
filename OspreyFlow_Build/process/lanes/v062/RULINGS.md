@@ -3,6 +3,16 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 28 November 2026, about 07:20 UTC: the 07:00 batch answered (the owner, in chat)
+
+1. **CO3d and the conformance-model parts: (a).** They wait until 0.7.0 is cut. Conformance reds are cleared by one rerun each (D44).
+2. **CO3d's job-split CI diff is written now, for the owner to apply** (technical, his standing word). The line never writes `.github/`.
+3. **The seats-test red on `d79baab`** (`test_build_seats.py::test_one_seat_per_part_at_a_time[verifier]`) gets one rerun after the conductor's push. It comes to the owner only if it is red twice.
+4. **The rest of the batch is agreed:**
+   - builders start at 09:00, in the order GR4c, CO3e, PL8b, IS4a, then GA1a, GG3a and GG3b;
+   - the first train (GG4b, SE9g, SE9i, GG2c, WS4a, SE8g, AD1c, CO3c) is pre-checked on the server while the Mac is off, and lands as one train when the owner is back.
+   - The owner closes the laptop at the conductor's "safe to close" and says "back" at about 09:00.
+
 ## 28 November 2026, about 06:05 UTC: the new plan to get the build moving (the owner, in chat; it replaces his morning rulings of a few minutes earlier)
 
 1. **65 is reverted on main** (`bd646f1`, `git revert 087c0d7`; the owner's commit, pushed with the conductor's next records commit). The gate is as it was when SE9d merged. **"applied": merges restart now**: GR1b, GG4b, then trains of the clean parts, with server stacks at 3 jobs. **A standing rule until 0.7.0: no merge starts between 03:00 and 03:50 UTC.** (Line-fix's 68 and 69 of the earlier message are replaced by this revert and by item 3.)
