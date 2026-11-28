@@ -102,6 +102,7 @@ async def _write_node(*, owning_unit: str, classification: str = "OFFICIAL") -> 
     database, which the running app would never see."""
     client = ArcadeDBClient(ArcadeDBConfig.from_env(database="ospreyflow"))
     try:
+        await client.create_database_if_absent()
         graph = GraphArcadeDBAdapter(client, load_uk_le_scheme())
         await graph.apply_schema(load_default_ontology())
         tx = await graph.begin_transaction()

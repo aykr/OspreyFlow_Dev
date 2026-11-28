@@ -363,6 +363,7 @@ async def _write_people(dataset_id: str) -> list[str]:
     now = datetime.now(UTC)
     client = ArcadeDBClient(ArcadeDBConfig.from_env(database="ospreyflow"))
     try:
+        await client.create_database_if_absent()
         graph = GraphArcadeDBAdapter(client, load_uk_le_scheme())
         await graph.apply_schema(load_default_ontology())
         tx = await graph.begin_transaction()
