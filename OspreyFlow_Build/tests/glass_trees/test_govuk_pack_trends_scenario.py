@@ -555,6 +555,17 @@ def _route_text_gone(data: dict[str, Any]) -> None:
     assert "/packs/{pack_id}/items/{item_id}" in data["cited_files"][app], "the sibling routes are still there"
 
 
+#: The route as the correction's own words name it: the anchor of the plants that change the words and leave app.py as it is.
+NAMED_ROUTE = "`POST …/packs/{pack_id}/items`"
+
+
+def _list_route_added_and_cited(data: dict[str, Any]) -> None:
+    """app.py with a second route on the add-item route's own path, a GET, and the correction naming that one: the file declares what
+    the words say, and only the method tells that it is not the route that adds an item."""
+    data["cited_files"]["services/api/app.py"] += '\n\n@app.get(\n    "/v1/investigations/{investigation_id}/packs/{pack_id}/items",\n)\n'
+    _replace("citation_diff", NAMED_ROUTE, NAMED_ROUTE.replace("POST", "GET"))(data)
+
+
 PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, Any]], list[str]], str]] = [
     ("a scenario row removed", _without_row("TS5"), scenario_problems, "no scenario TS5"),
     ("a page test case with no scenario row", _without_row("TS15"), scenario_problems, "titled TS15"),
@@ -611,9 +622,39 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
     ),
     (
         "a file cited by text that the check does not know",
-        _replace("citation_diff", "`services/api/app.py`", "`services/api/app.py`, `services/api/packs.py`"),
+        _replace("citation_diff", " route); packs already order,", " route) and `services/api/packs.py`; packs already order,"),
         citation_diff_problems,
         "cites services/api/packs.py, which this check does not know",
+    ),
+    (
+        "a citation by text whose words name no route",
+        _replace("citation_diff", f"(the {NAMED_ROUTE} route)", "(the add-item route)"),
+        citation_diff_problems,
+        "services/api/app.py is cited by its text, and the correction names no route in it",
+    ),
+    (
+        "a citation naming a route that does not exist",
+        _replace("citation_diff", NAMED_ROUTE, "`POST …/packs/{pack_id}/entries`"),
+        citation_diff_problems,
+        "services/api/app.py declares no POST route ending '/packs/{pack_id}/entries'",
+    ),
+    (
+        "a citation naming a method the path does not have",
+        _replace("citation_diff", NAMED_ROUTE, NAMED_ROUTE.replace("POST", "GET")),
+        citation_diff_problems,
+        "services/api/app.py declares no GET route ending '/packs/{pack_id}/items'",
+    ),
+    (
+        "a citation naming a sibling route",
+        _replace("citation_diff", NAMED_ROUTE, "`POST …/packs/{pack_id}/items/{item_id}/refresh`"),
+        citation_diff_problems,
+        "names POST …/packs/{pack_id}/items/{item_id}/refresh, which is not the add-item route",
+    ),
+    (
+        "a citation naming another method's route on the same path",
+        _list_route_added_and_cited,
+        citation_diff_problems,
+        "names GET …/packs/{pack_id}/items, which is not the add-item route",
     ),
     (
         "a cited field line that moved",
