@@ -58,3 +58,7 @@ Binding: process/CLAUDE.md rules 3, 4, 12, 13 and 15; British English.
 - Ruff, lint, typecheck and `no_react_check`.
 
 **Before your final report, run by hand the cheap checks the conductor will run again before the merge.**
+
+## Where your scenario section goes (the owner, 28 November 2026 about 10:45)
+
+If you add a section to `spec/08_ACCEPTANCE_SCENARIOS.md`, put it **directly after Scenario DM** (the Studio's dataset map) and before Scenario MS, not at the end of the file. Other parts in flight add theirs elsewhere, and the file has no union merge.

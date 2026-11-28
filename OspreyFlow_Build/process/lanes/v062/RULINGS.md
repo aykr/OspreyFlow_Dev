@@ -3,6 +3,37 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 28 November 2026, about 12:10 UTC: the server comes back for parallel builds (the owner, in chat; replaces "no new away rounds")
+
+1. **Away build sessions on the server, in three streams.** **No Mac builder starts for any of these parts.** Each comes into the line as before: round 1 merges `away/<ID>`, then the verifier, the server and the full gate. The owner's exception to the 23 November rule covers these branches, and an away session may build on its own stream's unmerged work.
+   - **Boards** (GG4d, GG4f1, GG4f2, GG4f3): starting now, from origin/main.
+   - **Cases** (GR1f1, GR1f2, GR1f3): once GR1d is on main.
+   - **The Sigma spine** (GG2b, GG2d, GG2e1, GG2e2, GG2f1): once GG2a is on main.
+2. **GR1d's row is cut now** from its 26 November draft, every proposal (a), with who made a view left out. Its round 1 merges `away/GR1d`, already in the main checkout. **GR1d and GG2a go as early as the queue allows:** two server streams wait for them.
+3. **Merge order, by what each unblocks:**
+   - WS4a and GG2c;
+   - then GR4c with SE9h, SE9j and SE9k;
+   - then AD1c;
+   - then the page parts.
+4. **A part that draws with Sigma 4 may start before WS4b and merges after it** (decision 9 allows writing early). WS4b's round 1 starts in the first slot after WS4a and GG2c land.
+5. **An away drafting session re-reads the old drafts against today's main** and writes briefs for GG2b, GG2d, GG2e1, GG2e2, GG4d, GG5b, GA1b, GA1c, GA1d, GG4e1 and GG4e2. The conductor cuts rows from them. Any question of the owner's kind goes to him.
+6. **Every brief written from now builds the GOV.UK page only.** A list of each default-look twin is kept for 0.7.5 (`process/lanes/v062/DEFAULT_TWINS_0.7.5.md`).
+7. **Two exceptions to the line freeze:**
+   - paying the owed live tests (line-fix is writing a plan);
+   - the small CI model for conformance-model, briefed now as ruled on 27 November (a) (CO3g), with its CI change a diff for the owner.
+8. **An approval stop on a spine part goes to the owner when it happens,** not in the batch.
+9. **The 03:00 to 03:50 no-merge rule is dropped.**
+10. **When fewer than 6 parts wait to merge, the conductor tells the owner,** and he puts builders back to 6.
+
+## 28 November 2026, about 10:45 UTC: spec/08's scenario sections, no union merge (the owner, in chat)
+
+1. **No union merge for `spec/08_ACCEPTANCE_SCENARIOS.md`.** 66 showed it is not safe there: pages edit paragraphs in place, and a union keeps both versions silently. The line is frozen.
+2. **In GA1a's and GG3a's rule-5 rounds after GG3b lands, each part's new scenario section goes directly after a different named existing section, not at the end of the file**, so the two touch different lines:
+   - GA1a's Scenario AC goes after Scenario TS;
+   - GG3a's Scenario SP goes after Scenario BD.
+   git merge-tree must show the two merge cleanly together; then they land as one train.
+3. **The same rule holds for every later part that adds a scenario:** its round table (or brief) names the existing section its own section goes after.
+
 ## 28 November 2026, about 09:00 to 09:35 UTC: the fastest path to 0.7.0, and the CI split automated for today (the owner, in chat)
 
 1. **For the rest of the build: the fastest path to 0.7.0.** The line stays frozen.
