@@ -28,7 +28,8 @@ async function planted() {
     [];
   const log: string[] = [];
   const page = {
-    route: async (_url: string, given: typeof handler) => void (handler = given),
+    route: async (_url: string, given: typeof handler) =>
+      void (handler = given),
     keyboard: { press: async (key: string) => void log.push(`press ${key}`) },
     waitForResponse: (wanted: (r: Answer) => boolean) =>
       new Promise<Answer>((done) => waits.push({ wanted, done })),

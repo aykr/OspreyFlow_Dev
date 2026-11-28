@@ -9,9 +9,14 @@
 // number. The plant holds the second answer until ArrowUp has been pressed, so it lands just after the
 // keypress, or for HELD_MS, so a case that waits for it before pressing still receives it. The answer is
 // held on the network, so a wait on the response sees it no sooner than the page does.
+//
+// What it holds back is that second answer alone. If the page asks no second time (a stable `api`, CO3f's
+// remedy), ArrowUp returns after SECOND_READ_MS with nothing to land. `./lateAgeingPlant.test.ts` holds
+// this.
 import type { Page } from "@playwright/test";
 
 const HELD_MS = 1_000;
+const SECOND_READ_MS = 5_000; // how long ArrowUp waits for a second read to be asked
 const AGEING_PATH = "/v1/admin/operations/ageing";
 
 /** Call after the harness's own `page.route`: the later route runs first and falls back to it. */
@@ -39,7 +44,15 @@ export async function plantLateAgeing(page: Page): Promise<void> {
   page.keyboard.press = async (key, options) => {
     await press(key, options);
     if (key !== "ArrowUp") return;
-    await secondAsked;
+    let giveUp: ReturnType<typeof setTimeout> | undefined;
+    const asked = await Promise.race([
+      secondAsked.then(() => true),
+      new Promise<boolean>(
+        (done) => (giveUp = setTimeout(() => done(false), SECOND_READ_MS)),
+      ),
+    ]);
+    clearTimeout(giveUp);
+    if (!asked) return; // the page read once: there is no late answer to land
     if (!held) return; // it has already gone: nothing is left to land after this keypress
     const answered = page.waitForResponse((response) =>
       response.url().endsWith(AGEING_PATH),
