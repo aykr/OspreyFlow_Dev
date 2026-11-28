@@ -136,9 +136,10 @@ def test_a_case_made_with_a_new_dataset_reads_it(setup) -> None:  # type: ignore
 def test_a_case_made_over_a_named_dataset_reads_it(setup) -> None:  # type: ignore[no-untyped-def]
     client, _, audit, _ = setup
     made = client.post("/v1/investigations", json={"name": "F", "dataset_ids": ["fixture"]}).json()
+    # The create's own row, read before the next request writes one of its own (SE9h).
+    assert audit.records[-1]["resolved_query"] == {"dataset_ids": ["fixture"]}
     read = client.get(f"/v1/investigations/{made['id']}/datasets").json()
     assert [d["id"] for d in read] == ["fixture"]
-    assert audit.records[-1]["resolved_query"] == {"dataset_ids": ["fixture"]}
 
 
 def test_a_case_cannot_be_made_over_another_units_dataset_and_none_is_left_behind(setup) -> None:  # type: ignore[no-untyped-def]

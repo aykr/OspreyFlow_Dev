@@ -80,14 +80,17 @@ NAMED = {"open_alert_at_address", "explain_alert", "alert_canvas", "claim_alert"
 
 @pytest.fixture
 def client() -> Iterator[TestClient]:
-    from services.api.app import app, get_principal
+    from services.api.app import app, get_audit, get_principal
 
     who = Principal(id="viewer-1", clearance="SECRET", org_unit="unit-1", roles=["reports_viewer"])
     app.dependency_overrides[get_principal] = lambda: who
+    # A right's refusal that is recorded (SE9h, the case's access read) needs an audit to write to.
+    app.dependency_overrides[get_audit] = _Nothing
     try:
         yield TestClient(app, raise_server_exceptions=False)
     finally:
         app.dependency_overrides.pop(get_principal, None)
+        app.dependency_overrides.pop(get_audit, None)
 
 
 class _Cases:
