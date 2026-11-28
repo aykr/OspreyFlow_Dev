@@ -984,6 +984,7 @@ from .review import (
     AcceptCandidateRequest,
     CandidateNotPendingError,
     DocumentNotFoundError,
+    EngineOnlyPropertyError,
     ExtractionCandidateNotFoundError,
     ExtractionCandidateRecord,
     ExtractionCandidateStore,
@@ -3920,6 +3921,15 @@ async def _candidate_not_pending_handler(
 ) -> JSONResponse:
     return JSONResponse(
         status_code=status.HTTP_409_CONFLICT, content={"error": "candidate_not_pending"}
+    )
+
+
+@app.exception_handler(EngineOnlyPropertyError)
+async def _engine_only_property_handler(
+    request: Request, exc: EngineOnlyPropertyError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=422, content={"error": "engine_only_property", "detail": str(exc)}
     )
 
 
@@ -7935,6 +7945,12 @@ async def upload_document_route(
     return result
 
 
+#: A PDF is sent as a download, never shown in a page (the owner, 26 November 2026; GG3b): a browser
+#: would otherwise open it in its own viewer at this origin. The file name is the route's own, never
+#: a title or a name a loader gave.
+PDF_DISPOSITION = 'attachment; filename="document.pdf"'
+
+
 @app.get(
     "/v1/investigations/{investigation_id}/documents/{document_id}/file",
     dependencies=[Depends(require_right(Right.INVESTIGATE))],
@@ -7956,7 +7972,9 @@ async def document_file_route(
         resolved_query={"document_id": document_id},
         result_cardinality=1,
     )
-    return Response(content=data, media_type=content_type)
+    download = content_type == "application/pdf"
+    headers = {"Content-Disposition": PDF_DISPOSITION} if download else None
+    return Response(content=data, media_type=content_type, headers=headers)
 
 
 #: The extensions a picture's name may carry (ADR-105), for the shared name check.

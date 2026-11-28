@@ -143,8 +143,8 @@ A board is a view with `drawing` on, kept by the views store and never listed am
 views. What is drawn on it is written into the graph: into the case's analyst layer, or, in the home
 case of a drawn dataset, into that dataset (Amendment 3 decision 1); never into a source. Each drawn
 node and link carries `provenance.drawn` (`DrawnAssertion`: its board's item id, who asserted it, the
-board and the case, the analyst's label, a grading in the deployment's scheme, a source note, a
-document of the case, or both). The board's registry (`board_items`) holds ids and a link's ends
+board and the case, the analyst's label, a grading in the deployment's scheme, a source note, to
+which a document of the case may be added, never in its place: ADR-143 Amendment 8). The board's registry (`board_items`) holds ids and a link's ends
 only; every element is read through the caller's principal, scoped to the case's read set and
 filtered in the adapter (rule 3). Every route stands behind the case's level check first. Reading
 needs `investigate`; drawing needs Editor, `draw_on_boards` and `investigate` too (a role with
@@ -155,19 +155,26 @@ else reads (rule 3): a drawn element's source locator names no board, and every 
 adapter's serialisation and the working set's projection, through `withhold_sources`) gives its
 `provenance.drawn.board_id` empty to anyone but its author, who made the board. A shared board is
 found by the board routes, not by its items
-(`test_a_private_boards_id_is_on_no_other_members_canvas`, through the canvas's own `sync`). A *Same* or *Not
+(`test_a_private_boards_id_is_on_no_other_members_canvas`, through the canvas's own `sync`). By the
+same function, a drawn element's cited document is sent only to a reader who may read it when it is
+sent (ADR-143 Amendment 8; `01_DOMAIN_MODEL.md` §2.2d): the adapter makes one batched read for each
+read it answers, and the working set one for each frame, delta, catch-up, view and writer's answer,
+with the reader's own principal; given no result, every cited document is withheld. The working set
+stores and publishes the cited documents as stored, and each socket's projection decides for its own
+reader. Declaring and linking refuse a body with no source note (422); the check at promotion asks for
+a note, whoever asks. A *Same* or *Not
 the same* is registered on its board (`board_items` kind `match`), so it goes with its drawn node.
 
 ```
 GET    /v1/investigations/{id}/boards                         the case's boards the caller may see (`Board`: name, creator, shared, how many drawn nodes the caller may see; `start` is `selection` when the caller may see one of the nodes it started from, `blank` otherwise, a view's start reading as `selection` since the store keeps only the nodes)
 POST   /v1/investigations/{id}/boards                         a board (`BoardInput`: blank, from a view, or from a selection; only the loaded nodes the caller may see are kept, as live references)
-GET    /v1/investigations/{id}/boards/{board}                 open it now (`BoardOpened`): its drawn items and references the caller may see, `drawn` naming which are drawn, `missing` the count of the board's own references whose drawn item has been withdrawn since, given to the board's creator alone and never counting what the caller was never allowed to see (rule 3; `test_missing_counts_what_was_lost_and_never_what_was_never_allowed`), the case's node and link types, the markings up to the case's ceiling and the caller's clearance, the grading scheme, `may_promote` (one who may draw on it, at the case's Author level, holding `promote_to_dataset` and `investigate`, as the promotion routes ask: the board offers *Promote…* to them alone, and the routes still refuse anyone else; `test_an_opened_board_offers_promote_only_to_one_the_promotion_routes_admit`), `may_draw`
+GET    /v1/investigations/{id}/boards/{board}                 open it now (`BoardOpened`): its drawn items and references the caller may see, `drawn` naming which are drawn, `missing` the count of the board's own references whose drawn item has been withdrawn since, given to the board's creator alone and never counting what the caller was never allowed to see (rule 3; `test_missing_counts_what_was_lost_and_never_what_was_never_allowed`), the case's node and link types, the markings up to the case's ceiling and the caller's clearance, `ceiling` (the case's own to a caller cleared for it; to anyone else the highest marking within both it and their clearance: see *A ceiling is told only as the reader may know it*, below), the grading scheme, `may_promote` (one who may draw on it, at the case's Author level, holding `promote_to_dataset` and `investigate`, as the promotion routes ask: the board offers *Promote…* to them alone, and the routes still refuse anyone else; `test_an_opened_board_offers_promote_only_to_one_the_promotion_routes_admit`), `may_draw`
 POST   /v1/investigations/{id}/boards/{board}/share           share it with the case (its creator only)
 DELETE /v1/investigations/{id}/boards/{board}                 delete it; what was drawn on it stays in the layer, with its watches
 POST   /v1/investigations/{id}/boards/{board}/items           declare a node (`DrawnItemInput`), with its watch; audited as draw_item
 POST   /v1/investigations/{id}/boards/{board}/links           draw a link between two items on the board, drawn or loaded (`DrawnLinkInput`); a loaded end is untouched; audited as draw_link
 PUT    /v1/investigations/{id}/boards/{board}/layout          move items (`BoardMove`): the board's own layout, not data
-PATCH  /v1/investigations/{id}/board-items/{item}             the author edits their own item (`DrawnItemEdit`), in place; a marking is never lowered (409 `marking_never_lowered`)
+PATCH  /v1/investigations/{id}/board-items/{item}             the author edits their own item (`DrawnItemEdit`), in place; a marking is never lowered (409 `marking_never_lowered`), and an edit that would leave the item with no source note is refused (422 `no_source`)
 POST   /v1/investigations/{id}/board-items/{item}/withdraw    the author withdraws their own item (`Withdrawn`): out of every read, never deleted; each drawn link and picture resting on it goes with it, those the caller may see named (`links`, `pictures`), one they may not see named only in the audit and counted nowhere, not even in `watches_ended`; audited before it is written
 GET    /v1/investigations/{id}/boards/{board}/matches         *Looks like a loaded item* (`MatchSuggestions`): `inferred`, acting on nothing
 POST   /v1/investigations/{id}/boards/{board}/matches         *Same* (one `SAME_AS`, score 1.0) or *Not the same* (one `NOT_SAME_AS`) in the layer (`MatchDecision`); no node is written
@@ -182,8 +189,9 @@ POST   /v1/drawings                                           *New drawing board
 Someone else's private board, another case's board and no board at all answer alike: 404
 `board_not_found`; an item of another case, one the caller may not see and none answer 404
 `item_not_found`. Each refusal of a drawing is said in words before anything is written:
-`above_the_ceiling` (409, naming the case's highest allowed marking: the strictest its datasets
-set, a composite's members' among them, the deployment's highest where none is set; Amendment 2
+`above_the_ceiling` (409, judged against the case's highest allowed marking: the strictest its datasets
+set, a composite's members' among them, the deployment's highest where none is set; its words name
+that ceiling only as the caller may be told it, below; Amendment 2
 decision 3; `test_the_ceiling_of_a_case_reading_a_composite_is_its_members`),
 `above_the_deployments_highest_marking` (422, the documents' own refusal: a drawn item, link, edit,
 match decision or picture, uploaded or chosen, marked above the deployment's highest marking is
@@ -209,6 +217,26 @@ touch, and every refusal is judged before the layer is made. A withdrawal is `wi
 in the store. A drawn item is changed only on its board: the canvas routes that would change one
 (ADR-105's entity picture, a link's change, a retract) answer 409 `drawn_on_its_board` in words
 (`test_a_drawn_nodes_picture_is_refused_on_the_canvas_route`, `test_a_drawn_link_is_not_changed_from_the_canvas`).
+
+**A ceiling is told only as the reader may know it** (rule 3; GG4j; the owner's rulings of 26
+November 2026). A case's ceiling is sent as it is only to a caller cleared for it; to anyone else
+it is the highest marking both under it and within their clearance, and no marking where there is
+none (a clearance the scheme does not know). One function says it (`Boards.ceiling_told`). It
+binds the opened board's `ceiling`; the words of `above_the_ceiling`, which name what the opened
+board sent that caller; the words of the board's own `above_the_deployments_highest_marking`, for
+the deployment's highest; the `highest_marking` of the promotion sheet, the layer merge sheet,
+the drawn merge sheet and each merge target (a dataset's highest allowed marking is the ceiling of
+every case reading it); and those sheets' marking check in words. **Every write is still judged
+against the real ceiling.** A sheet's words about one item name the real one: they are said only
+of an item the caller sees that is above it, so it is within their clearance.
+(`test_board_ceiling_for_the_reader.py`: `test_row_1_a_reader_below_the_ceiling_is_told_their_own_highest`,
+`test_row_3_bs_answer_is_the_same_whatever_the_ceiling_above_b_is`,
+`test_row_5_a_drawing_above_the_cases_real_ceiling_is_refused_as_before`,
+`test_row_5b_bs_refusal_names_only_the_ceiling_the_board_sent_b`,
+`test_the_boards_deployment_refusal_names_no_marking_above_the_reader`,
+`test_row_6_the_promotion_sheet_tells_a_reader_below_the_ceiling_only_their_own`,
+`test_row_6_the_layer_merge_sheet_opened_and_read_again`,
+`test_row_6_the_merge_targets_and_the_drawn_merge_sheet`.)
 
 **Promotion** (ADR-143 decisions 8 and 10; Amendment 2 decision 1; ADR-145 decision 8; L3.4):
 
@@ -515,7 +543,7 @@ GET    /v1/investigations/{investigation_id}/links/{edge_id}/events   the events
 POST   /v1/investigations/{investigation_id}/links/{edge_id}/events/documents   the emails on the link inside a window written as Documents and put on the canvas, or limit_exceeded, or not_documents (422) when no event carries text, Editor (ADR-092)
 GET    /v1/investigations/{investigation_id}/documents/{document_id}/reader   a Document's full text with its accepted entities marked, for the full-screen reader, Viewer (ADR-092)
 POST   /v1/investigations/{investigation_id}/documents   a file (image, video, text) added to the case as a Document, held by a node if one is named, with a marking and a legal basis; a marking above the deployment's highest is refused before the body is read, 422 `above_the_deployments_highest_marking` (ADR-148 decision 10), Editor (ADR-094)
-GET    /v1/investigations/{investigation_id}/documents/{document_id}/file   a held Document's file (image, video, kept text) from the media store, Viewer (ADR-094)
+GET    /v1/investigations/{investigation_id}/documents/{document_id}/file   a held Document's file (image, video, kept text) from the media store, Viewer (ADR-094); a PDF is sent as a download, never shown in a page: `application/pdf` with `Content-Disposition: attachment; filename="document.pdf"`, the route's own name, never one a loader gave (the owner, 26 November 2026)
 PUT    /v1/investigations/{investigation_id}/nodes/{node_id}/picture        one entity's own picture, an image Document that DEPICTS it, replacing the one seen before (kept); marking and legal basis required; a marking above the deployment's highest refused before the body is read, 422 `above_the_deployments_highest_marking` (ADR-148 decision 10); 409 `composite_read_only` in a case reading a composite ("do this in a case that reads that dataset"), nothing written (ADR-099 Amendment 15), before any file is stored, Editor (ADR-105)
 DELETE /v1/investigations/{investigation_id}/nodes/{node_id}/picture        back to its type's picture; its own is kept, no longer shown; 409 `composite_read_only` in a case reading a composite ("do this in a case that reads that dataset"), nothing written (ADR-099 Amendment 15), Editor (ADR-105)
 GET    /v1/investigations/{investigation_id}/nodes/{node_id}/picture        the entity's picture's file, to someone who may see it; one they may not answers as none, Viewer (ADR-105)

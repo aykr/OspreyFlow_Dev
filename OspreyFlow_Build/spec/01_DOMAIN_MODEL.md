@@ -845,7 +845,12 @@ a source. It carries `provenance.drawn` (`DrawnAssertion`, `schemas/domain.py`),
   link or edit graded in any other is refused (422 `grading_scheme`) before anything is written;
 - `original_grading`, absent until the scheme is first changed, then the grade and scheme the item
   had before that change, kept for good through every later one;
-- `source_note`, `source_document`, or both, never neither;
+- `source_note` (free text), to which `source_document`, a Document the case holds, may be added,
+  never in its place (ADR-143 Amendment 8 item 7): declaring and linking refuse a body with no note
+  (422, the body's own validation) and an edit that would leave none is refused (422 `no_source`), so
+  an item drawn before that gains its note at its next edit. As read, both may be empty: an item drawn
+  before may hold a document and no note, and a reader who may not read a cited document is sent the
+  item without it (the first invariant below);
 - `icon`, a display choice only (C17 c).
 
 Its provenance is `asserted` (decision 4: rule 5's `inferred` is for the matches it raises), its
@@ -860,6 +865,30 @@ live drawn nodes and links, as an operator outside the Conduit, answered to no r
 decision 7).
 
 The invariants, each with the test that fails if it is broken (rule 12):
+- **A cited document is told only to a reader who may read it when it is sent** (rules 3 and 4;
+  ADR-143 Amendment 8). The id is stored twice: `drawn.source_document` and the `document_id` of the
+  source the board writes (its locator "a drawing board of the case"); an edit leaves that source as it
+  was, so a stored source may name a document cited before. Every send goes through
+  `ontology.handling.withhold_sources` with the result of **one batched read for the answer**,
+  `readable_cited_documents`: of the cited ids, those the reader's own principal reads now through the
+  adapter's access step that are a `Document`. A cited id not in it is sent as no document:
+  `source_document` empty, and the withheld sources as one `drawn:<item_id>`, never repeated. Given no
+  result, `withhold_sources` withholds every one; a read that fails keeps nothing. Nothing about the
+  document is recorded on the item and nothing is swept, so a later re-marking is caught by the next
+  send. It withholds fields of an element the reader already sees, and changes no traversal, degree,
+  path or count. What the working set holds, and what is written back, keeps the stored ids
+  (`cited_documents_kept`, or `sources_in_full`): the rule is applied at each send. A single stored
+  element read for a check (`visible_node`, `visible_edge`) is read with no document read, so without
+  any document.
+  - `test_a_drawn_items_source_document_is_not_sent_to_a_reader_who_may_not_read_it`;
+    `test_the_working_set_never_sends_a_drawn_items_source_document_its_reader_may_not_read`;
+    `test_search_never_returns_a_drawn_items_source_document_its_reader_may_not_read`;
+    `test_what_the_working_set_holds_and_publishes_keeps_the_document_whoever_added_it`;
+    `test_changing_an_items_document_leaves_the_old_id_stored_and_each_is_judged_by_itself`;
+    `test_every_answer_to_b_is_the_same_whether_or_not_the_document_exists`;
+    `test_document_reads_do_not_grow_with_the_number_of_drawn_items`; against ArcadeDB,
+    `tests/conformance/graph_port/test_drawn_documents.py` and `test_drawn_documents_read_paths.py`
+    (its expansion within `02_GLASS_FRONTEND.md` §5's 800 ms), each shown red first (rule 15).
 - **Never readable outside its case** (rule 3; ADR-143 decision 3). Another case reading the same
   source reads none of it, nor its link from a loaded node.
   - `test_a_drawn_item_is_never_readable_outside_its_case`, red with case K's layer in case B's read
@@ -878,8 +907,14 @@ The invariants, each with the test that fails if it is broken (rule 12):
     `test_regrade_drawn_changes_the_grade_and_original_alone`; live, through the command,
     `test_the_command_changes_every_drawn_grade_in_the_real_stores`.
 - **Within the case's ceiling** (Amendment 2 decision 3): nothing drawn above the strictest highest
-  marking its datasets set, nor above the drawer's clearance, refused in words naming it.
+  marking its datasets set, nor above the drawer's clearance, refused in words naming it as the
+  drawer may be told it.
   - `test_an_item_above_the_ceiling_is_refused_in_words`, red with the ceiling bypassed.
+- **The ceiling is never told to a reader below it** (rule 3; GG4j): such a reader is told the
+  highest marking within both it and their clearance, in every field and refusal that carries it
+  (spec 03, *A ceiling is told only as the reader may know it*).
+  - `test_row_3_bs_answer_is_the_same_whatever_the_ceiling_above_b_is`,
+    `test_row_5b_bs_refusal_names_only_the_ceiling_the_board_sent_b`.
 - **A drawing with no case** (Amendment 2 decision 5) makes a drawn dataset, its home case and its
   board in one step; what is drawn there is written to the drawn dataset and to no layer.
   - `test_a_drawing_with_no_case_makes_its_dataset_case_and_board`, red with the writer aimed at a layer.

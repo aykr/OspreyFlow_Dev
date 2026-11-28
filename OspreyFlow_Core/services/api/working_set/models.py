@@ -16,10 +16,11 @@ code, not only in a docstring.
 
 from __future__ import annotations
 
+from collections.abc import Container
 from datetime import datetime
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, Self
 
-from pydantic import BaseModel, Field, TypeAdapter, model_validator
+from pydantic import BaseModel, Field, PrivateAttr, TypeAdapter, model_validator
 
 from ontology.handling import withhold_sources
 from schemas.domain import ClusterId, Edge, EdgeId, Handling, Node, NodeId, Principal
@@ -113,20 +114,44 @@ class NarrowingFilter(BaseModel):
 
 
 class DeltaAdd(BaseModel):
+    """Nodes and links put into the view.
+
+    An add the working set answers its writer with is **the writer's own view** of it, and holds
+    privately the delta as the working set stores it, its cited documents kept (ADR-143 Amendment 8
+    item 5). `notify.publish_delta` publishes that stored form, which each recipient's socket
+    projects for its own reader: otherwise the writer's view would reach everyone as the item
+    itself. It is private, so no answer carries it, and it stays with this object wherever a
+    route's result holds it. A `DeltaAdd` rebuilt from another's fields holds none, so a route
+    publishes the add it was answered with, never one it rebuilds."""
+
     seq: int
     op: Literal["add"] = "add"
     nodes: list[Node] = Field(default_factory=list)
     edges: list[Edge] = Field(default_factory=list)
+    _stored: DeltaAdd | None = PrivateAttr(default=None)
+
+    def holding(self, stored: DeltaAdd) -> Self:
+        self._stored = stored
+        return self
+
+    def to_publish(self) -> DeltaAdd:
+        """The delta as stored, for `notify.publish_delta` and nothing sent to a person: this add
+        itself where it is nobody's view of a stored one."""
+        return self._stored if self._stored is not None else self
 
 
-def add_for_reader(delta: DeltaAdd, reader: Principal) -> DeltaAdd:
+def add_for_reader(
+    delta: DeltaAdd, reader: Principal, readable_documents: Container[str] | None = None
+) -> DeltaAdd:
     """`delta` as `reader` may be sent it: each element's sources withheld where the reader's case
-    does not read every dataset of it (ADR-130 Amendment 2). For a writer's own response; the
-    delta it publishes is projected per recipient by `WorkingSetService.project_delta`."""
+    does not read every dataset of it (ADR-130 Amendment 2), and a drawn element without each
+    cited document not in `readable_documents` (ADR-143 Amendment 8; given none, every one). For a
+    writer's own response; the delta it publishes is projected per recipient by
+    `WorkingSetService.project_delta`."""
     return delta.model_copy(
         update={
-            "nodes": [withhold_sources(n, reader) for n in delta.nodes],
-            "edges": [withhold_sources(e, reader) for e in delta.edges],
+            "nodes": [withhold_sources(n, reader, readable_documents) for n in delta.nodes],
+            "edges": [withhold_sources(e, reader, readable_documents) for e in delta.edges],
         }
     )
 

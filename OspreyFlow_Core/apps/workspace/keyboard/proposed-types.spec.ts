@@ -5,7 +5,8 @@
 // that refuses as the server does: a decision with no reason, and a promotion under a taken name.
 import { expect, test, type Page } from "@playwright/test";
 
-import { PROPOSED_TYPES_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
+import { PROPOSED_TYPES_ACTIONS } from "@ospreyflow/glass-shared";
+import { assertAllCovered, registerCovered } from "../../provedActions";
 
 const REGISTRY = "PROPOSED_TYPES_ACTIONS";
 

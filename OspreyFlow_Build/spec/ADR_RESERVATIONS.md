@@ -130,6 +130,7 @@ Status is `reserved` (the number is held; the lane has not written it) or `writt
 | ADR-014 Amendment 2 | The revisit trigger is met: `maplibre-gl` 6.x on Sigma 3, through the binding already in the tree (the owner, 18 November 2026; slice GG6) | slice-GG6 | 2026-11-18 | written |
 | ADR-152 Amendment 3 | The page service in a deployment is a setting, `pages.enabled`, off by default and turned on per deployment by the owner; while it is off no deployment's rendered output changes (the owner's ruling of 21 Nov on PL7a2; reference render first, slice PL7a2a) | v062 conductor | 2026-11-21 | written |
 | ADR-152 Amendment 4 | A theme's override block, fonts entry and sign-in theme live in the theme's own folder (`OspreyFlow_Core/packages/themes/<name>/`); the shared design package names no theme; the React GOV.UK look is not moved (F7); the Default baseline is re-recorded once, in PL12d, with a diff of GOV.UK files only (the owner's rulings of 21 Nov on PL12; slice PL12a) | v062 conductor | 2026-11-21 | written |
+| ADR-143 Amendment 8 | A drawn item's source document is told only to a reader who may read it when it is sent, and a drawn item needs a source note; ADR-152 decision 11 row X9 (the owner's rulings of 26 November on GG4b) | v062 GG4b | 2026-11-26 | written |
 
 ## Baseline
 

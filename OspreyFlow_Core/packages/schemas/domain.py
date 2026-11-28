@@ -398,17 +398,14 @@ class DrawnAssertion(BaseModel):
     #: deployment's grading scheme was first changed, kept beside `grading` for good. `None` for
     #: an item whose grade no change has rewritten.
     original_grading: Grading | None = Field(default=None, title="DrawnOriginalGrading")
-    #: Free text, a document the case already holds, or both; never neither.
+    #: A source note (free text), to which a document the case already holds may be added. The
+    #: write routes require the note (`schemas.boards`, ADR-143 Amendment 8 item 7). As read, both
+    #: may be empty: an item drawn before that may have a document and no note, and a reader who may
+    #: not read a cited document is sent the item without it (`ontology.handling.withhold_sources`).
     source_note: str | None = Field(default=None, max_length=2000, title="DrawnSourceNote")
     source_document: DocumentId | None = None
     #: An icon chosen as a display setting only (C17 c): not evidence.
     icon: str | None = Field(default=None, title="DrawnIcon")
-
-    @model_validator(mode="after")
-    def _has_a_source(self) -> DrawnAssertion:
-        if not (self.source_note and self.source_note.strip()) and not self.source_document:
-            raise ValueError("a drawn item needs a source note, a document of the case, or both")
-        return self
 
 
 class Provenance(BaseModel):

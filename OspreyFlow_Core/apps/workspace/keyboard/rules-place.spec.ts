@@ -4,7 +4,8 @@
 // The switcher's way in is `shell.spec.ts`'s. No `page.mouse`, no `.click()`.
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
-import { RULES_PLACE_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
+import { RULES_PLACE_ACTIONS } from "@ospreyflow/glass-shared";
+import { assertAllCovered, registerCovered } from "../../provedActions";
 
 const REGISTRY = "RULES_PLACE_ACTIONS";
 

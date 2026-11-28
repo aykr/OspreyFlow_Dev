@@ -34,3 +34,30 @@ The new spec; the pages' own server tests (`apps/pages/test/server`); `tsc` for 
 ## Out of scope
 
 The map and site plans themselves (GG5b), Sigma, `headers.ts` changes (unless the owner rules after item 3), the tile forwarder, any change under `apps/workspace`, any real tile or style from the internet.
+
+**Added 26 November 2026 (the conductor):** the extension in `slices/drafts_2026-11-25/GG5a.md` is ruled as drafted, every proposal (a), with the 26th's corrections; it is built away and comes in below.
+
+## Round 1 (D247; the conductor, 26 November 2026): merge `away/GG5a` first
+
+**Your first step: merge the local branch `away/GG5a` into your branch.** Its report,
+`process/lanes/v062/away/GG5a_AWAY_REPORT.md` on that branch, is the record: read it whole. **Every figure in it was taken
+on the server under its namespace (56 of 56, and two stability runs of 50 of 50), not on the Mac or CI.** Then run your
+frozen checks here and say what differs.
+
+The owner's answers to its questions:
+- **Q1 (a), approved on the owner's standing word (D274, technical):** keep the exact `pmtiles` 4.5.0 pin (the
+  workspace's own resolved version, BSD-3-Clause) beside `maplibre-gl`, so the page reads the archive by the real
+  `pmtiles://` protocol. `make licence-check` must pass with it.
+- **Q2:** the CI patch (`apps/pages/test/csp/ci-wiring.patch`) and `GG5a_ADR152_DECISION8_RUN.diff` **stay diffs for the
+  owner** (the morning of 27 November). Apply neither. The slice may merge without them.
+- **Q3 (a):** leave the policy as it is (`headers.ts` is the owner's; no change); say so in the report.
+- **Q4:** Firefox is not run (no build on this machine). Nothing to do.
+
+## Checks
+
+`npm test --workspace apps/pages`; `npm run lint`; `npm run typecheck`; `node scripts/no_react_check.mjs`;
+`node scripts/version_isolation_check.mjs`; `make -C ../OspreyFlow_Build licence-check` (with the acceptance environment's Python: a merge tree has no `.venv`).
+
+## Out of scope
+
+`headers.ts`, the Makefile, the CI workflow, any decision record (diffs for the owner only), GG5b's map page.

@@ -18,12 +18,14 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { pathToFileURL } from "node:url";
 import { fileURLToPath } from "node:url";
 
 import type { Express } from "express";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+
+import { sharedPackageEntries } from "../../scripts/sharedEntries.mjs";
 
 import { csrfFromPage, request, signIn, TEST_SESSION_SECRET } from "../support/http.js";
 import { generateSecret } from "../support/secret.js";
@@ -105,8 +107,15 @@ describe("the build's GOV.UK tree steps (slice GR2a)", () => {
     }
     const words = readFileSync(join(out, "server", "views", "helpWords.js"), "utf8");
     expect(bareImports(words)).toEqual([]);
-    // Slice GR4a: the trends page's words are bundled the same way.
-    expect(bareImports(readFileSync(join(out, "server", "views", "packTrendsWords.js"), "utf8"))).toEqual([]);
+    // Every server file that imports the shared package is bundled the same way, at the path `tsc` wrote it to (the build finds them by
+    // reading them, `apps/pages/scripts/sharedEntries.mjs`; `test/shared-entries.test.ts` holds the finder to what the compiler
+    // reads). No list and no count: a page adding such a file edits nothing here (the owner's 66b, 27 November 2026).
+    const shared = sharedPackageEntries(join(PAGES, "server"));
+    expect(shared.length, "the build found no file that imports the shared package").toBeGreaterThan(0);
+    for (const file of shared) {
+      const built = join(out, relative(PAGES, file)).replace(/\.ts$/, ".js");
+      expect(bareImports(readFileSync(built, "utf8")), built).toEqual([]);
+    }
     // The control for the check itself: the compiler's own output of the same file does import the package.
     expect(bareImports('import { HELP_TITLE } from "@ospreyflow/glass-shared";')).toEqual(["@ospreyflow/glass-shared"]);
   });

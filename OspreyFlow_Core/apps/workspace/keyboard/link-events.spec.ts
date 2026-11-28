@@ -2,7 +2,8 @@
 // Show more, opening an email and going back. No `page.mouse`, no `.click()`.
 import { expect, test, type Page } from "@playwright/test";
 
-import { LINK_EVENTS_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
+import { LINK_EVENTS_ACTIONS } from "@ospreyflow/glass-shared";
+import { assertAllCovered, registerCovered } from "../../provedActions";
 
 const REGISTRY = "LINK_EVENTS_ACTIONS";
 

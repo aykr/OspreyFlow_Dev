@@ -27,7 +27,7 @@ from services.api.working_set.models import WorkingSetDelta, decode_delta, lacks
 from services.api.working_set.store import EdgeRewrite, _refuse_a_move
 
 from adapters.graph_arcadedb.serialization import _refuse_withheld
-from ontology.handling import load_uk_le_scheme, withhold_sources
+from ontology.handling import load_uk_le_scheme, readable_cited_documents, withhold_sources
 from schemas.domain import (
     AuditStub,
     Edge,
@@ -127,6 +127,19 @@ class FakeWorkingSetStore:
 
     async def get_node(self, investigation_id: str, node_id: NodeId) -> Node | None:
         return self._n(investigation_id).get(node_id)
+
+    async def get_members(
+        self, investigation_id: str, node_ids: Sequence[NodeId], edge_ids: Sequence[EdgeId]
+    ) -> tuple[dict[NodeId, Node], dict[EdgeId, Edge]]:
+        """Its own read of the bodies, not `get_node` and `get_edge` called in turn, so a test that
+        counts those sees one batched read as one. Refuses an empty list, as `HMGET` does."""
+        if not node_ids or not edge_ids:
+            raise ValueError("wrong number of arguments for 'hmget' command")
+        nodes, edges = self._n(investigation_id), self._e(investigation_id)
+        return (
+            {i: nodes[i] for i in node_ids if i in nodes},
+            {i: edges[i] for i in edge_ids if i in edges},
+        )
 
     def _state(self, investigation_id: str) -> IndexState:
         return self._index.setdefault(investigation_id, IndexState())
@@ -304,6 +317,9 @@ class FakeGraphPort:
         self._hidden_edge_ids = hidden_edge_ids
         self._superseded_edge_ids = superseded_edge_ids
         self.get_nodes_requests: list[tuple[list[NodeId], Principal]] = []
+        #: Each batched read of cited documents a read made for its answer, as the adapter makes
+        #: one (`GraphArcadeDBAdapter._documents`): the ids asked, and who asked.
+        self.document_reads: list[tuple[list[NodeId], str]] = []
         self.count_visible_requests: list[tuple[list[NodeId], Principal]] = []
         self.count_deleted_visible_requests: list[tuple[list[NodeId], Principal]] = []
         #: What the store keeps of a deletion (SE9): the time and the person, set with `reverted`
@@ -325,6 +341,29 @@ class FakeGraphPort:
         #: `get_edges` and `edges_among` also leave these ids out, as an override.
         self._hidden_node_ids = hidden_node_ids
 
+    async def _sent[Element: (Node, Edge)](
+        self, elements: Sequence[Element], principal: Principal
+    ) -> list[Element]:
+        """As the adapter sends one read's answer to `principal` (ADR-130 Amendment 2; ADR-143
+        Amendment 8): one batched read of the documents its drawn elements cite, then each element
+        withheld with that result."""
+        documents = await readable_cited_documents(elements, principal, self._documents)
+        return [withhold_sources(e, principal, documents) for e in elements]
+
+    async def _documents(self, ids: list[NodeId], principal: Principal) -> list[Node]:
+        """The fake's document store answering the reader's read, as the adapter's does: of the
+        ids asked, the Documents the fake holds that `principal` reads by their own body (handling,
+        datasets, reverted, superseded). An absent id and a hidden one are left out alike."""
+        self.document_reads.append((list(ids), principal.id))
+        world = self._world_nodes()
+        return [
+            withhold_sources(world[i], principal)
+            for i in sorted(set(ids))
+            if i in world
+            and world[i].type == "Document"
+            and self._node_readable(principal, world[i])
+        ]
+
     async def get_node(
         self, node_id: NodeId, principal: Principal, *, include_superseded: bool = False
     ) -> Node | None:
@@ -335,7 +374,10 @@ class FakeGraphPort:
             return None
         # As the adapter's element mapping does (ADR-130 Amendment 2): the body the fake holds for
         # the id, else the stand-in, with its sources withheld for a reader who may not have them.
-        return withhold_sources(self._world_nodes().get(node_id, _FAKE_VISIBLE_NODE), principal)
+        (sent,) = await self._sent(
+            [self._world_nodes().get(node_id, _FAKE_VISIBLE_NODE)], principal
+        )
+        return sent
 
     def _world_nodes(self) -> dict[NodeId, Node]:
         """What a lookup by id can find: `graph_nodes` and the nodes `expand_result` returns."""
@@ -420,11 +462,14 @@ class FakeGraphPort:
         world = self._world_nodes()
         # As the adapter's element mapping does (ADR-130 Amendment 2): sources withheld for a
         # reader whose case does not read every dataset of the node.
-        return [
-            withhold_sources(world[i], principal)
-            for i in sorted(set(node_ids))
-            if i in world and self._node_readable(principal, world[i])
-        ]
+        return await self._sent(
+            [
+                world[i]
+                for i in sorted(set(node_ids))
+                if i in world and self._node_readable(principal, world[i])
+            ],
+            principal,
+        )
 
     async def count_visible(self, node_ids: Sequence[NodeId], principal: Principal) -> int:
         """`get_nodes`' count, judged by each node's own body for `principal` (C045): the ids the
@@ -501,15 +546,19 @@ class FakeGraphPort:
                 continue
             ends = (nodes.get(edge.source), nodes.get(edge.target))
             if all(end is not None and self._node_readable(principal, end) for end in ends):
-                found.append(withhold_sources(edge, principal))
-        return found
+                found.append(edge)
+        return await self._sent(found, principal)
 
     async def expand(self, req: ExpandRequest, principal: Principal) -> Subgraph:
         self.expand_requests.append(req)
-        # As the adapter's element mapping does (ADR-130 Amendment 2).
+        # As the adapter's element mapping does (ADR-130 Amendment 2): one read of the cited
+        # documents for the whole answer.
+        sent = await self._sent(
+            [*self.expand_result.nodes, *self.expand_result.edges], principal
+        )
         return Subgraph(
-            nodes=[withhold_sources(n, principal) for n in self.expand_result.nodes],
-            edges=[withhold_sources(e, principal) for e in self.expand_result.edges],
+            nodes=[x for x in sent if isinstance(x, Node)],
+            edges=[x for x in sent if isinstance(x, Edge)],
         )
 
     async def edges_among(
@@ -529,16 +578,19 @@ class FakeGraphPort:
                 return self._node_readable(principal, nodes[node_id])
             return node_id not in self._hidden_node_ids | self._superseded_node_ids
 
-        return [
-            withhold_sources(e, principal)
-            for e in self._world_edges().values()
-            if e.source in asked
-            and e.target in asked
-            and (not edge_types or e.type in edge_types)
-            and self._edge_readable(principal, e)
-            and end_readable(e.source)
-            and end_readable(e.target)
-        ]
+        return await self._sent(
+            [
+                e
+                for e in self._world_edges().values()
+                if e.source in asked
+                and e.target in asked
+                and (not edge_types or e.type in edge_types)
+                and self._edge_readable(principal, e)
+                and end_readable(e.source)
+                and end_readable(e.target)
+            ],
+            principal,
+        )
 
     async def paths_at_length(
         self,
@@ -572,7 +624,14 @@ class FakeGraphPort:
 
         if source not in self._hidden_node_ids and target not in self._hidden_node_ids:
             walk(source, [source], [])
-        return RoutesAtLength(length=length, paths=found[:limit], more=len(found) > limit)
+        # One read of the cited documents for every route, as the adapter's hydration makes.
+        shown = found[:limit]
+        links = {e.id: e for e in await self._sent([e for p in shown for e in p.edges], principal)}
+        return RoutesAtLength(
+            length=length,
+            paths=[p.model_copy(update={"edges": [links[e.id] for e in p.edges]}) for p in shown],
+            more=len(found) > limit,
+        )
 
     async def begin_transaction(self) -> TxId:
         self._next_tx += 1

@@ -3,7 +3,9 @@
 // `.click()`; each proves its call reached the server.
 import { expect, test, type Page } from "@playwright/test";
 
-import { ADMIN_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
+import { ADMIN_ACTIONS } from "@ospreyflow/glass-shared";
+import { assertAllCovered, registerCovered } from "../../provedActions";
+import { plantLateAgeing } from "./lateAgeingPlant";
 
 const REGISTRY = "ADMIN_ACTIONS";
 const PERSON = { id: "u1", username: "osprey-demo-analyst", name: "Demo Analyst", enabled: true, roles: ["analyst"],
@@ -204,6 +206,8 @@ async function serve(page: Page, opts: { owns?: boolean; entra?: boolean; refuse
       return json(200, [{ ...SCHEDULE.last_run, run_id: "r0", outcome: "missed", rows_read: null, failure: "the deployment was not running then" }]);
     return json(404, {});
   });
+  // CO3e's proof plant, off unless the switch is set (./lateAgeingPlant.ts).
+  if (process.env.OSPREY_PLANT_LATE_AGEING === "1") await plantLateAgeing(page);
   return asked;
 }
 
@@ -981,10 +985,17 @@ test("the audit is paged by keyboard", async ({ page }) => {
 
 test("when promotions are overdue is set in Operations by keyboard", async ({ page }) => {
   const asked = await serve(page);
+  // The page reads ageing twice: on mount, and again once `/v1/me` has answered. Each answer sets the field to
+  // the server's number, so the second must land before the edit (GitHub run 46012575717). Listened for from
+  // before the page opens, so it cannot be missed.
+  let ageingAnswers = 0;
+  const secondAgeing = page.waitForResponse((r) => r.url().endsWith("/operations/ageing") && ++ageingAnswers === 2);
   await page.goto("/keyboard/admin-harness.html?rights=operate_schedules");
   await expect(page.getByText("After 3 days it is flagged overdue.")).toBeVisible();
   const days = page.getByLabel("Alert the reviewers and administrators after N days");
   await days.focus();
+  await expect(days).toBeFocused();
+  await (await secondAgeing).finished();
   await page.keyboard.press("ArrowUp");
   await expect(days).toHaveValue("4");
   const sent = page.waitForRequest((r) => r.url().endsWith("/settings/promotion-alert-days") && r.method() === "PUT");

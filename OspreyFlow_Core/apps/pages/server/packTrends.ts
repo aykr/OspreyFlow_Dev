@@ -35,6 +35,7 @@ import { ConduitUnreachable, conduitFor, v1 } from "./conduit.js";
 import type { Conduit, Reply } from "./conduit.js";
 import type { ForwardSettings } from "./config.js";
 import type { PageModule } from "./pages.js";
+import { identifier } from "./plainName.js";
 import { NOT_FOUND } from "./views/notFoundWords.js";
 import { PACK_TRENDS_WORDS, readDraft, readPublished } from "./views/packTrendsWords.js";
 import type { PackTrendsView } from "./views/packTrendsWords.js";
@@ -43,21 +44,6 @@ import { refusalWords } from "./views/studioWords.js";
 interface Settings {
   forward: ForwardSettings | undefined;
   log: (message: string) => void;
-}
-
-/** The longest identifier the page will ask about; a longer one is a path nothing serves. */
-const MAX_ID_CHARS = 200;
-
-/**
- * A plain name: letters, digits, dots, underscores and hyphens, starting with a letter or a digit. The Conduit decodes `%2F` to `/`
- * before it routes, so an identifier holding a slash would reach another real route (`pack-estuary%2Fpublished` is the published read),
- * and a `.` or `..` segment is folded away by a client; neither is an identifier, whatever encoding hides it. Real ones are ULIDs.
- */
-const PLAIN_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
-
-/** One query value, given once: anything else (missing, repeated, empty, too long, not a plain name) is not an identifier. */
-function identifier(value: unknown): string | undefined {
-  return typeof value === "string" && value.length <= MAX_ID_CHARS && PLAIN_NAME.test(value) ? value : undefined;
 }
 
 function context(view: unknown, extra: Record<string, unknown> = {}): Record<string, unknown> {

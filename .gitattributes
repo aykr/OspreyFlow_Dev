@@ -23,3 +23,24 @@
 # The attributes are read from the tree being merged, so this applies to every merge into main once the
 # file is on main; a branch that brings the file in does not get it for its own merge of main.
 OspreyFlow_Build/spec/ADR_RESERVATIONS.md merge=union
+#
+# The GOV.UK tree's two page lists take union too (the owner's word of 27 November 2026: page parts kept conflicting in them,
+# which broke trains and cost rounds). A page adds a line to each and edits none:
+# - apps/pages/tree-govuk/routes.yaml: its path, at the end, one to a line;
+# - apps/pages/server/pageList.ts: its import, one to a line, and its module, one to a line in `PAGES`.
+# Neither holds a count of the pages or a sentence naming each, since two branches editing the same line keep both
+# versions under union. tests/glass_trees/test_page_lists_merge.py merges two pages side by side with git (both kept, in
+# either order) and checks the real lists at every gate for what union could leave: a path twice, a line broken, a page
+# imported or listed twice, one listed and not imported. test/govuk/help.test.ts (HP9) holds the two lists in step, and
+# the type check holds pageList.ts to TypeScript.
+#
+# Not listed, though each page touches them:
+# - spec/08_ACCEPTANCE_SCENARIOS.md: a page's scenario is a new section, but two parts of the same page edit the same
+#   paragraphs in place (GR1b and GR1e both edit Scenario CS), and union would keep both versions of a paragraph, silently.
+# - apps/pages/scripts/build.mjs: it has no list now; it bundles the server files that import the shared package,
+#   found by reading them (scripts/sharedEntries.mjs).
+# - apps/pages/FUNCTIONS.yaml: a page fills in its own row's fields, an edit in place.
+# - the tests (test/govuk/help.test.ts and the scenario tests): no test pins the whole route list or counts the pages
+#   any more (tests/glass_trees/test_route_pins.py), so a page edits none but its own.
+OspreyFlow_Core/apps/pages/tree-govuk/routes.yaml merge=union
+OspreyFlow_Core/apps/pages/server/pageList.ts merge=union

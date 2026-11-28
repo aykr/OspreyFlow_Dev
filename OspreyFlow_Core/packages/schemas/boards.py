@@ -53,9 +53,11 @@ class _Asserted(BaseModel):
     source_document: DocumentId | None = None
 
     @model_validator(mode="after")
-    def _has_a_source(self) -> _Asserted:
-        if not (self.source_note and self.source_note.strip()) and not self.source_document:
-            raise ValueError("give a source note, a document of the case, or both")
+    def _has_a_source_note(self) -> _Asserted:
+        """ADR-143 Amendment 8 item 7: a source note, a blank one counting as none. A document of
+        the case may be added to it, never in its place."""
+        if not (self.source_note and self.source_note.strip()):
+            raise ValueError("give a source note; a document of the case may be added to it")
         return self
 
 
@@ -170,6 +172,8 @@ class BoardOpened(BaseModel):
     node_types: list[str] = Field(default_factory=list)
     link_types: list[str] = Field(default_factory=list)
     markings: list[str] = Field(default_factory=list)
+    #: The case's ceiling to a reader cleared for it; to anyone else the highest marking within
+    #: both it and their clearance, never the case's own name (rule 3; GG4j).
     ceiling: str | None = None
     grading_scheme: GradingScheme = "5x5x5"
     #: Its parts' grades (ADR-143 Amendment 6: a scheme file's are known only from here).

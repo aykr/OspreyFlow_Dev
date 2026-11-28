@@ -14,7 +14,9 @@ routes stand behind the case's own level check first.
 
 **What each refusal says.** A refusal names the rule it keeps, in words: the case's marking
 ceiling (Amendment 2 decision 3), the reader's own clearance, a type not in the case's model (C14),
-a link's ends not on the board, an item that is not the reader's own (decision 5).
+a link's ends not on the board, an item that is not the reader's own (decision 5). **A ceiling is
+told only as the reader may know it** (`Boards.ceiling_told`; GG4j): a reader below it is told, in
+the opened board and in a refusal's words, the highest marking within both it and their clearance.
 
 **Matching never merges** (decision 6; rule 6): *Same* writes one `SAME_AS` (score 1.0) into the
 layer and *Not the same* one `NOT_SAME_AS`; neither node is changed. A suggestion is `inferred` and
@@ -39,7 +41,12 @@ from services.ingest.ceiling import AboveTheDeploymentCeiling, DeploymentCeiling
 
 from adapters.media_objectstore import content_type_of, reference_for
 from conduit_common.identity import new_edge_id, new_id
-from ontology.handling import HandlingScheme, merge_handling
+from ontology.handling import (
+    BOARD_SOURCE_LOCATOR,
+    HandlingScheme,
+    cited_documents_kept,
+    merge_handling,
+)
 from ontology.validation import validate_properties
 from ports.graph import GraphPort, SuggestOptions
 from ports.media import MediaStore
@@ -206,19 +213,27 @@ class Boards:
     def check_marking(self, marking: str, ceiling: str, principal: Principal) -> None:
         """Every write site's first question, asked before anything is kept. The deployment's own
         highest marking comes before the case's (ADR-148 decision 10): refused with the documents'
-        refusal, in words that say the deployment's limit and never the item's content."""
+        refusal, in words that say the deployment's limit and never the item's content.
+
+        `ceiling` is the case's real one, and the check is against it. A refusal's words name a
+        ceiling, the case's or the deployment's, only as `ceiling_told` gives it to this reader
+        (GG4j): for the case's, the value the opened board sent them."""
         if marking not in self.scheme.classification:
             raise DrawingRefused(
                 "not_a_marking", f"{marking} is not a marking of this deployment", status=422
             )
         if self.deployment_ceiling is not None and self.deployment_ceiling.above(marking):
-            raise AboveTheDeploymentCeiling(self.deployment_ceiling.marking, "write")
+            named = self.ceiling_told(self.deployment_ceiling.marking, principal)
+            # With nothing to name (a clearance the scheme does not know), the checks below
+            # refuse the write: such a clearance clears no marking.
+            if named is not None:
+                raise AboveTheDeploymentCeiling(named, "write")
         if not self.scheme.clears(ceiling, marking):
-            raise DrawingRefused(
-                "above_the_ceiling",
-                f"{marking} is above this case's ceiling, {ceiling}: nothing drawn in this case "
-                f"may be marked above {ceiling}",
-            )
+            words = f"{marking} is above this case's ceiling"
+            told = self.ceiling_told(ceiling, principal)
+            if told is not None:
+                words += f", {told}: nothing drawn in this case may be marked above {told}"
+            raise DrawingRefused("above_the_ceiling", words)
         if not self.scheme.clears(principal.clearance, marking):
             raise DrawingRefused(
                 "above_your_clearance",
@@ -334,6 +349,15 @@ class Boards:
             if self.scheme.clears(ceiling, m) and self.scheme.clears(principal.clearance, m)
         ]
 
+    def ceiling_told(self, ceiling: str, principal: Principal) -> str | None:
+        """A marking ceiling as `principal` may be told it (rule 3; GG4j; the owner's ruling of
+        26 November 2026): itself to a reader cleared for it; to anyone else the highest marking
+        both under it and within their clearance; `None` where there is no such marking (a
+        clearance the scheme does not know). A ceiling is sent to a reader, in a field or in a
+        refusal's words, as this. A write is never checked against it, only against the real one."""
+        held = self.markings_up_to(ceiling, principal)
+        return held[-1] if held else None
+
     # --- boards ---------------------------------------------------------------------------
 
     async def board(self, case_id: str, board_id: str, reader: str) -> StoredCaseView:
@@ -446,7 +470,7 @@ class Boards:
             node_types=await self.node_types(board.case_id),
             link_types=sorted(await self.case_link_types(board.case_id, principal)),
             markings=self.markings_up_to(ceiling, principal),
-            ceiling=ceiling,
+            ceiling=self.ceiling_told(ceiling, principal),
             may_draw=board.created_by == principal.id,
         )
 
@@ -472,9 +496,10 @@ class Boards:
                 SourceRef(
                     document_id=given.source_document or f"drawn:{item_id}",
                     # No board id: a private board's is not told to the case (finding 7); the
-                    # board is `drawn.board_id`, kept on every read for its author alone
-                    # (`ontology.handling.withhold_sources`).
-                    locator="a drawing board of the case",
+                    # board is `drawn.board_id`, kept on every read for its author alone. The
+                    # locator marks a source the board wrote, whose document is sent only to a
+                    # reader who may read it (`ontology.handling.withhold_sources`).
+                    locator=BOARD_SOURCE_LOCATOR,
                     excerpt_hash="",
                 )
             ],
@@ -646,10 +671,14 @@ class Boards:
         if item is None or item.withdrawn_at is not None:
             raise ItemNotFound(item_id)
         found: Sequence[Node | Edge]
-        if item.kind == "node":
-            found = await self.graph.get_nodes([item.element_id], principal)
-        else:
-            found = await self.graph.get_edges([item.element_id], principal)
+        # The item is changed and written back from this read, so its cited documents are left in
+        # (ADR-143 Amendment 8 item 5): an author who may no longer read one would otherwise erase
+        # it by changing a label. The element goes to no one; the answer is ids alone.
+        with cited_documents_kept():
+            if item.kind == "node":
+                found = await self.graph.get_nodes([item.element_id], principal)
+            else:
+                found = await self.graph.get_edges([item.element_id], principal)
         element = found[0] if found else None
         if element is None:
             raise ItemNotFound(item_id)
@@ -717,14 +746,15 @@ class Boards:
                 if v is not None
             }
         )
-        try:
-            DrawnAssertion.model_validate(new_drawn.model_dump())  # a source is still given
-        except ValueError as invalid:
+        # A source note is still given (Amendment 8 item 7), so an item drawn with a document and
+        # no note gains its note at its next edit.
+        if not (new_drawn.source_note and new_drawn.source_note.strip()):
             raise DrawingRefused(
                 "no_source",
-                "a drawn item needs a source note, a document of the case, or both",
+                "a drawn item needs a source note; a document of the case may be added to it",
                 status=422,
-            ) from invalid
+            )
+        DrawnAssertion.model_validate(new_drawn.model_dump())
         provenance = element.provenance.model_copy(update={"drawn": new_drawn})
         handling = element.handling.model_copy(update={"classification": marking})
         now = datetime.now(UTC)
@@ -1134,13 +1164,15 @@ class Boards:
         """C17 (b): an image the case already holds, linked by a `DEPICTS` written into the layer;
         the image stays in its dataset. The link is marked at least as the image is.
         `before_write` is given that marking, after every refusal and before the link is written
-        (ADR-127 Amendment 27: a picture is never left unaudited)."""
+        (ADR-127 Amendment 27: a picture is never left unaudited). A Document whose stored file
+        is not of a picture type is refused, whatever its `media_kind` says (SE9g)."""
         subject = await self._picture_subject(board, node_id, principal)
         found = await self.graph.get_nodes([given.document_id], principal)
         if (
             not found
             or found[0].type != DOCUMENT_TYPE
             or found[0].properties.get("media_kind") != "image"
+            or not _stored_as_picture(found[0])
         ):
             raise DrawingRefused(
                 "not_a_picture", "that is not a picture this case holds", status=422
@@ -1191,6 +1223,9 @@ class Boards:
         if document_id is None:
             raise ItemNotFound(node_id)
         (document,) = await self.graph.get_nodes([document_id], principal)
+        # SE9g: a Document chosen before `choose_picture` checked its file answers as none.
+        if not _stored_as_picture(document):
+            raise ItemNotFound(node_id)
         ref = str(document.properties["object_ref"])
         return await self.media.get(ref), content_type_of(ref)
 
@@ -1251,6 +1286,14 @@ def match_writes(
             datasets=[into],
         )
     ]
+
+
+def _stored_as_picture(document: Node) -> bool:
+    """Whether the Document's stored reference is of a picture type (`PICTURE_TYPES`), by the
+    content type its file would be served as. Never by a file's name, and not by `media_kind`,
+    which does not say what the file is (SE9g)."""
+    ref = document.properties.get("object_ref")
+    return isinstance(ref, str) and content_type_of(ref) in PICTURE_TYPES.values()
 
 
 def _accepts(types: Sequence[str], node_type: str) -> bool:

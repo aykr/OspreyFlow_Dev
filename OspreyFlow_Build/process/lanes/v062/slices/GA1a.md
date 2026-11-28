@@ -53,3 +53,20 @@ left out while main is red on it; the merge's full gate runs `citation-check`.)
 
 Asking (GA1b); accepting and rejecting proposals (GA1c); a view's conversation (GA1d); "Show all on graph" and "Save as
 a view"; pattern asks; any Conduit change but the one comment; `apps/workspace`.
+
+## The owner's refreeze (28 November 2026, about 06:05 UTC; RULINGS.md, item 5)
+
+**Your frozen acceptance files change in these ways and no others, as you proposed. Your round takes main in with its trial resolution.**
+1. **AC17** checks that `sharedPackageEntries(server)` includes `views/askWords.ts`. It must not pin a list or a count (66b's `shared-entries.test.ts` checks every server file that imports the shared package is bundled).
+2. **The ask scenario checks its own path once.** The message at about line 1022 becomes "not once", plus a planted case listing the path twice and expecting "not once". It does not pin the tree's whole route list.
+3. **Two new checks join your frozen checks:** `OspreyFlow_Build/tests/glass_trees/test_route_pins.py` and `test_page_lists_merge.py`.
+4. **Who asked:** no exception. The page leaves it out, as ruled, and the route is not changed.
+
+## Round 4: take main in after GG3b (rule 5, no round spent; the owner, 28 November 2026 about 10:45)
+
+GG3b's merge put its Scenario DR after Scenario AQ in `spec/08_ACCEPTANCE_SCENARIOS.md`, where yours sat too. **Take main in. Then move your whole Scenario AC section so that it sits directly after Scenario TS and before Scenario CS** (about line 886 on main), not at the end of the file and not after AQ.
+- Change no word of it, and no other line of `spec/08`.
+- Keep main's other sections exactly as main has them.
+- GG3a moves its section to a different place (after Scenario BD), so the two of you touch different lines and merge together.
+
+Your scenario file reads the section by its heading, so it is unchanged. Your frozen checks must be green. Change nothing else this round.

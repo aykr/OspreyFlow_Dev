@@ -3,7 +3,8 @@
 // no `.click()`.
 import { expect, test } from "@playwright/test";
 
-import { PIPELINE_CANVAS_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
+import { PIPELINE_CANVAS_ACTIONS } from "@ospreyflow/glass-shared";
+import { assertAllCovered, registerCovered } from "../../provedActions";
 
 const REGISTRY = "PIPELINE_CANVAS_ACTIONS";
 

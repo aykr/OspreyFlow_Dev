@@ -25,7 +25,7 @@ export const RIGHT_WORDS: Readonly<Partial<Record<string, string>>>;
 export function rightName(right: string): string;
 export function rightSays(right: string): string;
 
-/** The shared package's words for a pack and a trend (`packages/glass-shared/src/reports/packText.ts`), for the one other server file
+/** The shared package's words for a pack and a trend (`packages/glass-shared/src/reports/packText.ts`), for another server file
  * that imports the package (`server/views/packTrendsWords.ts`: trends shown together, slice GR4a), bundled with it as `helpWords.ts` is. */
 // The generated `TrendFigures` (`packages/schemas/generated/TrendFigures.ts`), written out here rather than imported: an import would put
 // that source file into this build's program and `tsc` would write it out beside itself. `test/govuk/pack-trends.test.ts` holds this
@@ -68,3 +68,19 @@ export function formatNumber(n: number): string;
 export function periodKey(start: string): string;
 export function periodsOf(figures: TrendFigures): string[];
 export function trendSentence(figures: TrendFigures): string;
+
+/*
+ * For the cases page's words (`server/views/casesWords.ts`; slice GR1a): a level's name is `LEVEL_WORDS` above; a domain pack's label,
+ * the core model's name and the case picker's untitled name are `packages/glass-shared/src/investigation/cases.ts`'s, and a moment is
+ * written by `packages/glass-shared/src/time/utcStamp.ts`. `test/govuk/cases.test.ts` holds each to the package's own type.
+ */
+export type DomainPack = "fibo" | "niem" | "stix";
+export const DOMAIN_PACKS: readonly { name: DomainPack; label: string }[];
+export const POLE_LABEL: string;
+export function domainLabels(domains: readonly DomainPack[]): string;
+export function caseLabel(entry: { name: string; created_at: string }): string;
+export function utcStampOf(iso: string): string;
+// New case (slice GR1b): the untitled name the page sends in the route's place, and how a dataset is offered in a choice (its name
+// alone; a composite says how many it joins). `test/govuk/cases-new.test.ts` holds both to the package's own types.
+export const UNTITLED_CASE = "Untitled case";
+export function datasetChoiceLabel(dataset: { id: string; name: string; owning_unit: string; kind?: "source" | "composite"; members?: string[] }): string;

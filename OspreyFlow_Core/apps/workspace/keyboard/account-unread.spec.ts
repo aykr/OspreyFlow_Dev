@@ -3,11 +3,8 @@
 // with the keyboard. No `page.mouse`, no `.click()`.
 import { expect, test, type Page } from "@playwright/test";
 
-import {
-  ACCOUNT_UNREAD_ACTIONS,
-  assertAllCovered,
-  registerCovered,
-} from "@ospreyflow/glass-shared";
+import { ACCOUNT_UNREAD_ACTIONS } from "@ospreyflow/glass-shared";
+import { assertAllCovered, registerCovered } from "../../provedActions";
 
 const REGISTRY = "ACCOUNT_UNREAD_ACTIONS";
 const HARNESS = "/keyboard/account-unread-harness.html";

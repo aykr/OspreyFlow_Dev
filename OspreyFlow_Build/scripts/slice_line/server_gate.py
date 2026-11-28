@@ -163,14 +163,55 @@ def older_runs(slice_id: str, tip: str, newest: str | None) -> list[str]:
     return ids[:OLDER_RUNS]
 
 
+def newer_runs(slice_id: str, tip: str, rid: str | None) -> list[str]:
+    """The ids of the slice's runs at this tip that EW_RUNS records after `rid`'s own last line, newest first; [] when
+    the log does not hold `rid` (nothing is known to be newer). Only a shortcut: element() refuses another slice or tip."""
+    try:
+        lines = EW_RUNS.read_text().splitlines()
+    except OSError:
+        return []
+    rows = []
+    for ln in lines:
+        try:
+            r = json.loads(ln)
+        except ValueError:
+            continue
+        if isinstance(r, dict) and r.get("slice") == slice_id and r.get("tip") == tip \
+                and isinstance(r.get("id"), str) and RUN_ID.match(r["id"]):
+            rows.append(r["id"])
+    if not rid or rid not in rows:
+        return []
+    after = rows[len(rows) - rows[::-1].index(rid):]
+    ids: list[str] = []
+    for x in reversed(after):
+        if x != rid and x not in ids:
+            ids.append(x)
+    return ids[:OLDER_RUNS]
+
+
+def newer_green(slice_id: str, tip: str, rid: str | None) -> tuple[str, dict] | None:
+    """RM1a, 26 November 2026: a newer run of this slice at this tip supersedes an older red when the newest of them
+    with a verdict passed. A newer red never yields to an older green, and a run with no verdict decides nothing."""
+    for newer in newer_runs(slice_id, tip, rid):
+        o = element(fetch(newer), slice_id, tip)
+        if has_verdict(o):
+            return (newer, o) if o.get("verdict") == "pass" else None
+    return None
+
+
 def server_result(slice_id: str, tip: str) -> tuple[str | None, dict | None]:
     """(run id, this slice's element) as fetched; (rid, None) when the note names a run that cannot be fetched or is
     not for this slice at this tip. When the note's run finished with no verdict (an error: SE6c, 23 November 2026,
     run f8394584d97477d3, "nothing was run", sent again after its stack's own run), the newest earlier run of the slice
     at this tip that has one is read instead, and the element says which run had none: an error never hides a verdict,
-    and the older run must still be the same candidate as the Mac's (same_candidate)."""
+    and the older run must still be the same candidate as the Mac's (same_candidate). A red the note names is
+    superseded by a newer green the log records for the same slice at the same tip (newer_green): that run is read, and
+    the element names the red it superseded."""
     rid = run_id(slice_id, tip)
     e = element(fetch(rid), slice_id, tip)
+    if is_red(e):  # a newer green of the same slice at the same tip supersedes it (RM1a; newer_green)
+        g = newer_green(slice_id, tip, rid)
+        return (g[0], {**g[1], "superseded_red": rid}) if g else (rid, e)
     if not e or e.get("state") != "done" or has_verdict(e):
         return rid, e
     for older in older_runs(slice_id, tip, rid):
@@ -328,6 +369,33 @@ def matches(e: dict | None, base: str, tip: str, tree: str) -> str | None:
     return None
 
 
+#: D255 (the owner's ruling of 25 November 2026): the server does not judge the timing-budget tests; the Mac runs them.
+#: A budget test as the server's runner names one, and the workspace's own script that runs them alone.
+BUDGET_TEST = re.compile(r"\A\S+\.budget\.test\.[cm]?[jt]sx?(?: >|\Z)")
+BUDGET_WORKSPACE = "apps/workspace"
+BUDGET_SCRIPT = "test:budget"
+
+
+def budget_left(e: dict) -> list[str]:
+    """The budget tests the server left to the Mac with make test (its left_to_mac: rerun test-js, each name a budget
+    test, at least one), or [] when the result says no such thing in exactly that shape."""
+    left = e.get("left_to_mac")
+    if not isinstance(left, dict) or left.get("rerun") != "test-js":
+        return []
+    names = left.get("failed")
+    if not isinstance(names, list) or not names or not all(isinstance(n, str) and BUDGET_TEST.match(n) for n in names):
+        return []
+    return names
+
+
+def has_budget_script(tree: Path) -> bool:
+    try:
+        pkg = json.loads((tree / "OspreyFlow_Core" / BUDGET_WORKSPACE / "package.json").read_text())
+    except (OSError, ValueError):
+        return False
+    return isinstance(pkg, dict) and isinstance(pkg.get("scripts"), dict) and BUDGET_SCRIPT in pkg["scripts"]
+
+
 def remainder(e: dict, tree: Path, mk: Path, records: list[str] | tuple = ()) -> dict:
     """What the Mac still runs of today's full gate when the server's green counts, and what is taken from the server:
     each `ci` prerequisite the server does not name as run and passed (core-check by Core's own `check` targets, each
@@ -355,18 +423,29 @@ def remainder(e: dict, tree: Path, mk: Path, records: list[str] | tuple = ()) ->
     names = [x.get("name") if isinstance(x, dict) else x for x in (nr.get("test_files") or [])]
     names += [x for x in (nr.get("docker_skipped") or [])]
     files = [TEST_FILE.match(str(n)) for n in names]
-    if "test" in passed and all(files):
-        taken.append("test")
+    left = [] if "test" in passed else budget_left(e)
+    rules = []
+    if ("test" in passed or left) and all(files):
+        taken.append("test" if "test" in passed else "test (all but test-js)")
         files = sorted({"../" + m.group(1) for m in files})
         if records:
             files = sorted(set(files) | {f"../OspreyFlow_Build/{t}" for t in records_tests(tree)})
             targets.append(["make", "live-collect"])
             mac.append("live-collect (the records folder moved)")
+        if left:  # D255: only budget tests failed, last in test-js; the rest of make test passed on the server
+            targets.append(["make", "-C", "../OspreyFlow_Core", "test-js"])
+            mac.append("test-js whole: the server left its timing-budget tests to the Mac (D255): " + ", ".join(left))
         if files:
-            mk.write_text("server-test-files:\n\t$(IN_CORE) $(PYTEST) $(SERVER_TEST_FILES)\n")
+            rules.append("server-test-files:\n\t$(IN_CORE) $(PYTEST) $(SERVER_TEST_FILES)\n")
             targets.append(["make", "-f", "Makefile", "-f", str(mk), "server-test-files",
                             "SERVER_TEST_FILES=" + " ".join(files)])
             mac.append("test files the server did not run: " + ", ".join(f[len("../"):] for f in files))
+        if not left and has_budget_script(tree):  # D255: a server green never stands for them
+            rules.append(f"server-budget:\n\t$(IN_CORE) npm run {BUDGET_SCRIPT} --workspace {BUDGET_WORKSPACE}\n")
+            targets.append(["make", "-f", "Makefile", "-f", str(mk), "server-budget"])
+            mac.append("the timing-budget tests, which the server does not judge (D255)")
+        if rules:
+            mk.write_text("".join(rules))
     else:
         targets.append(["make", "test"])
         mac.append("test")

@@ -2,12 +2,13 @@
 // action registry and spec file, in the same change [as the first keyboard action]." Reuses
 // `packages/glass-shared/src/keyboard/actionRegistry.ts`'s own mechanism directly (imported, not
 // copied — the brief's own instruction): the registry lives in the shared package since PL4 slice C
-// (ADR-152 decision 6), and this app is a second consumer of it, as `apps/workspace` is.
+// (ADR-152 decision 6), and this app is a second consumer of it, as `apps/workspace` is. The run's
+// proofs are kept by `apps/provedActions.ts`, the store both apps' keyboard suites share.
 import { defineActionRegistry } from "@ospreyflow/glass-shared";
 
 // Re-exported so this app's own `*.spec.ts` files import both the registry and its proving
-// helpers from one local module, rather than reaching into the shared package twice per file.
-export { assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
+// helpers from one local module.
+export { assertAllCovered, registerCovered } from "../../provedActions";
 
 // Every action on this surface that mutates state or reaches the network — each screen's own
 // "Save", the Governance screen's exceptions-panel add/remove, and the Geospatial screen's three

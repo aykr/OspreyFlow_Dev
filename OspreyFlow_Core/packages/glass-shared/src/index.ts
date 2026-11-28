@@ -3,8 +3,8 @@
 //
 // What is here so far (slices PL4 C to E move the React workspace's plain leaves in, one behaviour-preserving
 // change at a time, invariant I11; each adds its exports below):
-//   keyboard/actionRegistry   the keyboard action registry: data, `defineActionRegistry`, `registerCovered`,
-//                             `assertAllCovered`
+//   keyboard/actionRegistry   the keyboard action registry: data and `defineActionRegistry` (a run's proofs are
+//                             kept test-side, by `apps/provedActions.ts`)
 //   workingset/store, models  the working set's store (graphology and `zustand/vanilla`) and its typed deltas
 //   color/textContrast        the text-contrast judgement the accessibility probe runs in Node
 //   map/contrast              the WCAG contrast ratio of two colours
@@ -255,6 +255,7 @@ export {
   scopeBadge,
   setCaseDatasets,
   sortedDomains,
+  UNTITLED_CASE,
 } from "./investigation/cases";
 export * from "./admin/needsYou/needsYouApi";
 export * from "./admin/needsYou/openings";

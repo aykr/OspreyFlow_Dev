@@ -64,3 +64,13 @@ As GR1a's, with the document scenario: `npm test --workspace apps/pages`; `npm r
 Any Conduit change but Q8 (i)'s header on `document_file_route` (Q1 is SE9d's, Q8 (ii) SE9e's, question 3 a later part);
 the front door (question 2); a list of
 a case's documents; uploads.
+
+## The owner's refreeze (28 November 2026, about 06:05 UTC; RULINGS.md, item 5)
+
+**Your four proposed changes are agreed, as written in your stop (tip `9eca9c5`), and no others.**
+1. In `test_govuk_document_scenario.py`, delete `ROUTE_LIST`.
+2. `route_problems` checks that the reader's `PATH` is in the list exactly once, as main's `test_govuk_cases_scenario.py` does.
+3. Rename `test_the_route_list_has_the_eight_pages` to `test_the_route_list_holds_the_reader_s_path_once`.
+4. The plant lists `PATH` twice and expects "not once".
+
+`OspreyFlow_Build/tests/glass_trees/test_route_pins.py` and `test_page_lists_merge.py` join your frozen checks.

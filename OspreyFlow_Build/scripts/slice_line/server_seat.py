@@ -43,6 +43,15 @@ class ServerSeatError(Exception):
     """The server's seat could not be run or its work not taken back: in words, nothing of the Mac's changed."""
 
 
+class ServerSeatNotRun(ServerSeatError):
+    """The seat did no work on the server: it was not started, or it gave no session's result and left the part's
+    branch where it was. run_seat.py runs it on the Mac at once (the owner's word of 26 November 2026, evening)."""
+
+
+#: The build account's refusal of a start for a seat of the part still running there: never run again on the Mac.
+STILL_RUNNING = "seat-running"
+
+
 def where(seat_settings: dict) -> str:
     """The dial's `where:` for this seat: mac (the default) or server."""
     w = seat_settings.get("where", "mac")
@@ -79,8 +88,12 @@ def start(bs: dict, slice_id: str, seat: str, branch: str, order: dict) -> str:
         with f.open("rb") as fh:
             code, data = ew.ssh(bs, ["start", slice_id, seat], stdin=fh, timeout=900)
     if not data or data.get("state") != "started" or not RUN_ID.match(str(data.get("id", ""))):
-        why = (data or {}).get("reason") or f"no answer (ssh exit {code})"
-        raise ServerSeatError(f"the build account did not start the {seat} of {slice_id}: {why}")
+        reason = (data or {}).get("reason")
+        why = reason or f"no answer (ssh exit {code})"
+        # not run: an answered refusal (never seat-running), or, for a verifier (it changes nothing), no answer at all
+        not_run = reason != STILL_RUNNING and (bool(reason) or seat == "verifier")
+        raise (ServerSeatNotRun if not_run else ServerSeatError)(
+            f"the build account did not start the {seat} of {slice_id}: {why}")
     return data["id"]
 
 
@@ -180,12 +193,16 @@ def run(slice_id: str, seat: str, rnd: int, prompt: str, model: str, effort: str
           f"{SEAT_POLL_SECONDS} s.", flush=True)
     st = wait(bs, slice_id, seat, rid)
     r = result_from_backup(slice_id, seat, rid, branch)
+    session = r.get("session") if isinstance(r.get("session"), dict) else {}
+    if not session:  # never handed to launch_seat as an empty session: that would read as the account's refusal
+        # checked before anything is taken: a builder's half work is never moved into the Mac's worktree unseen
+        did_nothing = seat == "verifier" or (r.get("tip") and r.get("tip") == r.get("tip_before"))
+        raise (ServerSeatNotRun if did_nothing else ServerSeatError)(
+            f"the {seat} of {slice_id} ended {st.get('state')} on the build account without a session's result (run "
+            f"{rid}, exit {r.get('exit')}{'; ' + st['words'] if st.get('words') else ''}"
+            f"{'' if did_nothing else '; its branch moved there to ' + str(r.get('tip'))[:10]}); its log is "
+            f"seats/{slice_id}-{seat}/seat.log in the build account's data")
     if seat == "builder":
         take_branch(r, branch, tree)
     take_records(slice_id, r)
-    session = r.get("session") if isinstance(r.get("session"), dict) else {}
-    if not session:  # never handed to launch_seat as an empty session: that would read as the account's refusal
-        raise ServerSeatError(f"the {seat} of {slice_id} ended {st.get('state')} on the build account without a "
-                              f"session's result (run {rid}, exit {r.get('exit')}{'; ' + st['words'] if st.get('words') else ''}); "
-                              f"its log is seats/{slice_id}-{seat}/seat.log in the build account's data")
     return {**session, "server_run": rid}

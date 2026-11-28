@@ -2,7 +2,8 @@
 // opens it (never while typing), a history step restores by Enter, and its own button closes it.
 import { expect, test } from "@playwright/test";
 
-import { WELCOME_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
+import { WELCOME_ACTIONS } from "@ospreyflow/glass-shared";
+import { assertAllCovered, registerCovered } from "../../provedActions";
 
 test("? opens the panel, never while typing; a step restores by keyboard; Close shuts it", async ({ page }) => {
   await page.route("**/*/v1/investigations/c1/history", (route) =>

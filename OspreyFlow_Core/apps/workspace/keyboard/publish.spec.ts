@@ -3,7 +3,8 @@
 // no `.click()`; each proves its call reached the server.
 import { expect, test, type Page } from "@playwright/test";
 
-import { PUBLISH_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
+import { PUBLISH_ACTIONS } from "@ospreyflow/glass-shared";
+import { assertAllCovered, registerCovered } from "../../provedActions";
 
 const REGISTRY = "PUBLISH_ACTIONS";
 const RECIPE = {
