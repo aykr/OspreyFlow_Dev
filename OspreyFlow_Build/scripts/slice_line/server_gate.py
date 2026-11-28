@@ -285,41 +285,17 @@ def git_ok(args: list[str]) -> tuple[bool, str]:
     return p.returncode == 0, p.stdout.strip()
 
 
-TRAINS_LOG = c.DATA / "trains" / "trains.jsonl"
-
-
-def landed_train(gated: str) -> dict | None:
-    """The train that gated `gated` and landed (merge_slice.py train's own record), or None. A stack sent on main plus a
-    train in flight (early_warning.py --on-train; 65, the conductor's word of 27 November 2026) ran on that commit."""
-    try:
-        rows = [json.loads(x) for x in TRAINS_LOG.read_text().splitlines() if x.strip()]
-    except (OSError, ValueError):
-        return None
-    return next((r for r in reversed(rows) if r.get("result") == "merged" and r.get("gated") == gated
-                 and re.fullmatch(r"[0-9a-f]{40}", str(r.get("landed") or ""))), None)
-
-
 def records_moved(e: dict, base: str, tip: str, tree: str) -> tuple[list[str], str | None]:
     """(the files the records commits changed, None) when main has moved since the server's run only by records
     commits (item 4): each a Slice-Records commit with one parent, together changing only records-folder files that are
     not scan rows, the owner's files or a file the slice changed; and the Mac's candidate tree differs from the server's
     (the server's main with the slice merged, made again here and checked against the tree the server gives) in
-    exactly those files, each as main has it. Otherwise ([], why).
-    A run on a train's gated commit (65: a stack on main plus the train in flight) counts the same way once that train
-    has landed: main moved since only by the train (its record names the commit it gated and the one it landed, which
-    main holds) and records commits, its own under its gate included; the trees are checked as above, against the
-    commit gated."""
+    exactly those files, each as main has it. Otherwise ([], why)."""
     smain, stree = str(e.get("main") or ""), str(e.get("tree") or "")
     words = f"main has moved since the server's run (it ran on {smain[:10]}, main is {base[:10]})"
-    since = smain
-    if smain and stree and not git_ok(["merge-base", "--is-ancestor", smain, base])[0]:
-        t = landed_train(smain)
-        if not t or not git_ok(["merge-base", "--is-ancestor", t["landed"], base])[0]:
-            return [], f"{words}, and not forward"
-        since, words = t["landed"], f"{words}; it ran on the train {t.get('train')}, which landed as {t['landed'][:10]}"
-    if not smain or not stree:
+    if not smain or not stree or not git_ok(["merge-base", "--is-ancestor", smain, base])[0]:
         return [], f"{words}, and not forward"
-    _, commits = git_ok(["rev-list", "--reverse", f"{since}..{base}"])
+    _, commits = git_ok(["rev-list", "--reverse", f"{smain}..{base}"])
     for sha in commits.split():
         _, parents = git_ok(["rev-list", "--parents", "-n", "1", sha])
         _, trailers = git_ok(["log", "-1", "--format=%(trailers:only,unfold)", sha])

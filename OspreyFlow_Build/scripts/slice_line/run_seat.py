@@ -453,28 +453,6 @@ def from_order(path: Path) -> int:
     return 1 if res.get("is_error") else 0
 
 
-#: How a builder ends its session (65, the owner's word of 27 November 2026: a builder that ends on a question must not
-#: read as "green; ready for the verifier"). The prompt is main's, so a part branched long ago is asked the same.
-BUILDER_ENDING = ("\n\nWhen you stop, the last line of your last message is one of two, on a line of its own:\n"
-                  "- `READY` when this round's work is done, its checks are green and you ask nothing;\n"
-                  "- `QUESTION: <what needs deciding>` when anything needs a decision (the conductor's or the owner's) "
-                  "before a verifier should look at the part.\n"
-                  "Never write READY beside a question: the part goes to its verifier only on READY.")
-
-
-def builder_ending(res: dict) -> tuple[str, str]:
-    """("ready", "") when the session's last line is READY and no line of its message is a QUESTION: line;
-    ("question", <the question>) when one is; ("unsaid", <its last words>) otherwise (a question in prose, no line)."""
-    lines = [ln.strip().strip("`*").strip() for ln in str(res.get("result") or "").splitlines() if ln.strip()]
-    asked = [ln[len("QUESTION:"):].strip().strip("`*").strip() for ln in lines if ln.upper().startswith("QUESTION:")]
-    if asked:
-        return "question", " / ".join(asked)
-    if lines and lines[-1] == "READY":
-        return "ready", ""
-    words = " ".join(str(res.get("result") or "").split())
-    return "unsaid", (words[-400:] if len(words) > 400 else words) or f"(no words; {res.get('subtype') or 'no result'})"
-
-
 def builder(slice_id: str) -> int:
     st, frozen = c.state(slice_id), c.read_json(c.rec_dir(slice_id) / "frozen.json")
     if not frozen or st.get("phase") != "building":
@@ -498,7 +476,6 @@ def builder(slice_id: str) -> int:
     if table:
         prompt += (f"\n\nThis round is judged against the scout's table of every open case, {table} (read it whole): "
                    "close its open rows; nothing outside it is this round's work.")
-    prompt += BUILDER_ENDING
     tip0 = c.git(["rev-parse", frozen["branch"]], c.REPO)
     mac = lambda: launch("builder", st["account"], wt, prompt, seat["model"], seat["effort"],  # noqa: E731
                          {"OSPREY_SLICE": slice_id, "OSPREY_SLICE_WORKTREE": str(wt),
@@ -536,19 +513,7 @@ def builder(slice_id: str) -> int:
                              "narrow the slice, or change its checks (your word)?")
         return 0 if self_clear(slice_id) else 1
     tests = c.read_json(c.rec_dir(slice_id) / f"tests-{tip}.json")
-    how, words = builder_ending(res)
-    if tests and tests.get("green") and how == "question":
-        stop_slice(slice_id, f"the builder asks, with its checks green at {tip[:10]}: {words}")
-        return 1
-    if tests and tests.get("green") and how == "unsaid":
-        c.set_state(slice_id, builder_ending="unsaid", builder_said=words, tip=tip)
-        board()
-        print(f"{slice_id}: green at {tip[:10]}, but the builder did not end with READY, so it has not said it is ready; "
-              f"not sent to the verifier. Its last words: {words}")
-        return 1
     if tests and tests.get("green"):
-        st_now = {k: v for k, v in c.state(slice_id).items() if k not in ("builder_ending", "builder_said")}
-        c.write_json(c.rec_dir(slice_id) / "state.json", st_now)
         c.set_state(slice_id, phase="verifying", tip=tip)
         board()
         print(f"{slice_id}: green at {tip[:10]}; ready for the verifier.")

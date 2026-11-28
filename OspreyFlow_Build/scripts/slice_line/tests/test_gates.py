@@ -25,9 +25,7 @@ SYSPY = "/usr/bin/python3"
 #: import and then ran a script that read the clock again were refused when the run crossed midnight). Every test
 #: module takes it from here, and the scripts in the throwaway repository read it too (TODAY_IN_THE_COPY): the real
 #: line's scripts are unchanged and always read the clock.
-#: SLICE_LINE_TEST_TODAY stands in a run collected before midnight and run after it (test_midnight.py): the tests' one
-#: date is then yesterday's, while every script the tests start reads the clock (65, CO3b's gate of 27 November 2026).
-TODAY = __import__("os").environ.get("SLICE_LINE_TEST_TODAY") or time.strftime("%Y-%m-%d", time.gmtime())
+TODAY = time.strftime("%Y-%m-%d", time.gmtime())
 #: The owner's files a test world needs, from the v062 folder.
 OWNER_WORLD_FILES = ("dial.yaml", "accounts.yaml", "live_step.yaml")
 
