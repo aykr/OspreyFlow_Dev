@@ -598,3 +598,12 @@ Accepted on the owner's standing line (gaps in a test only, from round 3) or his
 ### New row 49 (27 November 2026, the owner's ruling at about 13:45 UTC: SE9j question 4 (b), a Vault part after 0.7.0)
 
 **Lower incidents placed in a marked grid again.** With SE9j (question 4 (a)), an incident marked below its grid cell is not geocoded into it, and scenario A1 is narrowed to say so. After 0.7.0, a Vault security part gives `site_cell` its own marking in both analytics adapters (`analytics_duckdb` and `analytics_clickhouse`), so an incident below its cell can be placed again without telling its reader the cell is there. Its conformance case is written first (rule 1). A1's narrowing is then taken back.
+
+### New rows 50 and 51 (28 November 2026, WS4a's two accepted gaps in a test: round 3 on the standing line, tip `bf2fee695b`)
+
+- **50.** `apps/workspace/keyboard/canvas-compare.spec.ts`, case 3 (ADR-119's community links, the `communities` scene), has never been shown red in the comparison itself. The only red on record came from a wait that the spec later removed. The plant must be run again at the real call site (rule 15, second paragraph).
+- **51.** `apps/workspace/keyboard/canvasCompare.ts`: `CEILING`'s comment says the ceiling (share 0.0005) is below the smallest share any planted fault gave in its own scene. No test or record shows each plant's share against it. A test, or the run's record, must show each one.
+
+### New row 52 (28 November 2026, GG3a's accepted gap in a test: round 6 on the standing line, tip `bd669de089`)
+
+- **52.** `apps/pages/test/govuk/search.test.ts`, Scenario SP6: a refused search (422) shows "the same words beside the field". No test checks the inline message beside a field, or its `aria-invalid` and `aria-describedby` link. If the page stopped passing the refusal's lines to the form, or the template stopped writing the inline messages, every test would stay green.

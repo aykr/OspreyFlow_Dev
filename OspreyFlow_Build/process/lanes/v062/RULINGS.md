@@ -3,6 +3,17 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 28 November 2026, about 13:40 UTC: parallel merge proofs, the evening gap for 70, the server's drafts (the owner, in chat)
+
+1. **Parallel merge proofs are approved** (line-fix's `PLAN_PARALLEL_PROOFS.md`). Step 1 puts the full gate on the build account, in shadow first. Nothing changes for the conductor until the owner switches something on.
+2. **This evening the owner applies 70 (the live-tests pay run) and 67 in one gap.** When he asks for it, the merge in flight finishes and none starts. The conductor says "gap for 70" when no merge runs and nothing is running on the build account.
+3. **The server's finished work:**
+   - **`drafts/2026-11-28`:** rows are cut for GG2b, GG2d, GG2e1, GG2e2, GG5b1, GG5b2, GA1b, GA1c, GA1d, GG4e1 and GG4e2, with their briefs copied into `slices/`. GG5b is split into GG5b1 and GG5b2, and GG2e into GG2e1 and GG2e2. Later rows naming "GG5b" now name GG5b2, and those naming "GG2e" name GG2e1.
+     - The questions of the owner's kind are O1 to O4 in that branch's `INDEX.md`. Each stops its part's merge, not its start.
+     - GG2b, GG2d, GG2e1 and GG2e2 stay in the server's spine stream (12:10, item 1): no Mac builder.
+   - **`away/GG4d`** is built: its row is cut, and round 1 merges `away/GG4d`. Q4 (no source document offered) and Q6 (no marking below the item's own) were built as proposed. They touch security rules and are with the owner. GG4f1 follows when its report is in.
+   - **`drafts/gap-2026-11-28`'s `GOVUK_GAP.md`** is read. Nothing in the new areas is briefed until the owner rules on the re-plan.
+
 ## 28 November 2026, about 12:10 UTC: the scope of 0.7.0 (the owner, in chat)
 
 1. **For 0.7.0, every screen is a GOV.UK page from day one,** not only the analysts' screens. **The release needs the GOV.UK tree complete:** every `FUNCTIONS.yaml` row, less the agreed parity exceptions.
