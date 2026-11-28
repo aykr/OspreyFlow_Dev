@@ -1164,13 +1164,15 @@ class Boards:
         """C17 (b): an image the case already holds, linked by a `DEPICTS` written into the layer;
         the image stays in its dataset. The link is marked at least as the image is.
         `before_write` is given that marking, after every refusal and before the link is written
-        (ADR-127 Amendment 27: a picture is never left unaudited)."""
+        (ADR-127 Amendment 27: a picture is never left unaudited). A Document whose stored file
+        is not of a picture type is refused, whatever its `media_kind` says (SE9g)."""
         subject = await self._picture_subject(board, node_id, principal)
         found = await self.graph.get_nodes([given.document_id], principal)
         if (
             not found
             or found[0].type != DOCUMENT_TYPE
             or found[0].properties.get("media_kind") != "image"
+            or not _stored_as_picture(found[0])
         ):
             raise DrawingRefused(
                 "not_a_picture", "that is not a picture this case holds", status=422
@@ -1221,6 +1223,9 @@ class Boards:
         if document_id is None:
             raise ItemNotFound(node_id)
         (document,) = await self.graph.get_nodes([document_id], principal)
+        # SE9g: a Document chosen before `choose_picture` checked its file answers as none.
+        if not _stored_as_picture(document):
+            raise ItemNotFound(node_id)
         ref = str(document.properties["object_ref"])
         return await self.media.get(ref), content_type_of(ref)
 
@@ -1281,6 +1286,14 @@ def match_writes(
             datasets=[into],
         )
     ]
+
+
+def _stored_as_picture(document: Node) -> bool:
+    """Whether the Document's stored reference is of a picture type (`PICTURE_TYPES`), by the
+    content type its file would be served as. Never by a file's name, and not by `media_kind`,
+    which does not say what the file is (SE9g)."""
+    ref = document.properties.get("object_ref")
+    return isinstance(ref, str) and content_type_of(ref) in PICTURE_TYPES.values()
 
 
 def _accepts(types: Sequence[str], node_type: str) -> bool:
