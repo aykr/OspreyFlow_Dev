@@ -192,7 +192,7 @@ import {
   connectDeltaClient,
   type DeltaClient,
   type SocketLike,
-} from "./workingset/deltaClient";
+} from "@ospreyflow/glass-shared";
 import { applyRestoredSnapshot, ViewOverCapGate } from "./workingset/ViewOverCapGate";
 import { ViewOverCapDialog } from "./workingset/ViewOverCapDialog";
 import { BatchExpansion } from "./workingset/BatchExpansion";

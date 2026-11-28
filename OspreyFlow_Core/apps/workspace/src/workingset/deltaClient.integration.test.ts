@@ -17,8 +17,7 @@ import { createInterface } from "node:readline";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 
-import type { WorkingSetDelta } from "@ospreyflow/glass-shared";
-import { connectDeltaClient, type SocketLike } from "./deltaClient";
+import { connectDeltaClient, type SocketLike, type WorkingSetDelta } from "@ospreyflow/glass-shared";
 
 const REPO_ROOT = new URL("../../../../", import.meta.url).pathname;
 const PYTHON = `${REPO_ROOT}.venv/bin/python`;
