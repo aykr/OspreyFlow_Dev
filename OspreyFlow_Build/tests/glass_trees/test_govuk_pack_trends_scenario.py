@@ -419,6 +419,24 @@ def test_the_citation_correction_cites_lines_that_hold_what_it_says() -> None:
     assert citation_diff_problems(inputs()) == []
 
 
+def test_a_line_added_above_the_route_leaves_the_citation_holding() -> None:
+    """Slice GR4c. A part that adds lines to app.py above the add-item route changes nothing the correction cites (rule 15).
+
+    The shape is slice SE9j's merge: 92 lines more in app.py, all of them above the route. app.py's real text is the input, with those
+    lines inserted in the in-memory copy.
+    """
+    data = inputs()
+    assert citation_diff_problems(data) == []
+    app = "services/api/app.py"
+    lines = data["cited_files"][app].splitlines(keepends=True)
+    (route,) = [index for index, line in enumerate(lines) if CITED_LINES[app] in line]
+    lines[route - 1 : route - 1] = ["# a line another part adds above the add-item route\n"] * 92
+    assert lines[route - 1 + 92].startswith("@app.post("), "the lines went in above the route's decorator"
+    assert CITED_LINES[app] not in lines[route] and CITED_LINES[app] in lines[route + 92], "the route has moved 92 lines down"
+    data["cited_files"][app] = "".join(lines)
+    assert citation_diff_problems(data) == []
+
+
 def test_the_scenario_says_what_it_shows_who_sees_it_and_scripts_off() -> None:
     assert prose_problems(inputs()) == []
 
