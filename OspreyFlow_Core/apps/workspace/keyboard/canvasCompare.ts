@@ -79,15 +79,16 @@ export interface ReferenceRecord {
 }
 
 /** The record the reference-making command writes, or why it cannot be trusted: a reference not in it, or changed
- * since it was made (replaced by hand, not by the command), is refused. */
-export function readReferences(scenes: readonly string[]): { record: ReferenceRecord | null; problems: string[] } {
-  const path = new URL("REFERENCES.json", FOLDER);
+ * since it was made (replaced by hand, not by the command), is refused. `folder` is the committed one, but for the
+ * red cases, which plant their faults in a copy of it. */
+export function readReferences(scenes: readonly string[], folder: URL = FOLDER): { record: ReferenceRecord | null; problems: string[] } {
+  const path = new URL("REFERENCES.json", folder);
   if (!existsSync(path)) return { record: null, problems: ["no canvas-compare/REFERENCES.json: the references are made by `npm run canvas-compare:references -- --reason \"…\"`"] };
   const record = JSON.parse(readFileSync(path, "utf8")) as ReferenceRecord;
   const problems: string[] = [];
   if (!record.reason?.trim()) problems.push("REFERENCES.json gives no reason the references were made");
   for (const scene of scenes) {
-    const file = new URL(`${scene}.png`, FOLDER);
+    const file = new URL(`${scene}.png`, folder);
     if (!existsSync(file)) problems.push(`no reference for the scene ${scene}`);
     else if (record.scenes?.[scene] !== sha256(readFileSync(file))) {
       problems.push(`the reference for ${scene} is not the one REFERENCES.json records: it was changed without the command`);
