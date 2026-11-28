@@ -1,0 +1,66 @@
+{#- New case (slice GR1b; ADR-099 Amendment 12 item 6; ADR-126; scenario CS27 to CS44), a partial of `cases.njk`: one plain form, posted
+    once, complete without a script. The data the case reads is asked as GOV.UK radios with conditional content, **both shown**: with no
+    script nothing is hidden, and the server reads only the chosen radio's field. With no dataset to offer there is only the new one,
+    and no empty group. A dataset's radio is named by its label; its id is its value alone. The error summary and each field's error
+    are marked up as the GOV.UK Design System marks them up. The words are `server/views/casesWords.ts`'s. -#}
+{% if view.error %}
+<div class="govuk-error-summary">
+<div role="alert">
+<h2 class="govuk-error-summary__title">{{ words.errorTitle }}</h2>
+<div class="govuk-error-summary__body">
+<ul class="govuk-list govuk-error-summary__list"><li><a href="{{ view.error.href }}">{{ view.error.says }}</a></li></ul>
+</div>
+</div>
+</div>
+{% endif %}
+{% set nameWrong = view.error and view.error.against == "name" %}
+{% set choiceWrong = view.error and view.error.against == "choice" %}
+<h1>{{ words.newCase }}</h1>
+<form method="post" action="{{ view.action }}" novalidate>
+<input type="hidden" name="_csrf" value="{{ csrfToken }}">
+<div class="govuk-form-group">
+<label class="govuk-label" for="case-name">{{ words.caseName }}</label>
+<p id="case-name-hint" class="govuk-hint">{{ words.caseNameHint }}</p>
+<input class="input govuk-input" id="case-name" name="name" type="text" maxlength="200" value="{{ view.name }}" aria-describedby="case-name-hint">
+</div>
+<div class="govuk-form-group{% if view.error %} govuk-form-group--error{% endif %}">
+<fieldset class="govuk-fieldset"{% if choiceWrong and not view.datasets.length %} aria-describedby="data-error"{% endif %}>
+<legend class="govuk-fieldset__legend">{{ words.dataQuestion }}</legend>
+{% if choiceWrong and not view.datasets.length %}<p id="data-error" class="govuk-error-message">{{ words.errorPrefix }} {{ view.error.says }}</p>
+{% endif %}<div class="govuk-radios">
+<div class="govuk-radios__item"><input class="govuk-radios__input" id="data-new" name="data" type="radio" value="new"{% if not view.existing %} checked{% endif %}> <label class="govuk-label govuk-radios__label" for="data-new">{{ words.makeNew }}</label></div>
+<div class="govuk-radios__conditional">
+<label class="govuk-label" for="new-dataset-name">{{ words.newDatasetName }}</label>
+<p id="new-dataset-name-hint" class="govuk-hint">{{ words.newDatasetHint }}</p>
+{% if nameWrong %}<p id="new-dataset-name-error" class="govuk-error-message">{{ words.errorPrefix }} {{ view.error.says }}</p>
+{% endif %}<input class="input govuk-input{% if nameWrong %} govuk-input--error{% endif %}" id="new-dataset-name" name="new_dataset_name" type="text" maxlength="200" value="{{ view.newDatasetName }}" aria-describedby="new-dataset-name-hint{% if nameWrong %} new-dataset-name-error{% endif %}">
+</div>
+{% if view.datasets.length %}
+<div class="govuk-radios__item"><input class="govuk-radios__input" id="data-existing" name="data" type="radio" value="existing"{% if view.existing %} checked{% endif %}> <label class="govuk-label govuk-radios__label" for="data-existing">{{ words.useExisting }}</label></div>
+<div class="govuk-radios__conditional">
+<fieldset class="govuk-fieldset" aria-describedby="dataset-hint{% if choiceWrong %} dataset-error{% endif %}">
+<legend class="govuk-fieldset__legend">{{ words.datasetLegend }}</legend>
+<p id="dataset-hint" class="govuk-hint">{{ words.datasetHint }}</p>
+{% if choiceWrong %}<p id="dataset-error" class="govuk-error-message">{{ words.errorPrefix }} {{ view.error.says }}</p>
+{% endif %}<div class="govuk-radios">
+{% for dataset in view.datasets %}<div class="govuk-radios__item"><input class="govuk-radios__input" id="{{ dataset.htmlId }}" name="dataset_id" type="radio" value="{{ dataset.value }}"{% if dataset.checked %} checked{% endif %}> <label class="govuk-label govuk-radios__label" for="{{ dataset.htmlId }}">{{ dataset.label }}</label></div>
+{% endfor %}</div>
+</fieldset>
+</div>
+{% endif %}
+</div>
+</fieldset>
+</div>
+<div class="govuk-form-group">
+<fieldset class="govuk-fieldset">
+<legend class="govuk-fieldset__legend">{{ words.domainsLegend }}</legend>
+<div class="govuk-checkboxes">
+{% for pack in view.packs %}<div class="govuk-checkboxes__item"><input class="checkbox govuk-checkboxes__input" id="{{ pack.htmlId }}" name="domains" type="checkbox" value="{{ pack.value }}"{% if pack.checked %} checked{% endif %}> <label class="govuk-label govuk-checkboxes__label" for="{{ pack.htmlId }}">{{ pack.label }}</label></div>
+{% endfor %}</div>
+{% if view.noneTicked %}<p class="govuk-hint">{{ words.noneTicked }}</p>
+{% endif %}</fieldset>
+</div>
+<button type="submit" class="btn btn--primary">{{ words.createButton }}</button>
+</form>
+<p><a href="/cases">{{ words.toCases }}</a></p>
+<p><a href="/">{{ words.back }}</a></p>

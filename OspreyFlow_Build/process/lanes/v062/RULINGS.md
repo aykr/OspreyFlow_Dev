@@ -3,6 +3,30 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 28 November 2026, about 07:20 UTC: the 07:00 batch answered (the owner, in chat)
+
+1. **CO3d and the conformance-model parts: (a).** They wait until 0.7.0 is cut. Conformance reds are cleared by one rerun each (D44).
+2. **CO3d's job-split CI diff is written now, for the owner to apply** (technical, his standing word). The line never writes `.github/`.
+3. **The seats-test red on `d79baab`** (`test_build_seats.py::test_one_seat_per_part_at_a_time[verifier]`) gets one rerun after the conductor's push. It comes to the owner only if it is red twice.
+4. **The rest of the batch is agreed:**
+   - builders start at 09:00, in the order GR4c, CO3e, PL8b, IS4a, then GA1a, GG3a and GG3b;
+   - the first train (GG4b, SE9g, SE9i, GG2c, WS4a, SE8g, AD1c, CO3c) is pre-checked on the server while the Mac is off, and lands as one train when the owner is back.
+   - The owner closes the laptop at the conductor's "safe to close" and says "back" at about 09:00.
+
+## 28 November 2026, about 06:05 UTC: the new plan to get the build moving (the owner, in chat; it replaces his morning rulings of a few minutes earlier)
+
+1. **65 is reverted on main** (`bd646f1`, `git revert 087c0d7`; the owner's commit, pushed with the conductor's next records commit). The gate is as it was when SE9d merged. **"applied": merges restart now**: GR1b, GG4b, then trains of the clean parts, with server stacks at 3 jobs. **A standing rule until 0.7.0: no merge starts between 03:00 and 03:50 UTC.** (Line-fix's 68 and 69 of the earlier message are replaced by this revert and by item 3.)
+2. **The line is frozen until 0.7.0 is cut.** There are no hand-backs, no new away rounds, no server verifiers or builders, and no capacity changes. Builders and verifiers run on the Mac.
+3. **The `app.py:19905` citation that blocks SE9h, SE9j and SE9k: a small test-only part, cut now and merged first (GR4c).** It makes `test_govuk_pack_trends_scenario.py` find the add-item route by its text, not by a line number. It updates `away/GR4a_ADR152_DECISION10_CITATION.diff` to match, for the owner to apply. SE9h, SE9j and SE9k merge after it, with no re-citing.
+4. **CO3e: (B).** It lands as (A) now: the case waits for the field's focus and for the second ageing read before ArrowUp. A separate product-fix part (**CO3f**, after CO3e) does three things, red first, with the late-ageing plant as its proof:
+   - gives `AdminPlace` a stable `api`;
+   - makes sure a late read never overwrites an administrator's edit;
+   - checks the other Admin sections for the same shape.
+5. **Refreezes for GA1a, GG3a and GG3b, as their builders proposed**, each with `test_route_pins.py` and `test_page_lists_merge.py` added to its checks. The owner's resume.tsv lines are dated 2026-11-28.
+6. **Builders: the next parts in the build order, briefed on the owner's standing word (D274), keeping a night's queue.** Any question in a brief is answered (a) unless it is one of the owner's own kinds, which waits for him. Fill all four slots now.
+7. **The owner's decisions are batched:** sent to him at about 07:00 and 17:00, not one at a time, unless one stops all merging.
+8. `test_build_seats.py::test_one_seat_per_part_at_a_time[verifier]` (GitHub's runner red on `d79baab`) goes in line-fix's batch (from his earlier message).
+
 ## 27 November 2026, 22:24 UTC: 66b and 65 applied (on the owner's word of about 19:40, tonight only)
 
 1. `/tmp/apply65.out` read "done: 087c0d7 committed on main (not pushed); suite: 1075 passed; early warning: 301 passed; citations: clean; install.sh not needed". So 66b (`8fbbeb4`) and 65 (`087c0d7`) count as applied. They are pushed with this records commit, and the overnight plan resumes.

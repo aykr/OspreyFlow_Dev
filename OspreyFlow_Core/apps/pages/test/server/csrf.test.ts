@@ -146,6 +146,24 @@ describe("the boards page's writes, through the real page list", () => {
   });
 });
 
+// New case on the GOV.UK tree (slice GR1b): its POST, through the real page list, stands behind this check like every other.
+describe("the cases page's write, through the real page list", () => {
+  it("is refused 403 with no token or another session's, and reaches the page only with this session's", async () => {
+    const { app } = build({ pages: PAGES, tree: "govuk" });
+    const mine = await signIn(app);
+    const theirs = await signIn(app);
+    for (const body of ["data=new", `_csrf=${theirs.csrf}&data=new`, "_csrf=&data=new"]) {
+      const res = await request(app).post("/cases?new=1").set("Cookie", mine.cookie).type("form").send(body);
+      expect(res.status, body).toBe(403);
+      expect(res.text).toMatch(/could not be checked/i);
+    }
+    // With this session's token the page answers: with no Conduit to ask here, that the case was not made.
+    const reached = await request(app).post("/cases?new=1").set("Cookie", mine.cookie).type("form").send(`_csrf=${mine.csrf}&data=new`);
+    expect(reached.status).toBe(503);
+    expect(reached.text).toMatch(/could not be made/);
+  });
+});
+
 describe("the safe methods need no token (control)", () => {
   it.each(SAFE)("%s with no token is not refused", async (method) => {
     const { app } = build();

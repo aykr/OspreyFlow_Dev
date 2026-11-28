@@ -48,7 +48,7 @@ def launch(seat, account, cwd, prompt, model, effort, env_extra, log, extra=None
     tip = subprocess.run(["git", "rev-parse", "HEAD"], cwd=str(cwd), capture_output=True, text=True).stdout.strip()
     out = {"verdict": "pass", "commit": tip, "findings": []} if seat == "verifier" else None
     return {"type": "result", "subtype": "success", "session_id": "mac-" + seat, "usage": {}, "total_cost_usd": 0,
-            **({"structured_output": out} if out else {"result": "done\n\nREADY"})}
+            **({"structured_output": out} if out else {"result": "done"})}
 run_seat.launch = launch
 run_seat.transcript_of = lambda account, sid: ""
 sys.exit(run_seat.%(seat)s("S1"))

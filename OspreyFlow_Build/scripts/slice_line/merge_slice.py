@@ -679,7 +679,7 @@ def main_ready(records: bool = False) -> str:
 
 
 def temp_tree(ref: str, name: str) -> Path:
-    d = c.gate_dir(f"slice-{name}-")  # 65: the line's own tmp, never the system's
+    d = Path(tempfile.mkdtemp(prefix=f"slice-{name}-"))
     shutil.rmtree(d)
     c.git(["worktree", "add", "--detach", str(d), ref], c.REPO)
     return d
@@ -1664,7 +1664,7 @@ def merge(slice_id: str) -> dict:
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_bytes(subprocess.run(["git", "show", f"{tip}:{f}"], cwd=c.REPO, capture_output=True, check=True).stdout)
         slot = c.state(slice_id).get("slot")
-        envs = c.gate_dir(f"slice-{slice_id}-envs-")
+        envs = Path(tempfile.mkdtemp(prefix=f"slice-{slice_id}-envs-"))
         trees.append(envs)
         try:
             env_before = slice_env(before, log, slot, envs / "before", pytest_base=envs / "pytest-before")
@@ -1883,14 +1883,6 @@ TRAINS = "trains"
 TRAIN_MAX = 3
 #: The train being run (train()): {"base": the candidate the next part merges onto}. None outside a train.
 TRAIN: dict | None = None
-#: While a train's gate runs: the train, its parts, the main it started on and the commit gated (its tested merge
-#: result), for a server stack named on main plus this train (early_warning.py --on-train; 65, the conductor's word of
-#: 27 November 2026). Removed when the train ends, landed or not.
-INFLIGHT = "inflight.json"
-
-
-def train_in_flight() -> dict | None:
-    return c.read_json(c.DATA / TRAINS / INFLIGHT) or None
 
 
 class TrainBroken(Refused):
@@ -1996,7 +1988,6 @@ def train(ids: list[str]) -> dict:
         on_build, code = None, None
         if not why:
             log.open("a").write(f"the train {tid}: {', '.join(ids)} on main {base0[:10]}; the gate on {cand[:10]}\n")
-            c.write_json(d / INFLIGHT, {"train": tid, "parts": ids, "base": base0, "gated": cand, "at": c.now()})
             gate_tree_dir = temp_tree(cand, tid)
             on_build = BUILD_GATE(ids[-1], base0, cand, gate_tree_dir, log)
             code = gate_on_build(on_build, gate_tree_dir, base0, log)
@@ -2011,7 +2002,6 @@ def train(ids: list[str]) -> dict:
                 else:
                     c.git(["merge", "--ff-only", made[-1]], c.REPO)
     finally:
-        (d / INFLIGHT).unlink(missing_ok=True)
         if gate_tree_dir:
             drop_tree(gate_tree_dir)
             shutil.rmtree(gate_tree_dir, ignore_errors=True)

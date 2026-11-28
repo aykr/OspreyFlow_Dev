@@ -132,12 +132,16 @@ export function scopeBadge(datasets: readonly string[] | undefined): { text: str
   };
 }
 
+/** What a case with no name is called: the Conduit's own default (`DEFAULT_CASE_NAME`, `services/api/app.py`;
+ * `test_govuk_cases_scenario.py` holds the two in step), and how a listing with a blank name is shown. */
+export const UNTITLED_CASE = "Untitled case";
+
 export function caseLabel(entry: Pick<CaseListing, "name" | "created_at">): string {
   const name = entry.name.trim();
   if (name) return name;
   const made = new Date(entry.created_at);
-  if (Number.isNaN(made.getTime())) return "Untitled case";
-  return `Untitled case · created ${utcStamp(made)}`;
+  if (Number.isNaN(made.getTime())) return UNTITLED_CASE;
+  return `${UNTITLED_CASE} · created ${utcStamp(made)}`;
 }
 
 /** Named cases first, then untitled ones; newest first within each. */

@@ -335,36 +335,11 @@ def standing_cmd(argv: list) -> int:
     return code
 
 
-#: The train in flight (merge_slice.py train writes it while its gate runs), and the base a stack named on it is sent on
-#: (--on-train; 65, the conductor's word of 27 November 2026): its gated commit, main plus the train. None: main.
-INFLIGHT = c.DATA / "trains" / "inflight.json"
-ON_TRAIN: str | None = None
-
-
-def train_base(slices: list[str]) -> dict:
-    """The train in flight, for a stack named on main plus it: refused when no train is in flight, when a slice of the
-    stack is one of the train's parts, or when its gated commit is not here."""
-    t = c.read_json(INFLIGHT) or {}
-    gated = str(t.get("gated") or "")
-    if not re.fullmatch(r"[0-9a-f]{40}", gated):
-        raise Refused("no train is in flight (no gated commit in trains/inflight.json): send the stack on main.")
-    inside = [x for x in slices if x in (t.get("parts") or [])]
-    if inside:
-        raise Refused(f"{inside[0]} is in the train {t.get('train')}: a stack on the train holds none of its parts.")
-    if c.git(["cat-file", "-t", gated], c.REPO, check=False) != "commit":
-        raise Refused(f"the train's gated commit {gated[:10]} is not in this repository.")
-    return t
-
-
-def make_bundle(branch, dest: Path, full: bool, held_file: Path = HELD, base: str | None = None) -> None:
+def make_bundle(branch, dest: Path, full: bool, held_file: Path = HELD) -> None:
     """A git bundle of main's tip and the slice's tip (or each slice's, for a stack), from commits only (never a
-    working-tree file); less what the server already holds, unless `full`. With `base` (--on-train: the train's gated
-    commit), the bundle's refs/heads/main is that commit, main plus the train, and the Mac's own main is untouched: the
-    bundle is made in a throwaway repository that borrows this one's objects."""
+    working-tree file); less what the server already holds, unless `full`."""
     branches = [branch] if isinstance(branch, str) else list(branch)
-    if "main" in branches:
-        raise Refused("a bundle's slices are their branches, never main")
-    main = base or c.git(["rev-parse", "refs/heads/main"], c.REPO)
+    main = c.git(["rev-parse", "refs/heads/main"], c.REPO)
     held = (c.read_json(held_file) or {}).get("main", "")
     args = ["bundle", "create", "-q", str(dest), "refs/heads/main", *[f"refs/heads/{b}" for b in branches]]
     if not full and re.fullmatch(r"[0-9a-f]{40}", held or "") and \
@@ -372,17 +347,7 @@ def make_bundle(branch, dest: Path, full: bool, held_file: Path = HELD, base: st
         # git leaves out a ref whose tip is excluded, so when the server holds main itself the bundle stops at main's
         # parents (which it holds too): main's tip is always in the bundle, by name
         args += [f"^{held}"] if held != main else [f"^{x}" for x in c.git(["rev-parse", f"{main}^@"], c.REPO).split()]
-    if not base:
-        c.git(args, c.REPO)
-        return
-    with tempfile.TemporaryDirectory(prefix="early-warning-base-") as d:
-        objects = c.git(["rev-parse", "--path-format=absolute", "--git-common-dir"], c.REPO) + "/objects"
-        c.git(["init", "-q", "--bare", d], c.REPO)
-        Path(d, "objects", "info", "alternates").write_text(objects + "\n")
-        c.git(["update-ref", "refs/heads/main", base], d)
-        for b in branches:
-            c.git(["update-ref", f"refs/heads/{b}", c.git(["rev-parse", f"refs/heads/{b}"], c.REPO)], d)
-        c.git(args, d)
+    c.git(args, c.REPO)
 
 
 def ssh(s: dict, words: list[str], stdin=None, timeout: int = 1800) -> tuple[int, dict | None]:
@@ -437,7 +402,7 @@ def start(s: dict, branch, order: list | None = None) -> tuple[str, dict | None,
         for full in (False, True):
             b = Path(d) / "slice.bundle"
             b.unlink(missing_ok=True)
-            make_bundle(branch, b, full, base=ON_TRAIN)
+            make_bundle(branch, b, full)
             with b.open("rb") as fh:
                 code, data = ssh(s, ["stack", *order] if order else ["run"], stdin=fh)
             if data and data.get("state") == "refused" and data.get("reason") == "bundle-prerequisites" and not full:
@@ -724,8 +689,7 @@ ANSWERED_ASKS = 3
 
 
 def current_main() -> str:
-    """The main a run is sent on: main, or with --on-train the train's gated commit (main plus the train)."""
-    return ON_TRAIN or c.git(["rev-parse", "refs/heads/main"], c.REPO)
+    return c.git(["rev-parse", "refs/heads/main"], c.REPO)
 
 
 def answered(s: dict, slice_id: str, tip: str, below: list, main: str) -> tuple[str, dict] | None:
@@ -1050,13 +1014,10 @@ def _main(argv: list[str]) -> int:
     ap.add_argument("--result", metavar="ID", help="poll a run already started")
     ap.add_argument("--trust", metavar="ID", help="for the merge: does the server's run ID prove --tree?")
     ap.add_argument("--tree", metavar="HASH", help="the candidate tree the merge built (with --trust)")
-    ap.add_argument("--on-train", action="store_true",
-                    help="send it on main plus the train in flight (its gated commit), not on main")
     ap.add_argument("--again", action="store_true",
                     help="send it even though a run of the same candidate has a verdict on this main")
     a = ap.parse_args(argv)
     s: dict = {}
-    global ON_TRAIN
     try:
         if not all(re.fullmatch(proto.SLICE_PATTERN, x) for x in a.slices):
             raise Refused("A slice id is letters and digits only.")
@@ -1069,13 +1030,6 @@ def _main(argv: list[str]) -> int:
                 raise Refused(f"A run id is {proto.ID_LENGTH} lower-case hexadecimal characters.")
         if (a.trust is None) != (a.tree is None) or (a.tree is not None and not re.fullmatch(r"[0-9a-f]{40}", a.tree)):
             raise Refused("--trust <id> goes with --tree <the candidate's 40-character tree hash>.")
-        if a.on_train:  # 65: before the setting is read, so a stack on no train is refused as that, whatever the setting
-            if a.result or a.trust:
-                raise Refused("--on-train sends a slice or a stack; --result and --trust send nothing.")
-            t = train_base(a.slices)
-            ON_TRAIN = t["gated"]
-            print(f"On main plus the train {t.get('train')} ({', '.join(t.get('parts') or [])}): its gated commit "
-                  f"{ON_TRAIN[:10]} is this run's main.")
         s = load_setting()
         if a.trust:
             frozen = c.read_json(c.rec_dir(a.slices[0]) / "frozen.json") or {}

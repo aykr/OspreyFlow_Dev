@@ -48,3 +48,15 @@ left out while main is red on it; the merge's full gate runs `citation-check`.)
 Adding to the working set (GG2b); the inspector, the timeline and documents (later GG3 slices); suggestions as you type;
 the frame's controls and their keyboard cases (PL8's mount slice); any graph drawing; any Conduit change;
 `apps/workspace`.
+
+## The owner's refreeze (28 November 2026, about 06:05 UTC; RULINGS.md, item 5)
+
+**Your frozen acceptance files change in these ways and no others (the same answer as GA1a's).**
+1. **`test_govuk_search_scenario.py` checks the search page's own path once.**
+   - Delete `ROUTE_LIST` (about line 98).
+   - `route_problems` checks that `PATH` is in the tree's list exactly once, as main's `test_govuk_cases_scenario.py` does.
+   - Rename `test_the_route_list_has_the_trees_pages` to `test_the_route_list_holds_the_search_path_once`.
+   - The planted case lists `PATH` twice and expects "not once", alongside today's "left out of the list" plant, whose message changes to match.
+2. **`shared-entries.test.ts`:** take main's file (66b, `8fbbeb4`: no fixed list). Do not add `searchWords.ts` to it. Keep `searchWords.ts` reachable from a server file that imports the shared package, so 66b's check covers it.
+3. **Two new checks join your frozen checks:** `OspreyFlow_Build/tests/glass_trees/test_route_pins.py` and `test_page_lists_merge.py`.
+4. Your round takes main in first.

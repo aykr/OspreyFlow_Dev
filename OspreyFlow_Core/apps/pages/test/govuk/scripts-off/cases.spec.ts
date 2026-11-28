@@ -1,6 +1,7 @@
 // The GOV.UK tree's cases page with scripts switched off (slices GR1a and GR1e; ADR-152 decision 6 and invariant I4; `CLAUDE.md` rule 13;
 // scenario CS13 and CS25): the same pages, the same stops in the same order, and each link still does what it says, because the page needs no script.
-// `../keyboard/cases.spec.ts` is the same walk with scripts on.
+// `../keyboard/cases.spec.ts` is the same walk with scripts on. New case (slice GR1b; scenario CS41): every field is shown and the form
+// posts with no script.
 import { expect, test } from "@playwright/test";
 
 import { buildScratchAssets, tabOrder, viaProxy } from "../helpServer.js";
@@ -60,5 +61,28 @@ test.describe("the cases page with scripts switched off", () => {
       await expect(page.getByText("Nothing has changed in this case yet.")).toBeVisible();
       expect(await tabOrder(page)).toEqual(CASE_TAB_ORDER);
     });
+  });
+
+  test("CO4 (CS41): with no script every field of New case is shown, and a case is made", async ({ page }) => {
+    await withCases(
+      assets,
+      async (base) => {
+        await openCases(page, base);
+        await page.getByRole("link", { name: "New case" }).focus();
+        await page.keyboard.press("Enter");
+        await expect(page.getByRole("textbox", { name: "Name of the new dataset" })).toBeVisible();
+        await expect(page.getByRole("radio", { name: "Gate camera log" })).toBeVisible();
+        await expect(page.getByRole("checkbox")).toHaveCount(3);
+        await expect(page.getByText("With no box ticked: Bespoke POLE (the core model)")).toBeVisible();
+        await page.getByRole("textbox", { name: "Case name" }).focus();
+        await page.keyboard.type("No script");
+        await page.getByRole("button", { name: "Create case" }).focus();
+        await page.keyboard.press("Enter");
+        await expect(page.getByRole("heading", { level: 1 })).toHaveText("No script");
+        await expect(page.getByRole("alert")).toContainText("Case made. Its data is loaded in the Ingest Studio");
+        await expect(page.getByRole("link", { name: "Open the Ingest Studio" })).toBeVisible();
+      },
+      "creator",
+    );
   });
 });

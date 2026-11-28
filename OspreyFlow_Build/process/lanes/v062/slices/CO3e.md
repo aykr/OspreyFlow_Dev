@@ -56,3 +56,19 @@ Binding: process/CLAUDE.md rules 12, 13 and 15; British English. You do not edit
 - `no_react_check`.
 
 The full keyboard suite runs in the merge's full gate. **Before your final report, run by hand the cheap checks the conductor will run again before the merge.**
+
+## The owner's answer to round 2's question (28 November 2026, about 06:05 UTC; RULINGS.md, item 4)
+
+**(B): CO3e lands as (A) now.** The product fault is a separate part, CO3f, which merges after CO3e. Do not fix the product here.
+
+1. **Item 1, as (A).** `admin.spec.ts:982`, "when promotions are overdue", waits for two things before ArrowUp:
+   - the field's focus;
+   - the second ageing read to land: its `operations/ageing` answer after `/v1/me` has answered, as your round 2 measured.
+   Change nothing else in the case. Prove it with your plant switch:
+   - with `OSPREY_PLANT_LATE_AGEING=1`, the case as it was is red;
+   - with both waits added, it is green 10 of 10;
+   - with the plant off, it is green 10 of 10.
+   Give the commands and the counts in your report.
+2. **The plant stays.** `keyboard/lateAgeingPlant.ts` is off by default. CO3f uses it as its proof, so name its switch and what it holds back in your report.
+3. **Item 2 is done.** It is your round 1 and 2 commits; leave it as it is.
+4. Your round 2 note about the small gap (the wait sees the answer arrive, not the redraw) goes in your report. CO3f closes it.

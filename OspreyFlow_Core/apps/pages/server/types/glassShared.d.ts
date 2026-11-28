@@ -80,3 +80,7 @@ export const POLE_LABEL: string;
 export function domainLabels(domains: readonly DomainPack[]): string;
 export function caseLabel(entry: { name: string; created_at: string }): string;
 export function utcStampOf(iso: string): string;
+// New case (slice GR1b): the untitled name the page sends in the route's place, and how a dataset is offered in a choice (its name
+// alone; a composite says how many it joins). `test/govuk/cases-new.test.ts` holds both to the package's own types.
+export const UNTITLED_CASE = "Untitled case";
+export function datasetChoiceLabel(dataset: { id: string; name: string; owning_unit: string; kind?: "source" | "composite"; members?: string[] }): string;
