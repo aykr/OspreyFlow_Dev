@@ -1,0 +1,21 @@
+--- as it is: vitest exit 0
+Tests  4 passed (4)
+--- planted: the teardown leaves the state mark on: vitest exit 1
+× takes the state off when the renderer is taken down 3ms
+× stays unmarked when a renderer taken down before its frame finishes one afterwards 1ms
+Tests  2 failed | 2 passed (4)
+FAIL  src/canvas/canvasMarks.test.ts > the canvas's marks > takes the state off when the renderer is taken down
+FAIL  src/canvas/canvasMarks.test.ts > the canvas's marks > stays unmarked when a renderer taken down before its frame finishes one afterwards
+--- planted: nothing listens for a finished frame: vitest exit 1
+× says mounted at once, and drawn only once the renderer has finished a frame 4ms
+Tests  1 failed | 3 passed (4)
+FAIL  src/canvas/canvasMarks.test.ts > the canvas's marks > says mounted at once, and drawn only once the renderer has finished a frame
+--- planted: the teardown leaves its listener on: vitest exit 1
+× stays unmarked when a renderer taken down before its frame finishes one afterwards 3ms
+Tests  1 failed | 3 passed (4)
+FAIL  src/canvas/canvasMarks.test.ts > the canvas's marks > stays unmarked when a renderer taken down before its frame finishes one afterwards
+--- planted: drawn is said without waiting for a frame: vitest exit 1
+× says mounted at once, and drawn only once the renderer has finished a frame 3ms
+Tests  1 failed | 3 passed (4)
+FAIL  src/canvas/canvasMarks.test.ts > the canvas's marks > says mounted at once, and drawn only once the renderer has finished a frame
+restored: canvasMarks.ts 111c945f

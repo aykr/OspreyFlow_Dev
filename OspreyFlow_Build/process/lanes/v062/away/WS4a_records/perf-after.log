@@ -1,0 +1,39 @@
+== run 1 of 3, after, cf1b6fbde (tree 7 changed files), start 10:54:39, load 5.72 6.72 5.87
+exit 0
+[1/3] perf/perf.spec.ts:18:1 › 50k/250k fixture reaches a first interactive frame within the CI software-render budget
+perf/perf.spec.ts:18:1 › 50k/250k fixture reaches a first interactive frame within the CI software-render budget
+perf long frames: 4 in all, 3 after readyAt 4415 ms, 5609 ms long; script 5605 ms, rendering 2321 ms
+  at 11965 ms: 363 ms (TimerHandler:setTimeout GlassCanvas.tsx)
+  at 11858 ms: 107 ms (TimerHandler:setTimeout GlassCanvas.tsx)
+perf first frame: 12344 ms in all; {"responseEnd":20,"domContentLoaded":1598,"readyAt":4415,"modules":173,"slowestModule":258}
+[2/3] perf/perf.spec.ts:77:1 › a sustained pan/zoom sweep holds a CI-appropriate minimum frame rate
+perf/perf.spec.ts:77:1 › a sustained pan/zoom sweep holds a CI-appropriate minimum frame rate
+perf sweep: 1875.3 ms per frame over 8 frames in 15003 ms
+  3 passed (1.0m)
+   end 10:55:41, load 11.77 8.13 6.40
+== run 2 of 3, after, cf1b6fbde (tree 11 changed files), start 10:55:41, load 11.77 8.13 6.40
+exit 0
+[1/3] perf/perf.spec.ts:18:1 › 50k/250k fixture reaches a first interactive frame within the CI software-render budget
+perf/perf.spec.ts:18:1 › 50k/250k fixture reaches a first interactive frame within the CI software-render budget
+perf long frames: 4 in all, 3 after readyAt 4496 ms, 5646 ms long; script 5642 ms, rendering 2148 ms
+  at 12003 ms: 358 ms (TimerHandler:setTimeout GlassCanvas.tsx)
+  at 11747 ms: 256 ms (TimerHandler:setTimeout GlassCanvas.tsx)
+perf first frame: 12380 ms in all; {"responseEnd":23,"domContentLoaded":1613,"readyAt":4496,"modules":173,"slowestModule":259}
+[2/3] perf/perf.spec.ts:77:1 › a sustained pan/zoom sweep holds a CI-appropriate minimum frame rate
+perf/perf.spec.ts:77:1 › a sustained pan/zoom sweep holds a CI-appropriate minimum frame rate
+perf sweep: 2128.4 ms per frame over 8 frames in 17027 ms
+  3 passed (1.0m)
+   end 10:56:45, load 14.26 9.39 6.94
+== run 3 of 3, after, cf1b6fbde (tree 14 changed files), start 10:56:45, load 14.26 9.39 6.94
+exit 0
+[1/3] perf/perf.spec.ts:18:1 › 50k/250k fixture reaches a first interactive frame within the CI software-render budget
+perf/perf.spec.ts:18:1 › 50k/250k fixture reaches a first interactive frame within the CI software-render budget
+perf long frames: 4 in all, 3 after readyAt 5594 ms, 6777 ms long; script 6772 ms, rendering 2688 ms
+  at 13318 ms: 418 ms (TimerHandler:setTimeout GlassCanvas.tsx)
+  at 13077 ms: 241 ms (TimerHandler:setTimeout GlassCanvas.tsx)
+perf first frame: 13758 ms in all; {"responseEnd":37,"domContentLoaded":2166,"readyAt":5594,"modules":173,"slowestModule":334}
+[2/3] perf/perf.spec.ts:77:1 › a sustained pan/zoom sweep holds a CI-appropriate minimum frame rate
+perf/perf.spec.ts:77:1 › a sustained pan/zoom sweep holds a CI-appropriate minimum frame rate
+perf sweep: 2118.6 ms per frame over 8 frames in 16949 ms
+  3 passed (1.1m)
+   end 10:57:51, load 19.48 11.67 7.88

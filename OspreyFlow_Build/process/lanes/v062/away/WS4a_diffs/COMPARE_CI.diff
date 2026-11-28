@@ -1,0 +1,12 @@
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -1290,6 +1290,9 @@
+       - run: npm run test:perf --workspace apps/workspace
+       - run: npm run test:a11y --workspace apps/workspace
+       - run: npm run test:keyboard --workspace apps/workspace
++      # ADR-152 decision 9: the canvas-look comparison (WS4a). Its references were made with SwiftShader; this step
++      # is added once a run here has shown it green (or the references are made here, the owner's choice).
++      - run: npm run test:canvas-compare --workspace apps/workspace
+       # ADR-147 Amendment 1 (P4): the map's colours at WCAG's floors in the dark, light and GOV.UK
+       # themes, measured from their call sites (`map-verify/contrast.spec.ts`). The floor checks only:
+       # the reference images are macOS's (`*-darwin.png`); make Linux ones once on a runner

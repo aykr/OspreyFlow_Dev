@@ -15,6 +15,9 @@ export default defineConfig({
   // A new folder for this run's keyboard proofs, shared by its workers, so that a worker replaced
   // after a failed case loses none of them (`apps/provedActions.ts`).
   globalSetup: "../../provedActions.ts",
+  // The canvas-look comparison runs on its own (`canvas-compare.config.ts`, `npm run test:canvas-compare`): its
+  // references belong to one WebGL renderer, and it joins CI only once shown green there (slice WS4a).
+  testIgnore: /canvas-compare\.spec\.ts$/,
   timeout: 60_000,
   webServer: {
     command: `OSPREY_GOVUK_IDENTITY=1 node scripts/sync_govuk_assets.mjs && npx vite --port ${PORT} --strictPort`,

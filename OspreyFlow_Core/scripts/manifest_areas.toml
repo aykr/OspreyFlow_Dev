@@ -120,6 +120,7 @@ paths = [
   "apps/pages/Dockerfile",
   "apps/pages/FUNCTIONS.yaml",
   "apps/pages/PARITY_EXCEPTIONS.yaml",
+  "apps/pages/VERSION_WINDOW.yaml",
   "apps/pages/README.md",
   "apps/pages/package.json",
   "apps/pages/tsconfig.json",

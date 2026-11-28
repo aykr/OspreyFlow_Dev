@@ -1,0 +1,20 @@
+            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                if sigma_class_names(line):
+                    found.append(f"{path.relative_to(WORKSPACE).as_posix()}:{number}: {line.strip()[:120]}")
+>       assert found == [], "Sigma's own class names; use the canvas's marks (src/canvas/canvasMarks.ts):\n" + "\n".join(found)
+E       AssertionError: Sigma's own class names; use the canvas's marks (src/canvas/canvasMarks.ts):
+E         perf/perf.spec.ts:110: const canvas = page.locator("canvas.sigma-nodes");
+E         perf/harness.tsx:78: const canvas = container.querySelector("canvas.sigma-nodes");
+E         perf/harness.tsx:86: if (container.querySelector("canvas.sigma-nodes")) {
+E         perf/community-links.spec.ts:15: const canvas = document.querySelector<HTMLCanvasElement>("canvas.sigma-communityLinks");
+E         keyboard/link-selection.spec.ts:142: const canvas = document.querySelector<HTMLCanvasElement>("canvas.sigma-labels");
+E         keyboard/canvas-look.spec.ts:201: "button, select, label, .canvas-toolbar, .canvas-legend, .canvas-zoom, .sigma-nodes, .sigma-labels, .sigma-hovers, .sigm
+E       assert ['perf/perf.s...overs, .sigm'] == []
+E         
+E         Left contains 6 more items, first extra item: 'perf/perf.spec.ts:110: const canvas = page.locator("canvas.sigma-nodes");'
+E         Use -v to get more diff
+
+../OspreyFlow_Build/tests/glass_trees/test_no_sigma_class_names_in_the_workspace.py:84: AssertionError
+=========================== short test summary info ============================
+FAILED ../OspreyFlow_Build/tests/glass_trees/test_no_sigma_class_names_in_the_workspace.py::test_no_file_of_the_workspace_names_a_sigma_class
+1 failed, 11 passed in 0.99s

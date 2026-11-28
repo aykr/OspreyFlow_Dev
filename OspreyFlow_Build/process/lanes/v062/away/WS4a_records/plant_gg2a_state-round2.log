@@ -1,0 +1,27 @@
+WS4a round 2, the owner's Mac. `plant_gg2a_state.py`: GG2a's lockfile (37492cc) and its `sigma` window entry planted
+at the checkout's own two files, and restored byte for byte.
+
+== 1. Round 1's tests (the file at aa6bda4)
+--- this checkout as it is (window shut): pytest exit 0
+25 passed in 2.02s
+--- planted: GG2a's lockfile at 37492cc and its `sigma` window entry: pytest exit 1
+FAILED ../OspreyFlow_Build/tests/glass_trees/test_same_drawing_versions.py::test_the_real_tree_passes
+FAILED ../OspreyFlow_Build/tests/glass_trees/test_same_drawing_versions.py::test_the_real_window_file_is_empty
+FAILED ../OspreyFlow_Build/tests/glass_trees/test_same_drawing_versions.py::test_an_entry_with_no_difference_left_fails
+3 failed, 22 passed in 1.41s
+restored: package-lock.json 3ae975ce, VERSION_WINDOW.yaml af16dbe9
+
+== 2. Round 2's tests, before the check script's fix (red: the four "listed twice" cases only, in both states)
+--- this checkout as it is (window shut): pytest exit 1
+FAILED ...::test_a_library_listed_twice_is_refused[the wrong entry first]
+FAILED ...::test_a_library_listed_twice_is_refused[the wrong entry last]
+FAILED ...::test_a_library_listed_twice_is_refused[the same entry twice]
+FAILED ...::test_a_library_listed_twice_is_refused_however_its_name_is_quoted
+4 failed, 27 passed in 2.05s
+--- planted: GG2a's lockfile at 37492cc and its `sigma` window entry: pytest exit 1
+FAILED ...::test_a_library_listed_twice_is_refused[the wrong entry first]
+FAILED ...::test_a_library_listed_twice_is_refused[the wrong entry last]
+FAILED ...::test_a_library_listed_twice_is_refused[the same entry twice]
+FAILED ...::test_a_library_listed_twice_is_refused_however_its_name_is_quoted
+4 failed, 27 passed in 1.96s
+restored: package-lock.json 3ae975ce, VERSION_WINDOW.yaml af16dbe9

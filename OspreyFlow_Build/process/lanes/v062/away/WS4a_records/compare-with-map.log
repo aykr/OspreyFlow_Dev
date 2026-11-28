@@ -1,0 +1,42 @@
+== run 1 of 3, with-map, aba8907e7 (tree 3 changed files), start 11:26:26, load 8.46 12.28 13.16
+exit 0
+canvas-compare links: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare links-zoomed-out: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare nodes: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare labels: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare hover: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare selected-node: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare selected-link: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare export: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare communities: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare map: 0 of 700000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  12 passed (44.9s)
+   end 11:27:12, load 9.28 11.95 13.00
+== run 2 of 3, with-map, aba8907e7 (tree 3 changed files), start 11:27:12, load 9.28 11.95 13.00
+exit 0
+canvas-compare links: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare links-zoomed-out: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare nodes: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare labels: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare hover: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare selected-node: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare selected-link: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare export: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare communities: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare map: 0 of 700000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  12 passed (46.8s)
+   end 11:28:00, load 10.57 11.83 12.90
+== run 3 of 3, with-map, aba8907e7 (tree 3 changed files), start 11:28:00, load 10.57 11.83 12.90
+exit 0
+canvas-compare links: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare links-zoomed-out: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare nodes: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare labels: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare hover: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare selected-node: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare selected-link: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare export: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare communities: 0 of 540000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+canvas-compare map: 0 of 700000 pixels differ by more than 16 (share 0.000000); 0 differ at all
+  12 passed (45.1s)
+   end 11:28:47, load 10.11 11.52 12.75

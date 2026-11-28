@@ -1,0 +1,37 @@
+--- as it is: vitest exit 0
+Tests  21 passed (21)
+--- planted: the hash comparison is turned off (the verifier's): vitest exit 1
+× is refused when a picture is replaced by another 14ms
+× is refused when one byte of a picture changes 8ms
+× is refused when the hash recorded for a picture is changed 8ms
+× is refused when the record has no entry for a picture that is there 7ms
+Tests  4 failed | 17 passed (21)
+FAIL  keyboard/canvasCompare.test.ts > a reference the command did not write > is refused when a picture is replaced by another
+FAIL  keyboard/canvasCompare.test.ts > a reference the command did not write > is refused when one byte of a picture changes
+FAIL  keyboard/canvasCompare.test.ts > a reference the command did not write > is refused when the hash recorded for a picture is changed
+FAIL  keyboard/canvasCompare.test.ts > a reference the command did not write > is refused when the record has no entry for a picture that is there
+--- planted: a picture the record has no entry for is let through: vitest exit 1
+× is refused when the record has no entry for a picture that is there 10ms
+Tests  1 failed | 20 passed (21)
+FAIL  keyboard/canvasCompare.test.ts > a reference the command did not write > is refused when the record has no entry for a picture that is there
+--- planted: a missing picture is not reported: vitest exit 1
+× are refused when the scene has none, or the record names a scene that is gone 4ms
+× is refused when the picture is gone 6ms
+Tests  2 failed | 19 passed (21)
+FAIL  keyboard/canvasCompare.test.ts > the references > are refused when the scene has none, or the record names a scene that is gone
+FAIL  keyboard/canvasCompare.test.ts > a reference the command did not write > is refused when the picture is gone
+--- planted: a record with no reason is taken: vitest exit 1
+× is refused when the record gives no reason 10ms
+Tests  1 failed | 20 passed (21)
+FAIL  keyboard/canvasCompare.test.ts > a reference the command did not write > is refused when the record gives no reason
+--- planted: a missing record is no problem: vitest exit 1
+× is refused when there is no record at all 11ms
+Tests  1 failed | 20 passed (21)
+FAIL  keyboard/canvasCompare.test.ts > a reference the command did not write > is refused when there is no record at all
+--- planted: a recorded scene that is gone is let through: vitest exit 1
+× are refused when the scene has none, or the record names a scene that is gone 4ms
+Tests  1 failed | 20 passed (21)
+FAIL  keyboard/canvasCompare.test.ts > the references > are refused when the scene has none, or the record names a scene that is gone
+restored: canvasCompare.ts 405bbefc
+--- restored: vitest exit 0
+Tests  21 passed (21)

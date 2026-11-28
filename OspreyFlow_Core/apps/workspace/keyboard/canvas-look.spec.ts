@@ -195,10 +195,15 @@ async function linkContrastBetween(page: Page, a: string, b: string): Promise<nu
   );
   if (!ends[0] || !ends[1]) throw new Error("the link's ends are not drawn");
   // The link alone: nodes, their labels and hover layers hidden too, since zoomed out they sit
-  // within a few pixels of the midpoint and would be read as the link.
+  // within a few pixels of the midpoint and would be read as the link. The layers are found by the
+  // canvas's own marks (`src/canvas/canvasMarks.ts`, WS4a), and each must be there: a style naming a
+  // layer that does not exist hides nothing and fails nothing, and the nodes would be read as the link.
+  for (const layer of ["nodes", "labels"]) {
+    await expect(page.locator(`[data-canvas-layer="${layer}"]`), `the canvas's ${layer} layer`).toHaveCount(1);
+  }
   await page.addStyleTag({
     content:
-      "button, select, label, .canvas-toolbar, .canvas-legend, .canvas-zoom, .sigma-nodes, .sigma-labels, .sigma-hovers, .sigma-hoverNodes, .sigma-edgeLabels { visibility: hidden !important; } .network-canvas { background-image: none !important; }",
+      "button, select, label, .canvas-toolbar, .canvas-legend, .canvas-zoom, [data-canvas-layer='nodes'], [data-canvas-layer='labels'], [data-canvas-layer='hovers'], [data-canvas-layer='hover-nodes'], [data-canvas-layer='link-labels'] { visibility: hidden !important; } .network-canvas { background-image: none !important; }",
   });
   const pixels = readPng(await page.screenshot());
   const scale = pixels.width / page.viewportSize()!.width;
