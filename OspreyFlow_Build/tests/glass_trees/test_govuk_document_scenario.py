@@ -13,7 +13,7 @@ This file holds the document, the page test, the `documents` row, the route list
   that it works with scripts off, or what it leaves out             -> `test_the_scenario_says_what_it_shows_who_sees_it_and_scripts_off`
 * the row without its scenario ids or its journeys, given a route
   while the function is incomplete                                   -> `test_the_documents_row_carries_the_scenario_and_no_route`
-* a route list that is not the paths the tree has pages for          -> `test_the_route_list_has_the_eight_pages`
+* the reader's path not in the route list, or listed twice          -> `test_the_route_list_holds_the_reader_s_path_once`
 * the page module not the row's, at the path, for the GOV.UK tree
   alone, answering GET alone, or not in the one table of pages       -> `test_the_page_module_is_the_documents_rows_at_its_path`
 * a field of the route's models neither drawn by the page nor named
@@ -84,8 +84,6 @@ JOURNEYS = ["A6", "B6"]
 ROW = "documents"
 ROW_NAME = "Documents: reader, a node's Messages, adding files"
 ROW_WHERE = "apps/workspace/src/reader/, apps/workspace/src/dossier/, apps/workspace/src/content/"
-#: Every page of the tree, in the list's own order: main's seven first, this one the eighth (round 1 took main in).
-ROUTE_LIST = ["/help", "/admin/people", "/reports", "/packs/trends", "/cases", "/cases/boards", "/alert-queue", PATH]
 
 #: Each model the page reads, and the file it is defined in.
 MODELS: dict[str, Path] = {
@@ -325,9 +323,15 @@ def function_problems(data: dict[str, Any]) -> list[str]:
 
 
 def route_problems(data: dict[str, Any]) -> list[str]:
-    if data["routes"] != ROUTE_LIST:
-        return [f"the route list is {data['routes']!r}: the tree has eight pages, {ROUTE_LIST}"]
-    return []
+    # The page's own path is in the tree's route list, once. Whether the list and the pages that name the GOV.UK tree agree is
+    # checked in one place, `apps/pages/test/govuk/help.test.ts` (HP9), from the files themselves, so a page added to the tree
+    # edits no other page's test (`test_route_pins.py`).
+    found: list[str] = []
+    if data["routes"].count(PATH) != 1:
+        found.append(f"the route list {data['routes']!r} holds {PATH} {data['routes'].count(PATH)} times, not once")
+    if len(set(data["routes"])) != len(data["routes"]):
+        found.append("the route list names a path twice")
+    return found
 
 
 def module_problems(data: dict[str, Any]) -> list[str]:
@@ -447,7 +451,7 @@ def test_the_documents_row_carries_the_scenario_and_no_route() -> None:
     assert function_problems(inputs()) == []
 
 
-def test_the_route_list_has_the_eight_pages() -> None:
+def test_the_route_list_holds_the_reader_s_path_once() -> None:
     assert route_problems(inputs()) == []
 
 
@@ -560,8 +564,8 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
     ("the row without its journeys", _row(ROW, scenario=", ".join(EXPECTED_IDS)), function_problems, "scenario"),
     ("the row routed while incomplete", _row(ROW, route=PATH), function_problems, "stays empty"),
     ("the row's where moved", _row(ROW, where="apps/workspace/src/reader/"), function_problems, "has moved"),
-    ("a route in the list the code has no page for", lambda d: d["routes"].append("/welcome"), route_problems, "eight pages"),
-    ("the reader's path left out of the list", lambda d: d["routes"].remove(PATH), route_problems, "eight pages"),
+    ("the reader's path listed twice", lambda d: d["routes"].append(PATH), route_problems, "not once"),
+    ("the reader's path left out of the list", lambda d: d["routes"].remove(PATH), route_problems, "not once"),
     ("the page at another path", _replace("page_module", f'path: "{PATH}"', 'path: "/document"'), module_problems, "its path"),
     ("the page for both trees", _replace("page_module", 'trees: ["govuk"]', 'trees: ["default", "govuk"]'), module_problems, "GOV.UK tree alone"),
     ("the page answering POST", _replace("page_module", 'methods: ["GET"]', 'methods: ["GET", "POST"]'), module_problems, "GET alone"),
