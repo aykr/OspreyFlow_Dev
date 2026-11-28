@@ -19,6 +19,7 @@ import { adminPeople } from "./adminPeople.js";
 import { alertMonitoring } from "./alertMonitoring.js";
 import { boardsPage } from "./boards.js";
 import { casesPage } from "./cases.js";
+import { documentPage } from "./document.js";
 import { studioDatasetMap } from "./datasetMap.js";
 import { alertQueue } from "./alertQueue.js";
 import { help } from "./help.js";
@@ -38,4 +39,5 @@ export const PAGES: readonly PageModule[] = [
   casesPage,
   boardsPage,
   alertQueue,
+  documentPage,
 ];
