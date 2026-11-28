@@ -36,7 +36,7 @@ Binding: process/CLAUDE.md rules 14 and 15; British English.
 
 ## Checks
 
-- The three tests' pure halves: ports pinned to 9, so no store is reached and a live case skips as it does today.
+- (The three live tests themselves run in the merge gate's live step, not here: with ports pinned to 9 they cannot reach a store. Run each by hand under a stack lease, `VALKEY_PORT` set to that stack's port, and give the result.)
 - `test_port_guard.py`.
 - Ruff.
 

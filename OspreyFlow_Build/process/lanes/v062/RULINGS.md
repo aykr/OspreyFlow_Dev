@@ -3,6 +3,16 @@
 Rulings given in conversation, written here so the conductor and every seat read them (rule 11). Newest first. No
 client's name or abbreviation is written in this file, nor in any message about it.
 
+## 28 November 2026, about 12:10 UTC: the scope of 0.7.0 (the owner, in chat)
+
+1. **For 0.7.0, every screen is a GOV.UK page from day one,** not only the analysts' screens. **The release needs the GOV.UK tree complete:** every `FUNCTIONS.yaml` row, less the agreed parity exceptions.
+2. **AD4 (the identity switch) is in 0.7.0,** no longer after RL2.
+3. **Nothing in today's order changes:** everything in flight is inside the wider scope. A read-only server session is listing the gap, and the re-plan comes after it. **The new areas are not briefed yet.**
+4. Also, about 12:20: **line-fix's `PLAN_LIVE_PAY.md` is approved.**
+   - The pay run of the owed live tests is a separate run on the server, and the merge gate is unchanged.
+   - CO3h (three live tests read `VALKEY_PORT`, standing (a)) merges early.
+   - Once line-fix's change is applied, the conductor runs the pay command on the owner's word. A pay run counts as one of the server's 3 jobs, so it goes in an evening, with a stack beside it only if both fit.
+
 ## 28 November 2026, about 12:10 UTC: the server comes back for parallel builds (the owner, in chat; replaces "no new away rounds")
 
 1. **Away build sessions on the server, in three streams.** **No Mac builder starts for any of these parts.** Each comes into the line as before: round 1 merges `away/<ID>`, then the verifier, the server and the full gate. The owner's exception to the 23 November rule covers these branches, and an away session may build on its own stream's unmerged work.
