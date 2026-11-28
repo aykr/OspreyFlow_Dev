@@ -1,11 +1,14 @@
 // The canvas-look comparison's own arithmetic, each refusal shown red without a browser (slice WS4a, cases 5 and 6).
 // Which test fails if the comparison is loosened (rule 12): a tolerance above the ceiling fails the first block; a
-// picture a pixel unlike its reference counted as alike fails the second; a reference changed by hand, or missing,
-// fails the third.
+// picture a pixel unlike its reference counted as alike fails the second; a scene with no reference fails the third; a
+// reference changed by hand, or a record that cannot be trusted, let through fails the fourth.
 import { deflateSync } from "node:zlib";
-import { readFileSync } from "node:fs";
+import { copyFileSync, cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { CEILING, compare, readReferences, sha256, toleranceRefusal } from "./canvasCompare";
 
@@ -105,5 +108,73 @@ describe("the references", () => {
   });
   it("hash the bytes of each picture", () => {
     expect(sha256(Buffer.from("x"))).toBe("2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881");
+  });
+});
+
+// Each fault is planted in a scratch copy of the committed folder, never in the references themselves. Every case asks
+// for the whole list of problems, so no other refusal can stand in for the one it plants.
+describe("a reference the command did not write", () => {
+  const committed = fileURLToPath(new URL("./canvas-compare/", import.meta.url));
+  const scenes = Object.keys(JSON.parse(readFileSync(join(committed, "REFERENCES.json"), "utf8")).scenes);
+  const [first, second] = scenes as [string, string];
+  const changed = (scene: string) => `the reference for ${scene} is not the one REFERENCES.json records: it was changed without the command`;
+  const made: string[] = [];
+
+  afterEach(() => {
+    for (const folder of made.splice(0)) rmSync(folder, { recursive: true, force: true });
+  });
+
+  /** A copy of the committed folder that `plant` then changes by hand. */
+  function copy(plant: (folder: string) => void = () => {}): URL {
+    const folder = mkdtempSync(join(tmpdir(), "canvas-compare-"));
+    made.push(folder);
+    cpSync(committed, folder, { recursive: true });
+    plant(folder);
+    return pathToFileURL(`${folder}/`);
+  }
+
+  function editRecord(folder: string, edit: (record: { reason: string; scenes: Record<string, string> }) => void): void {
+    const path = join(folder, "REFERENCES.json");
+    const record = JSON.parse(readFileSync(path, "utf8"));
+    edit(record);
+    writeFileSync(path, JSON.stringify(record));
+  }
+
+  it("is not found in a copy nobody has touched (what each case below starts from)", () => {
+    expect(readReferences(scenes, copy()).problems).toEqual([]);
+  });
+  it("is refused when a picture is replaced by another", () => {
+    const folder = copy((at) => copyFileSync(join(at, `${second}.png`), join(at, `${first}.png`)));
+    expect(readReferences(scenes, folder).problems).toEqual([changed(first)]);
+  });
+  it("is refused when one byte of a picture changes", () => {
+    const folder = copy((at) => {
+      const bytes = readFileSync(join(at, `${second}.png`));
+      bytes[bytes.length - 1]! ^= 1;
+      writeFileSync(join(at, `${second}.png`), bytes);
+    });
+    expect(readReferences(scenes, folder).problems).toEqual([changed(second)]);
+  });
+  it("is refused when the hash recorded for a picture is changed", () => {
+    const folder = copy((at) => editRecord(at, (record) => { record.scenes[first] = sha256(Buffer.from("x")); }));
+    expect(readReferences(scenes, folder).problems).toEqual([changed(first)]);
+  });
+  it("is refused when the record has no entry for a picture that is there", () => {
+    const folder = copy((at) => editRecord(at, (record) => { delete record.scenes[first]; }));
+    expect(readReferences(scenes, folder).problems).toEqual([changed(first)]);
+  });
+  it("is refused when the picture is gone", () => {
+    const folder = copy((at) => rmSync(join(at, `${first}.png`)));
+    expect(readReferences(scenes, folder).problems).toEqual([`no reference for the scene ${first}`]);
+  });
+  it("is refused when the record gives no reason", () => {
+    const folder = copy((at) => editRecord(at, (record) => { record.reason = "  "; }));
+    expect(readReferences(scenes, folder).problems).toEqual(["REFERENCES.json gives no reason the references were made"]);
+  });
+  it("is refused when there is no record at all", () => {
+    const folder = copy((at) => rmSync(join(at, "REFERENCES.json")));
+    const answer = readReferences(scenes, folder);
+    expect(answer.record).toBeNull();
+    expect(answer.problems).toEqual([expect.stringMatching(/^no canvas-compare\/REFERENCES\.json:/)]);
   });
 });
