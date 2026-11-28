@@ -476,6 +476,16 @@ jobs:
 
   conformance:
     runs-on: ubuntu-latest
+    # CO3d (the owner, 27 November 2026 about 11:15, item 3; 28 November about 07:20, item 2): the job runs in
+    # two parts, so a lost runner (8de2b2a and 023d2f9 left no log at all) costs half the suite, not all of it.
+    # Both parts stand up the same stores; `stores` runs the port suites and ingest, `services` the Conduit's
+    # store-backed tests and the Glass's integration test. One job block, so test_file_coverage_check.py and
+    # test_ci_postgres_connections.py read both lists as before. The checks appear as conformance (stores) and
+    # conformance (services): a branch rule naming plain `conformance` must name both.
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [stores, services]
     services:
       arcadedb:
         image: arcadedata/arcadedb:26.10.1
@@ -677,7 +687,9 @@ jobs:
       # run nowhere in CI since the day each was written, the identical gap class this gate exists
       # to catch, now caught by the gate itself rather than found by accident a fifth and sixth
       # time.
-      - env:
+      - name: Conformance, the stores part (port suites, ingest, the store-run tests)
+        if: matrix.part == 'stores'
+        env:
           # ADR-143 Amendment 2 decision 4: the restore test that names a layer backs up and restores
           # inside this job's ArcadeDB service (`tests/harness/test_restore_drawn_layer.py`). In the
           # step's env: GitHub refuses the `job` context in a job's own env (an invalid workflow file).
@@ -697,6 +709,15 @@ jobs:
           ../OspreyFlow_Build/tests/services/api/test_recipe_pins_lifespan.py
           ../OspreyFlow_Build/tests/services/api/test_schedule_notice.py
           ../OspreyFlow_Build/tests/services/api/test_schedule_notices_needs_you.py
+      - name: Conformance, the services part (the Conduit's store-backed tests)
+        if: matrix.part == 'services'
+        env:
+          # ADR-143 Amendment 2 decision 4: the restore test that names a layer backs up and restores
+          # inside this job's ArcadeDB service (`tests/harness/test_restore_drawn_layer.py`). In the
+          # step's env: GitHub refuses the `job` context in a job's own env (an invalid workflow file).
+          OSPREY_TEST_ARCADEDB_CONTAINER: ${{ job.services.arcadedb.id }}
+        run: >-
+          uv run pytest -c ../OspreyFlow_Build/pytest.ini
           ../OspreyFlow_Build/tests/services/api/test_valkey_store.py
           ../OspreyFlow_Build/tests/services/api/test_ws_ticket.py
           ../OspreyFlow_Build/tests/services/api/test_statelessness.py
@@ -849,13 +870,15 @@ jobs:
           ../OspreyFlow_Build/tests/test_stamp_datasets.py
           ../OspreyFlow_Build/tests/test_stamp_records.py
           ../OspreyFlow_Build/tests/test_seed_ledger_screening_rule.py
-      - run: npm ci
+      - if: matrix.part == 'services'
+        run: npm ci
       # `deltaClient.integration.test.ts` (Phase 4) spawns the real
       # `services.api.app` (`apps/workspace/test/glass_test_server.py`)
       # against this same ArcadeDB/Valkey/Postgres — the one live-infra
       # dependency the Glass's own test suite has, so it runs in this job
       # rather than the plain `test` job below.
-      - run: npm run test:integration --workspace apps/workspace
+      - if: matrix.part == 'services'
+        run: npm run test:integration --workspace apps/workspace
 
   # `ModelPort`'s conformance suite (Phase 6 Stage 1) — needs a live LiteLLM
   # proxy in front of Ollama, pinned per spec/06_DECISIONS.md ADR-020. A
