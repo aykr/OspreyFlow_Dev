@@ -4,7 +4,10 @@ What a mistake here would do, and the case that catches it:
 
 - a grade outside its scheme stored as if it were one (3x5x2 has no source D, 5x5x5 no handling P):
   `test_a_grade_outside_its_scheme_is_refused`;
-- a drawn item with no source at all, which decision 4 forbids: `test_a_drawn_item_needs_a_source`;
+- a drawn item or link made with no source note, a document never in its place (decision 4 as
+  Amendment 8 amends it): `test_a_drawn_item_needs_a_source_note`; an assertion read back with
+  neither refused, which would refuse a reader sent an item without its document (Amendment 8
+  item 8): `test_an_assertion_is_read_with_neither_a_note_nor_a_document`;
 - every element that is not drawn stored differently from before (a `drawn: null` key added to every
   provenance, so every stored fingerprint and golden file moves):
   `test_an_undrawn_provenance_is_stored_exactly_as_before`, red with the serializer removed
@@ -19,7 +22,7 @@ from typing import Any
 
 import pytest
 from pydantic import ValidationError, model_serializer
-from schemas.boards import BoardInput, DrawnItemInput
+from schemas.boards import BoardInput, DrawnItemInput, DrawnLinkInput
 from schemas.domain import (
     DrawnAssertion,
     Grading,
@@ -70,16 +73,36 @@ def test_a_grade_in_each_scheme_is_kept_with_its_scheme() -> None:
     assert Grading(source="E", intelligence="5", handling="5").scheme == "5x5x5"
 
 
-def test_a_drawn_item_needs_a_source() -> None:
-    with pytest.raises(ValidationError):
-        _drawn(source_note="  ", source_document=None)
-    with pytest.raises(ValidationError):
-        DrawnItemInput(
-            type="Person",
-            label="Tall",
-            marking="OFFICIAL",
-            grading=Grading(source="B", intelligence="2", handling="1"),
-        )
+_ASSERTED: dict[str, Any] = {
+    "label": "Tall",
+    "marking": "OFFICIAL",
+    "grading": Grading(source="B", intelligence="2", handling="1"),
+}
+
+
+@pytest.mark.parametrize("note", [None, "", "  "], ids=["none", "empty", "blank"])
+@pytest.mark.parametrize("document", [None, "doc-1"], ids=["alone", "with-a-document"])
+def test_a_drawn_item_needs_a_source_note(note: str | None, document: str | None) -> None:
+    """Row 9 (ADR-143 Amendment 8 item 7): a new item, and a new link, with a document and no note
+    is refused by the body's own validation, as one with neither is."""
+    given = {**_ASSERTED, "source_note": note, "source_document": document}
+    with pytest.raises(ValidationError, match="give a source note"):
+        DrawnItemInput(type="Person", **given)
+    with pytest.raises(ValidationError, match="give a source note"):
+        DrawnLinkInput(type="ASSOCIATE_OF", source="a", target="b", **given)
+
+
+def test_a_document_is_added_to_a_note() -> None:
+    both = DrawnItemInput(
+        type="Person", **_ASSERTED, source_note="Gate log", source_document="doc-1"
+    )
+    assert (both.source_note, both.source_document) == ("Gate log", "doc-1")
+
+
+def test_an_assertion_is_read_with_neither_a_note_nor_a_document() -> None:
+    """What a reader who may not read an older item's document is sent."""
+    read = _drawn(source_note=None, source_document=None)
+    assert DrawnAssertion.model_validate(read.model_dump()) == read
     assert _drawn(source_note=None, source_document="doc-1").source_document == "doc-1"
 
 

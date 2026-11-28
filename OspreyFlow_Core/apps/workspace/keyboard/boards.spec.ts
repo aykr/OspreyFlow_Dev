@@ -1,6 +1,6 @@
 // Drawing boards by keyboard alone (ADR-143 decision 5: "every board action has its keyboard case";
 // rule 13): open, make (blank, from a view and from the selection) and share a board; declare an item,
-// with a document of the case as its source and an icon of its own; inspect it, move it by the arrow
+// with a document of the case added to its source note (Amendment 8) and an icon of its own; inspect it, move it by the arrow
 // keys, edit it and withdraw it after asking once (from the inspector and from its menu, Shift+F10);
 // open the link form from the selected item and from an item's menu; add a picture, or choose one on
 // the board; decide a suggested match both ways; start a drawing with no case; go back to the boards;
@@ -137,12 +137,13 @@ async function choosePerson(page: Page): Promise<void> {
   await expect(person).toBeChecked();
 }
 
-test("an item is declared by keyboard with a document of the case as its source and an icon of its own", async ({ page }) => {
+test("an item is declared by keyboard with a document of the case beside its source note and an icon of its own", async ({ page }) => {
   await open(page, "?board=b-wing");
   await choosePerson(page);
   await press(page, "Declare a Person");
   await page.keyboard.type("Visitor in the photo");
-  // No note: the document on the board is the source (decision 4: a note, a document, or both).
+  // The document on the board is added to the note, never in its place (ADR-143 Amendment 8 item 7).
+  await typeInto(page, "Source note", "The photo of 3 Nov");
   await page.getByLabel("A document of the case (optional)").selectOption("doc-photo");
   await page.getByLabel(/^Icon/).selectOption({ index: 1 });
   const icon = await page.getByLabel(/^Icon/).inputValue();
@@ -150,19 +151,39 @@ test("an item is declared by keyboard with a document of the case as its source 
   await press(page, "Add to board");
   await expect(item(page, /^Person Visitor in the photo \(drawn\)/)).toBeFocused();
   const declared = (await sent(page)).find((s) => s.method === "POST" && s.path.endsWith("/items"));
-  expect(declared?.body).toMatchObject({ label: "Visitor in the photo", source_note: null, source_document: "doc-photo", icon });
+  expect(declared?.body).toMatchObject({ label: "Visitor in the photo", source_note: "The photo of 3 Nov", source_document: "doc-photo", icon });
   registerCovered("BOARD_ACTIONS", "declare-an-item-with-a-source-document-by-keyboard");
   registerCovered("BOARD_ACTIONS", "choose-an-items-icon-by-keyboard");
 });
 
-test("an item with neither a source note nor a document is refused before it is sent", async ({ page }) => {
+test("an item with no source note is refused before it is sent, with a document chosen or not", async ({ page }) => {
   await open(page, "?board=b-wing");
   await choosePerson(page);
   await press(page, "Declare a Person");
   await page.keyboard.type("No source");
   await press(page, "Add to board");
-  await expect(page.getByRole("alert")).toContainText("Give a source note or choose a document of the case");
+  await expect(page.getByRole("alert")).toContainText("Give a source note: where this comes from.");
+  await page.getByLabel("A document of the case (optional)").selectOption("doc-photo");
+  await press(page, "Add to board");
+  await expect(page.getByRole("alert")).toContainText("Give a source note: where this comes from.");
   expect((await sent(page)).some((s) => s.method === "POST" && s.path.endsWith("/items"))).toBe(false);
+});
+
+test("an item drawn before with no note says so, and gains one at its next edit, by keyboard", async ({ page }) => {
+  await open(page, "?board=b-wing&before=1");
+  await item(page, /^Person Unknown male “Tall” \(drawn\)/).focus();
+  await page.keyboard.press("Enter");
+  const inspector = page.getByRole("region", { name: "Unknown male “Tall”" });
+  await expect(inspector).toContainText("No source note was given");
+  await press(page, "Edit Unknown male “Tall”");
+  await press(page, "Save the change");
+  await expect(page.getByRole("alert")).toContainText("Give a source note: where this comes from.");
+  expect((await sent(page)).some((s) => s.method === "PATCH")).toBe(false);
+  await typeInto(page, "Source note", "Wing officer report, 4 Nov");
+  await press(page, "Save the change");
+  const edit = (await sent(page)).find((s) => s.method === "PATCH");
+  expect(edit?.body).toMatchObject({ source_note: "Wing officer report, 4 Nov", source_document: "doc-photo" });
+  await expect(item(page, /^Person Unknown male “Tall” \(drawn\)/)).toBeFocused();
 });
 
 test("a refusal is said in the Conduit's own words, naming the ceiling", async ({ page }) => {

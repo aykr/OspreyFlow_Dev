@@ -24,6 +24,7 @@ from valkey.asyncio import Valkey
 from conduit_common.valkey_compat import reply as _reply
 
 from .working_set.models import (
+    DeltaAdd,
     DeltaRemoveSent,
     DeltaReplaceEdgeSent,
     DeltaViewOverCap,
@@ -39,7 +40,11 @@ async def publish_delta(client: Valkey, investigation_id: str, delta: WorkingSet
     """Publishes the stored form of a delta, record included (ADR-124 decision 4): every socket's
     own projection decides what its reader is sent of it. The stored and sent forms are separate
     types, so the checker refuses a sent one; the check below is for a caller it does not see,
-    since nothing can be projected from a sent form."""
+    since nothing can be projected from a sent form. An add a writer was answered with is
+    published as the working set stored it, never as that writer's view (`DeltaAdd.to_publish`;
+    ADR-143 Amendment 8 item 5): decided here, for every route that publishes one."""
     if isinstance(delta, DeltaRemoveSent | DeltaReplaceEdgeSent | DeltaViewOverCap):
         raise TypeError(f"a sent {type(delta).__name__} has no record to project readers from")
+    if isinstance(delta, DeltaAdd):
+        delta = delta.to_publish()
     await _reply(client.publish(notify_channel(investigation_id), delta.model_dump_json()))

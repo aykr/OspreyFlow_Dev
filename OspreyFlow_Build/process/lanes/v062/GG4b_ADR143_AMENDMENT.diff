@@ -1,0 +1,123 @@
+diff --git a/OspreyFlow_Build/spec/06_DECISIONS.md b/OspreyFlow_Build/spec/06_DECISIONS.md
+--- a/OspreyFlow_Build/spec/06_DECISIONS.md
++++ b/OspreyFlow_Build/spec/06_DECISIONS.md
+@@ -41135,7 +41135,8 @@
+ 
+ 11. **Exceptions to "the Conduit and the Vault do not change"** (F1). Each is built with its access-control
+     test first (rule 4), shown red before it is relied on (rule 15). X1 and X2 come from the front end; X3 to
+-    X7 from the Ingest Studio's own specification (16 and 18 November); X8 from the owner's answer 2. They are
++    X7 from the Ingest Studio's own specification (16 and 18 November); X8 from the owner's answer 2; X9, added
++    by ADR-143 Amendment 8, from his rulings of 26 November 2026 on slice GG4b. They are
+     listed here so that one place holds every change below the Glass that this work brings. The earlier
+     draft's dashboards-figures and board exceptions are withdrawn: the owner's answers 12 and 14 add no Conduit
+     route, and their tests are now I15 and I21.
+@@ -41150,6 +41151,7 @@
+     | X6 | **The Model step's routes** (slice B): a list of the model's versions; a reference list created without a Make live (S20). | Conduit | `test_versions_are_listed_only_to_a_reader_of_the_dataset`; `test_a_reference_list_is_created_only_by_a_holder_of_edit_target_model`. |
+     | X7 | **A type per dataset** (S10, S11, slice C): the ontology composed per dataset wherever it is read, a type record with its class, identifiers and matching rule; the adapter's refusal of an unknown type (`adapter.py:353`) reads the composed ontology. | Conduit and Vault | `test_a_type_added_to_one_dataset_is_not_seen_from_another`; the leak test over a world with a dataset-only type; `test_search_never_finds_a_node_of_another_datasets_type`. |
+     | X8 | **Admin › Themes** (the owner's answer 2), when that menu is built, not before: an appearance file in the Conduit's own volume, written through Admin behind `administer_system`; `GET /v1/appearance`, read before sign-in, carrying the presentational settings only; the logo served from the deployment's own origin. `appearance.brand` is not among them (decision 14). | Conduit | `test_only_a_holder_of_administer_system_changes_the_appearance` (red with the route's `require_right` removed); `test_the_public_appearance_read_carries_only_the_presentational_settings` (the response's keys against a fixed list; red with the whole file returned); `test_the_brand_cannot_be_changed_through_the_themes_route`; `test_a_logo_that_is_not_png_or_svg_or_is_over_the_limit_is_refused_in_words`; `test_the_logo_is_served_with_nosniff_and_a_policy_of_its_own`; `test_every_appearance_change_is_audited_with_who_made_it`. |
++    | X9 | **A drawn item's source document** (ADR-143, Amendment 8; slice GG4b, a security part): on every read path that sends a drawn node or link, a cited document is re-read with the reader's own principal, in one batched read for the answer, and its id is sent only if that read finds it; a drawn item needs a source note. A defect the GOV.UK board page found (GG4a): the id reached every member of the case who could see the item. No new route and no new stored field. | Conduit, the ontology package and Vault (the graph adapter's serialisation) | `test_a_drawn_items_source_document_is_not_sent_to_a_reader_who_may_not_read_it`; `test_the_working_set_never_sends_a_drawn_items_source_document_its_reader_may_not_read`; `test_search_never_returns_a_drawn_items_source_document_its_reader_may_not_read`; the graph adapter's conformance case for a drawn node and a drawn link, written before the change; the leak test over the same three readers (each red first, ADR-143 Amendment 8). |
+ 
+     No other change below the Glass is made under this record. Anything else found needed comes back to the
+     owner as an amendment.
+@@ -42120,3 +42122,90 @@
+ allowlist); the fonts test applied to the theme folder's list (a face not in either list); the default build's output holds no GDS Transport
+ file and no GOV.UK token or font once the move has landed, and holds them when the identity is on; the re-recorded baseline differs from the old only
+ in GOV.UK files; and a deployment with the GOV.UK brand and the switch off refuses to start.
++
++### ADR-143, Amendment 8 (26 November 2026) — a drawn item's source document is told only to a reader who may read it when it is sent, and a drawn item needs a source note — Proposed for the owner's approval
++
++Status: **Proposed**, for the owner's approval by this diff (slice GG4b, a security part, never accepted narrower). It rests on the owner's
++rulings of 26 November 2026 (about 10:35 and 13:40 UTC): on the slice's draft every proposal (a), except how "may read" is decided and how
++a later re-marking is caught, which are (b); the board's ceiling is its own slice (GG4j). It amends decision 4. Points the rulings did not
++decide are marked **[for approval]** and gathered in item 11. ADR-152 decision 11 gains row X9 for the changes below the Glass.
++
++**The defect.** A drawn element's provenance names a cited document twice: `provenance.drawn.source_document`, and the `document_id` of
++the source the board writes. Every read path sends an element through `ontology.handling.withhold_sources`, which keeps the sources of an
++element whose datasets the reader's case reads, and a drawn item lives in the case's own layer. So the id reaches every member of the case
++who may see the item, whether or not they may read the document. (Where the sources are withheld, `source_document` is still sent.) The
++document is checked once, at drawing, with the author's principal. Nothing, in the code or this record, re-reads a drawn item when a
++document's marking later changes, so nothing recorded at drawing could be relied on afterwards.
++
++1. **Sent without the document.** A reader who may not read a cited document is sent the drawn node or link without it:
++   `drawn.source_document` is sent empty, and the source that named it is sent as `drawn:<item_id>`, the source of an item drawn from a
++   note alone. **Every document the board cited is covered, not only the one cited now:** an edit changes the assertion and leaves the
++   stored sources as they were, and a second write keeps every stored source (`merge_provenance`), so a source the board wrote may name a
++   document cited before an edit. Each such source is judged by its own document. Those withheld become **one** `drawn:<item_id>` source,
++   never repeated, so that the sources sent do not say how many documents were withheld, or that any was. The author keeps a document only
++   while the author may still read it.
++2. **"May read" is asked when the item is sent, of the person it is sent to.** The question is the one drawing asks, put by the graph
++   adapter's own access step: the id names an element that the reader's principal reads (its handling and the case's datasets) and that is a
++   `Document`. The principal is the reader's: never the author's, and never that of whoever put the item on a canvas. **Nothing about the
++   document is recorded on the drawn assertion, no answer is kept for a later one, and there is no reconciliation.** A document re-marked
++   after drawing, by any path, is therefore caught by the next send. What a client was already sent is not recalled, as for any element
++   re-marked while it is on a screen.
++3. **One batched read for an answer.** For a frame, a delta, a page of hits or any other answer, the documents its drawn elements cite are
++   read together, never one read for each element; an answer that cites none makes no read. Where one answer is put together from several
++   reads of the graph, each such read makes at most one **[for approval]**, so the number of reads never grows with the number of drawn
++   items. A cited id costs the same whether the document is read, hidden from the reader or gone. **A read that fails keeps nothing:** no
++   cited document is sent that the read did not find.
++4. **One place.** The rule is in `withhold_sources`, beside the board id's rule. It stays a pure function: the batch's result, the cited
++   documents this reader may read, is passed to it, and **given none it withholds every one**, so a caller that makes no read fails closed.
++   Through it go the graph adapter's serialisation (and so the board route, every node and link read, and search hits, which are read from
++   the graph) and the working set's projection (the snapshot, a delta, a replacement and a writer's own answer): no body the working set
++   stores is sent to a person except through it. The search index's builder has no reader: it passes none, and it indexes no provenance.
++5. **What is kept is kept whole.** What the working set holds, and what any write writes back, keeps the cited documents as stored; the
++   rule is applied at each send. A read that fills the working set, or whose result is written back (ADR-130 Amendment 2, "a read that is
++   written back"), is made with the cited documents left in. Otherwise one person's view would be stored as everyone's, and an author who
++   may no longer read a document would erase it by changing a label. Such a read's result goes to no one without the rule.
++6. **Why this meets rule 3.** The rule withholds fields of an element the reader may already see. It changes no traversal, degree, path,
++   count or histogram bucket, and which elements are sent does not depend on it. Whether the reader may read a document is decided by the
++   adapter's access step, as for every read. A reader's answers have the same shape whether a cited document is hidden from them or does
++   not exist.
++7. **A drawn item needs a source note (decision 4 amended).** Decision 4's "a source note (free text, a document the case already holds,
++   or both)" now reads: **a source note (free text), to which a document the case already holds may be added, never in its place.**
++   Declaring and linking refuse a body with no note, a blank one counting as none, by the body's own validation (422). **An edit that
++   would leave an item with no note is refused, 422 `no_source`, so an item drawn before this amendment gains its note at its next edit
++   [for approval].** Items already drawn with a document and no note stay as they are stored; nothing migrates them.
++8. **An item drawn before this amendment with a document and no note.** A reader who may not read its document is shown **"No source note
++   was given"**: the words every drawn item with an empty note is shown with, to every reader, byte for byte. No screen says that an empty
++   note means there is a document. **[for approval]** On the wire such a reader is sent no note and no document. So "a source note, a
++   document, or both; never neither" is no longer a rule of `DrawnAssertion` as it is read (`01_DOMAIN_MODEL.md` §2.2d and
++   `03_CONDUIT_MIDDLEWARE.md`'s boards are brought into line); the write routes hold item 7's rule instead. GG4b makes three small changes
++   to the front ends that this needs, and no other: the GOV.UK board page's reader stops refusing a drawn element with neither (as built it
++   would refuse that reader's whole board); the React board's inspector says "No source note was given" for an empty note, in place of
++   "None: a document of the case"; and the React drawing form asks for a note, with the document optional (its keyboard case in the same
++   change, rule 13). No page gains a source column.
++9. **What this still tells, stated so that it is approved knowingly.** Once item 7 holds, an item with an empty note can only be one drawn
++   before it, and such an item had to cite a document. A reader who knows that history can infer that **some** document was cited: not
++   which, nor anything about it. This is accepted in place of hiding the item in full. For an item drawn after this amendment, a reader
++   who may not read the document cannot tell a note with a document from a note alone.
++10. **Promotion (decision 8, "each item graded with a source note") [for approval].** As built, the check passes an item with a note or a
++    document, so on an item sent without its document its answer would differ by who asks. It asks for a note, whoever asks. An item drawn
++    before this amendment with no note is promoted once its author has added one.
++11. **For approval, in one place:** item 3's several reads for one answer; item 7's rule for edits; item 8's wire shape and three
++    front-end changes; item 10's promotion check.
++
++Not decided or changed here: the board's ceiling (GG4j); a drawn item re-marked other than by its edit route, as it bears on a waiting
++promotion (its own security row, before RL2); a picture's own handling (decision 7); the source references of elements that were not drawn;
++a source column on any page.
++
++Tests that would fail (rule 12; each written first and shown red on the code as it stood, with a fault planted at the real call site in the
++shape the code writes it, rule 15). The readers: **A** drew an item citing document D; **B** reads the case but may not read D; **C** reads
++the case and may read D. In `tests/ontology/test_drawn_source_document_withheld.py`, over `withhold_sources` and the boards service: B is
++sent a drawn node and a drawn link with D in neither place (red: today's code); C is sent D (red: the read skipped for C, the id kept from
++the author's check); A is sent D (red: the author's case inverted); an item drawn from a note alone is the same for all three (red: the
++note blanked too); an item with a document and no note is sent to B with an empty note and nothing else of the document; an item edited
++from one document to another sends B neither (red: only the current document blanked); and `sources_in_full()` keeps D (red: the scope
++ignored). Beside the existing tests, with the store each needs: the working set's snapshot on connect, a delta, a search hit and a link
++from the item to a loaded node send B no D (each red with the rule put in the board route alone); the graph adapter's conformance case for
++the node and the link, written before the change; the leak test over the same readers, B's answers the same shape whether or not D exists;
++a new item with a document and no note is refused (red: the old rule kept); the promotion check asks for a note whoever asks; and the
++working set with drawn items opens and takes deltas within its budget, with a number of document reads that does not grow with the number
++of items (red: one read for each element).
+diff --git a/OspreyFlow_Build/spec/ADR_RESERVATIONS.md b/OspreyFlow_Build/spec/ADR_RESERVATIONS.md
+--- a/OspreyFlow_Build/spec/ADR_RESERVATIONS.md
++++ b/OspreyFlow_Build/spec/ADR_RESERVATIONS.md
+@@ -130,6 +130,7 @@
+ | ADR-014 Amendment 2 | The revisit trigger is met: `maplibre-gl` 6.x on Sigma 3, through the binding already in the tree (the owner, 18 November 2026; slice GG6) | slice-GG6 | 2026-11-18 | written |
+ | ADR-152 Amendment 3 | The page service in a deployment is a setting, `pages.enabled`, off by default and turned on per deployment by the owner; while it is off no deployment's rendered output changes (the owner's ruling of 21 Nov on PL7a2; reference render first, slice PL7a2a) | v062 conductor | 2026-11-21 | written |
+ | ADR-152 Amendment 4 | A theme's override block, fonts entry and sign-in theme live in the theme's own folder (`OspreyFlow_Core/packages/themes/<name>/`); the shared design package names no theme; the React GOV.UK look is not moved (F7); the Default baseline is re-recorded once, in PL12d, with a diff of GOV.UK files only (the owner's rulings of 21 Nov on PL12; slice PL12a) | v062 conductor | 2026-11-21 | written |
++| ADR-143 Amendment 8 | A drawn item's source document is told only to a reader who may read it when it is sent, and a drawn item needs a source note; ADR-152 decision 11 row X9 (the owner's rulings of 26 November on GG4b) | v062 GG4b | 2026-11-26 | written |
+ 
+ ## Baseline
+ 

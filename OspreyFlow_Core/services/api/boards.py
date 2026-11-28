@@ -41,7 +41,12 @@ from services.ingest.ceiling import AboveTheDeploymentCeiling, DeploymentCeiling
 
 from adapters.media_objectstore import content_type_of, reference_for
 from conduit_common.identity import new_edge_id, new_id
-from ontology.handling import HandlingScheme, merge_handling
+from ontology.handling import (
+    BOARD_SOURCE_LOCATOR,
+    HandlingScheme,
+    cited_documents_kept,
+    merge_handling,
+)
 from ontology.validation import validate_properties
 from ports.graph import GraphPort, SuggestOptions
 from ports.media import MediaStore
@@ -491,9 +496,10 @@ class Boards:
                 SourceRef(
                     document_id=given.source_document or f"drawn:{item_id}",
                     # No board id: a private board's is not told to the case (finding 7); the
-                    # board is `drawn.board_id`, kept on every read for its author alone
-                    # (`ontology.handling.withhold_sources`).
-                    locator="a drawing board of the case",
+                    # board is `drawn.board_id`, kept on every read for its author alone. The
+                    # locator marks a source the board wrote, whose document is sent only to a
+                    # reader who may read it (`ontology.handling.withhold_sources`).
+                    locator=BOARD_SOURCE_LOCATOR,
                     excerpt_hash="",
                 )
             ],
@@ -665,10 +671,14 @@ class Boards:
         if item is None or item.withdrawn_at is not None:
             raise ItemNotFound(item_id)
         found: Sequence[Node | Edge]
-        if item.kind == "node":
-            found = await self.graph.get_nodes([item.element_id], principal)
-        else:
-            found = await self.graph.get_edges([item.element_id], principal)
+        # The item is changed and written back from this read, so its cited documents are left in
+        # (ADR-143 Amendment 8 item 5): an author who may no longer read one would otherwise erase
+        # it by changing a label. The element goes to no one; the answer is ids alone.
+        with cited_documents_kept():
+            if item.kind == "node":
+                found = await self.graph.get_nodes([item.element_id], principal)
+            else:
+                found = await self.graph.get_edges([item.element_id], principal)
         element = found[0] if found else None
         if element is None:
             raise ItemNotFound(item_id)
@@ -736,14 +746,15 @@ class Boards:
                 if v is not None
             }
         )
-        try:
-            DrawnAssertion.model_validate(new_drawn.model_dump())  # a source is still given
-        except ValueError as invalid:
+        # A source note is still given (Amendment 8 item 7), so an item drawn with a document and
+        # no note gains its note at its next edit.
+        if not (new_drawn.source_note and new_drawn.source_note.strip()):
             raise DrawingRefused(
                 "no_source",
-                "a drawn item needs a source note, a document of the case, or both",
+                "a drawn item needs a source note; a document of the case may be added to it",
                 status=422,
-            ) from invalid
+            )
+        DrawnAssertion.model_validate(new_drawn.model_dump())
         provenance = element.provenance.model_copy(update={"drawn": new_drawn})
         handling = element.handling.model_copy(update={"classification": marking})
         now = datetime.now(UTC)

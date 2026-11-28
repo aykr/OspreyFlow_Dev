@@ -2,7 +2,9 @@
 refuses (rule 15: a fake models its dependency's refusals, not only its grants).
 
 Built on `FakeGraphPort`, which already judges each element by its own body (handling, datasets,
-reverted, superseded) for the principal given, as the adapter's access step does. Added here, each
+reverted, superseded) for the principal given, as the adapter's access step does, and sends each
+read's answer as the adapter does: one batched read of the documents its drawn elements cite, with
+the reader's principal (`document_reads` records each; ADR-143 Amendment 8). Added here, each
 as the ArcadeDB adapter does it (`adapters/graph_arcadedb/adapter.py`):
 
 - `upsert_nodes`: keyed on the write's id; an unknown type or an undeclared property is refused
@@ -146,7 +148,29 @@ class BoardGraph(FakeGraphPort):
                 principal, node
             ):
                 found.append(node)
-        return sorted(found, key=lambda n: n.id)[:limit]
+        return await self._sent(sorted(found, key=lambda n: n.id)[:limit], principal)
+
+    async def find_node(
+        self,
+        entity_type: str,
+        identifier_field: str,
+        value: str,
+        principal: Principal,
+        *,
+        also: dict[str, str] | None = None,
+    ) -> Node | None:
+        """As the adapter's: the live node of that type holding that identifier, filtered like
+        every read; a node the principal may not read is not found."""
+        wanted = {identifier_field: value, **(also or {})}
+        for node in sorted(self._graph_nodes.values(), key=lambda n: n.id):
+            if (
+                node.type == entity_type
+                and all(node.properties.get(k) == v for k, v in wanted.items())
+                and self._node_readable(principal, node)
+            ):
+                (sent,) = await self._sent([node], principal)
+                return sent
+        return None
 
     async def suggest_nodes(
         self,
@@ -172,7 +196,9 @@ class BoardGraph(FakeGraphPort):
             values = [v for v in node.properties.values() if isinstance(v, str)]
             if any(prefix.casefold() in v.casefold() for v in values):
                 hits.append(node)
-        return NodeSuggestions(nodes=hits[:limit], more=len(hits) > limit)
+        return NodeSuggestions(
+            nodes=await self._sent(hits[:limit], principal), more=len(hits) > limit
+        )
 
     # --- writes ------------------------------------------------------------------------------
 

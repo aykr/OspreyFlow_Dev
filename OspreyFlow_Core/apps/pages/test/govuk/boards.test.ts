@@ -804,6 +804,20 @@ describe("the boards page on the GOV.UK tree (scenario BD)", () => {
     expect(tableCalled((await getAs(unnamed, boardOfPath("b-quay"))).text, BOARDS_WORDS.loadedCaption)?.rows[0]?.head).toBe(`Unnamed Vessel ${BOARDS_WORDS.loadedNote}`);
   });
 
+  it("BD3: an item and a link sent with neither a note nor a document, as the Conduit sends them to a reader who may not read the document, are drawn like any other (GG4b)", async () => {
+    // ADR-143 Amendment 8 item 8: an item drawn before it with a document and no note is sent to such a reader with neither, its source
+    // `drawn:<item_id>`. One such item must not make the whole board unreadable, and no source is said of it either.
+    const withheld = <T extends { id: string; drawn?: NonNullable<Item["drawn"]> }>(all: T[], id: string): T[] =>
+      all.map((e) => (e.id === id && e.drawn ? { ...e, drawn: { ...e.drawn, source_note: null, source_document: null } } : e));
+    const w = await world({ boards: [SOURCE_BOARD], items: withheld(SOURCE_ITEMS, "d-s-doc"), links: withheld(SOURCE_LINKS, "l-s-doc") });
+    const res = await getAs(w, boardOfPath("b-sources"));
+    expect(res.status).toBe(200);
+    expect(mainText(res.text)).not.toContain(BOARDS_WORDS.unreadableBoard);
+    expect((tableCalled(res.text, BOARDS_WORDS.drawnCaption)?.rows ?? []).map((r) => r.head)).toEqual(["First lead Drawn, not loaded", "Second lead Drawn, not loaded", "Third lead Drawn, not loaded"]);
+    expect((tableCalled(res.text, BOARDS_WORDS.linksCaption)?.rows ?? []).map((r) => r.head)).toEqual(["First tie", "Second tie", "Third tie", "owns"]);
+    expect(sourceProblems(res.text)).toEqual([]);
+  });
+
   it("BD3: the board page sends no source: over items and links drawn from a note, a document and both, no note, document id or source word", async () => {
     const w = await sourceWorld();
     // The route does send them, so their absence from the page is the page's doing.
@@ -1048,13 +1062,18 @@ describe("the boards page on the GOV.UK tree (scenario BD)", () => {
     (twiceDrawn.opened["drawn"] as string[]).push("d-tall");
     expect(quayView(twiceDrawn.opened)).toBeUndefined();
     expect(listView(CASE, [...listBody(), listBody()[0]])).toBeUndefined();
-    // A drawn item with no source at all (`DrawnAssertion._has_a_source`): neither a note nor a document.
-    const sourceless = bodies();
-    Object.assign((nodeIn(sourceless.opened, "d-tall")["provenance"] as Json)["drawn"] as Json, { source_note: null, source_document: null });
-    expect(quayView(sourceless.opened)).toBeUndefined();
-    const blankNote = bodies();
-    Object.assign((nodeIn(blankNote.opened, "d-tall")["provenance"] as Json)["drawn"] as Json, { source_note: "  ", source_document: null });
-    expect(quayView(blankNote.opened)).toBeUndefined();
+    // A drawn item with neither a note nor a document is read (GG4b; ADR-143 Amendment 8 item 8): the Conduit sends one to a reader
+    // who may not read its document. A note or a document of another shape is still refused (below).
+    for (const source_note of [null, "  "]) {
+      const neither = bodies();
+      Object.assign((nodeIn(neither.opened, "d-tall")["provenance"] as Json)["drawn"] as Json, { source_note, source_document: null });
+      expect(quayView(neither.opened), JSON.stringify(source_note)).toBeDefined();
+    }
+    for (const [field, value] of [["source_note", 7], ["source_document", ["doc"]]] as const) {
+      const misshapen = bodies();
+      Object.assign((nodeIn(misshapen.opened, "d-tall")["provenance"] as Json)["drawn"] as Json, { [field]: value });
+      expect(quayView(misshapen.opened), field).toBeUndefined();
+    }
     // Wrong values, one field at a time.
     const wrong: [string, string, unknown][] = [
       ["Board", "start", "drawing"],
