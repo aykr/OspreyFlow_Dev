@@ -12,6 +12,9 @@ export default defineConfig({
   // `describe`/`it` are not this runner's globals — scoped here so the two suites never collide
   // over the same file.
   testMatch: /.*\.spec\.ts$/,
+  // A new folder for this run's keyboard proofs, shared by its workers, so that a worker replaced
+  // after a failed case loses none of them (`apps/provedActions.ts`).
+  globalSetup: "../../provedActions.ts",
   timeout: 60_000,
   webServer: {
     command: `OSPREY_GOVUK_IDENTITY=1 node scripts/sync_govuk_assets.mjs && npx vite --port ${PORT} --strictPort`,

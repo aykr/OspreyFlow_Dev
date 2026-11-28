@@ -4,7 +4,8 @@
 // removed case's layer after asking once. No `page.mouse`, no `.click()` in these.
 import { expect, test, type Page } from "@playwright/test";
 
-import { PROMOTION_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
+import { PROMOTION_ACTIONS } from "@ospreyflow/glass-shared";
+import { assertAllCovered, registerCovered } from "../../provedActions";
 
 async function open(page: Page, query = ""): Promise<void> {
   await page.goto(`/keyboard/promotions-harness.html${query}`);

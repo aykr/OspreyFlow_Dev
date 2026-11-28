@@ -5,7 +5,8 @@
 // handler (`window.__DID__`, written by the harness).
 import { expect, test, type Page } from "@playwright/test";
 
-import { ALERT_FIGURES_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
+import { ALERT_FIGURES_ACTIONS } from "@ospreyflow/glass-shared";
+import { assertAllCovered, registerCovered } from "../../provedActions";
 
 const REGISTRY = "ALERT_FIGURES_ACTIONS";
 const did = (page: Page) => page.evaluate(() => window.__DID__ ?? []);

@@ -4,7 +4,8 @@
 // and the request that went out can be read back.
 import { expect, test, type Page } from "@playwright/test";
 
-import { LINK_NOTES_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
+import { LINK_NOTES_ACTIONS } from "@ospreyflow/glass-shared";
+import { assertAllCovered, registerCovered } from "../../provedActions";
 
 interface Note {
   id: string;

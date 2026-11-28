@@ -3,7 +3,8 @@
 // harness records every request, so the case proves the action reached its route.
 import { expect, test, type Page } from "@playwright/test";
 
-import { OPERATIONS_FIGURES_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
+import { OPERATIONS_FIGURES_ACTIONS } from "@ospreyflow/glass-shared";
+import { assertAllCovered, registerCovered } from "../../provedActions";
 
 const REGISTRY = "OPERATIONS_FIGURES_ACTIONS";
 const HARNESS = "/keyboard/operations-figures-harness.html";

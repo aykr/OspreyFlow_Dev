@@ -26,3 +26,7 @@ nothing reaching a live store (ports 9). Live tests go in the acceptance command
 ## Out of scope
 
 <What the builder must not do in this slice, and the questions it must stop and ask rather than answer.>
+
+## Where a new scenario section goes (the owner, 28 November 2026)
+
+<If the slice adds a section to `spec/08_ACCEPTANCE_SCENARIOS.md`: name the existing section it goes directly after, a different one from any other part in flight, never "at the end of the file". Two parts that append at the end conflict, and the file has no union merge.>

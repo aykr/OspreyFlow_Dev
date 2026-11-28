@@ -5,11 +5,8 @@
 // data only (rule 9).
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
-import {
-  RULE_STANDARDS_ACTIONS,
-  assertAllCovered,
-  registerCovered,
-} from "@ospreyflow/glass-shared";
+import { RULE_STANDARDS_ACTIONS } from "@ospreyflow/glass-shared";
+import { assertAllCovered, registerCovered } from "../../provedActions";
 
 const REGISTRY = "RULE_STANDARDS_ACTIONS";
 

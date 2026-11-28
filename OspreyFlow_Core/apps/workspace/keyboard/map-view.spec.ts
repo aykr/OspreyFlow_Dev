@@ -4,7 +4,8 @@
 // blank until another view was opened (ADR-086 Amendment 1).
 import { expect, test } from "@playwright/test";
 
-import { MAP_VIEW_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
+import { MAP_VIEW_ACTIONS } from "@ospreyflow/glass-shared";
+import { assertAllCovered, registerCovered } from "../../provedActions";
 
 const REGISTRY = "MAP_VIEW_ACTIONS";
 

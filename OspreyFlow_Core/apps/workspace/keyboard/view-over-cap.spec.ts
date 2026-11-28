@@ -4,7 +4,8 @@
 // opened (`save_as_view`, ADR-144); Escape puts it away.
 import { expect, test } from "@playwright/test";
 
-import { VIEW_OVER_CAP_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
+import { VIEW_OVER_CAP_ACTIONS } from "@ospreyflow/glass-shared";
+import { assertAllCovered, registerCovered } from "../../provedActions";
 
 const OVER_CAP = {
   seq: 5,

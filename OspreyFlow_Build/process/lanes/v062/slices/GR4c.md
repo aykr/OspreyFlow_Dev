@@ -46,3 +46,7 @@ Binding: process/CLAUDE.md rules 12 and 15; British English.
 - Ruff.
 
 **Before your final report, run by hand the cheap checks the conductor will run again before the merge.**
+
+## The answer to round 1's question (the conductor, on the owner's standing word, 28 November 2026 about 12:30)
+
+**(a): keep this branch's side of both conflicting hunks**, which are the citation diff's route-by-text line and the scenario test's route-text plants. Take everything else from main, then commit the merge. Main's `app.py:19913` (GG3b) is the line-number dependency this slice removes. Your trial showed the result is identical to your tip, with the acceptance and all 83 checks green and `git apply --check` passing. Repeat those in your report.

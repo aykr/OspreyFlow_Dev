@@ -4,7 +4,8 @@
 // transport, empty, as the server answers a link with none.
 import { expect, test, type Page } from "@playwright/test";
 
-import { INSPECTOR_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
+import { INSPECTOR_ACTIONS } from "@ospreyflow/glass-shared";
+import { assertAllCovered, registerCovered } from "../../provedActions";
 
 const REGISTRY = "INSPECTOR_ACTIONS";
 

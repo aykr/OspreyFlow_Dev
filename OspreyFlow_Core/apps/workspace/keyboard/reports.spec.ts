@@ -4,7 +4,8 @@
 // the second door (decision 8); choosing a board is `alert-figures.spec.ts`'s.
 import { expect, test } from "@playwright/test";
 
-import { REPORTS_ACTIONS, assertAllCovered, registerCovered } from "@ospreyflow/glass-shared";
+import { REPORTS_ACTIONS } from "@ospreyflow/glass-shared";
+import { assertAllCovered, registerCovered } from "../../provedActions";
 
 const REGISTRY = "REPORTS_ACTIONS";
 
