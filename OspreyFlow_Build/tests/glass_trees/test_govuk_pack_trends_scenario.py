@@ -22,7 +22,9 @@ The row is the page's own because one id is one page in a tree (`server/pages.ts
   alone, answering GET alone, or not in the one table of pages         -> `test_the_page_module_is_its_own_rows_at_its_path`
 * the "no scenario" list holding the page's row                        -> `test_the_known_without_scenario_list_no_longer_holds_the_row`
 * the citation correction for ADR-152 decision 10 pointing a line
-  number at a line that does not hold what it says                      -> `test_the_citation_correction_cites_lines_that_hold_what_it_says`
+  number at a line that does not hold what it says, or citing by text
+  a file that does not hold that text                                   -> `test_the_citation_correction_cites_lines_that_hold_what_it_says`
+* a line added above the add-item route breaking its citation          -> `test_a_line_added_above_the_route_leaves_the_citation_holding`
 
 THE FOLDERS THIS TEST WALKS (the conductor's scan-map row): none. It reads named files only, by path, and plants every fault in an
 in-memory copy of what it read; it never writes into the repository. The files, from the repository's root:
@@ -63,9 +65,10 @@ SCRIPTS_OFF_TEST = PAGES / "test" / "govuk" / "scripts-off" / "pack-trends.spec.
 PAGE_MODULE = PAGES / "server" / "packTrends.ts"
 PAGE_LIST = PAGES / "server" / "pageList.ts"
 KNOWN_LIST = BUILD / "tests" / "glass_trees" / "test_functions_yaml.py"
-#: The correction to ADR-152 decision 10's citation, left for the owner to apply (ruling 5); each `file:line` it cites must hold what it says.
+#: The correction to ADR-152 decision 10's citation, left for the owner to apply (ruling 5); each file it cites must hold what it says.
 CITATION_DIFF = BUILD / "process" / "lanes" / "v062" / "away" / "GR4a_ADR152_DECISION10_CITATION.diff"
-#: What a cited line must hold, by cited file: the field a pack item names a trend by, and the route that adds an item.
+#: What each cited file must hold: the field a pack item names a trend by, and the route that adds an item. A citation with a line
+#: number must hold it on that line; one with no number (the route, since slice GR4c) must hold it somewhere in the file.
 CITED_LINES: dict[str, str] = {
     "packages/schemas/packs.py": "trend_id",
     "services/api/app.py": '/packs/{pack_id}/items"',
@@ -263,23 +266,28 @@ def citation_problems(data: dict[str, Any]) -> list[str]:
 
 
 def citation_diff_problems(data: dict[str, Any]) -> list[str]:
-    """Each `file:line` the owner's citation correction adds is a line of that file that holds what the correction says it is.
+    """Each file the owner's citation correction adds holds what the correction says it does: at the line it names, or anywhere in the
+    file when it names no line (slice GR4c: the route is cited by its text, so a line added above it changes nothing cited).
 
-    The decision log's own checks do not look at what a line number points to, so a line that drifted (the route moved 99 lines when main
-    was merged in) was green: this reads the line itself.
+    The decision log's own checks do not look at what a line number points to, so a line that drifted was green: this reads the line
+    itself.
     """
     found: list[str] = []
     added = " ".join(line[1:].strip() for line in data["citation_diff"].splitlines() if line.startswith("+") and not line.startswith("+++"))
-    cites = re.findall(r"`((?:packages|services)/[\w/]+\.py):(\d+)`", added)
+    cites = re.findall(r"`((?:packages|services)/[\w/]+\.py)(?::(\d+))?`", added)
     named = {name for name, _ in cites}
     for name in CITED_LINES:
         if name not in named:
             found.append(f"the citation correction does not cite {name}")
     for name, number in cites:
-        lines = data["cited_files"].get(name, "").splitlines()
+        text = data["cited_files"].get(name, "")
+        lines = text.splitlines()
         wanted = CITED_LINES.get(name)
         if wanted is None:
             found.append(f"the citation correction cites {name}, which this check does not know what to find in")
+        elif not number:
+            if wanted not in text:
+                found.append(f"{name} is cited by its text, and nowhere holds {wanted!r}")
         elif not 0 < int(number) <= len(lines) or wanted not in lines[int(number) - 1]:
             at = lines[int(number) - 1].strip() if 0 < int(number) <= len(lines) else "past the end of the file"
             found.append(f"{name}:{number} does not hold {wanted!r} (it holds {at!r})")
@@ -537,6 +545,16 @@ def _field_gone(type_name: str, field: str) -> Callable[[dict[str, Any]], None]:
     return plant
 
 
+def _route_text_gone(data: dict[str, Any]) -> None:
+    """app.py as if the add-item route had been renamed. Its sibling routes (`.../items/{item_id}` and its refresh) stay as they are,
+    so a check that settled for a path near the cited one would still be green."""
+    app = "services/api/app.py"
+    text = data["cited_files"][app]
+    assert text.count(CITED_LINES[app]) == 1, "the route's text is in app.py once"
+    data["cited_files"][app] = text.replace(CITED_LINES[app], '/packs/{pack_id}/entries"')
+    assert "/packs/{pack_id}/items/{item_id}" in data["cited_files"][app], "the sibling routes are still there"
+
+
 PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, Any]], list[str]], str]] = [
     ("a scenario row removed", _without_row("TS5"), scenario_problems, "no scenario TS5"),
     ("a page test case with no scenario row", _without_row("TS15"), scenario_problems, "titled TS15"),
@@ -580,10 +598,22 @@ PLANTS: list[tuple[str, Callable[[dict[str, Any]], None], Callable[[dict[str, An
     ("the page left out of the table of pages", _replace_all("page_list", "packTrends", "somethingElse"), module_problems, "does not hold the page"),
     ("the word board in the page's code", _replace("page_module", "export const packTrends", "const boardName = 1;\nexport const packTrends"), module_problems, "says board"),
     (
-        "a cited route line that drifted (the add-item route as it was before main moved)",
-        _replace("citation_diff", "services/api/app.py:19905", "services/api/app.py:19861"),
+        "a citation whose route text is not in app.py",
+        _route_text_gone,
         citation_diff_problems,
-        "services/api/app.py:19861 does not hold",
+        "services/api/app.py is cited by its text, and nowhere holds",
+    ),
+    (
+        "the route's file no longer cited",
+        _replace("citation_diff", "`services/api/app.py`", "the Conduit"),
+        citation_diff_problems,
+        "does not cite services/api/app.py",
+    ),
+    (
+        "a file cited by text that the check does not know",
+        _replace("citation_diff", "`services/api/app.py`", "`services/api/app.py`, `services/api/packs.py`"),
+        citation_diff_problems,
+        "cites services/api/packs.py, which this check does not know",
     ),
     (
         "a cited field line that moved",
